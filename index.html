@@ -179,8 +179,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         if (u.key == "z" || u.key == "Z") {
-            timeWarp = true;
-            
+            timeWarp = true;  
         }
     }
     
@@ -234,8 +233,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         normalize() {
             let len = Math.sqrt(this.x * this.x + this.y * this.y);
-            if (len === 0) return new Vector2(0, 0);
-            return new Vector2(this.x / len, this.y / len);
+            if (len === 0) {
+                this.x = 0; this.y = 0; return this;
+            }
+            this.x /= len;
+            this.y /= len;
+            return this;
         }
     }
 
@@ -660,8 +663,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
 
-    // Draw a pseudo-3D wireframe sphere showing only the front hemisphere
-    function drawWireframeRoid(cx, cy, radius, originalRadius, hue, saturation, lightness, spinAngle = 0, orientation = {w:1,x:0,y:0,z:0}) {
+    //  DRAW WIREFRAME ROIDS  --------------------
+    function drawWireframeRoid(cx, cy, radius, originalRadius, hue, saturation, lightness, spinAngle = 0, orientation = {w:1,x:0,y:0,z:0}, flashPolkadots) {
         // Parametric globe-style wireframe (latitude & longitude) with front-hemisphere clipping
         c.save();
         // line width scales with roid size (radius is in pixels already)
@@ -695,9 +698,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         c.save();
         c.lineWidth = 0.015 * radius;
-        //c.strokeStyle = `hsla(${hue}, 30%, ${Math.max(10, Math.round(lightness - 40))}%, 0.5)`;
         c.strokeStyle = `hsla(${hue}, ${Math.max(30, Math.round(saturation))}%, ${Math.max(20, Math.round(lightness - 20))}%, 0.6)`;
-
         for (let li = 0; li < latDegrees.length; li++) {
             const phi = latDegrees[li] * Math.PI / 180;
             const rLat = radius * Math.cos(phi);
@@ -737,8 +738,66 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.restore();
 
         //  DRAW INNER ROID  ----------
-        drawCircle(cx, cy, 0.2 * originalRadius);
-        //  superimpose shading
+        // Use the incoming hue/saturation/lightness parameters (avoid referencing
+        // undefined variables from the polkadot routine). Compute a dotHue for
+        // flash tinting and respect flashPolkadots argument.
+        let flashAmount = 0;
+        drawCircle(cx, cy, 0.0001 * cScale * cScale);
+        if (typeof flashPolkadots === 'number') {
+            flashAmount = Math.max(0, Math.min(1, flashPolkadots / 0.5));
+        } else if (flashPolkadots === true) {
+            flashAmount = 1;
+        }
+
+        // Map local names used by the polkadot code to the parameters passed in
+        const roidHue = hue;
+        const roidSaturation = saturation;
+        const roidLightness = lightness;
+        // Default dot hue (unused when flashing red)
+        const dotHue = (roidHue + 90) % 360;
+
+        // Temporary debug: log flash parameters for diagnosis (limit logs)
+        if (typeof drawWireframeRoid._flashLogCount === 'undefined') drawWireframeRoid._flashLogCount = 0;
+        if (flashAmount > 0 && drawWireframeRoid._flashLogCount < 30) {
+            console.log(`WFRAME FLASH ${drawWireframeRoid._flashLogCount}: flashPolkadots=`, flashPolkadots,
+                'flashAmount=', flashAmount, 'dotHue=', dotHue,
+                'roidHSL=', roidHue, roidSaturation, roidLightness);
+            drawWireframeRoid._flashLogCount++;
+        }
+
+        if (flashAmount > 0) {
+            // Blink pattern: 3 quick red blinks over the standard flash duration.
+            const BLINK_COUNT = 3;
+            const BLINK_TOTAL = 0.5; // default per-code assignments use 0.5
+            // remaining timer is provided as flashPolkadots (or derived numeric)
+            let tRemaining = (typeof flashPolkadots === 'number') ? flashPolkadots : (flashAmount > 0 ? BLINK_TOTAL * flashAmount : 0);
+            let elapsed = Math.max(0, BLINK_TOTAL - tRemaining);
+            let blinkPeriod = BLINK_TOTAL / BLINK_COUNT;
+            let within = elapsed % blinkPeriod;
+            // show flash for first half of each blinkPeriod
+            let showFlashThisFrame = (within / blinkPeriod) < 0.5;
+
+            // When showing, use a strong red highlight; otherwise use normal shading.
+            if (showFlashThisFrame) {
+                const redHue = 60;
+                const redSat = 100;
+                // make the flash bright and opaque
+                let l = 90;
+                let a = 1.0;
+                c.fillStyle = `hsla(${redHue}, ${redSat}%, ${l}%, ${a})`;
+                var highlight = `hsla(${redHue}, ${redSat}%, ${l}%, ${a})`;
+                var midtone = `hsla(${redHue}, ${Math.max(30, redSat - 40)}%, ${Math.max(0, l - 40)}%, ${a})`;
+                var shadow = `hsl(0, 0%, 10%)`;
+            } else {
+                var highlight = `hsla(0, 0%, 100%)`;
+                var midtone = `hsla(0, 0%, 50%)`;
+                var shadow = `hsl(0, 0%, 10%)`;
+            }
+        } else {
+            var highlight = `hsla(0, 0%, 100%)`;
+            var midtone = `hsla(0, 0%, 50%)`;
+            var shadow = `hsl(0, 0%, 10%)`;
+        }
         var sphereGradient = c.createRadialGradient(
                 (cx - 0.2 * (0.3 * originalRadius)),
                 (cy - 0.2 * (0.5 * originalRadius)),
@@ -746,10 +805,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 (cx - 0.2 * (0.3 * originalRadius)),
                 (cy - 0.2 * (0.5 * originalRadius)),
                 0.3 * originalRadius);
-
-        var highlight = `hsl(${hue + 180}, 0%, 100%)`;
-        var midtone = `hsl(${hue + 180}, 0%, 50%)`;
-        var shadow = `hsl(0, 0%, 10%)`;
         sphereGradient.addColorStop(0.0, highlight);
         sphereGradient.addColorStop(0.5, midtone);
         sphereGradient.addColorStop(1.0, shadow);
@@ -1360,7 +1415,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
             }
             c.lineWidth = .01 * this.radius * cScale;
-            if (weaponLevel < 6) {
+            if (weaponLevel < 7) {
                 c.fillStyle = 'hsl(0, 0%, 40%)';
             } else {
                 c.fillStyle = rainbowpants;
@@ -1536,7 +1591,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.fill();
             
             // SUNGLASSES  ----------
-            if (weaponLevel > 5) {
+            if (weaponLevel >= 6) {
                 // bridge
                 c.beginPath();
                 c.lineWidth = 0.01 * this.radius * cScale;
@@ -1688,11 +1743,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     this.gunAngle -= 0.1;
                 } else {
                     //  LEAVE A BOMB BEHINS WHEN ENEMY LEAVES ----------
-                    var pos = Enemy[0].pos.clone();
-                    var vel = new Vector2(0, 0);
-                    var radius = 0.1;
-                    //spawnBomb(pos, vel, radius);
 
+                    //  POINT GUN TO THE RIGHT  ----------
                     this.gunAngle = 0;
                     window.clearInterval(gonnaGetcha);
                     if (this.pos.x > simWidth + this.radius) {
@@ -2487,7 +2539,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         draw() {
             if (this.isWireframe == true) {
                 //  DRAW WIREFRAME ROIDS  ---------
-                drawWireframeRoid(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale, this.originalRadius * cScale, this.hue, this.saturation, this.lightness, this.poleSpinAngle, this.orientation);
+                drawWireframeRoid(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale, this.originalRadius * cScale, this.hue, this.saturation, this.lightness, this.poleSpinAngle, this.orientation, this.polkadotFlashTimer);
 
                 //  HIGHLIGHT SHADING ----------
                 drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
@@ -2505,7 +2557,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.fillStyle = sphereGradient;
                 c.fill();
 
-                //  OVERALL "BUBBLE" SHADING  ----------
+                //  OVERALL BUBBLE SHADING  ----------
                 var sphereGradient = c.createRadialGradient(
                         this.pos.x * cScale, 
                         this.pos.y * cScale, 
@@ -2593,54 +2645,209 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
 
-    
-
     //  DEFINE BOMB  ----------
     class BOMB {
-        constructor(pos, radius) {
+        constructor(pos, vel, radius) {
             this.pos = pos.clone();
+            this.vel = vel.clone();
             this.radius = radius;
-            this.vel = new Vector2(0, 0);
+            this.mass = radius;
+            this.birthday = Date.now();
+            this.exploding = false;
+            this.explosionTime = 0;
+            this.firstPulse = true;
+        }
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
         }
         simulate() {
-            this.angle = getInterceptAngle(
-                    this.pos,
-                    Roket[0].pos,
-                    Roket[0].vel,
-                    0.5
-                );
-            var direction = new Vector2(
-                Math.cos(this.angle),
-                Math.sin(this.angle)
-            );
-            direction.scale(0.5)
-            this.vel.add (direction);
-            this.pos.add(this.vel, dT);
+            if (this.exploding !== true) {
+                //  COMPRESS BOMB  ----------
+                if (Date.now() - this.birthday > 2800) {
+                    this.radius *= 0.9;
+                }
+                // Debug: log initial velocity once to check for unexpected zeroing
+                if (!this._spawnLogged) {
+                    try { console.log('BOMB.simulate ENTRY: vel=', this.vel, 'pos=', this.pos); } catch (e) {}
+                    this._spawnLogged = true;
+                }
+                // Guard: if no player roket exists, just coast
+                if (!Roket || Roket.length === 0 || !Roket[0] || !Roket[0].pos) {
+                    this.pos.add(this.vel, dT);
+                    return;
+                }
+
+                // Tunable parameters (adjust for feel)
+                const maxSpeed = 0.20;      // desired top speed for the bomb
+                const maxAccel = 0.30;      // max change in velocity (units/sec); lower = smoother
+                const angleSmoothing = 0.22; // 0 = no smoothing, 1 = instant
+
+                // Predict intercept heading using the bomb's max speed
+                const desiredAngle = getInterceptAngle(this.pos, Roket[0].pos, Roket[0].vel, maxSpeed);
+
+                // Smooth heading to avoid rapid flips
+                if (typeof this._smoothedAngle === 'undefined') this._smoothedAngle = desiredAngle;
+                const a0 = this._smoothedAngle;
+                let da = desiredAngle - a0;
+                while (da > Math.PI) da -= 2 * Math.PI;
+                while (da < -Math.PI) da += 2 * Math.PI;
+                this._smoothedAngle = a0 + da * angleSmoothing;
+
+                const desiredDir = new Vector2(Math.cos(this._smoothedAngle), Math.sin(this._smoothedAngle));
+
+                // desired velocity vector
+                const desiredVel = desiredDir.clone();
+                desiredVel.scale(maxSpeed);
+
+                // steering = desiredVel - currentVel
+                const steering = desiredVel.clone();
+                // Vector2.subtract(a,b) expects two args in this codebase; do component subtract here
+                steering.x -= this.vel.x;
+                steering.y -= this.vel.y;
+
+                // clamp steering to maxAccel * dT so changes are smooth and framerate-independent
+                const maxStep = maxAccel * dT;
+                const steerLen = steering.length();
+                if (steerLen > maxStep && steerLen > 0) {
+                    steering.normalize();
+                    steering.scale(maxStep);
+                }
+
+                // record the actual steering direction applied (after clamping)
+                if (steering.x === 0 && steering.y === 0) {
+                    // if no steering, prefer the smoothed desired heading or current velocity
+                    if (typeof this._smoothedAngle !== 'undefined') {
+                        this._steerAngle = this._smoothedAngle;
+                    } else {
+                        this._steerAngle = Math.atan2(this.vel.y, this.vel.x);
+                    }
+                } else {
+                    this._steerAngle = Math.atan2(steering.y, steering.x);
+                }
+
+                // apply steering and clamp speed
+                this.vel.add(steering);
+                if (this.vel.length() > maxSpeed) {
+                    this.vel.normalize();
+                    this.vel.scale(maxSpeed);
+                }
+
+                //  UPDATE POSITION BASED ON NEW CALCULATED VELOCITY  ----------
+                this.pos.add(this.vel, dT);
+            } else { 
+                //  BOMB IS EXPLODING  -------------------
+                var elapsed = (Date.now() - this.birthday) / 1000; // seconds
+                if (typeof this._explosionOrigin === 'undefined') {
+                    this._explosionOrigin = this.radius; // store radius at explosion start
+                }
+                // peak expansion 
+                var peak = Math.max(0.15, this._explosionOrigin * 8);
+                // decay rate (higher => faster onset)
+                var decay = 12.0;
+                // exponential ease-out: origin + peak * (1 - e^{-decay * t})
+                this.radius = this._explosionOrigin + peak * (1 - Math.exp(-decay * elapsed));
+            }
         }
         draw() {
-            drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
-            var sphereGradient = c.createRadialGradient(
-                    (cx - 0.3 * originalRadius),
-                    (cy - 0.5 * originalRadius),
+            var age = Date.now() - this.birthday;
+            if (this.exploding != true) {
+                //  DRAW RADAR PULSE  ---------
+                radarPulser += 0.03;
+                c.linewidth = 0.01 * cScale;
+                for (var r = 1; r < 5; r++) {
+                    c.strokeStyle = `hsla(0, 0%, ${r / 0.04}%, ${100 - radarPulser * 100}%)`;
+                    var radarPulseRadius = radarPulser * 0.5 * r / 10;
+                    drawCircle(this.pos.x * cScale, this.pos.y * cScale, radarPulseRadius * cScale);
+                    c.stroke();
+                }
+                if (radarPulser > 1) {
+                    radarPulser = 0;
+                }
+                let whiteHot = 0;
+                if (age > 2800) {
+                    whiteHot = 30 * (age - 2800) / 200;
+                }
+                
+                drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
+                var sphereGradient = c.createRadialGradient(
+                    (this.pos.x - 0.3 * this.radius) * cScale,
+                    (this.pos.y - 0.5 * this.radius) * cScale,
                     0,
-                    (cx - 0.3 * originalRadius),
-                    (cy - 0.5 * originalRadius),
-                    0.3 * originalRadius);
+                    (this.pos.x - 0.3 * this.radius) * cScale,
+                    (this.pos.y - 0.5 * this.radius) * cScale,
+                    1.5 * this.radius * cScale);
+                var highlight = `hsl(0, ${100 * age / 6000}%, ${70 + whiteHot}%)`;
+                var midtone = `hsl(0, ${100 * age / 6000}%, ${50 + whiteHot}%)`;
+                var shadow = `hsl(0, 0%, 10%)`;
+                sphereGradient.addColorStop(0.0, highlight);
+                sphereGradient.addColorStop(0.5, midtone);
+                sphereGradient.addColorStop(1.0, shadow);
+                c.fillStyle = sphereGradient;
+                c.fill();
 
-            var highlight = `hsl(0, 0%, 100%)`;
-            var midtone = `hsl(0, 0%, 50%)`;
-            var shadow = `hsl(0, 0%, 10%)`;
-            sphereGradient.addColorStop(0.0, highlight);
-            sphereGradient.addColorStop(0.5, midtone);
-            sphereGradient.addColorStop(1.0, shadow);
-            c.fillStyle = sphereGradient;
-            c.fill();
+                //  DRAW HEADING ARROW  ----------
+                if (age < 2800) {
+                    let heading;
+                    if (this.vel && (this.vel.x !== 0 || this.vel.y !== 0)) {
+                        heading = Math.atan2(this.vel.y, this.vel.x);
+                    } else if (typeof this._smoothedAngle !== 'undefined') {
+                        heading = this._smoothedAngle;
+                    } else {
+                        heading = 0;
+                    }
+                    let arrowAngle;
+                    arrowAngle = 0.5 * Math.PI - heading + Math.PI;
+                    var bombDirPulseDisp = 2 * this.radius + 0.7 * this.radius * Math.abs(Math.sin(bombDirShake));
+                    const arrowX = this.pos.x + bombDirPulseDisp * Math.cos(heading);
+                    const arrowY = this.pos.y + bombDirPulseDisp * Math.sin(heading);
+                    drawArrow(arrowX, arrowY, arrowAngle, 0.00015 * cScale);
+                    c.fillStyle = `hsla(60, 100%, 50%, 60%)`;
+                    c.fill();
+                }
+            } else {
+                drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
+                this.alpha = 100 * age / 250;
+                if (this.firstPulse == true) {
+                    this.firstPulse = false;
+                    c.drawImage(offscreenFlashCanvas, (this.pos.x - 0.2) * cScale, (this.pos.y - 0.2) * cScale); 
+                    c.drawImage(offscreenFlashCanvas, (this.pos.x - 0.2) * cScale, (this.pos.y - 0.2) * cScale); 
+                    c.drawImage(offscreenFlashCanvas, (this.pos.x - 0.2) * cScale, (this.pos.y - 0.2) * cScale); 
+                    makeRoidDebris(this.pos, 0.004, 0, 0, 100, 750, 1.8, 'bomb');
+                }
+                //  OVERALL BUBBLE SHADING  ----------
+                var sphereGradient = c.createRadialGradient(
+                    this.pos.x * cScale, 
+                    this.pos.y * cScale, 
+                    0, 
+                    this.pos.x * cScale, 
+                    this.pos.y * cScale, 
+                    this.radius * cScale);
+                var highlight = `hsla(0, 0%, 100%, ${100 - this.alpha}%)`;
+                var midtone = `hsla(50, 100%, 60%, ${100 - this.alpha}%)`;
+                var shadow = `hsla(0, 0%, 0%, 0%)`;
+                sphereGradient.addColorStop(0.0, highlight);
+                sphereGradient.addColorStop(0.3, midtone);
+                sphereGradient.addColorStop(1.0, shadow);
+                c.fillStyle = sphereGradient;
+                c.fill();
+
+                //  OUTER CIRCLE
+                drawCircle(this.pos.x * cScale, this.pos.y * cScale, Math.pow(this.radius * cScale, 1.3));
+                c.lineWidth = 0.0001 * (100 - this.alpha) * cScale;
+                c.strokeStyle = `hsla(0, 0%, ${100 - this.alpha}%, ${100 - this.alpha}%)`;
+                //c.strokeStyle = `hsl(0, 0%, 100%)`;
+                c.stroke();
+
+                /*//  test circle
+                drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
+                c.lineWidth = 0.01 * cScale;
+                c.strokeStyle = `green`;
+                c.stroke();*/
+            }
         }
-    }
-
-    //  SPAWN BOMB  ----------
-    function spawnBomb(pos, radius) {
-        Bomb.push(new BOMB(pos, radius) );
     }
 
     //  DEFINE PUSHER  ------------------
@@ -2739,9 +2946,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (tumbling == true) {
                 spawnRetro(this.pos.x, this.pos.y);
                 if (this.vel.x > 0) {
-                    this.angle -= 0.5 * this.vel.length();
+                    this.angle -= 0.25 * this.vel.length();
                 } else {
-                    this.angle += 0.5 * this.vel.length();
+                    this.angle += 0.25 * this.vel.length();
                 } 
                 if (score > 0) {
                     score -= 11;
@@ -2936,7 +3143,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.shadowColor = 'black';
             c.fill();
 
-
             // FUSELAGE (smooth Catmull-Rom spline)
             const pts = [
                 { x: (this.pos.x + roket.radius * roket.r1 * roket.a1cos) * cScale, y: (this.pos.y - roket.radius * roket.r1 * roket.a1sin) * cScale },
@@ -2964,8 +3170,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.lineWidth = 1;
             c.stroke();
 
-                  // (removed duplicate smoothing code)
-
             //  NOZZLE  ---------
             c.beginPath();
             c.moveTo((this.pos.x + roket.radius * roket.r10 * roket.a10cos) * cScale,
@@ -2981,7 +3185,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.stroke();
             c.fillStyle = 'hsl(30, 70%, 60%)';
             c.fill();
-
 
             // RIGHT FIN (smooth)
             const rightFinPts = [
@@ -3063,9 +3266,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.birthday = birthday;
         }
         simulate() {
+            this.vel.scale(0.97);
             this.pos.add(this.vel, dT)
             this.angle += 0.2;
-            this.alpha = 100 - ((Date.now() - this.birthday)) * 100 / 3000;
+            this.alpha = 100 - ((Date.now() - this.birthday)) * 100 / 2000;
         }
         get left() {
             return this.pos.x - this.radius;
@@ -3092,11 +3296,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  DEFINE ROID DEBRIS -------------------
     class ROIDDEBRIS {
-        constructor(pos, vel, radius, hue, alpha, birthday) {
+        constructor(pos, vel, radius, hue, sat, alpha, birthday) {
             this.pos = pos.clone();
             this.vel = vel.clone();
             this.radius = radius;
             this.hue = hue;
+            this.sat = sat;
             this.alpha = alpha;
             this.birthday = birthday;
         }
@@ -3106,8 +3311,37 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         draw() {  
             drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale)
-            c.fillStyle = `hsl(${this.hue}, 80%, 70%, ${this.alpha}%)`;
+            c.fillStyle = `hsl(${this.hue}, ${this.sat}%, ${this.alpha + 20}%, ${this.alpha}%)`;
             c.fill();
+        }
+    }
+
+    //  DEFINE RING OF FIRE -------------------
+    class RINGOFFIRE {
+        constructor(pos, hue, vel) {
+            this.pos = pos.clone();
+            this.birthday = Date.now();
+            this.vel = new Vector2(vel.x + 0.5 * Math.random(), vel.y + 0.5 * Math.random());
+            this.hue = hue;
+        }
+        simulate() {
+            this.pos.add(this.vel, dT)
+        }
+        draw() {
+            var alpha = 100 - (100 * (Date.now() - this.birthday) / 500);
+            drawCircle(this.pos.x * cScale, this.pos.y * cScale, 0.004 * cScale)
+            c.fillStyle = `hsl(${this.hue}, 60%, 60%, ${alpha}%)`;
+            c.fill();
+        }
+    }
+
+    function spawnRingOfFire(pos, radius, hue, vel) {
+        for (var i = 0; i < 300; i++) {
+            var angle = i * (2 * Math.PI / 300);
+            var x = pos.x + radius * Math.cos(angle);
+            var y = pos.y + radius * Math.sin(angle);
+            var newPos = new Vector2(x, y);
+            RingOfFire.push(new RINGOFFIRE(newPos, hue, vel));
         }
     }
 
@@ -3401,7 +3635,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         (this.pos.y + stardist * Math.sin(this.angularposition + d * 2 * Math.PI / starQuant))), 
                         this.startingRadius + 0.2 * poofStars * this.startingRadius, 
                         Math.PI / 5 + this.angularposition + d * 2 * Math.PI / starQuant);
-                    if (weaponLevel < 6) {
+                    if (weaponLevel < 6 || weaponLevel > 7) {
                         if (d % 2 == 0) {
                             c.fillStyle = `hsla(0, 0%, 80%, ${radialGrowthFade}%)`;
                         } else {    
@@ -3422,7 +3656,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         (this.pos.y + stardist * Math.sin(this.angularposition + d * 2 * Math.PI / starQuant))), 
                         1 * this.radius + 10 * (stardist - 2 * this.radius) * this.radius, 
                         Math.PI / 5 + 1.5 * this.angularposition + d * 2 * Math.PI / starQuant);
-                    if (weaponLevel < 5) {
+                    if (weaponLevel < 6) {
                         if (d % 2 == 0) {
                             c.fillStyle = `hsl(0, 0%, 80%)`;
                         } else {    
@@ -3444,10 +3678,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.textAlign = 'center';
                 //c.strokeStyle = 'green'
                 c.lineWidth = 0.05 * this.radius * cScale;
-                if (weaponLevel < 6) {
+                if (weaponLevel <= 6) {
                     c.fillText(`TORPEDO x ${weaponLevel + 1}`, this.pos.x * cScale, (this.pos.y - 2.3 * this.radius) * cScale);
-                } else {
+                } else if (weaponLevel == 7) {
                     c.fillText(`TASTE THE RAINBOW!`, this.pos.x * cScale, (this.pos.y - 2.3 * this.radius) * cScale);
+                } else if (weaponLevel == 8) {
+                    c.fillText(`GO NUTS!!!`, this.pos.x * cScale, (this.pos.y - 2.3 * this.radius) * cScale);
                 }
                 if (radialGrowthFade <= 0) {
                     Prize = [];
@@ -3531,6 +3767,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     function spawnTorpedo() {
         if (bombsAway == false) {
             var numTorpedos = weaponLevel + 1;
+            if (numTorpedos > 6) {
+                numTorpedos = 6;
+            }
             var spread = 0.2;
         var roket = Roket[0];
         var torpSpeed = 2;
@@ -3549,14 +3788,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             );
             var squangle = 0;
             var radius = 0.01;
-            var color = (weaponLevel < 6)
+            rainbowTorpedoIndex += 5;
+            if (rainbowTorpedoIndex > 360) {
+                rainbowTorpedoIndex -= 360;
+            }
+            var color = (weaponLevel < 7)
                 ? 'red'
-                : `hsl(${360 * Math.random()}, ${40 + 60 * Math.random()}%, ${40 + 20 * Math.random()}%)`;
+                : `hsl(${rainbowTorpedoIndex}, ${40 + 60 * Math.random()}%, ${40 + 20 * Math.random()}%)`;
             var friendly = 'friend';
             torpedoFired += 1;
             Torpedo.push(new TORPEDO(tipPos, torpVel, squangle, radius, color, friendly));
         }
-        var torpedoFireRate = 100;
+        //  PLAYER TORPEDO FIRE RATE  -----------
+        if (weaponLevel < 8) {
+            var torpedoFireRate = 100;
+        } else {
+            var torpedoFireRate = 33.3;
+        }
+        
         setTimeout(() => { bombsAway = false }, torpedoFireRate);
         } 
     }
@@ -3766,15 +4015,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             let seed = Math.floor(Math.random() * 0xFFFFFFFF);
             let randomNo = Math.random();
 
-            // wireframe or roid or wireframe
-            // Randomly choose about half of the roids to be wireframe
-            let isWireframe = (Math.random() < 0.25);
-            
+            //  CHOOSE WIREFRAME or POLKADOT ROID  ----------
+            //let isWireframe = (Math.random() < 0.5);
+            if (firstSpawnPass == true) {
+                var isWireframe = false;
+                firstSpawnPass = false;
+            } else {
+                var isWireframe = true;
+                console.log('isWireframe = true');
+                firstSpawnPass = true;
+            }
             // random 3D orientation
             let yaw = Math.random() * 2 * Math.PI;
             let pitch = (Math.random() - 0.5) * Math.PI; // -pi/2 .. +pi/2
             let roll = Math.random() * 2 * Math.PI;
-            Roids.push(new ROID(pos, vel, radius, mass, hue, saturation, lightness, seed, randomNo, isWireframe, yaw, pitch, roll));
+            Roids.push(new ROID(pos, vel, radius, mass, hue, saturation, lightness, seed, randomNo, isWireframe, yaw, pitch, roll, 0));
             spawnCounter += 1;
             // ...existing code...
             spawned = true;
@@ -3790,12 +4045,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         lives -= 1
         for (var u = 0; u < 500; u++) {
             var pos = Roket[0].pos.clone();
-            var kapow = 0.01 + Math.random();
+            var kapow = 0.1 + 2 * Math.random();
             var huh = 2 * Math.PI * Math.random()
             var vel = new Vector2(
                 0.1 + kapow * Math.cos(huh), 
                 0.1 + kapow * Math.sin(huh));
-            var circ = 2 * Math.PI;
             var radius = .003 + 0.01 * Math.random();
             var angle = 0;
             var randi = Math.random();
@@ -3827,7 +4081,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var vel = new Vector2(
                 0.01 + kapow * Math.cos(huh), 
                 0.01 + kapow * Math.sin(huh));
-            var circ = 2 * Math.PI;
             var radius = .005 + 0.01 * Math.random();
             var angle = 0;
             var randi = Math.random();
@@ -3852,7 +4105,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         var radius = .003;
         var alpha = 100;
         var birthday = Date.now();
-        for (var u = 0; u < 50; u++) {
+        for (var u = 0; u < 100; u++) {
             var pos = new Vector2(
                 Enemy[0].pos.x + Enemy[0].radius * Math.cos(interceptAngle), 
                 Enemy[0].pos.y + Enemy[0].radius * Math.sin(interceptAngle));
@@ -3867,21 +4120,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
 
     //  SPAWN ROID DEBRIS  -------------------
-    function makeRoidDebris(origin, hue1, hue2, debrisQuant) {
+    function makeRoidDebris(origin, radius, hue1, hue2, sat, debrisQuant, debrisVel, type) {
         var pos = origin.clone();
         var firstpass = true;
-        var radius = .003;
         var alpha = 100;
         var birthday = Date.now();
         for (var u = 0; u < debrisQuant; u++) {
-            var kapow = 0.8 * 0.5 * Math.random();
+            //var kapow = 0.8 * 0.5 * Math.random();
+            var kapow = debrisVel * 0.5 * Math.random();
             var dangle = 2 * Math.PI * Math.random()
             var vel = new Vector2(
                 kapow * Math.cos(dangle), 
                 kapow * Math.sin(dangle));
             if (hue1 == hue2) {
                 var hue = hue1;
-            } else {
+            } 
+            if (type == 'roid') {
                 if (firstpass == true) {
                     var hue = hue1;
                     firstpass = false;
@@ -3889,9 +4143,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     var hue = hue2;
                     firstpass = true;
                 }
+            } else {
+                if (firstpass == true) {
+                    var hue = hue1;
+                    var sat = 100;
+                    firstpass = false;
+                } else {
+                    var sat = 0;
+                    firstpass = true;
+                }
             }
+            if (hue1 == hue2) {
+                var hue = hue1;
+            } 
 
-            RoidDebris.push(new ROIDDEBRIS(pos, vel, radius, hue, alpha, birthday));
+            RoidDebris.push(new ROIDDEBRIS(pos, vel, radius, hue, sat, alpha, birthday, type));
         } 
     }
 
@@ -3912,11 +4178,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var exhaustScatterY = -0.2 + 0.40 * Math.random();
             var pos = new Vector2(x,y);
             var vel = new Vector2(
-                -0.35 * Math.cos(ang) + exhaustScatterX + Roket[0].vel.x, 
-                0.35 * Math.sin(ang) + exhaustScatterY + Roket[0].vel.y);
+                -0.35 * Math.cos(ang) + exhaustScatterX, 
+                0.35 * Math.sin(ang) + exhaustScatterY);
             var radius = 0;     
             var maxRadius = 0.01 + 0.02 * Math.random();
-            if (weaponLevel < 6) {
+            if (weaponLevel < 7) {
                 var hue = 300;
             } else {
                 var hue = 360 * Math.random();
@@ -4060,12 +4326,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         var dir = new Vector2();
         dir.subtract(roket.pos, prize.pos);
         var d = dir.length();
-        if (d < 0.5 * roket.radius + prize.radius && (Date.now() - prizeTimer) > 5000) {
+        if (d < roket.radius + prize.radius && (Date.now() - prizeTimer) > 5000) {
             //  HIT  --------------------
             prizeTimer = Date.now();
             weaponLevel += 1;
-            if (weaponLevel > 6) {
-                weaponLevel = 6;
+            if (weaponLevel > 8) {
+                weaponLevel = 8;
             }
             poofPrize = true;
             poofPrizeDate = Date.now();
@@ -4078,7 +4344,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         dir.subtract(roket.pos, roid1.pos);
         var d = dir.length();
         if (d <= 0.5 * roket.radius + roid1.radius) {
-            makeRoidDebris(roket.pos, roid1.hue, roid1.hue2, 200);
+            makeRoidDebris(roket.pos, 0.003, roid1.hue, roid1.hue2, 80, 200, 0.8, 'roid');
             //  DRAW COLLISION HIGHLIGHT  --------------------
             roid1.polkadotFlashTimer = 0.5;
             dir.scale(1.0 / d);
@@ -4098,7 +4364,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         } 
     }
 
-    //  HANDLE  ENEMY - ROKET  COLLISIONS  -------------------
+    //  HANDLE ROKET BOMB COLLISIONS  -------------------
+    function handleRoketBombCollisions(roket, bomb) {
+        var dir = new Vector2();
+        dir.subtract(roket.pos, bomb.pos);
+        var d = dir.length();
+        if (d < 0.5 * roket.radius + bomb.radius) {
+            //  HIT  --------------------
+            if (!athena.checked) {
+                Roket[0].collision = 2;
+                //  EXPLODE BOMB  -------------
+                bomb.exploding = true;
+            }
+        } 
+    }
+
+    //  HANDLE ENEMY ROKET COLLISIONS  -------------------
     function handleRoketEnemyCollisions(roket, enemy) {
         var dir = new Vector2();
         dir.subtract(roket.pos, enemy.pos);
@@ -4147,6 +4428,87 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         return entryPos;
     }
 
+    //  HANDLE BOMB ROKET COLLISIONS  -------------------
+    function handleBombRoketCollisions(roket, bomb) {
+        var dir = new Vector2();
+        dir.subtract(bomb.pos, roket.pos);
+        var d = dir.length();
+
+        // safety: ensure roket collision counter exists
+        if (typeof Roket[0].collision === 'undefined') Roket[0].collision = 0;
+
+        // Cooldown (milliseconds) to prevent repeated triggers from same bomb/roket
+        const COOLDOWN_MS = 700;
+        var now = Date.now();
+        if (typeof bomb._roketLastHit === 'undefined') bomb._roketLastHit = 0;
+        if (typeof roket._lastBombHit === 'undefined') roket._lastBombHit = 0;
+        if (now - bomb._roketLastHit < COOLDOWN_MS) return;
+        if (now - roket._lastBombHit < COOLDOWN_MS) return;
+
+        // radii thresholds depend on whether the bomb is exploding
+        var lethalRadius, tumbleRadius;
+        if (bomb.exploding) {
+            lethalRadius = 4 * bomb.radius;
+            tumbleRadius = 6 * bomb.radius;
+        } else {
+            lethalRadius = roket.radius + 1 * bomb.radius;
+            tumbleRadius = 0;
+        }
+
+        if (!athena.checked) {
+            if (d <= lethalRadius) {
+                // lethal
+                Roket[0].collision = 2;
+                sayByeBye = true;
+                bomb.exploding = true;
+                bomb._roketLastHit = now;
+                roket._lastBombHit = now;
+                bomb._roketAffected = true;
+            } else if (d <= tumbleRadius) {
+                // tumble + single increment
+                if (!bomb._roketAffected) {
+                    tumbling = true;
+                    Roket[0].collision = (Roket[0].collision || 0) + 1;
+                    try {
+                        var nd = dir.clone();
+                        if (nd.length() > 0) {
+                            nd.normalize();
+                            var impulse = Math.max(0.02, (tumbleRadius - d) / tumbleRadius * 0.12);
+                            // push roket away from bomb center
+                            Roket[0].vel.add(nd, -impulse);
+                        }
+                    } catch (e) {}
+                    bomb._roketLastHit = now;
+                    roket._lastBombHit = now;
+                    bomb._roketAffected = true;
+                }
+            } 
+        }
+    }
+
+    //  HANDLE BOMB ROID COLLISIONS  -------------------
+    function handleBombRoidCollisions(roid1, bomb) {
+        var dir = new Vector2();
+        dir.subtract(bomb.pos, roid1.pos);
+        var d = dir.length();
+        if (d == 0.0 || d > roid1.radius + bomb.radius)
+            return;
+        //  HIT  -----------
+        spawnRingOfFire(roid1.pos, roid1.radius, roid1.hue, roid1.vel);
+        roid1.radius *= 0.80;
+        //  REMOVE IF TOO SMALL  ----------
+        if (roid1.isWireframe == true) {
+            if (roid1.radius <= 0.3 * roid1.originalRadius) {
+                var ri = Roids.indexOf(roid1);
+                if (ri !== -1) Roids.splice(ri, 1);
+            } 
+        } else {
+            if (roid1.radius <= 0.05) {
+                var ri = Roids.indexOf(roid1);
+                if (ri !== -1) Roids.splice(ri, 1);
+            }
+        }
+    }
 
     //  HANDLE ROID ROID COLLISIONS  -------------------
     function handleRoidCollisions(roid1, roid2) {
@@ -4185,13 +4547,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         let debrisCount = Math.max(5, Math.min(100, Math.round(impulseMag * 3000)));
 
         // Use the contact point on the surface of roid1 as the debris origin
-        makeRoidDebris(new Vector2(collisionX, collisionY), roid1.hue, roid2.hue, debrisCount);
-
+        makeRoidDebris(new Vector2(collisionX, collisionY), 0.003, roid1.hue, roid2.hue, 80, debrisCount, 0.8, 'bomb');
         // polkadot visual flash remains optional
-        if (polkadots.checked == true) {
+        //if (polkadots.checked == true) {
             roid1.polkadotFlashTimer = 0.5;
             roid2.polkadotFlashTimer = 0.5;
-        }
+        //}
 
         // --- Always apply angular effects from collisions (torque + friction) ---
         // 1. Vector from A to B
@@ -4237,10 +4598,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         roid2.omega.y += relBx * collisionTumble * deltaOmegaCollB;
         // Debug: log angular velocity changes on collision
         try {
-            console.log('collision angulars:', {
-                idA: roid1.id || '?', omegaA: roid1.omega, yawA: roid1.yaw, pitchA: roid1.pitch, rollA: roid1.roll,
-                idB: roid2.id || '?', omegaB: roid2.omega, yawB: roid2.yaw, pitchB: roid2.pitch, rollB: roid2.roll
-            });
+            //console.log('collision angulars:', {
+            //    idA: roid1.id || '?', omegaA: roid1.omega, yawA: roid1.yaw, pitchA: roid1.pitch, rollA: roid1.roll,
+            //    idB: roid2.id || '?', omegaB: roid2.omega, yawB: roid2.yaw, pitchB: roid2.pitch, rollB: roid2.roll
+            //});
         } catch (e) {}
 
     //  FRICTIONAL TRANSFER OF ROTATIONAL VELOCITY  ----------------
@@ -4354,34 +4715,76 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         var d = dir.length();
         if (d <= torpedo.radius + roid1.radius) {
             //  HIT --------------------
-            if (polkadots.checked == true) {
+            //if (polkadots.checked == true) {
+                // Compute contact vector on the sphere surface in 3D with a small, robust
+                // out-of-plane component so grazing torpedo hits still produce pitch/roll.
                 let rx = torpedo.pos.x - roid1.pos.x;
                 let ry = torpedo.pos.y - roid1.pos.y;
-                // torpedo impulse scale (greatly reduced)
-                let fx = torpedo.vel.x * 0.00025;
-                let fy = torpedo.vel.y * 0.00025;
-                //  Torque (2D cross product)
-                let torque = rx * fy - ry * fx;
-                //  Moment of inertia for a solid disk: I = 0.5 * m * r^2
-                let inertia = 0.5 * roid1.mass * roid1.radius * roid1.radius;
-                //  Change in angular velocity: Δω = torque / I
-                let deltaOmega = 0.15 * torque / inertia; // reduced torpedo angular impulse (90% reduction)
-                roid1.angularVelocity += deltaOmega;
-                // update 3D omega: primarily z
-                roid1.omega.z += deltaOmega;
-                // Deterministic tumbling: map impact point into pitch/roll
-                const torpTumble = 0.06; // reduced torpedo-induced pitch/roll (90% reduction)
-                let relRx = rx / roid1.radius; // -1..1
-                let relRy = ry / roid1.radius;
-                roid1.omega.x += -relRy * torpTumble * deltaOmega; // pitch
-                roid1.omega.y += relRx * torpTumble * deltaOmega;  // roll
+                const rlen2 = rx * rx + ry * ry;
+                const rRadius = roid1.radius;
+                const rlen = Math.sqrt(rlen2);
+
+                // Unit approach direction from torpedo velocity (safeguard zero-length)
+                let ax = torpedo.vel.x;
+                let ay = torpedo.vel.y;
+                let alen = Math.sqrt(ax*ax + ay*ay) || 1.0;
+                ax /= alen; ay /= alen;
+
+                // Surface normal (in-plane) from roid center toward impact (safeguard zero)
+                let nx = rlen > 1e-9 ? rx / rlen : 0;
+                let ny = rlen > 1e-9 ? ry / rlen : 0;
+
+                // How head-on is the approach relative to the local normal? (positive = approaching)
+                let approachDot = Math.max(0, -(ax * nx + ay * ny));
+
+                // Heuristic alpha: larger when torpedo center is deeper inside the projected disk
+                // and when approach is head-on. Always leave a small floor so rim hits still get some z.
+                let penetrationFrac = Math.max(0, 1 - (rlen / rRadius));
+                let alpha = Math.max(0.02, penetrationFrac * 0.8 * Math.max(0.1, approachDot));
+                // contact z on the sphere surface (positive toward viewer)
+                let rz = rRadius * alpha;
+
+                // torpedo impulse vector (assume in-plane force from torpedo velocity)
+                // Increase impulse scale so torpedoes can impart noticeable off-axis torque
+                const IMPULSE_SCALE = 0.25; // was 0.025
+                let fx = torpedo.vel.x * IMPULSE_SCALE;
+                let fy = torpedo.vel.y * IMPULSE_SCALE;
+                let fz = 0;
+
+                // Contact position vector r = (rx, ry, rz)
+                // Compute 3D torque = r x F
+                // torque.x = ry * fz - rz * fy = - rz * fy
+                // torque.y = rz * fx - rx * fz = rz * fx
+                // torque.z = rx * fy - ry * fx  (original 2D torque)
+                let torqueX = -rz * fy;
+                let torqueY = rz * fx;
+                let torqueZ = rx * fy - ry * fx;
+
+                // Moment of inertia (approximate solid disk behavior as before)
+                let inertia = 0.5 * roid1.mass * rRadius * rRadius;
+
+                // scale into angular velocity change
+                // Use separate gains: keep axial (Z) modest to avoid only pole-spin,
+                // but amplify off-axis (X/Y) so pitch/roll are visible.
+                const TORP_GAIN_Z = 0.15;   // preserves previous axial feel
+                const TORP_GAIN_OFF = 0.9;  // stronger off-axis effect
+                let deltaOmegaX = TORP_GAIN_OFF * torqueX / inertia;
+                let deltaOmegaY = TORP_GAIN_OFF * torqueY / inertia;
+                let deltaOmegaZ = TORP_GAIN_Z * torqueZ / inertia;
+
+                // apply to 3D omega so wireframe roids pick up off-axis tumble
+                roid1.omega.x += deltaOmegaX;
+                roid1.omega.y += deltaOmegaY;
+                roid1.omega.z += deltaOmegaZ;
+
+                // keep scalar compatibility and clamp axial spin used for pole visuals
                 roid1.angularVelocity = roid1.omega.z;
                 roid1.angularVelocity = Math.max(-0.05, Math.min(roid1.angularVelocity, 0.05));
                 roid1.polkadotFlashTimer = 0.5;
                 try {
-                    console.log('torp hit angulars:', { id: roid1.id || '?', omega: roid1.omega, yaw: roid1.yaw, pitch: roid1.pitch, roll: roid1.roll });
+                    //console.log('torp hit angulars:', { id: roid1.id || '?', omega: roid1.omega, yaw: roid1.yaw, pitch: roid1.pitch, roll: roid1.roll });
                 } catch (e) {}
-            }
+            //}
 
             if (torpedo.friendOrFoe == 'friend') {
                 torpedoHit += 1
@@ -4391,12 +4794,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
 
             makePulse(torpedo.pos);
-            makeRoidDebris(torpedo.pos, roid1.hue, roid1.hue, 200);
+            makeRoidDebris(torpedo.pos, 0.003, roid1.hue, roid1.hue, sat = 80, 200, 0.8, 'roid');
             
             roid1.hue += 5;
             roid1.lightness -= 2;
             if (roid1.isWireframe == true) {
-                roid1.radius *= 0.90;
+                spawnRingOfFire(roid1.pos, roid1.radius, roid1.hue, roid1.vel);
+                roid1.radius *= 0.80;
             } else {
                 roid1.radius *= 0.75;
             }
@@ -4409,13 +4813,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var newV1 = (m1 * v1 + m2 * v2 - m2 * (v1 - v2) * 1) / (m1 + m2);
             
             roid1.vel.add(dir, (-0.5 + Math.random()) + 0.2*(newV1 - v1));
-            Torpedo.splice(torpedo,1);
+            Torpedo.splice(u, 1);
             roid1.polkaSeed = Math.floor(Math.random() * 0xFFFFFFFF);
 
             //  REMOVE IF TOO SMALL  ----------
             if (roid1.isWireframe == true) {
                 if (roid1.radius <= 0.3 * roid1.originalRadius) {
-                    spawnBomb(roid1.pos, 0.3 * roid1.originalRadius);
+                    //  SPAWN BOMB  ----------
+                    // create bomb and explicitly set its velocity to the roid's current velocity
+                    console.log('SPAWN BOMB: roid.vel=', roid1.vel);
+                    const __b = new BOMB(roid1.pos.clone(), roid1.vel.clone(), 0.0001 * cScale);
+                    Bomb.push(__b);
+                    // ensure the bomb's velocity matches the roid's (defensive in case constructor mutation occurs)
+                    Bomb[Bomb.length - 1].vel = roid1.vel.clone();
+                    console.log('SPAWN BOMB: bomb.vel=', Bomb[Bomb.length - 1].vel);
                     Roids.splice(r, 1);
                 } 
             } else {
@@ -4493,12 +4904,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 makeEnemyDebris();
 
                 //  SPAWN PRIZE  -------------------
-                if (weaponLevel < 6) {
+                if (weaponLevel < 8) {
                     spawnPrize(Enemy[0].pos);
                 }
 
                 spawnSoloAlien(enemy.pos);
-                Torpedo.splice(torpedo,1);
+                // remove the specific torpedo object from the array (find its index first)
+                var ti = Torpedo.indexOf(torpedo);
+                if (ti !== -1) Torpedo.splice(ti, 1);
                 window.clearInterval(gonnaGetcha);
                 Enemy = [];
             } 
@@ -4521,12 +4934,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (gameIdle == true) {
                     makePulse(Roket[0].pos);
                     spawnSpawnlets(Roket[0].pos.x, Roket[0].pos.y, 50, 0.02, 1500);
-                    Torpedo.splice(torpedo,1);
+                    // remove the specific torpedo object from the array (find its index first)
+                    var ti = Torpedo.indexOf(torpedo);
+                    if (ti !== -1) Torpedo.splice(ti, 1);
                 } else {
                     if (!athena.checked) {
                         Roket[0].collision = 2;
                         sayByeBye = true;
-                        Torpedo.splice(torpedo,1);
+                        // remove the specific torpedo object from the array (find its index first)
+                        var ti = Torpedo.indexOf(torpedo);
+                        if (ti !== -1) Torpedo.splice(ti, 1);
                     }
                 }
             } 
@@ -4543,7 +4960,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  HANDLE ROKET DEBRIS AGE OUT  -------------------
     function handleRoketDebrisAge(debris, d) {
-        if (Date.now() - debris.birthday > 3000) {
+        if (Date.now() - debris.birthday > 2000) {
                 RoketDebris.splice(d, 1);
 
             if (RoketDebris.length == 0 && lives > 0) {
@@ -4627,6 +5044,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         WarpIn = [];
         Prize = [];
         Bomb = [];
+        RingOfFire = [];
 
         TrashTalk = [
             'BOOM!', 'KABOOM!', 'BOOYAH!', 'HAHAHA!!', 'HAH HAAAA!', 
@@ -4685,6 +5103,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         tumbling = false;
         debrisMade = false;
         spawning = false;
+        firstSpawnPass = true; 
         animateWave = false;
         dropOnce = true;
         sayByeBye = false; 
@@ -4715,6 +5134,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         gameOverTime = 0;
         torpedoFired = 0;
         torpedoHit = 0;
+        rainbowTorpedoIndex = 0;
         totalTravelX = 0;
         totalTravelY = 0;
         earthrise = 0;
@@ -4752,6 +5172,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         poofStars = 1;
         poofPrizeDate = 0;
         textPulse = 0;
+        bombDirShake = 0;
+        radarPulser = 0;
 
         c.shadowBlur = 0;
         
@@ -4819,7 +5241,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         //  ADVANCE WAVE WHEN ALL ROIDS AND ENEMIES GONE  -------------------
         if (gameIdle != true) {
-            if (Roids.length == 0 && spawning == false && Enemy.length == 0) {
+            if (Roids.length == 0 && spawning == false && Enemy.length == 0 && Bomb.length == 0) {
                 spawning = true;
                 wave += 1;
                 waveNoBday = Date.now();
@@ -4879,6 +5301,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (Enemy[0] != null) {
                 handleRoketEnemyCollisions(Roket[0], Enemy[0]);
             }
+
+            //  HANDLE ROKET BOMB COLLISIONS  ------------------
+            for (var b = 0; b < Bomb.length; b++) {
+                handleRoketBombCollisions(Roket[0], Bomb[b]);
+            }
         }  
 
         //  SIMULATE ENEMY  -------------------
@@ -4928,6 +5355,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             //sadTromboneSound.play();
         }
 
+        //  SIMULATE RING OF FIRE  -------------------
+        for (var r = 0; r < RingOfFire.length; r++) {
+            RingOfFire[r].simulate();
+            if (Date.now() - RingOfFire[r].birthday > 300) {
+                RingOfFire.splice(r, 1);
+                r--;
+                continue;
+            }
+        }   
+
         //  SIMULATE ROIDS  --------------------
         SortedRoids = Roids.sort((a, b) => a.left - b.left); 
         for (var r = 0; r < Roids.length; r++) {
@@ -4936,17 +5373,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 //Roids[r].simulate();
                 sortedRoids1.simulate();
 
-                //  HANDLE ROKET ROID HITS ------------------
+                //  HANDLE ROKET ROID COLLISIONS ------------------
                 var roket = Roket[0];
                 if (roket.left < sortedRoids1.right) {
                     if (Math.abs(sortedRoids1.pos.y - roket.pos.y) <= sortedRoids1.radius + roket.radius) {
                         handleRoketRoidCollisions(roket, sortedRoids1);
                     }
-                
-                
                 }  
                 
-                //  DETECT PRIZE COLLECTION  -------------------
+                //  HANDLE PRIZE COLLECTION  -------------------
                 if (Prize[0] != null) {
                     handlePrizeCollisions(roket, Prize[0]);
                 }
@@ -4956,56 +5391,89 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     handlePusherRoidPushes(sortedRoids1, Pusher[0]);
                 }
             
-                //  DETECT ROID-ROID HITS  ------------------
-                //if (Roids.length > 0) {
+                //  HANDLE ROID ROID COLLISIONS  ------------------
                 for (var t = r+1; t < Roids.length; t++) {
                     var sortedRoids2 = SortedRoids[t];
                     if (sortedRoids2 != null && sortedRoids1 != null ) {
                         if (sortedRoids2.left < sortedRoids1.right) {
-                                if (Math.abs(sortedRoids1.pos.y - sortedRoids2.pos.y) <= sortedRoids1.radius + sortedRoids2.radius) {
-                                    handleRoidCollisions(sortedRoids1, sortedRoids2);
-                                }
-                            }  
+                            if (Math.abs(sortedRoids1.pos.y - sortedRoids2.pos.y) <= sortedRoids1.radius + sortedRoids2.radius) {
+                                handleRoidCollisions(sortedRoids1, sortedRoids2);
+                            }
+                        }  
                     }
                 }
-                //}
-            
-                //if (gameOn == true) {
-                    var SortedRoketDebris = RoketDebris.sort((a, b) => a.left - b.left);
-                    //  HANDLE SHIP DEBRIS HITS ON ROIDS ------------------
-                    for (var s = 0; s < RoketDebris.length; s++) {
-                        var sortedRoketDebris1 = SortedRoketDebris[s];
-                        if (Roids[r] != null) {
-                            if (sortedRoketDebris1.left < sortedRoids1.right) {
-                                if (Math.abs(sortedRoids1.pos.y - sortedRoketDebris1.pos.y) <= sortedRoids1.radius + sortedRoketDebris1.radius) {
-                                    handleShipDebrisCollisions(sortedRoids1, sortedRoketDebris1);
-                                }
-                            }   
-                        }
-                    }
 
-                    //  HANDLE TORPEDO ROID HITS  --------------------
-                    var SortedTorpedo = Torpedo.sort((a, b) => a.left - b.left);
-                    for (var u = 0; u < Torpedo.length; u++) {
-                        var sortedTorpedo1 = SortedTorpedo[u];
-                        if (Roids[r] != null) {
-                            if (sortedTorpedo1.left < sortedRoids1.right) {
-                                if (Math.abs(sortedRoids1.pos.y - sortedTorpedo1.pos.y) <= sortedRoids1.radius + sortedTorpedo1.radius) {
-                                    handleTorpedoRoidHits(sortedRoids1, sortedTorpedo1, r, u);
-                                }
-                            }   
-                        }
+                //  HANDLE BOMB ROID COLLISIONS  -------------------
+                if (Bomb.length > 0) {
+                    var SortedBombs = Bomb.sort((a, b) => a.left - b.left);
+                    for (var b = 0; b < SortedBombs.length; b++) {
+                        if (SortedBombs[b].left < sortedRoids1.right) {
+                            if (Math.abs(sortedRoids1.pos.y - SortedBombs[b].pos.y) <= sortedRoids1.radius + SortedBombs[b].radius) {
+                                handleBombRoidCollisions(sortedRoids1, SortedBombs[b]);
+                            }
+                        }   
                     }
+                }
 
-                    /*//  HANDLE EXHAUST PUSHES  --------------------
-                    for (var e = 0; e < Exhaustlets.length; e++) {
-                        if (Roids[r] != null) {
-                            handleExhaustPushes(Roids[r], Exhaustlets[e]);
-                        }
-                    }*/
-                //}
+                //  HANDLE SHIP DEBRIS HITS ON ROIDS ------------------
+                var SortedRoketDebris = RoketDebris.sort((a, b) => a.left - b.left);
+                for (var s = 0; s < RoketDebris.length; s++) {
+                    var sortedRoketDebris1 = SortedRoketDebris[s];
+                    if (Roids[r] != null) {
+                        if (sortedRoketDebris1.left < sortedRoids1.right) {
+                            if (Math.abs(sortedRoids1.pos.y - sortedRoketDebris1.pos.y) <= sortedRoids1.radius + sortedRoketDebris1.radius) {
+                                handleShipDebrisCollisions(sortedRoids1, sortedRoketDebris1);
+                            }
+                        }   
+                    }
+                }
+
+                //  HANDLE TORPEDO ROID HITS  --------------------
+                var SortedTorpedos = Torpedo.sort((a, b) => a.left - b.left);
+                for (var u = 0; u < SortedTorpedos.length; u++) {
+                    var sortedTorpedo1 = SortedTorpedos[u];
+                    if (Roids[r] != null) {
+                        if (sortedTorpedo1.left < sortedRoids1.right) {
+                            if (Math.abs(sortedRoids1.pos.y - sortedTorpedo1.pos.y) <= sortedRoids1.radius + sortedTorpedo1.radius) {
+                                handleTorpedoRoidHits(sortedRoids1, sortedTorpedo1, r, u);
+                            }
+                        }   
+                    }
+                }
+
+                /*//  HANDLE EXHAUST PUSHES  --------------------
+                for (var e = 0; e < Exhaustlets.length; e++) {
+                    if (Roids[r] != null) {
+                        handleExhaustPushes(Roids[r], Exhaustlets[e]);
+                    }
+                }*/
             }
         } 
+
+        //  SIMULATE BOMB  ----------------------------
+        for (var b = 0; b < Bomb.length; b++) {
+            Bomb[b].simulate();
+            //  HANDLE BOMB ROCKET COLLISIONS  -------------
+            if (Roket[0] != null && Bomb[b].left < Roket[0].right) {
+                if (Math.abs(Roket[0].pos.y - Bomb[b].pos.y) <= Roket[0].radius + Bomb[b].radius) {
+                    handleBombRoketCollisions(Roket[0], Bomb[b]);
+                }
+            }
+            //  EXPLODE BOMB  ----------
+            if (Bomb[b].exploding != true && Date.now() - Bomb[b].birthday > 3000) {
+                Bomb[b].exploding = true;
+                Bomb[b].birthday = Date.now();
+            }
+            if (Bomb[b].exploding == true && Date.now() - Bomb[b].birthday > 300) {
+                Bomb.splice(b, 1);
+            }
+        }
+        if (Bomb.length > 0) {
+            bombDirShake += 0.05;
+            if (bombDirShake > 2 * Math.PI) {
+                bombDirShake -= 2 * Math.PI;
+            }
+        }
 
         //  HANDLE TORPEDO ENEMY HITS  --------------------
         for (var e = 0; e < Enemy.length; e++) {
@@ -5131,12 +5599,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             earthWidth,
             earthHeight);
         c.restore();
+
+        //  DRAW RING OF FIRE  -------------------
+        for (var r = 0; r < RingOfFire.length; r++) {
+            RingOfFire[r].draw();
+        }   
         
         //  DRAW ROIDS  --------------------
         for (var r = 0; r < Roids.length; r++) {
             if (Roids[r] != null) {
                 Roids[r].draw();
             }
+        }
+
+        for (var b = 0; b < Bomb.length; b++) {
+            Bomb[b].draw();
         }
 
         //  DRAW TORPEDO  ------------------
@@ -5516,7 +5993,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             Roket[0].draw();
             } else {
             if (debrisMade != true) {
-                weaponLevel = 0;
+                weaponLevel -= 2;
+                if (weaponLevel < 0) weaponLevel = 0;  
                 makePulse(Roket[0].pos);
                 makeRoketDebris();
             }
