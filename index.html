@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <head>
-    <title>R0IDS 1.70</title>
+    <title>R0IDS 1.71</title>
     <style>
         body {font-family: monospace; 
             font-size: 14px;
@@ -2755,17 +2755,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var age = Date.now() - this.birthday;
             if (this.exploding != true) {
                 //  DRAW RADAR PULSE  ---------
-                radarPulser += 0.03;
-                c.linewidth = 0.01 * cScale;
+                c.lineWidth = 0.01 * cScale;
                 for (var r = 1; r < 5; r++) {
-                    c.strokeStyle = `hsla(0, 0%, ${r / 0.04}%, ${100 - radarPulser * 100}%)`;
+                    c.strokeStyle = `hsla(0, ${radarPulser * 100}%, ${80}%, ${100 - radarPulser * 100}%)`;
                     var radarPulseRadius = radarPulser * 0.5 * r / 10;
                     drawCircle(this.pos.x * cScale, this.pos.y * cScale, radarPulseRadius * cScale);
                     c.stroke();
                 }
-                if (radarPulser > 1) {
-                    radarPulser = 0;
-                }
+                
                 let whiteHot = 0;
                 if (age > 2800) {
                     whiteHot = 30 * (age - 2800) / 200;
@@ -2803,7 +2800,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     var bombDirPulseDisp = 2 * this.radius + 0.7 * this.radius * Math.abs(Math.sin(bombDirShake));
                     const arrowX = this.pos.x + bombDirPulseDisp * Math.cos(heading);
                     const arrowY = this.pos.y + bombDirPulseDisp * Math.sin(heading);
-                    drawArrow(arrowX, arrowY, arrowAngle, 0.00015 * cScale);
+                    drawArrow(arrowX, arrowY, arrowAngle, Math.abs(Math.sin(bombDirShake) * 50 / cScale));
                     c.fillStyle = `hsla(60, 100%, 50%, 60%)`;
                     c.fill();
                 }
@@ -3321,7 +3318,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         constructor(pos, hue, vel) {
             this.pos = pos.clone();
             this.birthday = Date.now();
-            this.vel = new Vector2(vel.x + 0.5 * Math.random(), vel.y + 0.5 * Math.random());
+            this.vel = new Vector2((-0.25 + 0.5 * Math.random()), (-0.25 + 0.5 * Math.random()));
             this.hue = hue;
         }
         simulate() {
@@ -4493,8 +4490,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         var d = dir.length();
         if (d == 0.0 || d > roid1.radius + bomb.radius)
             return;
-        //  HIT  -----------
-        spawnRingOfFire(roid1.pos, roid1.radius, roid1.hue, roid1.vel);
+        //  HIT  -------------------------------
+        //  make ring of fire particles  ---------
+        var velocity = roid1.vel.clone();
+        velocity.normalize();
+        velocity.scale(0.05);
+        spawnRingOfFire(roid1.pos, roid1.radius, roid1.hue, velocity);
         roid1.radius *= 0.80;
         //  REMOVE IF TOO SMALL  ----------
         if (roid1.isWireframe == true) {
@@ -5469,6 +5470,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
         if (Bomb.length > 0) {
+            radarPulser += 0.04;
+            if (radarPulser > 1) {
+                radarPulser = 0;
+            }
             bombDirShake += 0.05;
             if (bombDirShake > 2 * Math.PI) {
                 bombDirShake -= 2 * Math.PI;
