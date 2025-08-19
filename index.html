@@ -756,15 +756,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Default dot hue (unused when flashing red)
         const dotHue = (roidHue + 90) % 360;
 
-        // Temporary debug: log flash parameters for diagnosis (limit logs)
-        if (typeof drawWireframeRoid._flashLogCount === 'undefined') drawWireframeRoid._flashLogCount = 0;
-        if (flashAmount > 0 && drawWireframeRoid._flashLogCount < 30) {
-            console.log(`WFRAME FLASH ${drawWireframeRoid._flashLogCount}: flashPolkadots=`, flashPolkadots,
-                'flashAmount=', flashAmount, 'dotHue=', dotHue,
-                'roidHSL=', roidHue, roidSaturation, roidLightness);
-            drawWireframeRoid._flashLogCount++;
-        }
-
         if (flashAmount > 0) {
             // Blink pattern: 3 quick red blinks over the standard flash duration.
             const BLINK_COUNT = 3;
@@ -2669,11 +2660,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (Date.now() - this.birthday > 2800) {
                     this.radius *= 0.9;
                 }
-                // Debug: log initial velocity once to check for unexpected zeroing
-                if (!this._spawnLogged) {
-                    try { console.log('BOMB.simulate ENTRY: vel=', this.vel, 'pos=', this.pos); } catch (e) {}
-                    this._spawnLogged = true;
-                }
                 // Guard: if no player roket exists, just coast
                 if (!Roket || Roket.length === 0 || !Roket[0] || !Roket[0].pos) {
                     this.pos.add(this.vel, dT);
@@ -4019,7 +4005,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 firstSpawnPass = false;
             } else {
                 var isWireframe = true;
-                console.log('isWireframe = true');
                 firstSpawnPass = true;
             }
             // random 3D orientation
@@ -4821,13 +4806,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (roid1.isWireframe == true) {
                 if (roid1.radius <= 0.3 * roid1.originalRadius) {
                     //  SPAWN BOMB  ----------
-                    // create bomb and explicitly set its velocity to the roid's current velocity
-                    console.log('SPAWN BOMB: roid.vel=', roid1.vel);
+                    // create bomb and explicitly set its velocity to the roid's current velocit
                     const __b = new BOMB(roid1.pos.clone(), roid1.vel.clone(), 0.0001 * cScale);
                     Bomb.push(__b);
                     // ensure the bomb's velocity matches the roid's (defensive in case constructor mutation occurs)
                     Bomb[Bomb.length - 1].vel = roid1.vel.clone();
-                    console.log('SPAWN BOMB: bomb.vel=', Bomb[Bomb.length - 1].vel);
                     Roids.splice(r, 1);
                 } 
             } else {
