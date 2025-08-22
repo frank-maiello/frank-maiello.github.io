@@ -173,10 +173,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //    spawnSoloAlien(new Vector2(0.5 * simWidth, 0.2 * simHeight));
         //}
 
-        if (u.key == "x" || u.key == "X") {
-            spawnSpawnlets(0.5 * simWidth, 0.5 * simHeight, 4, 0.35, 1000);
-        }
-
         if (gameOn != true && lives < 1 && (u.key == "R" || u.key == 'r')) {
             window.clearInterval(fallingStars);
             setupScene();
@@ -2315,12 +2311,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  DEFINE TORPEDO  -----------------
     class TORPEDO {
-        constructor(pos, vel, squangle, radius, hue, friendOrFoe) {
+        constructor(pos, vel, squangle, radius, color, friendOrFoe) {
             this.pos = pos.clone();
             this.vel = vel.clone();
             this.squangle = squangle;
             this.radius = radius;
-            this.hue = hue;
+            this.color = color;
             this.friendOrFoe = friendOrFoe;
         }
         get left() {
@@ -2333,23 +2329,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.pos.add(this.vel, dT);
             if (this.friendOrFoe == 'foe') {
                 if (this.vel.x > 0) {
-                    this.squangle += 1;
+                    this.squangle += 0.07;
                 } else {
-                    this.squangle -= 1;
+                    this.squangle -= 0.07;
                 }
             }
         }
         draw() {
             if (this.friendOrFoe == 'foe') {
-                const points = 4;
-                const starWedges = Math.PI / points;
-                var radius = 1.5 * this.radius; // + 0.5 * this.radius * Math.cos(2*this.squangle);
-                var innerRadius = 0.4 * radius;
-                var outerRadius = 1.4 * radius;
-                //function spawnRoidDebris(origin, radius, hue1, hue2, sat, debrisQuant, debrisVel, type)
-                spawnRoidDebris(this.pos, 0.003, 60, 60, 100, 20, 0.4, 'torpedo');
+                const starWedges = Math.PI / 8;
+                var radius = 1.5 * this.radius + 0.5 * this.radius * Math.cos(2*this.squangle);
+                var innerRadius = 0.5 * radius;
+                var outerRadius = 1.0 * radius;
                 c.beginPath();
-                for (var v = 0; v < 2 * points; v++) {
+                for (var v = 0; v < 20; v++) {
                     if (v == 0) {
                         c.moveTo((this.pos.x + innerRadius * Math.cos(this.squangle + v * starWedges)) * cScale, (this.pos.y + innerRadius * Math.sin(this.squangle + v * starWedges)) * cScale);
                     } else 
@@ -2360,18 +2353,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     }
                 }
                 c.closePath();
-                c.fillStyle = `yellow`;
-                c.fill();
-                c.lineWidth = 0.15 * this.radius * cScale;
-                c.strokeStyle = `cyan`;
-                c.stroke();
-            } else {
-                spawnRoidDebris(this.pos, 0.003, this.hue, this.hue, 100, 1, 0.4, 'torpedo');
-                drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
-                c.fillStyle = `hsl(${this.hue}, ${40 + 60 * Math.random()}%, ${40 + 20 * Math.random()}%)`;
-                c.fill();
-            }
-            
+                } else {
+                    drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale)
+                }
+            c.fillStyle = this.color;
+            c.fill();
         }
     }
 
@@ -2670,7 +2656,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         simulate() {
             if (this.exploding !== true) {
-                //  COMPRESS BOMB BEFORE EXPLODING  ----------
+                //  COMPRESS BOMB  ----------
                 if (Date.now() - this.birthday > 2800) {
                     this.radius *= 0.9;
                 }
@@ -2681,8 +2667,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
 
                 // Tunable parameters (adjust for feel)
-                const maxSpeed = 0.20 + wave / 100;      // desired top speed for the bomb
-                const maxAccel = 0.30 + wave / 100;      // max change in velocity (units/sec); lower = smoother
+                const maxSpeed = 0.20;      // desired top speed for the bomb
+                const maxAccel = 0.30;      // max change in velocity (units/sec); lower = smoother
                 const angleSmoothing = 0.22; // 0 = no smoothing, 1 = instant
 
                 // Predict intercept heading using the bomb's max speed
@@ -2812,7 +2798,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.drawImage(offscreenFlashCanvas, (this.pos.x - 0.2) * cScale, (this.pos.y - 0.2) * cScale); 
                     c.drawImage(offscreenFlashCanvas, (this.pos.x - 0.2) * cScale, (this.pos.y - 0.2) * cScale); 
                     c.drawImage(offscreenFlashCanvas, (this.pos.x - 0.2) * cScale, (this.pos.y - 0.2) * cScale); 
-                    spawnRoidDebris(this.pos, 0.004, 0, 0, 100, 750, 1.8, 'bomb');
+                    makeRoidDebris(this.pos, 0.004, 0, 0, 100, 750, 1.8, 'bomb');
                 }
                 //  OVERALL BUBBLE SHADING  ----------
                 var sphereGradient = c.createRadialGradient(
@@ -3293,7 +3279,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  DEFINE ROID DEBRIS -------------------
     class ROIDDEBRIS {
-        constructor(pos, vel, radius, hue, sat, alpha, birthday, type) {
+        constructor(pos, vel, radius, hue, sat, alpha, birthday) {
             this.pos = pos.clone();
             this.vel = vel.clone();
             this.radius = radius;
@@ -3301,19 +3287,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.sat = sat;
             this.alpha = alpha;
             this.birthday = birthday;
-            this.type = type;
         }
         simulate() {
             this.pos.add(this.vel, dT)
-            if (this.type == 'torpedo') {
-                this.alpha = 70 - ((Date.now() - this.birthday)) * 50 / 1000;
-            } else {
-                this.alpha = 100 - ((Date.now() - this.birthday)) * 100 / 1000;
-            }
+            this.alpha = 100 - ((Date.now() - this.birthday)) * 100 / 1000;
         }
         draw() {  
             drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale)
-            c.fillStyle = `hsl(${this.hue}, ${this.sat}%, ${this.alpha}%, ${this.alpha}%)`;
+            c.fillStyle = `hsl(${this.hue}, ${this.sat}%, ${this.alpha + 20}%, ${this.alpha}%)`;
             c.fill();
         }
     }
@@ -3683,11 +3664,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (weaponLevel <= 6) {
                     c.fillText(`TORPEDO x ${weaponLevel + 1}`, this.pos.x * cScale, (this.pos.y - 2.3 * this.radius) * cScale);
                 } else if (weaponLevel == 7) {
-                    c.fillText(`TASTE THE RAINBOW!!`, this.pos.x * cScale, (this.pos.y - 2.3 * this.radius) * cScale);
+                    c.fillText(`TASTE THE RAINBOW!`, this.pos.x * cScale, (this.pos.y - 2.3 * this.radius) * cScale);
                 } else if (weaponLevel == 8) {
                     c.fillText(`GO NUTS!!!`, this.pos.x * cScale, (this.pos.y - 2.3 * this.radius) * cScale);
-                } else if (weaponLevel == 9) {
-                    c.fillText(`YOU CAN'T LOSE!!!`, this.pos.x * cScale, (this.pos.y - 2.3 * this.radius) * cScale);
                 }
                 if (radialGrowthFade <= 0) {
                     Prize = [];
@@ -3778,13 +3757,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         var roket = Roket[0];
         var torpSpeed = 2;
         var tipOffset = 0.9 * roket.radius;
-        if (weaponLevel > 8) {
-            wagTorpedoIndex += 1;
-            var wagTorpedos = 0.1 * Math.PI * Math.sin(wagTorpedoIndex);
-        } else {
-            var wagTorpedos = 0;
-        }
-        
         for (var i = 0; i < numTorpedos; i++) {
             bombsAway = true;
             var t = i - (numTorpedos - 1) / 2;
@@ -3794,8 +3766,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var tipY = roket.pos.y - tipOffset * Math.sin(roket.angle);
             var tipPos = new Vector2(tipX, tipY);
             var torpVel = new Vector2(
-                roket.vel.x + torpSpeed * Math.cos(roket.angle + angleOffset + wagTorpedos),
-                roket.vel.y - torpSpeed * Math.sin(roket.angle + angleOffset + wagTorpedos)
+                roket.vel.x + torpSpeed * Math.cos(roket.angle + angleOffset),
+                roket.vel.y - torpSpeed * Math.sin(roket.angle + angleOffset)
             );
             var squangle = 0;
             var radius = 0.01;
@@ -3803,13 +3775,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (rainbowTorpedoIndex > 360) {
                 rainbowTorpedoIndex -= 360;
             }
-            var hue = (weaponLevel < 7)
-                ? 0
-                : rainbowTorpedoIndex;
+            var color = (weaponLevel < 7)
+                ? 'red'
+                : `hsl(${rainbowTorpedoIndex}, ${40 + 60 * Math.random()}%, ${40 + 20 * Math.random()}%)`;
             var friendly = 'friend';
             torpedoFired += 1;
-
-            Torpedo.push(new TORPEDO(tipPos, torpVel, squangle, radius, hue, friendly));
+            Torpedo.push(new TORPEDO(tipPos, torpVel, squangle, radius, color, friendly));
         }
         //  PLAYER TORPEDO FIRE RATE  -----------
         if (weaponLevel < 8) {
@@ -4051,22 +4022,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
 
     //  SPAWN ROKET DEBRIS  -------------------
-    function spawnRoketDebris() {
+    function makeRoketDebris() {
         debrisMade = true;
         lives -= 1
         for (var u = 0; u < 500; u++) {
             var pos = Roket[0].pos.clone();
             var kapow = 0.1 + 2 * Math.random();
             var huh = 2 * Math.PI * Math.random()
-            if (bombBlastAngle == null) {
-                var vel = new Vector2(
+            var vel = new Vector2(
                 0.1 + kapow * Math.cos(huh), 
                 0.1 + kapow * Math.sin(huh));
-            } else {
-                var vel = new Vector2(
-                0.1 + kapow * Math.cos(huh) - 1.5 * Math.cos(bombBlastAngle), 
-                0.1 + kapow * Math.sin(huh) - 1.5 * Math.sin(bombBlastAngle));
-            }
             var radius = .003 + 0.01 * Math.random();
             var angle = 0;
             var randi = Math.random();
@@ -4087,7 +4052,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             RoketDebris.push(new DEBRIS(pos, vel, radius, angle, hue, alpha, birthday));
         }
-        bombBlastAngle = null;
     }
 
     //  SPAWN ENEMY UFO DEBRIS  -------------------
@@ -4138,9 +4102,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
 
     //  SPAWN ROID DEBRIS  -------------------
-    function spawnRoidDebris(origin, radius, hue1, hue2, sat, debrisQuant, debrisVel, type) {
+    function makeRoidDebris(origin, radius, hue1, hue2, sat, debrisQuant, debrisVel, type) {
         var pos = origin.clone();
         var firstpass = true;
+        var alpha = 100;
         var birthday = Date.now();
         for (var u = 0; u < debrisQuant; u++) {
             //var kapow = 0.8 * 0.5 * Math.random();
@@ -4153,7 +4118,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 var hue = hue1;
             } 
             if (type == 'roid') {
-                var alpha = 100;
                 if (firstpass == true) {
                     var hue = hue1;
                     firstpass = false;
@@ -4161,12 +4125,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     var hue = hue2;
                     firstpass = true;
                 }
-            } else if (type == 'torpedo') {
-                var alpha = 0;
-                var hue = hue1;
-                var sat = 100;   
             } else {
-                var alpha = 100;
                 if (firstpass == true) {
                     var hue = hue1;
                     var sat = 100;
@@ -4179,7 +4138,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (hue1 == hue2) {
                 var hue = hue1;
             } 
-            
+
             RoidDebris.push(new ROIDDEBRIS(pos, vel, radius, hue, sat, alpha, birthday, type));
         } 
     }
@@ -4353,8 +4312,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             //  HIT  --------------------
             prizeTimer = Date.now();
             weaponLevel += 1;
-            if (weaponLevel > 9) {
-                weaponLevel = 9;
+            if (weaponLevel > 8) {
+                weaponLevel = 8;
             }
             poofPrize = true;
             poofPrizeDate = Date.now();
@@ -4367,7 +4326,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         dir.subtract(roket.pos, roid1.pos);
         var d = dir.length();
         if (d <= 0.5 * roket.radius + roid1.radius) {
-            spawnRoidDebris(roket.pos, 0.003, roid1.hue, roid1.hue2, 80, 200, 0.8, 'roid');
+            makeRoidDebris(roket.pos, 0.003, roid1.hue, roid1.hue2, 80, 200, 0.8, 'roid');
             //  DRAW COLLISION HIGHLIGHT  --------------------
             roid1.polkadotFlashTimer = 0.5;
             dir.scale(1.0 / d);
@@ -4471,10 +4430,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // radii thresholds depend on whether the bomb is exploding
         var lethalRadius, tumbleRadius;
         if (bomb.exploding) {
-            lethalRadius = 8 * bomb.radius;
-            tumbleRadius = 12 * bomb.radius;
+            lethalRadius = 4 * bomb.radius;
+            tumbleRadius = 6 * bomb.radius;
         } else {
-            lethalRadius = roket.radius + bomb.radius;
+            lethalRadius = roket.radius + 1 * bomb.radius;
             tumbleRadius = 0;
         }
 
@@ -4482,10 +4441,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (d <= lethalRadius) {
                 // lethal
                 Roket[0].collision = 2;
-
-                //  save relative rocket to bomb angle for blast ---------
-                bombBlastAngle = Math.atan2(dir.y, dir.x);
-
                 sayByeBye = true;
                 bomb.exploding = true;
                 bomb._roketLastHit = now;
@@ -4578,7 +4533,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         let debrisCount = Math.max(5, Math.min(100, Math.round(impulseMag * 3000)));
 
         // Use the contact point on the surface of roid1 as the debris origin
-        spawnRoidDebris(new Vector2(collisionX, collisionY), 0.003, roid1.hue, roid2.hue, 80, debrisCount, 0.8, 'bomb');
+        makeRoidDebris(new Vector2(collisionX, collisionY), 0.003, roid1.hue, roid2.hue, 80, debrisCount, 0.8, 'bomb');
         // polkadot visual flash remains optional
         //if (polkadots.checked == true) {
             roid1.polkadotFlashTimer = 0.5;
@@ -4825,7 +4780,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
 
             makePulse(torpedo.pos);
-            spawnRoidDebris(torpedo.pos, 0.003, roid1.hue, roid1.hue, sat = 80, 200, 0.8, 'roid');
+            makeRoidDebris(torpedo.pos, 0.003, roid1.hue, roid1.hue, sat = 80, 200, 0.8, 'roid');
             
             roid1.hue += 5;
             roid1.lightness -= 2;
@@ -4840,7 +4795,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var v1 = roid1.vel.dot(dir);
             var v2 = torpedo.vel.dot(dir);
             var m1 = roid1.mass;
-            var m2 = 0.01; //roid1.mass;
+            var m2 = roid1.mass;
             var newV1 = (m1 * v1 + m2 * v2 - m2 * (v1 - v2) * 1) / (m1 + m2);
             
             roid1.vel.add(dir, (-0.5 + Math.random()) + 0.2*(newV1 - v1));
@@ -4933,7 +4888,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 makeEnemyDebris();
 
                 //  SPAWN PRIZE  -------------------
-                if (weaponLevel < 9) {
+                if (weaponLevel < 8) {
                     spawnPrize(Enemy[0].pos);
                 }
 
@@ -5119,7 +5074,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         gameOn = false;
         gameIdle = true;
-        gameBootTime = Date.now();
         userPause = false;
         gameStarting = false;
         pickFallingStar = 0;
@@ -5165,7 +5119,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         torpedoFired = 0;
         torpedoHit = 0;
         rainbowTorpedoIndex = 0;
-        wagTorpedoIndex = 0;
         totalTravelX = 0;
         totalTravelY = 0;
         earthrise = 0;
@@ -5204,7 +5157,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         poofPrizeDate = 0;
         textPulse = 0;
         bombDirShake = 0;
-        bombBlastAngle = null;
         radarPulser = 0;
 
         c.shadowBlur = 0;
@@ -5338,11 +5290,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             for (var b = 0; b < Bomb.length; b++) {
                 handleRoketBombCollisions(Roket[0], Bomb[b]);
             }
-
-            //  HANDLE PRIZE COLLECTION  -------------------
-            if (Prize[0] != null) {
-                handlePrizeCollisions(Roket[0], Prize[0]);
-            }
         }  
 
         //  SIMULATE ENEMY  -------------------
@@ -5417,6 +5364,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         handleRoketRoidCollisions(roket, sortedRoids1);
                     }
                 }  
+                
+                //  HANDLE PRIZE COLLECTION  -------------------
+                if (Prize[0] != null) {
+                    handlePrizeCollisions(roket, Prize[0]);
+                }
                 
                 //  HANDLE RESPAWN PUSHER  ------------------
                 if (Pusher[0] != null) {
@@ -5540,7 +5492,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
 
-        //  SIMULATE ROKET DEBRIS  ------------------
+        //  SIMULATE SHIP DEBRIS  ------------------
         for (var d = 0; d < RoketDebris.length; d++) {
             RoketDebris[d].simulate();
             handleRoketDebrisAge(RoketDebris[d], d);
@@ -5615,36 +5567,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         } else {
             earthriseAdj = 2.95;
         }
-
-        if (gameIdle == true || gameStarting == true) {
-            var elapsed = (Date.now() - gameBootTime) / 1000;
-            if (elapsed <= 7) {
-                // start with an extra spin of 0.02 (i.e. 0.02 * dT) and decay exponentially
-                // choose tau so the extra is ~1% after 7s: tau = 7 / ln(100) ~= 1.52s
-                var extraSpin = 1 * Math.exp(-elapsed / 1.22);
-                var earthSpinIncrement = (0.002 + extraSpin) * dT;
-                var earthZoom = 1;
-
-            } else {
-                var earthSpinIncrement = 0.002 * dT;
-                var earthZoom = 1;
-            }
-        } else {
-            var earthSpinIncrement = 0.002 * dT;
-            var earthZoom = 1;
-        }
-
-        earthSpinner += earthSpinIncrement;
+        earthSpinner += 0.002 * dT;
         if (earthSpinner > 2 * Math.PI) {
             earthSpinner -= 2 * Math.PI;
         }
         const earthImage = document.getElementById("earth");
-        const earthWidth = 9 * cScale * earthZoom;
-        const earthHeight = 9 * cScale * earthZoom;
+        const earthWidth = 9 * cScale;
+        const earthHeight = 9 * cScale;
         const centerX = 0.5 * simWidth * cScale;
         const centerY = earthriseAdj * simHeight * cScale - 0.03 * totalTravelY * cScale;
-        //const earthAngle = -earthSpinner - 0.0025 * totalTravelX * Math.PI + 0.34 * Math.PI; // 180 degrees
-        const earthAngle = -earthSpinner - 0.0025 * totalTravelX * Math.PI + 2.7 * Math.PI; // 180 degrees
+        const earthAngle = -earthSpinner - 0.0025 * totalTravelX * Math.PI + 0.34 * Math.PI; // 180 degrees
         c.save();
         c.translate(centerX, centerY); // move origin
         c.rotate(earthAngle); 
@@ -5715,6 +5647,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //  DRAW SCORER  -------------------
         for (var p = 0; p < Scorer.length; p++) {
             Scorer[p].draw();
+        }
+
+        //  DRAW SPAWNLETS  --------------------
+        for (var b = 0; b < Spawnlets.length; b++) {
+            Spawnlets[b].draw();
         }
 
         //  DRAW PUSHER  ---------------------
@@ -6042,12 +5979,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //  DRAW ROKET  --------------------
         if (Roket[0].collision < 2) {
             Roket[0].draw();
-        } else {
+            } else {
             if (debrisMade != true) {
-                weaponLevel -= 3;
+                weaponLevel -= 2;
                 if (weaponLevel < 0) weaponLevel = 0;  
                 makePulse(Roket[0].pos);
-                spawnRoketDebris();
+                makeRoketDebris();
             }
         }
 
@@ -6055,12 +5992,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         for (var w = 0; w < WarpIn.length; w++) {
             WarpIn[w].draw();
         }
-
-        //  DRAW SPAWNLETS  --------------------
-        for (var b = 0; b < Spawnlets.length; b++) {
-            Spawnlets[b].draw();
-        }
-
     }
 
     //  RUN  --------------------
