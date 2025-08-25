@@ -6255,8 +6255,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.lineWidth = 0.023 * cScale;
         const coneGradient = c.createConicGradient(
             arcStart, 
-            curveX * cScale, 
-            curveY * cScale
+            curveX, 
+            curveY
         );
         coneGradient.addColorStop(0, "red");
         coneGradient.addColorStop(0.10, "orange");
