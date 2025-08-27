@@ -85,6 +85,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             opacity: 0.7;
             cursor: pointer;
             box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+        
+        .button1:hover {opacity: 1}
+        .button1 {
+            appearance: none;
+            padding: 0px;
+            border: 0px;
+            vertical-align: middle;
+            margin-top: 0px;
+            margin-bottom: 0px;
+            margin-left: 0px;
+            margin-right: 5px;
+            width: 15px;
+            height: 15px;
+            border-radius: 10px;
+            color: black;
+            background-color: hsl(30, 80%, 47%);
+            opacity: 0.7;
+            cursor: pointer;
+            box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
         </style>
 </head>
 
@@ -98,8 +117,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     <h2><input type="checkbox" title="Roid Fill ON/OFF" name="roidFill" id="roidFill" class="radio" checked>
     <input type="checkbox" title="Princess Mode ON/OFF" name="athena" id="athena" class="radio" unchecked>
+    <input type="button" value="-" title="Decrease Wave Level" id="waveMinusButton" class="button1">
+    <input type="button" value="+" title="Increase Wave Level" id="wavePlusButton" class="button1">
     <input type="button" value="-" title="Decrease Torpedo Level" id="torpedoMinusButton" class="button">
     <input type="button" value="+" title="Increase Torpedo Level" id="torpedoPlusButton" class="button"></h2>
+    
     <h1>:: R0IDS ::</h1>
     <script>
 
@@ -138,15 +160,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     //  BUTTONS  -------------------
     document.getElementById("torpedoMinusButton").addEventListener("click", function() {
         if (weaponLevel > 0) {
-            weaponLevel--;
+            weaponLevel =- 1;
+            score += 10000;
             
         }
     });
     document.getElementById("torpedoPlusButton").addEventListener("click", function() {
         if (weaponLevel < maxWeaponLevel) {
-            weaponLevel++;
+            weaponLevel += 1;
             score -= 10000;
         }
+    });
+    document.getElementById("waveMinusButton").addEventListener("click", function() {
+        if (wave > 0) {
+            wave -= 1;
+            score -= 10000;
+            if (score < 0) {
+                score = 0;
+            }
+        }
+    });
+    document.getElementById("wavePlusButton").addEventListener("click", function() {
+        wave += 1;
+        score += 10000;
     });
 
     //  KEYBOARD CONTROL  ---------------------
@@ -3260,7 +3296,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     this.angle += 0.25 * this.vel.length();
                 } 
                 if (score > 0) {
-                    score -= 1;
+                    score -= (0.005 * score);
                     if (score < 1) {
                         score = 0;
                     }
