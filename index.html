@@ -6542,7 +6542,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             //c.fillText(RoidDebris.length, 95, cScale * simHeight - 10);*/
         }
 
-        //  DRAW STREAK AND SCORE  ------------------
+        //  DRAW STREAK AND DRAW SCORE  ------------------
         if (!athena.checked) {
             //  streak  ----------
             c.font = `${0.045 * cScale}px monospace`;
@@ -6560,7 +6560,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.font = `${0.12 * cScale}px monospace`;
             c.textBaseline = 'middle';
             c.textAlign = "left";
-            c.strokeStyle = `hsla(105, 70%, 50%, 70%)`;
+            if (score > -1) {
+                c.strokeStyle = `hsla(105, 70%, 50%, 70%)`;
+            } else {
+                c.strokeStyle = `hsla(0, 70%, 50%, 70%)`;
+            }
+            
             c.lineWidth = 2;
             c.beginPath();
             c.strokeText(Math.floor(score).toLocaleString("el-GR"), .14 * cScale, .098 * cScale);
