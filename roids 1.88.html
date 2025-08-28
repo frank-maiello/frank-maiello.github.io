@@ -4406,16 +4406,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         function threePasser() {
             if (firstSpawnPass == true) {
                 firstSpawnPass = false;
-                secondSpawnPass = true;
                 return 'polkadot';
             } else if (secondSpawnPass == true) {
                 secondSpawnPass = false;
                 return 'wireframe';
             } else {
                 firstSpawnPass = true;
+                secondSpawnPass = true;
                 return 'eyeball';
             }
         }
+
+        //  SPAWN OR NOT  ----------
+        if (spawnMode == 'suds') {
+            if ((Date.now() - lastRoidSpawnTime) < 20) {
+                return;
+            }   
+        } else {
+            if ((Date.now() - lastRoidSpawnTime) < (3100 - (1000 * wave / 10))) {
+                return;
+            }
+        }
+
         if (auto.checked == true) {
             if (spawnCycle == 1) {
                 var type = 'polkadot';
@@ -4431,10 +4443,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 var type = threePasser()
             } else if (spawnCycle == 7) {
                 var type = 'suds';
+                spawnMode = 'suds';
             } else if (spawnCycle == 8) {
                 var type = threePasser()
             }
-        } else if (polkadot.checked == true) {
+        } 
+        
+        if (polkadot.checked == true) {
             var type = 'polkadot';
         } else if (wireframe.checked == true) {
             var type = 'wireframe';
@@ -4443,16 +4458,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         } else if (suds.checked == true) {
             var type = 'suds';
         }
-        //  SPAWN OR NOT  ----------
-        if (type == 'suds') {
-            if ((Date.now() - lastRoidSpawnTime) < 20) {
-                return;
-            }   
-        } else {
-            if ((Date.now() - lastRoidSpawnTime) < (3100 - (1000 * wave / 10))) {
-                return;
-            }
-        }
+
+
         lastRoidSpawnTime = Date.now();
         //  limit roids per wave  ----------
         if (type == 'suds') {
@@ -5802,6 +5809,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         spawning = false;
         firstSpawnPass = true; 
         secondSpawnPass = true;
+        spawnMode = "";
         animateWave = false;
         dropOnce = true;
         sayByeBye = false; 
