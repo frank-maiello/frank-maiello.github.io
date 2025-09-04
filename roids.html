@@ -139,7 +139,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <h2><input type="checkbox" title="Roid Fill ON/OFF" id="roidFill" class="checkbox" checked>
     <input type="checkbox" title="Artwork ON/OFF" id="artFill" class="checkbox" checked>
     <input type="checkbox" title="Not a Moon ON/OFF" id="moonFill" class="checkbox" checked>
-    <input type="checkbox" title="Princess Mode ON/OFF" name="athena" id="athena" class="checkbox" unchecked>
+    <input type="checkbox" title="Princess Mode ON/OFF" id="athena" class="checkbox" unchecked>
+    <input type="checkbox" title="Untouchable ON/OFF" id="untouchable" class="checkbox" unchecked>
     <input type="radio" title="Auto Roids (default)" name="spawnType" id="auto" class="radio" checked>
     <input type="radio" title="Polkadot Roids" name="spawnType" id="polkadot" class="radio">
     <input type="radio" title="Globe Roids" name="spawnType" id="globe" class="radio">
@@ -226,6 +227,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         wave += 1;
         score += 20000 * (wave - 1);
     });
+    document.getElementById("untouchable").addEventListener("click", function() {
+        untouchable = !untouchable;
+    });
 
     //  KEYBOARD CONTROL  ---------------------
     document.addEventListener("keydown", keyDownHandler, false);
@@ -253,6 +257,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //  SHIELDS  -------
         if ((u.key == "x" || u.key == "X") && shieldLevel > 0) {
             shieldsUp = true;
+            shieldKey = true;
         }
         //  START GAME  ---------
         if (gameIdle == true && (leftPressed || rightPressed || thrustKey || spawnTorpedoKey)) {
@@ -300,6 +305,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //  SHIELDS  -------
         if (u.key == "x" || u.key == "X") {
             shieldsUp = false;
+            shieldKey = false;
         }
     }
 
@@ -331,6 +337,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         Bomb = [];
         RingOfFire = [];
         Moon = [];
+        PacMan = [];
         TrashTalk = [
             'BOOM!', 'KABOOM!', 'BOOYAH!', 'HAHAHA!!', 'HAH HAAAA!', 
             'PFFT...', 'TRY HARDERRRR', 'WINNER!', 'YOU LOSE!', 'A HIT!!', 
@@ -404,6 +411,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //  INITIALIZE BOOLEANS  ----------
         gameOn = false;
         gameIdle = true;
+        gameOver = false;
         gameBootTime = Date.now();
         userPause = false;
         gameStarting = false;
@@ -430,6 +438,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         timeWarp = false;
         shieldsUp = false;
         firstRetroPass = true;
+        untouchable = false;
 
         //  INITIALIZE ALPHA VARIABLES  ----------
         lastSide = '';
@@ -437,6 +446,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         spawnMode = '';
         
         //  INITIALIZE NUMERICAL VARIABLES  ----------
+        lives = 1;
         dT = 1/60;
         startingRoidLimit = 6;
         wave = 0;
@@ -444,6 +454,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         maxWeaponLevel = 9;
         minWeaponLevel = 0;
         shieldLevel = 0;
+        shieldKey = false;
 
         lastRoidSpawnTime = 0;
         bSide = 0;
@@ -452,11 +463,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         score = 0;
         streak = 1;
         hitPct = 100;
-        lives = 3;
         waveNoBday = 0;
         dimmer = 0;
         nSpawn = 1;
         spawnCycle = 0;
+        programStartTime = Date.now();
         gameStartTime = 0;
         gameOverTime = 0;
         torpedosFired = 0;
@@ -601,6 +612,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
     function rads(theta) {
         return theta * Math.PI/180;
+    }
+    function cX(pos) {
+        return pos.x * cScale;
+    }
+	function cY(pos) {
+        return pos.y * cScale;
     }
     function drawArrow(posX, posY, angle, radius) {
         var arrow = {
@@ -1387,11 +1404,242 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             return this;
         }
     }
+
+    //  PACMAN DIRECTION CHOOSER ---------------------------------------------------------------
+    function setNewPacDir() {
+        var dirSeed = Math.random();
+        const pacman = PacMan[0];
+        // ...if going right...
+        if (pacman.vel.x > 0) {
+            if (dirSeed < 0.33) {
+                pacDir = 'up';
+            } else if (dirSeed < 0.67) {
+                  pacDir = 'right';
+              } else if (dirSeed < 1.00) {
+                  pacDir = 'down';
+            }
+        }
+        // ...if going left...
+        if (pacman.vel.x < 0) {
+            if (dirSeed < 0.33) {
+                 pacDir = 'up';
+             } else if (dirSeed < 0.67) {
+                   pacDir = 'left';
+            } else if (dirSeed < 1.00) {
+                   pacDir = 'down';
+               }
+        }
+        // ...if going up...
+        if (pacman.vel.y > 0) {
+            if (dirSeed < 0.33) {
+                pacDir = 'left';
+            } else if (dirSeed < 0.67) {
+                pacDir = 'up';
+            } else if (dirSeed < 1.00) {
+                pacDir = 'right';
+            }
+        }
+        // ...if going down...
+        if (pacman.vel.y < 0) {
+            if (dirSeed < 0.33) {
+                pacDir = 'left';
+            } else if (dirSeed < 0.67) {
+                pacDir = 'down';
+            } else if (dirSeed < 1.00) {
+                pacDir = 'right';
+            }
+        }
+    }
+
+    //  PAC-MAN CONSTRUCTOR  ------------------------------------------------------------------------
+    class PACMAN {
+        constructor(yLoc) {
+            this.radius = 0.0003 * cScale;
+            this.pos = new Vector2(-this.radius, yLoc);
+            this.vel = new Vector2(0.7, 0);
+            this.rot = 0;
+            this.mouthMotor = 0;
+            this.mouthSize = 0;
+        }
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        simulate() {
+            this.mouthMotor += 0.1;
+            this.mouthSize = 0.05 * Math.PI + 0.55 * Math.PI * Math.abs(Math.cos(this.mouthMotor));
+
+            // overrun RIGHT side  ------------
+            if (this.pos.x > simWidth + 2 * this.radius) {
+                this.vel.x *= -1.0;
+                var oldPacHeight = this.pos.y;
+                var randPacHeight = this.radius + Math.random() * (simHeight - this.radius);
+                var tries = 0;
+                while (randPacHeight < oldPacHeight + 3 * this.radius && randPacHeight > oldPacHeight - 3 * this.radius) {
+                    randPacHeight = this.radius + Math.random() * (simHeight - this.radius);
+                    tries += 1;
+                    if (tries > 10) {
+                        break
+                    }
+                }
+                this.pos.y = randPacHeight;
+                //walkoutH = 0.2 * simWidth + 0.8 * simWidth * Math.random();
+                setNewPacDir();
+            }
+            // overrun left side --------------
+            if (this.pos.x < -2 * this.radius) {
+                this.vel.x *= -1.0;
+                var oldPacHeight = this.pos.y;
+                var randPacHeight = Math.random() * simHeight;
+                var tries = 0;
+                while (randPacHeight < oldPacHeight + this.radius && randPacHeight > oldPacHeight - this.radius) {
+                    randPacHeight = this.radius + Math.random() * (simHeight - this.radius);
+                    tries += 1;
+                    if (tries > 10) {
+                        tries = 0;
+                        break
+                    }
+                }
+                this.pos.y = randPacHeight;
+                //walkoutH = 0.2 * simWidth + 0.8 * simWidth * Math.random();
+                setNewPacDir();
+            }
+            // overrun floor --------------
+            if (this.pos.y < -2 * this.radius) {
+                this.vel.y *= -1.0;
+                var oldPacLateral = this.pos.x;
+                var randPacLateral = Math.random() * simWidth;
+                var tries = 0;
+                while (randPacLateral < oldPacLateral + this.radius && randPacLateral > oldPacLateral - this.radius) {
+                    randPacLateral = this.radius + Math.random() * (simHeight - this.radius);
+                    tries += 1;
+                    if (tries > 10) {
+                        tries = 0;
+                        break
+                    }
+                }
+                this.pos.x = randPacLateral;
+                //walkoutV = 0.2 * simHeight + 0.8 * simHeight * Math.random();
+                setNewPacDir();
+            }
+            // overrun ceiling --------------
+            if (this.pos.y > 2 * this.radius + simHeight) {
+                this.vel.y *= -1.0;
+                var oldPacLateral = this.pos.x;
+                var randPacLateral = Math.random() * simWidth;
+                var tries = 0;
+                while (randPacLateral < oldPacLateral + this.radius && randPacLateral > oldPacLateral - this.radius) {
+                    randPacLateral = this.radius + Math.random() * (simHeight - this.radius);
+                    tries += 1;
+                    if (tries > 10) {
+                        tries = 0;
+                        break
+                    }
+                }
+                this.pos.x = randPacLateral;
+                //walkoutV = 0.2 * simHeight + 0.8 * simHeight * Math.random();
+                setNewPacDir();
+            }
+            this.pos.add(this.vel, 1/60);
+        }
+        draw() {
+            drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
+            var sphereGradient = c.createRadialGradient(
+                this.pos.x * cScale, 
+                this.pos.y * cScale, 
+                0, 
+                this.pos.x * cScale, 
+                this.pos.y * cScale, 
+                this.radius * cScale
+            );
+            sphereGradient.addColorStop(0, `hsla(0, 0%, 0%, 100%)`);
+            sphereGradient.addColorStop(0.5, `hsla(0, 0%, 0%, 100%)`);
+            sphereGradient.addColorStop(1, `hsla(0, 0%, 0%, 0%)`);
+            c.fillStyle = sphereGradient;
+            //c.fillStyle = 'black'
+            c.fill();
+
+            c.beginPath();
+            if (this.vel.x > 0) {  // RIGHT
+                // body
+                c.arc(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale, 0.5 * this.mouthSize, 2 * Math.PI - 0.5 * this.mouthSize);
+                // top jaw
+                c.moveTo((this.pos.x * cScale + this.radius * cScale * Math.sin(0.5 * this.mouthSize + 0.5 * Math.PI)), 
+                this.pos.y * cScale + this.radius * cScale * Math.cos(0.5 * this.mouthSize + 0.5 * Math.PI));
+                // center
+                c.lineTo((this.pos.x - 0.4 * this.radius) * cScale, this.pos.y * cScale);
+                // bottom jaw
+                c.lineTo((this.pos.x * cScale + this.radius * cScale * Math.sin(0.5 * this.mouthSize + 0.5 * Math.PI)), 
+                this.pos.y * cScale - this.radius * cScale * Math.cos(0.5 * this.mouthSize + 0.5 * Math.PI));
+            } 
+            if (this.vel.x < 0) {  // LEFT 
+                // body
+                c.arc(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale, 0.5 * this.mouthSize + Math.PI, 2 * Math.PI - 0.5 * this.mouthSize + Math.PI);
+                // bottom jaw
+                c.moveTo((this.pos.x * cScale - this.radius * cScale * Math.sin(0.5 * this.mouthSize + 0.5 * Math.PI)), 
+                this.pos.y * cScale - this.radius * cScale * Math.cos(0.5 * this.mouthSize + 0.5 * Math.PI));
+                // center
+                c.lineTo((this.pos.x + 0.4 * this.radius) * cScale, this.pos.y * cScale);
+                // top jaw
+                c.lineTo((this.pos.x * cScale - this.radius * cScale * Math.sin(0.5 * this.mouthSize + 0.5 * Math.PI)), 
+                this.pos.y * cScale + this.radius * cScale * Math.cos(0.5 * this.mouthSize + 0.5 * Math.PI));
+            }
+            if (this.vel.y > 0) { // UP
+                // body
+                c.arc(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale, -0.5*Math.PI + 0.5 * this.mouthSize, -0.5*Math.PI - 0.5 * this.mouthSize);
+                // top jaw
+                c.moveTo((this.pos.x * cScale + this.radius * cScale * Math.cos(0.5 * this.mouthSize + .5 * Math.PI)), 
+                this.pos.y * cScale - this.radius * cScale * Math.sin(0.5 * this.mouthSize + 0.5 * Math.PI));
+                // center
+                c.lineTo((this.pos.x) * cScale, (simHeight - this.pos.y + 0.4 * this.radius) * cScale);
+                // bottom jaw
+                c.lineTo((this.pos.x * cScale - this.radius * cScale * Math.cos(0.5 * this.mouthSize + 0.5 * Math.PI)), 
+                this.pos.y * cScale + this.radius * cScale * Math.sin(0.5 * this.mouthSize - 0.5 * Math.PI));
+            } 
+
+            if (this.vel.y < 0) { // DOWN
+                // body
+                c.arc(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale, 0.5*Math.PI + 0.5 * this.mouthSize, 0.5*Math.PI - 0.5 * this.mouthSize);
+                // bottom jaw
+                c.lineTo((this.pos.x * cScale - this.radius * cScale * Math.cos(0.5 * this.mouthSize + 0.5 * Math.PI)), 
+                this.pos.y * cScale - this.radius * cScale * Math.sin(0.5 * this.mouthSize - 0.5 * Math.PI));
+                // center
+                c.lineTo((this.pos.x) * cScale, (simHeight - this.pos.y - 0.4 * this.radius) * cScale);
+                // top jaw
+                c.moveTo((this.pos.x * cScale + this.radius * cScale * Math.cos(0.5 * this.mouthSize + .5 * Math.PI)), 
+                this.pos.y * cScale + this.radius * cScale * Math.sin(0.5 * this.mouthSize + 0.5 * Math.PI));
+            } 
+            
+            /*if (brightnessSlider.value > 50) {
+                c.strokeStyle = 'black';
+                c.lineWidth = 4;
+                c.stroke();
+
+                c.font = `${0.8 * this.radius * cScale}px Andale Mono`;
+                c.fillStyle = "hsl(0, 0%, 10%)";
+                c.textAlign = "center";
+                c.verticalAlign = "center";
+                c.fillText("1UP", cX(this.pos), this.pos.y * cScale - 1.4 * this.radius * cScale);
+            }*/
+
+            c.fillStyle = 'yellow';
+            c.shadowColor = 'yellow';
+            c.shadowBlur = 15;
+            c.fill();
+            c.shadowBlur = 0;
+            //c.strokeStyle = 'yellow';
+            //c.lineWidth = 4;
+            //c.stroke();
+        }
+    }
     
     //  THAT'S NO MOON  --------------
     class MOON {
         constructor() {
-            this.pos = new Vector2((-0.4 * cScale), 0.3 * simHeight * cScale)
+            this.pos = new Vector2((-0.4 * cScale), 0.3 * simHeight * cScale);
+            this.vel = new Vector2();
             this.radius = 0;
             this.phase = 0;
             this.angle = 0.58 * Math.PI;
@@ -1409,9 +1657,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 //  BOTTOM LIGHT ROW  ---------
                 this.BottomLiteRow.push(this.bandStart + Math.random() * (this.bandEnd - this.bandStart));
             }   
+            // one-shot spawn guard for PacMan when moon finishes arrival
+            this.pacmanSpawned = false;
         }
         simulate(){
-            if (this.radius < this.maxRadius) {
+            if (this.radius < this.maxRadius && gameOver != true) {
                 this.radius += 0.0006 * cScale;
             }
             if (this.radius > this.maxRadius) {
@@ -1422,8 +1672,80 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 this.angle = 0.7 * Math.PI;
             }
             var moonRise = (earthriseAdj / 2.95);
-            this.pos.x = (0.5 * simWidth * cScale) + (imageCenterY - 3 * 0.2 * cScale) * Math.cos(this.angle);
-            this.pos.y = ((imageCenterY / moonRise) - ((imageCenterY - 7 * 0.2 * cScale) * Math.sin(this.angle)));
+            if (gameOver != true) {
+                this.pos.x = (0.5 * simWidth * cScale) + (imageCenterY - 3 * 0.2 * cScale) * Math.cos(this.angle);
+                this.pos.y = ((imageCenterY / moonRise) - ((imageCenterY - 7 * 0.2 * cScale) * Math.sin(this.angle)));
+            } else {
+                // Smoothly shrink radius toward a target pixel size
+                const TARGET_RADIUS_PX = 25;
+                // lerp factor per second (higher = faster shrink)
+                const SHRINK_SPEED = 0.3;
+                this.radius += (TARGET_RADIUS_PX - this.radius) * SHRINK_SPEED * dT;
+
+                // Critically-damped spring controller (stable, avoids overshoot)
+                var home = new Vector2(0.5 * simWidth * cScale, 0.3 * simHeight * cScale);
+                var error = new Vector2();
+                // error = home - pos
+                error.subtract(home, this.pos);
+                var dist = error.length();
+                // snap threshold (pixels) - start gentle braking earlier
+                const SNAP_DIST = 8.0;
+                // velocity threshold for snapping (px/sec)
+                const VEL_SNAP = 6.0;
+                // core dynamics params: lower natural frequency and overdamp to avoid overshoot
+                const omega = 2.5; // natural frequency (rad/s) — lower = slower acceleration
+                const zeta = 1.8;  // damping ratio (>1 => overdamped, prevents overshoot)
+                const ACCEL_SCALE = 0.12; // global accel/damping scale (smaller => gentler forces)
+
+                if (dist > SNAP_DIST) {
+                    // Full critically-damped spring when far away
+                    var ax = ACCEL_SCALE * ((omega * omega) * error.x - 2.0 * zeta * omega * this.vel.x);
+                    var ay = ACCEL_SCALE * ((omega * omega) * error.y - 2.0 * zeta * omega * this.vel.y);
+                    this.vel.x += ax * dT;
+                    this.vel.y += ay * dT;
+                    // clamp max speed for safety
+                    const MAX_SPEED = 800; // px/s
+                    var sp = this.vel.length();
+                    if (sp > MAX_SPEED) {
+                        this.vel.normalize();
+                        this.vel.scale(MAX_SPEED);
+                    }
+                    this.pos.add(this.vel, dT);
+                } else {
+                    // Within the snap radius: progressively fade the proportional pull
+                    // so we brake smoothly rather than snapping immediately.
+                    // scaleFactor goes from 1 at SNAP_DIST to 0 at 0 — square for a softer fade near zero
+                    var scaleFactor = Math.max(0, Math.pow(dist / SNAP_DIST, 2));
+                    // proportional term reduced by scaleFactor
+                    var ax_p = (omega * omega) * error.x * scaleFactor;
+                    var ay_p = (omega * omega) * error.y * scaleFactor;
+                    // damping term (braking) still active to remove velocity
+                    var ax_d = -2.0 * zeta * omega * this.vel.x;
+                    var ay_d = -2.0 * zeta * omega * this.vel.y;
+                    var ax = ACCEL_SCALE * (ax_p + ax_d);
+                    var ay = ACCEL_SCALE * (ay_p + ay_d);
+                    this.vel.x += ax * dT;
+                    this.vel.y += ay * dT;
+                    this.pos.add(this.vel, dT);
+
+                    // Snap only when both position and velocity are sufficiently small
+                    var curSpeed = this.vel.length();
+                    if (dist < SNAP_DIST && curSpeed < VEL_SNAP) {
+                        this.pos.x = home.x;
+                        this.pos.y = home.y;
+                        this.vel.x = 0;
+                        this.vel.y = 0;
+                        // spawn PacMan once: position in sim units, offscreen-left
+                        if (!this.pacmanSpawned) {
+                            var pm = new PACMAN();
+                            pm.pos = new Vector2(-0.2, this.pos.y / cScale); // x offscreen-left, y aligned to moon (sim units)
+                            pm.vel = new Vector2(0.7, 0); // rightward motion in sim units
+                            PacMan.push(pm);
+                            this.pacmanSpawned = true;
+                        }
+                    }
+                }
+            }
         }
         draw() {
             //  OUTLINE  ----------
@@ -4013,6 +4335,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.age = 0;
             this.shake = 0;
             this.shaker = 0;
+            this.rando = Math.random();
         }
             startExplosion() {
                 // Idempotent: if already exploding, don't restart/refresh timing
@@ -4181,7 +4504,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.stroke();
 
                     //  DRAW MOUTH  ----------
-                    if (this.birthday % 2 == 0) {
+                    if (this.rando < 0.33) {
                         //  POUTY MOUTH  ---------
                         //c.lineWidth = 0.006 * cScale;
                         c.beginPath();
@@ -4194,8 +4517,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                             Math.PI, 
                             0);
                         c.stroke();
-                    } else {
-                        //  GAPING MOUTH  ---------
+                    } else if (this.rando < 0.67) {
+                        //  YELLY MOUTH  ---------
                         c.lineWidth = 0.1 * this.radius * cScale;
                         c.beginPath();
                         c.ellipse(
@@ -4208,6 +4531,49 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                             0);
                         c.fillStyle = `hsla(0, 0%, 0%, ${faceAlpha}%)`;
                         c.fill();
+                    } else {
+                        // TOOTHY MOUTH  ---------
+                        // white mouth
+                        c.lineWidth = 0.1 * this.radius * cScale;
+                        c.beginPath();
+                        var longAxis = (0.05 * this.radius + (this.age / 2500) * 0.25 * this.radius);
+                        var shortAxis = (0.05 * this.radius + (this.age / 2500) * 0.18 * this.radius);
+                        c.ellipse(
+                            xPos * cScale, 
+                            (this.pos.y + 0.25 * this.radius) * cScale, 
+                            longAxis * cScale,
+                            shortAxis * cScale,
+                            0, 
+                            2 * Math.PI, 
+                            0);
+                        c.fillStyle = `hsla(0, 0%, 90%, ${faceAlpha}%)`;
+                        c.fill();
+                        // mouth outline
+                        c.lineWidth = 0.04 * this.radius * cScale;
+                        c.stroke();
+                        //  DRAW TEETH  ---------
+                        c.lineWidth = 0.06 * this.radius * cScale;
+                        c.beginPath();
+                        c.moveTo((xPos - longAxis) * cScale, (this.pos.y + 0.25 * this.radius) * cScale);
+                        c.lineTo((xPos + longAxis) * cScale, (this.pos.y + 0.25 * this.radius) * cScale);
+                        c.stroke();
+                        // draw left tooth gap
+                        c.lineWidth = 0.04 * this.radius * cScale;
+                        c.beginPath();
+                        c.moveTo((xPos - 0.5 * longAxis) * cScale, (this.pos.y + 0.25 * this.radius - 0.8 * shortAxis) * cScale);
+                        c.lineTo((xPos - 0.5 * longAxis) * cScale, (this.pos.y + 0.25 * this.radius + 0.8 * shortAxis) * cScale);
+                        c.stroke();
+                        //  DRAW mid TOOTH gap 
+                        c.beginPath();
+                        c.moveTo(xPos * cScale, (this.pos.y + 0.25 * this.radius - shortAxis) * cScale);
+                        c.lineTo(xPos * cScale, (this.pos.y + 0.25 * this.radius + shortAxis) * cScale);
+                        c.stroke();
+                        // draw right tooth gap
+                        c.beginPath();
+                        c.moveTo((xPos + 0.5 * longAxis) * cScale, (this.pos.y + 0.25 * this.radius - 0.8 * shortAxis) * cScale);
+                        c.lineTo((xPos + 0.5 * longAxis) * cScale, (this.pos.y + 0.25 * this.radius + 0.8 * shortAxis) * cScale);
+                        c.stroke();
+                        c.closePath();
                     }
                 }
 
@@ -4392,13 +4758,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
 
-    //  DEFINE OFFSCREENROKET DRAWING  ------------------
+    //  DEFINE OFFSCREEN ROKET  ------------------
     function defineOffscreenRoket(radius) {
         //  DRAW ROKET TO OFFSCREEN CANVAS  ------------------
-        // radius is expected in simulation units; fall back to reasonable default
-        if (!radius || typeof radius !== 'number') radius = 0.0003 * cScale;
+        // radius is expected in simulation units; if not provided, try to
+        // derive it from the existing Roket instance (which stores radius in pixels)
+        if (!radius || typeof radius !== 'number') {
+            if (typeof Roket !== 'undefined' && Roket && Roket[0] && Roket[0].radius) {
+                // Roket[0].radius in this project is stored as the base value used throughout
+                // (previous edits keep it as 0.0003 * cScale). To compute the final pixel radius
+                // for offscreen drawing we will multiply by cScale below (rpx = radius * cScale).
+                // So keep the same base value here.
+                radius = Roket[0].radius;
+            } else {
+                // match the constructor default (0.0003 * cScale stored as base)
+                radius = 0.0003 * cScale;
+            }
+        }
 
         // size the offscreen canvas to comfortably contain the sprite (pixels)
+        // convert sim-units to pixels with cScale
         var spriteDiameterPx = Math.max(64, Math.ceil(2 * radius * cScale * 1.6 + 8));
         offscreenRoketCanvas.width = spriteDiameterPx;
         offscreenRoketCanvas.height = spriteDiameterPx;
@@ -4497,32 +4876,34 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             rMid: 0.456,
             rBot: 0.3,
         }
+        // convert simulation radius -> pixel radius for drawing convenience
+        const rpx = roketVars.radius * cScale;
 
         //  ANTENNA  ----------
         roketCtx.beginPath();
         roketCtx.moveTo(0, 0);
         roketCtx.lineTo(
-            (1.15 * roketVars.r9 * roketVars.radius * Math.cos(0)) * cScale, 
-            (-1.15 * roketVars.r9 * roketVars.radius * Math.sin(0)) * cScale
+            (1.15 * roketVars.r9 * rpx * Math.cos(0)), 
+            (-1.15 * roketVars.r9 * rpx * Math.sin(0))
         );
         roketCtx.strokeStyle = 'hsl(0, 0%, 90%)';
-        roketCtx.lineWidth = 0.015 * roketVars.radius * cScale;
+        roketCtx.lineWidth = 0.015 * rpx;
         roketCtx.shadowBlur = 10;
         roketCtx.shadowColor = 'black';
         roketCtx.stroke();
 
         // FUSELAGE (smooth Catmull-Rom spline)
         const pts = [
-            { x: (roketVars.radius * roketVars.r1 * roketVars.a1cos) * cScale, y: (-roketVars.radius * roketVars.r1 * roketVars.a1sin) * cScale },
-            { x: (roketVars.radius * roketVars.r2 * roketVars.a2cos) * cScale, y: (-roketVars.radius * roketVars.r2 * roketVars.a2sin) * cScale },
-            { x: (roketVars.radius * roketVars.r6 * roketVars.a6cos) * cScale, y: (-roketVars.radius * roketVars.r6 * roketVars.a6sin) * cScale },
-            { x: (roketVars.radius * roketVars.r7 * roketVars.a7cos) * cScale, y: (-roketVars.radius * roketVars.r7 * roketVars.a7sin) * cScale },
-            { x: (roketVars.radius * roketVars.r8 * roketVars.a8cos) * cScale, y: (-roketVars.radius * roketVars.r8 * roketVars.a8sin) * cScale },
-            { x: (roketVars.radius * roketVars.r9 * roketVars.a9cos) * cScale, y: (-roketVars.radius * roketVars.r9 * roketVars.a9sin) * cScale },
-            { x: (roketVars.radius * roketVars.rl8 * roketVars.al8cos) * cScale, y: (-roketVars.radius * roketVars.rl8 * roketVars.al8sin) * cScale },
-            { x: (roketVars.radius * roketVars.rl7 * roketVars.al7cos) * cScale, y: (-roketVars.radius * roketVars.rl7 * roketVars.al7sin) * cScale },
-            { x: (roketVars.radius * roketVars.rl6 * roketVars.al6cos) * cScale, y: (-roketVars.radius * roketVars.rl6 * roketVars.al6sin) * cScale },
-            { x: (roketVars.radius * roketVars.rl2 * roketVars.al2cos) * cScale, y: (-roketVars.radius * roketVars.rl2 * roketVars.al2sin) * cScale }
+            { x: (roketVars.r1 * rpx * roketVars.a1cos), y: (-roketVars.r1 * rpx * roketVars.a1sin) },
+            { x: (roketVars.r2 * rpx * roketVars.a2cos), y: (-roketVars.r2 * rpx * roketVars.a2sin) },
+            { x: (roketVars.r6 * rpx * roketVars.a6cos), y: (-roketVars.r6 * rpx * roketVars.a6sin) },
+            { x: (roketVars.r7 * rpx * roketVars.a7cos), y: (-roketVars.r7 * rpx * roketVars.a7sin) },
+            { x: (roketVars.r8 * rpx * roketVars.a8cos), y: (-roketVars.r8 * rpx * roketVars.a8sin) },
+            { x: (roketVars.r9 * rpx * roketVars.a9cos), y: (-roketVars.r9 * rpx * roketVars.a9sin) },
+            { x: (roketVars.rl8 * rpx * roketVars.al8cos), y: (-roketVars.rl8 * rpx * roketVars.al8sin) },
+            { x: (roketVars.rl7 * rpx * roketVars.al7cos), y: (-roketVars.rl7 * rpx * roketVars.al7sin) },
+            { x: (roketVars.rl6 * rpx * roketVars.al6cos), y: (-roketVars.rl6 * rpx * roketVars.al6sin) },
+            { x: (roketVars.rl2 * rpx * roketVars.al2cos), y: (-roketVars.rl2 * rpx * roketVars.al2sin) }
         ];
         const smoothPts = catmullRomSpline(pts, 0.5, 12);
         roketCtx.beginPath();
@@ -4542,26 +4923,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         roketCtx.beginPath();
         roketCtx.moveTo((roketVars.radius * roketVars.r10 * roketVars.a10cos) * cScale,
             (-roketVars.radius * roketVars.r10 * roketVars.a10sin) * cScale);
+        roketCtx.lineTo((roketVars.radius * roketVars.r10 * roketVars.a10cos) * cScale,
+            (-roketVars.radius * roketVars.r10 * roketVars.a10sin) * cScale);
         roketCtx.lineTo((roketVars.radius * roketVars.r11 * roketVars.a11cos) * cScale,
             (-roketVars.radius * roketVars.r11 * roketVars.a11sin) * cScale);
         roketCtx.lineTo((roketVars.radius * roketVars.r12 * roketVars.a12cos) * cScale,
             (-roketVars.radius * roketVars.r12 * roketVars.a12sin) * cScale);
         roketCtx.lineTo((roketVars.radius * roketVars.r13 * roketVars.a13cos) * cScale,
             (-roketVars.radius * roketVars.r13 * roketVars.a13sin) * cScale);
-        roketCtx.closePath();
-        roketCtx.shadowBlur = 0;
         roketCtx.stroke();
         roketCtx.fillStyle = 'hsl(30, 70%, 60%)';
         roketCtx.fill();
 
         // RIGHT FIN (smooth)
         const rightFinPts = [
-            { x: (roketVars.radius * roketVars.r2 * roketVars.a2cos) * cScale, y: (-roketVars.radius * roketVars.r2 * roketVars.a2sin) * cScale },
-            { x: (roketVars.radius * roketVars.r3 * roketVars.a3cos) * cScale, y: (-roketVars.radius * roketVars.r3 * roketVars.a3sin) * cScale },
-            { x: (roketVars.radius * roketVars.r4 * roketVars.a4cos) * cScale, y: (-roketVars.radius * roketVars.r4 * roketVars.a4sin) * cScale },
-            { x: (roketVars.radius * roketVars.r5 * roketVars.a5cos) * cScale, y: (-roketVars.radius * roketVars.r5 * roketVars.a5sin) * cScale },
-            { x: (roketVars.radius * roketVars.r6 * roketVars.a6cos) * cScale, y: (-roketVars.radius * roketVars.r6 * roketVars.a6sin) * cScale },
-            { x: (roketVars.radius * roketVars.r2 * roketVars.a2cos) * cScale, y: (-roketVars.radius * roketVars.r2 * roketVars.a2sin) * cScale }
+            { x: (roketVars.r2 * rpx * roketVars.a2cos), y: (-roketVars.r2 * rpx * roketVars.a2sin) },
+            { x: (roketVars.r3 * rpx * roketVars.a3cos), y: (-roketVars.r3 * rpx * roketVars.a3sin) },
+            { x: (roketVars.r4 * rpx * roketVars.a4cos), y: (-roketVars.r4 * rpx * roketVars.a4sin) },
+            { x: (roketVars.r5 * rpx * roketVars.a5cos), y: (-roketVars.r5 * rpx * roketVars.a5sin) },
+            { x: (roketVars.r6 * rpx * roketVars.a6cos), y: (-roketVars.r6 * rpx * roketVars.a6sin) },
+            { x: (roketVars.r2 * rpx * roketVars.a2cos), y: (-roketVars.r2 * rpx * roketVars.a2sin) }
         ];
         const rightFinSmooth = catmullRomSpline(rightFinPts, 0.5, 10);
         roketCtx.beginPath();
@@ -4579,12 +4960,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         // LEFT FIN (smooth)
         const leftFinPts = [
-            { x: (roketVars.radius * roketVars.rl2 * roketVars.al2cos) * cScale, y: (-roketVars.radius * roketVars.rl2 * roketVars.al2sin) * cScale },
-            { x: (roketVars.radius * roketVars.rl3 * roketVars.al3cos) * cScale, y: (-roketVars.radius * roketVars.rl3 * roketVars.al3sin) * cScale },
-            { x: (roketVars.radius * roketVars.rl4 * roketVars.al4cos) * cScale, y: (-roketVars.radius * roketVars.rl4 * roketVars.al4sin) * cScale },
-            { x: (roketVars.radius * roketVars.rl5 * roketVars.al5cos) * cScale, y: (-roketVars.radius * roketVars.rl5 * roketVars.al5sin) * cScale },
-            { x: (roketVars.radius * roketVars.rl6 * roketVars.al6cos) * cScale, y: (-roketVars.radius * roketVars.rl6 * roketVars.al6sin) * cScale },
-            { x: (roketVars.radius * roketVars.rl2 * roketVars.al2cos) * cScale, y: (-roketVars.radius * roketVars.rl2 * roketVars.al2sin) * cScale }
+            { x: (roketVars.rl2 * rpx * roketVars.al2cos), y: (-roketVars.rl2 * rpx * roketVars.al2sin) },
+            { x: (roketVars.rl3 * rpx * roketVars.al3cos), y: (-roketVars.rl3 * rpx * roketVars.al3sin) },
+            { x: (roketVars.rl4 * rpx * roketVars.al4cos), y: (-roketVars.rl4 * rpx * roketVars.al4sin) },
+            { x: (roketVars.rl5 * rpx * roketVars.al5cos), y: (-roketVars.rl5 * rpx * roketVars.al5sin) },
+            { x: (roketVars.rl6 * rpx * roketVars.al6cos), y: (-roketVars.rl6 * rpx * roketVars.al6sin) },
+            { x: (roketVars.rl2 * rpx * roketVars.al2cos), y: (-roketVars.rl2 * rpx * roketVars.al2sin) }
         ];
         const leftFinSmooth = catmullRomSpline(leftFinPts, 0.5, 10);
         roketCtx.beginPath();
@@ -4598,9 +4979,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         roketCtx.stroke();
 
         //  WINDOWS  ----------
-        offscreenRoketDrawCircle((roketVars.rTop * roketVars.radius * Math.cos(0)) * cScale,
-            (-roketVars.rTop * roketVars.radius * Math.sin(0)) * cScale,
-            0.04 * roketVars.radius * cScale
+        offscreenRoketDrawCircle((roketVars.rTop * rpx * Math.cos(0)),
+            (-roketVars.rTop * rpx * Math.sin(0)),
+            0.04 * rpx
         );
         roketCtx.strokeStyle = 'hsl(0, 0%, 90%)';
         roketCtx.lineWidth = 0.015 * roketVars.radius * cScale;
@@ -4608,16 +4989,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         roketCtx.fill();
         roketCtx.stroke();
 
-        offscreenRoketDrawCircle((roketVars.rMid * roketVars.radius * Math.cos(0)) * cScale,
-            (-roketVars.rMid * roketVars.radius * Math.sin(0)) * cScale,
-            0.05 * roketVars.radius * cScale
+        offscreenRoketDrawCircle((roketVars.rMid * rpx * Math.cos(0)),
+            (-roketVars.rMid * rpx * Math.sin(0)),
+            0.05 * rpx
         );
         roketCtx.fill();
         roketCtx.stroke();
 
-        offscreenRoketDrawCircle((roketVars.rBot * roketVars.radius * Math.cos(0)) * cScale,
-            (-roketVars.rBot * roketVars.radius * Math.sin(0)) * cScale,
-            0.05 * roketVars.radius * cScale
+        offscreenRoketDrawCircle((roketVars.rBot * rpx * Math.cos(0)),
+            (-roketVars.rBot * rpx * Math.sin(0)),
+            0.05 * rpx
         );
         roketCtx.fill();
         roketCtx.stroke();
@@ -4625,15 +5006,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // compute and store sprite metadata
         // tip offset in pixels relative to sprite center
         try {
-            var tipX_center = (1.15 * roketVars.r9 * roketVars.radius * Math.cos(0)) * cScale;
-            var tipY_center = (-1.15 * roketVars.r9 * roketVars.radius * Math.sin(0)) * cScale;
+            var tipX_center = (1.15 * roketVars.r9 * rpx * Math.cos(0));
+            var tipY_center = (-1.15 * roketVars.r9 * rpx * Math.sin(0));
         } catch (e) {
             var tipX_center = 0;
             var tipY_center = - (roketVars.radius * cScale);
         }
 
         // estimate geometric centroid (pivot) from the fuselage smooth points
-        var avgX = 0, avgY = 0;
+    var avgX = 0, avgY = 0;
         if (typeof smoothPts !== 'undefined' && smoothPts.length > 0) {
             for (var i = 0; i < smoothPts.length; i++) {
                 avgX += smoothPts[i].x;
@@ -4646,10 +5027,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         // pivot relative to top-left image coordinates
-        var halfW = offscreenRoketCanvas.width / 2;
-        var halfH = offscreenRoketCanvas.height / 2;
-        var pivotImgX = halfW + avgX;
-        var pivotImgY = halfH + avgY;
+    var halfW = offscreenRoketCanvas.width / 2;
+    var halfH = offscreenRoketCanvas.height / 2;
+    var pivotImgX = halfW + avgX;
+    var pivotImgY = halfH + avgY;
 
         // expose for runtime drawing
         window.roketSprite = {
@@ -4657,12 +5038,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             ctx: roketCtx,
             tipX_center: tipX_center,
             tipY_center: tipY_center,
-            pivotCenterX: avgX, // relative to sprite center
+            pivotCenterX: avgX, // relative to sprite center (pixels)
             pivotCenterY: avgY,
-            pivotImgX: pivotImgX, // relative to image top-left
+            pivotImgX: pivotImgX, // relative to image top-left (pixels)
             pivotImgY: pivotImgY,
-            radius: roketVars.radius
+            radius: rpx // store pixel radius for runtime clarity
         };
+
+        // sanity check
+        if (!offscreenRoketCanvas || offscreenRoketCanvas.width < 2 || offscreenRoketCanvas.height < 2) {
+            console.warn('defineOffscreenRoket: invalid offscreen canvas', offscreenRoketCanvas && offscreenRoketCanvas.width, offscreenRoketCanvas && offscreenRoketCanvas.height);
+        }
 
         roketCtx.restore();
     }
@@ -4816,6 +5202,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.rotate(this.angle);
                 // draw the image so that its pivot aligns at origin (0,0)
                 c.drawImage(spriteCanvas, -pivotImgX, -pivotImgY);
+                
                 c.restore();
             } else {
                 // fallback: draw vector (minimal) if sprite missing
@@ -4848,40 +5235,44 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 var rotY = relX * Math.sin(this.angle) + relY * Math.cos(this.angle);
                 const tipCanvasX = this.pos.x * cScale + rotX;
                 const tipCanvasY = this.pos.y * cScale + rotY;
-                drawCircle(tipCanvasX, tipCanvasY, 0.05 * window.roketSprite.radius * cScale);
+                // use the sprite's pixel radius so the tip scales with the sprite
+                var spriteRpx = (window.roketSprite && window.roketSprite.radius) ? window.roketSprite.radius : (this.radius * cScale);
+                drawCircle(tipCanvasX, tipCanvasY, 0.05 * spriteRpx);
                 c.fillStyle = `hsl(0, 100%, ${rudolphIntensity}%)`;
                 c.shadowBlur = 0;
                 c.shadowColor = 'black';
                 c.fill();
-                
-                /*
-                // --- DEBUG MARKERS (temporary) ---
-                c.strokeStyle = 'red';
-                c.beginPath();
-                c.arc(
-                    this.pos.x * cScale, 
-                    this.pos.y * cScale, 
-                    this.radius * cScale, 
-                    0, 
-                    Math.PI * 2);
-                c.stroke();
-                    
-                c.beginPath();
-                    c.arc(
-                    this.pos.x * cScale, 
-                    this.pos.y * cScale, 
-                    0.5 * this.radius * cScale, 
-                    0, 
-                    Math.PI * 2);
-                c.stroke();
-                c.closePath();*/
-
-                c.restore();
             }
+
             // DRAW SHIELDS  ----------------
+            if (shieldKey == true && shieldLevel < 10) {
+                //  BLINK RED (2 Hz) ----------
+                // show the red fill only when the time-based toggle is true
+                var nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                // frequency = 2 flashes per second. Use sine wave so on/off each 0.25s (visible window)
+                var show = Math.sin((nowMs / 1000) * 2 * Math.PI * 2) > 0;
+                if (show) {
+                    drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
+                    var sphereGradient = c.createRadialGradient(
+                        this.pos.x * cScale, 
+                        this.pos.y * cScale, 
+                        0, 
+                        this.pos.x * cScale, 
+                        this.pos.y * cScale, 
+                        1 * this.radius * cScale
+                    );
+                    var highlight = `hsla(0, 80%, 70%, 60%)`;
+                    var midtone = `hsla(0, 50%, 40%, 40%)`;
+                    var shadow = `hsla(0, 0%, 0%, 0%)`;
+                    sphereGradient.addColorStop(0.0, shadow);
+                    sphereGradient.addColorStop(0.8, midtone);
+                    sphereGradient.addColorStop(1.0, highlight);
+                    c.fillStyle = sphereGradient;
+                    c.fill();
+                }
+            }
             if (shieldsUp == true) {
                 var shieldHue = 240 - shieldLevel / 100 * (240 - 180);
-                c.beginPath();
                 drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
                 //  bubble shading ---------
                 var sphereGradient = c.createRadialGradient(
@@ -4892,8 +5283,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     this.pos.y * cScale, 
                     1 * this.radius * cScale
                 );
-                if (shieldLevel  <= 10) {
-                    var alpha = shieldLevel / 10 * 100;
+                if (shieldLevel  <= 20) {
+                    var alpha = shieldLevel / 20 * 100;
                 } else {
                     var alpha = 100;
                 }
@@ -4925,6 +5316,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.fillStyle = sphereGradient;
                 c.fill();
             }
+            /*drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
+            c.strokeStyle = 'red';
+            c.stroke();*/
         }
     }
 
@@ -5706,8 +6100,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 var m1 = roid1.mass;
                 var m2 = roid1.mass;
                 var newV2 = (m1 * v1 + m2 * v2 - m1 * (v2 - v1) * 1) / (m1 + m2);
-                spawnParticleDebris(roket.pos, 0.003, roid1.hue, roid1.hue2, 80, 200, 0.8, 'roid');
-                
+                if (roid1.type != 'suds') {
+                    spawnParticleDebris(roket.pos, 0.003, roid1.hue, roid1.hue2, 80, 200, 0.8, 'roid');
+                } else {
+                    spawnParticleDebris(roket.pos, 0.003, roid1.hue, roid1.hue2, 80, 1, 0.8, 'roid');
+                }
+
                 roket.pos.add(dir, corr);
                 roket.vel.add(dir, newV2 - v2);
 
@@ -5971,6 +6369,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
 
+    //  HANDLE PACMAN MOON COLLISIONS  -------------------
+    function handlePacmanMoonCollisions(pacman, moon) {
+        var scaledMoon = new Vector2(Moon[0].pos.x / cScale, Moon[0].pos.y / cScale);
+        var dir = new Vector2();
+        dir.subtract(scaledMoon, pacman.pos);
+        var d = dir.length();
+        if (d == 0.0 || d > (0.5 * pacman.radius) + moon.radius / cScale)
+            return;
+        Moon.splice(0, 1);
+    }
+
     //  HANDLE ROID ROID COLLISIONS  -------------------
     function handleRoidRoidCollisions(roid1, roid2) {
         var dir = new Vector2();
@@ -6008,7 +6417,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         let debrisCount = Math.max(5, Math.min(100, Math.round(impulseMag * 3000)));
 
         // Use the contact point on the surface of roid1 as the debris origin
-        spawnParticleDebris(new Vector2(collisionX, collisionY), 0.003, roid1.hue, roid2.hue, 80, debrisCount, 0.8, 'bomb');
+        if (roid1.type != 'suds' || roid2.type != 'suds') {
+            spawnParticleDebris(new Vector2(collisionX, collisionY), 0.003, roid1.hue, roid2.hue, 80, debrisCount, 0.8, 'bomb');
+        } else {
+            spawnParticleDebris(new Vector2(collisionX, collisionY), 0.003, roid1.hue, roid2.hue, 80, 0.1 * debrisCount, 0.8, 'bomb');
+        }
         // polkadot visual flash remains optional
         //if (polkadots.checked == true) {
             
@@ -6571,6 +6984,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (shieldLevel < 0) {
                 shieldLevel = 0;
                 shieldsUp = false;
+                //blinkShieldsRed = true;
             }
         } else {
             if (shieldLevel < 100) {
@@ -6615,10 +7029,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         //  SIMULATE MOON  -----------
-        if (Moon != null && moonFill.checked == true) {
+        if (Moon.length > 0 && moonFill.checked == true) {
             Moon[0].simulate();
         }
-       
+
+        // SIMULATE PACMAN  -------------------
+        if (gameOver == true) {
+            for (var p = 0; p < PacMan.length; p++) {
+                PacMan[p].simulate();
+                if (Moon.length > 0) {
+                    handlePacmanMoonCollisions(PacMan[p], Moon[0]);
+                }
+            }
+        }
+
         //  SPAWN ROIDS PERIODICALLY (fixed interval)  -------------------
         if (spawning == true && Roket[0] != null) {
             spawnRoids();
@@ -6660,15 +7084,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (typeof Roket[0].simulate === 'function') {
                 Roket[0].simulate();
             }
+            if (untouchable != true) {
+                //  HANDLE ROKET ENEMY COLLISIONS  ---------------------
+                if (Enemy[0] != null) {
+                    handleRoketEnemyCollisions(Roket[0], Enemy[0]);
+                }
 
-            //  HANDLE ROKET ENEMY COLLISIONS  ---------------------
-            if (Enemy[0] != null) {
-                handleRoketEnemyCollisions(Roket[0], Enemy[0]);
-            }
-
-            //  HANDLE ROKET BOMB COLLISIONS  ------------------
-            for (var b = 0; b < Bomb.length; b++) {
-                handleRoketBombCollisions(Roket[0], Bomb[b]);
+                //  HANDLE ROKET BOMB COLLISIONS  ------------------
+                for (var b = 0; b < Bomb.length; b++) {
+                    handleRoketBombCollisions(Roket[0], Bomb[b]);
+                }
             }
 
             //  HANDLE PRIZE COLLECTION  -------------------
@@ -6720,6 +7145,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         // GAME OVER  -----------------
         if (gameOn == true && lives < 1) {
+            gameOver = true;
             gameOn = false;
             gameOverTime = Date.now();
         }
@@ -6742,19 +7168,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 sortedRoids1.simulate();
 
                 //  HANDLE ROKET ROID COLLISIONS ------------------
-                var roket = Roket[0];
-                if (shieldsUp != true) {
-                    if (roket.leftForShields < sortedRoids1.right && gameOn == true) {
-                        if (Math.abs(sortedRoids1.pos.y - roket.pos.y) <= sortedRoids1.radius + 0.5 * roket.radius) {
-                            handleRoketRoidCollisions(roket, sortedRoids1);
-                        }
-                    }  
-                } else {
-                    if (roket.leftForHits < sortedRoids1.right && gameOn == true) {
-                        if (Math.abs(sortedRoids1.pos.y - roket.pos.y) <= sortedRoids1.radius + roket.radius) {
-                            handleRoketRoidCollisions(roket, sortedRoids1);
-                        }
-                    }  
+                if (untouchable != true) {
+                    var roket = Roket[0];
+                    if (shieldsUp != true) {
+                        if (roket.leftForShields < sortedRoids1.right && gameOn == true && roket.collision < 2) {
+                            if (Math.abs(sortedRoids1.pos.y - roket.pos.y) <= sortedRoids1.radius + 0.5 * roket.radius) {
+                                handleRoketRoidCollisions(roket, sortedRoids1);
+                            }
+                        }  
+                    } else {
+                        if (roket.leftForHits < sortedRoids1.right && gameOn == true  && roket.collision < 2) {
+                            if (Math.abs(sortedRoids1.pos.y - roket.pos.y) <= sortedRoids1.radius + roket.radius) {
+                                handleRoketRoidCollisions(roket, sortedRoids1);
+                            }
+                        }  
+                    }
                 }
                 
                 //  HANDLE RESPAWN PUSHER  ------------------
@@ -6789,9 +7217,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }*/
 
                 //  HANDLE BOMB ROID COLLISIONS  -------------------
-                for (var b = 0; b < Bomb.length; b++) {
-                    handleBombRoidCollisions(sortedRoids1, Bomb[b]);
-                }   
+                if (untouchable != true) {
+                    for (var b = 0; b < Bomb.length; b++) {
+                        handleBombRoidCollisions(sortedRoids1, Bomb[b]);
+                    }   
+                }
                 
                 //  HANDLE SHIP DEBRIS HITS ON ROIDS ------------------
                 var SortedRoketDebris = RoketDebris.sort((a, b) => a.left - b.left);
@@ -6838,10 +7268,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (Bomb[b].exploding != true && Date.now() - Bomb[b].birthday > 3000) {
                 if (typeof Bomb[b].startExplosion === 'function') Bomb[b].startExplosion(); else { Bomb[b].exploding = true; Bomb[b].birthday = Date.now(); if (typeof Bomb[b]._explosionOrigin !== 'undefined') delete Bomb[b]._explosionOrigin; }
             }
-
-            //  HANDLE BOMB ROCKET COLLISIONS  -------------
-            if (typeof Roket !== 'undefined' && Roket && Roket.length > 0 && Roket[0]) {
-                handleBombRoketCollisions(Roket[0], Bomb[b]);
+            if (untouchable != true) {
+                //  HANDLE BOMB ROCKET COLLISIONS  -------------
+                if (typeof Roket !== 'undefined' && Roket && Roket.length > 0 && Roket[0]) {
+                    handleBombRoketCollisions(Roket[0], Bomb[b]);
+                }
             }
 
             if (Bomb[b].exploding == true && Date.now() - Bomb[b].birthday > 300) {
@@ -6871,7 +7302,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //  HANDLE ENEMY TORPEDO PLAYER HITS  --------------------
         //for (var e = 0; e < Enemy.length; e++) {
             for (var f = 0; f < Torpedo.length; f++)
-                if (Torpedo[f].friendOrFoe == 'foe' && !athena.checked) {
+                if (Torpedo[f].friendOrFoe == 'foe' && !athena.checked && untouchable != true) {
                     handleTorpedoOnPlayerHits(Torpedo[f]);
                 }
         //}
@@ -6936,9 +7367,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
 
-
     //  DRAW   ===================================================
-    
     function draw() {  
         //  CLEAR BACKGROUND  ----------------
         c.clearRect(0, 0, canvas.width, canvas.height);
@@ -6963,6 +7392,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //  DRAW MOON  -----------
         if (Moon.length > 0 && moonFill.checked == true) {
             Moon[0].draw();
+        }
+
+        // DRAW PACMAN  -------------------
+        if (gameOver == true) {
+            for (var p = 0; p < PacMan.length; p++) {
+                PacMan[p].draw();
+            }
+            /*// pacman moon tests 
+            drawCircle(Moon[0].pos.x, Moon[0].pos.y, 2 * Moon[0].radius);
+            c.lineWidth = .01 * cScale
+            c.strokeStyle = 'blue';
+            c.stroke();
+            if (PacMan.length > 0) {
+                drawCircle(PacMan[0].pos.x * cScale, PacMan[0].pos.y * cScale, 2 * PacMan[0].radius * cScale);
+                c.strokeStyle = 'red';
+                c.stroke();
+            }*/
+            
         }
 
         //  EARTH BACKGROUND  ---------------------
@@ -7128,6 +7575,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             Spawnlets[b].draw();
         }
 
+
         // DRAW OSD ELEMENTS ==================================================
         
         //  DRAW WAVE NUMBER  -------------------
@@ -7253,6 +7701,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         //  ARC BAR GAUGE METER FOR SHIELD AND TORPEDO  ---------------------
+        if (gameIdle == true || (gameOn == true && lives > 0)) {
         const curveXforShield = 0.35 * simWidth * cScale;
         const curveXforTorpedo = 0.65 * simWidth * cScale;
         const curveY = 0.55 * cScale;
@@ -7274,7 +7723,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         if (disco > 2 * Math.PI) {
             disco -= 2 * Math.PI;
         }
-        var discoIntensity = 10 + 50 * Math.abs(Math.sin(disco));
+        var discoIntensity = 50 + 50 * Math.abs(Math.sin(disco));
 
         //  SHIELD METER  -----------------------
         //  green background  ------------
@@ -7304,69 +7753,74 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             curveXforShield, 
             curveY
         );
-        coneGradient.addColorStop(0, "blue");
-        coneGradient.addColorStop(0.13, "cyan")
-        coneGradient.addColorStop(1, "blue");
+        //  SHIELDS EMPTY OR NOT STROKE STYLE  ----------
+        if (shieldLevel < 1) {
+            coneGradient.addColorStop(0, "red");
+            coneGradient.addColorStop(1, "red");
+        } else {
+            coneGradient.addColorStop(0, "blue");
+            coneGradient.addColorStop(1, "blue");
+        }
+        coneGradient.addColorStop(0.13, "cyan");
         c.strokeStyle = coneGradient;
         c.stroke();
         c.closePath();
 
-        var shieldSpinner = Math.abs(Math.cos(disco));
-
-        // draw a simple shield icon (white fill, blue outline) under the shield meter
-        (function() {
-            const sx = curveXforShield; // center x under meter
-            const sy = curveY - arcRadius + 0.06 * cScale; // slightly below the arc
-            const r = 0.035 * cScale; // base size for the shield icon
-
-            // local geometry (unscaled relative to r)
-            const tipY =        r * 1.05;           // top
-            const bulgeX =      r * 0.75 * shieldSpinner;           // shoulder width
-            const bulgeY =      r * 0.7;            // shoulder height
-            const crestW =      r * 0.65 * shieldSpinner;           // mid-point width
-            const crestCY =     0;                  // crest center Y (small offset)
-            const crestTopY =   crestCY - r * 0.75; // bottom
-            
-            c.save();
-            c.translate(sx, sy);
-            // flip vertically so crest is at top and tip at bottom
-            c.scale(1, -1);
-
-            // polygonal shield: sharp top and bottom points
-            c.beginPath();
-            const topX = 0, topY = crestTopY; // sharp top
-            const rightShoulderX = crestW, rightShoulderY = crestCY;
-            const rightBulgeX = bulgeX, rightBulgeY = bulgeY;
-            const bottomX = 0, bottomY = tipY + Math.max(r * 0.02, 0.5); // sharp bottom
-            const leftBulgeX = -bulgeX, leftBulgeY = bulgeY;
-            const leftShoulderX = -crestW, leftShoulderY = crestCY;
-
-            c.moveTo(topX, topY);
-            c.lineTo(rightShoulderX, rightShoulderY);
-            c.lineTo(rightBulgeX, rightBulgeY);
-            c.lineTo(bottomX, bottomY);
-            c.lineTo(leftBulgeX, leftBulgeY);
-            c.lineTo(leftShoulderX, leftShoulderY);
-            c.closePath();
-
+        //  SHIELD  ------------------
+        if (shieldLevel < 100) {
+            var shieldSpinner = Math.abs(Math.cos(disco));
             if (Math.cos(disco) > 0) {
                 c.fillStyle = 'hsla(240, 80%, 50%, 80%)';
             } else {
                 c.fillStyle = 'hsla(190, 80%, 30%, 80%)';
             }
-            c.fill();
-
-            c.lineWidth = 0.005 * cScale;
-            c.lineJoin = 'round';
-            c.lineCap = 'round';
-            if (shieldLevel < 100) {
-                c.strokeStyle = 'hsl(120, 50%, 50%)';
+        } else {
+            var shieldSpinner = Math.abs(Math.cos(5 * disco));
+            if (Math.cos(5 * disco) > 0) {
+                c.fillStyle = 'hsla(240, 80%, 50%, 80%)';
             } else {
-                c.strokeStyle = `hsl(0, 0%, 70%)`;
+                c.fillStyle = 'hsla(190, 80%, 30%, 80%)';
             }
-            c.stroke();
-            c.restore();
-        })();
+        }
+        
+        // SHIELD VARIABLES  ----------
+        const sx = curveXforShield; // center x under meter
+        const sy = curveY - arcRadius + 0.06 * cScale; // slightly below the arc
+        var r = 0.03 * cScale; // base size for the shield icon
+        const tipY =        r * 1.05;           // top
+        const bulgeX =      r * 0.75 * shieldSpinner;           // shoulder width
+        const bulgeY =      r * 0.7;            // shoulder height
+        const crestW =      r * 0.65 * shieldSpinner;           // mid-point width
+        const crestCY =     0;                  // crest center Y (small offset)
+        const crestTopY =   crestCY - r * 0.75; // bottom
+        
+        c.save();
+        c.translate(sx, sy);
+        // flip vertically
+        c.scale(1, -1);
+        c.beginPath();
+        const topX = 0, topY = crestTopY; // sharp top
+        const rightShoulderX = crestW, rightShoulderY = crestCY;
+        const rightBulgeX = bulgeX, rightBulgeY = bulgeY;
+        const bottomX = 0, bottomY = tipY + Math.max(r * 0.02, 0.5); // sharp bottom
+        const leftBulgeX = -bulgeX, leftBulgeY = bulgeY;
+        const leftShoulderX = -crestW, leftShoulderY = crestCY;
+        // FILL SHIELD  ----------
+        c.moveTo(topX, topY);
+        c.lineTo(rightShoulderX, rightShoulderY);
+        c.lineTo(rightBulgeX, rightBulgeY);
+        c.lineTo(bottomX, bottomY);
+        c.lineTo(leftBulgeX, leftBulgeY);
+        c.lineTo(leftShoulderX, leftShoulderY);
+        c.closePath();
+        c.fill();
+        // STROKE SHIELD OUTLINE ----------
+        c.lineWidth = 0.005 * cScale;
+        c.lineJoin = 'round';
+        c.lineCap = 'round';
+        c.strokeStyle = 'hsl(0, 0%, 60%)';
+        c.stroke();
+        c.restore();
       
         //  TORPEDO METER  -----------------
         //  green background  ------------
@@ -7422,46 +7876,76 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.strokeStyle = 'hsl(0, 0%, 10%)';
             c.stroke();
         }
-        //  weapon level readout  ----------
-        c.lineWidth = 0.013 * cScale;
+        
+        //  WEAPON LEVEL READOUT  ----------
+        c.lineWidth = 0.005 * cScale;
+        c.strokeStyle = 'hsl(0, 0%, 60%)';
+
         if (weaponLevel < maxWeaponLevel) {
-            c.strokeStyle = 'hsl(120, 50%, 50%)';
-        } else {
-            c.strokeStyle = `hsl(0, 0%, 70%`;
+            var iconSpinner1 = Math.abs(Math.cos(disco));
+            var iconSpinner2 = Math.abs(Math.cos(disco + 0.2 * Math.PI));
+            var iconSpinner3 = Math.abs(Math.cos(disco + 0.4 * Math.PI));
+            if (Math.cos(disco) > 0) {
+                c.fillStyle = 'hsla(0, 80%, 50%, 100%)';
+            } else {
+                c.fillStyle = 'hsla(0, 80%, 50%, 100%)';
         }
-    
-        if (Math.sin(disco) > 0) {
-            c.fillStyle = 'hsla(30, 80%, 50%, 100%)';
         } else {
-            c.fillStyle = 'hsla(0, 80%, 50%, 100%)';
-        }
-        //  outline  ----------
+            var iconSpinner1 = Math.abs(Math.cos(5 * disco));
+            var iconSpinner2 = Math.abs(Math.cos(5 * disco + 0.2 * Math.PI));
+            var iconSpinner3 = Math.abs(Math.cos(5 * disco + 0.4 * Math.PI));
+            if (Math.cos(5 * disco) > 0) {
+                c.fillStyle = 'hsla(0, 80%, 50%, 100%)';
+            } else {
+                c.fillStyle = 'hsla(0, 80%, 50%, 100%)';
+            }
+        }        
         c.beginPath();
-        c.moveTo(curveXforTorpedo + 0.006 * cScale, (curveY - arcRadius) + 0.061 * cScale - 0.03 * cScale);
-        c.lineTo(curveXforTorpedo + 0.006 * cScale, (curveY - arcRadius) + 0.061 * cScale + 0.03 * cScale);
-        c.closePath();
-        //c.stroke();
-        c.beginPath();
-        c.ellipse(
-            curveXforTorpedo + 0.006 * cScale, 
+        c.ellipse(  // left icon
+            curveXforTorpedo - 0.045 * cScale, 
             (curveY - arcRadius) + 0.061 * cScale, 
-            0.03 * cScale *  Math.abs(Math.sin(disco)), 
-            0.03 * cScale, 
+            0.015 * cScale * iconSpinner1, 
+            0.015 * cScale, 
             0,
             0 * Math.PI, 
             2 * Math.PI,
-            );
-        c.closePath();
+        );
         c.fill();
-        c.lineWidth = 0.005 * cScale;
         c.stroke();
-        
+        c.beginPath();
+        c.ellipse(  // middle icon 
+            curveXforTorpedo + 0.005 * cScale, 
+            (curveY - arcRadius) + 0.061 * cScale, 
+            0.015 * cScale * iconSpinner2, 
+            0.015 * cScale, 
+            0,
+            0 * Math.PI, 
+            2 * Math.PI,
+        );
+        c.fill();
+        c.stroke();
+        c.beginPath();
+        c.ellipse(  // right icon
+            curveXforTorpedo + 0.055 * cScale, 
+            (curveY - arcRadius) + 0.061 * cScale, 
+            0.015 * cScale * iconSpinner3, 
+            0.015 * cScale, 
+            0,
+            0 * Math.PI, 
+            2 * Math.PI,
+        );
+        c.fill();
+        c.stroke();
+        }
+
+        /*
         //  text  ----------
         c.font = `${0.04 * cScale}px monospace`;
         c.fillStyle = `hsla(0, 0%, 100%, ${40 + discoIntensity}%)`;
         c.textAlign = 'center';
         c.textBaseline = 'middle';
         c.fillText(weaponLevel + 1, curveXforTorpedo + 0.006 * cScale, (curveY - arcRadius) + 0.065 * cScale);
+        */
 
         //  GAME OVER  ------------------------------------
         if (gameOn != true && lives < 1) {
@@ -7514,7 +7998,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             //  PRESS ANY KEY TO TO RETURN  ------------------
             rudolphIntensity = 100;
             c.fillStyle = `hsla(175, 100%, 50%, 80%)`;
-            c.font = "italic 15px verdana";
+            c.font = "italic ${(trans5/100) * 15}px verdana";
             c.beginPath();
             c.fillText('PRESS -R- TO RETURN', 0.5 * simWidth * cScale, 0.8 * simHeight * cScale);
             c.closePath();
@@ -7524,7 +8008,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //  TITLE ART  --------------------------------------
         function titleArt() {
             const fadeTime = 3000
-            if ((Date.now() - gameStartTime) > 4.0 * fadeTime) {
+            var timer = (Date.now() - programStartTime);
+            
+            if (timer > 4.0 * fadeTime) {
                 gameStarting = false;
             }
 
@@ -7540,11 +8026,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
             //  SET TRANSPARENCY AND GROW  ------------------
             if (gameIdle == true) {
-                var trans = 100;
+                
                 var trans2 = 70;
                 var trans3 = 80;
                 var trans4 = 0;
-                c.font = `bolder ${0.25 * simWidth * cScale}px monospace`;
+                var maxFontSize = 0.25 * simWidth * cScale;
+                if (timer < 2000) {
+                    var fontSize = (timer / 2000) * maxFontSize;
+                    var trans = (timer / 1000) * 100;
+                } else {
+                    var fontSize = maxFontSize;
+                    var trans = 100;
+                }
+                
+                c.font = `bolder ${fontSize}px monospace`;
             } else {
                 var trans = 70 - (Date.now() - gameStartTime) * 100 / fadeTime;
                 var trans2 = 70 - (Date.now() - gameStartTime) * 100 / (0.25 * fadeTime);
@@ -7695,28 +8190,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.shadowColor = 'black';
             c.shadowBlur = 7;
             c.fillText('LEFT', (0.2 * simWidth + 0.15) * cScale, 0.91 * simHeight * cScale);
-            c.fillText('RIGHT', (0.35 * simWidth + 0.16) * cScale, 0.91 * simHeight * cScale);
-            c.fillText('THRUST', (0.5 * simWidth + 0.16) * cScale, 0.91 * simHeight * cScale);
-            c.fillText('SH00T', (0.66 * simWidth + 0.15) * cScale, 0.91 * simHeight * cScale); 
-            c.fillText('SHIELDS', (0.8 * simWidth + 0.15) * cScale, 0.91 * simHeight * cScale);
+            c.fillText('RIGHT', (0.335 * simWidth + 0.16) * cScale, 0.91 * simHeight * cScale);
+            c.fillText('THRUST', (0.47 * simWidth + 0.16) * cScale, 0.91 * simHeight * cScale);
+            c.fillText('SH00T', (0.635 * simWidth + 0.15) * cScale, 0.91 * simHeight * cScale); 
+            c.fillText('SHIELDS', (0.758 * simWidth + 0.15) * cScale, 0.91 * simHeight * cScale);
             c.lineWidth = 0.005 * cScale;
             c.font = `${0.08 * cScale}px monospace`;
-            c.strokeText('S', (0.67 * simWidth - 0.12) * cScale, 0.912 * simHeight * cScale);
-            c.strokeText('X', (0.83 * simWidth - 0.12) * cScale, 0.912 * simHeight * cScale);
+            c.strokeText('S', (0.65 * simWidth - 0.12) * cScale, 0.912 * simHeight * cScale);
+            c.strokeText('X', (0.79 * simWidth - 0.12) * cScale, 0.912 * simHeight * cScale);
             c.font = `${0.06 * cScale}px monospace`;
-            c.fillText('/', (0.667 * simWidth - .06) * cScale, 0.912 * simHeight * cScale);
-            
-            
+            c.fillText('/', (0.645 * simWidth - .06) * cScale, 0.912 * simHeight * cScale);
             
             //  ARROWS  ------------------
             c.lineWidth = 0.007 * cScale;
             drawArrow(0.2 * simWidth, 0.908 * simHeight, 0.5 * Math.PI, 0.08);
             c.stroke();
-            drawArrow(0.35 * simWidth, 0.908 * simHeight, 1.5 * Math.PI, 0.08);
+            drawArrow(0.335 * simWidth, 0.908 * simHeight, 1.5 * Math.PI, 0.08);
             c.stroke();
-            drawArrow(0.5 * simWidth, 0.908 * simHeight, 0, 0.08);
+            drawArrow(0.47 * simWidth, 0.908 * simHeight, 0, 0.08);
             c.stroke();
-            drawArrow(0.665 * simWidth, 0.908 * simHeight, Math.PI, 0.08);
+            drawArrow(0.64 * simWidth, 0.908 * simHeight, Math.PI, 0.08);
             c.stroke();
             c.shadowBlur = 0;
         }
