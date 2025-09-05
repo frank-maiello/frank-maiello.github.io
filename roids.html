@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <head>
-    <title>R0IDS 1.98</title>
+    <title>R0IDS 1.99</title>
     <style>
         body {font-family: verdana; 
             font-size: 14px;
@@ -273,9 +273,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             setupScene();
         }
         //  PAUSE  -------
-        //if (u.key == "p" || u.key == "P") {
-        //    userPause = !userPause;
-        //}
+        if (u.key == "p" || u.key == "P") {
+            userPause = !userPause;
+        }
+
         //  SPAWN ALIEN  -------
         //if (u.key == "q" || u.key == "Q") {
         //    spawnSoloAlien(new Vector2(0.5 * simWidth, 0.2 * simHeight));
@@ -4763,19 +4764,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //  DRAW ROKET TO OFFSCREEN CANVAS  ------------------
         // radius is expected in simulation units; if not provided, try to
         // derive it from the existing Roket instance (which stores radius in pixels)
-        if (!radius || typeof radius !== 'number') {
-            if (typeof Roket !== 'undefined' && Roket && Roket[0] && Roket[0].radius) {
-                // Roket[0].radius in this project is stored as the base value used throughout
-                // (previous edits keep it as 0.0003 * cScale). To compute the final pixel radius
-                // for offscreen drawing we will multiply by cScale below (rpx = radius * cScale).
-                // So keep the same base value here.
-                radius = Roket[0].radius;
-            } else {
-                // match the constructor default (0.0003 * cScale stored as base)
-                radius = 0.0003 * cScale;
-            }
-        }
-
+ 
+        // match the constructor default;
+        radius = Math.max(0.1, Math.min(0.1, 0.0002 * cScale));
         // size the offscreen canvas to comfortably contain the sprite (pixels)
         // convert sim-units to pixels with cScale
         var spriteDiameterPx = Math.max(64, Math.ceil(2 * radius * cScale * 1.6 + 8));
@@ -5045,11 +5036,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             radius: rpx // store pixel radius for runtime clarity
         };
 
-        // sanity check
-        if (!offscreenRoketCanvas || offscreenRoketCanvas.width < 2 || offscreenRoketCanvas.height < 2) {
-            console.warn('defineOffscreenRoket: invalid offscreen canvas', offscreenRoketCanvas && offscreenRoketCanvas.width, offscreenRoketCanvas && offscreenRoketCanvas.height);
-        }
-
         roketCtx.restore();
     }
 
@@ -5063,7 +5049,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         constructor() {
             this.pos = new Vector2(0.5 * simWidth, 0.7 * simHeight);
             this.vel = new Vector2();
-            this.radius = 0.0003 * cScale;
+            this.radius = Math.max(0.1, Math.min(0.1, 0.0002 * cScale));
             this.mass = this.radius;
             this.angle = 0
             this.collision = 0;
@@ -6987,7 +6973,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 //blinkShieldsRed = true;
             }
         } else {
-            if (shieldLevel < 100) {
+            if (gameOn == true && shieldLevel < 100) {
                 shieldLevel += 0.1 * 60 * dT;
                 if (shieldLevel > 100) {
                     shieldLevel = 100;
@@ -7753,15 +7739,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             curveXforShield, 
             curveY
         );
-        //  SHIELDS EMPTY OR NOT STROKE STYLE  ----------
-        if (shieldLevel < 1) {
-            coneGradient.addColorStop(0, "red");
-            coneGradient.addColorStop(1, "red");
-        } else {
-            coneGradient.addColorStop(0, "blue");
-            coneGradient.addColorStop(1, "blue");
-        }
+        //  SHIELD METER STROKE STYLE  ----------
+        coneGradient.addColorStop(0, "blue");
         coneGradient.addColorStop(0.13, "cyan");
+        coneGradient.addColorStop(1, "blue");
         c.strokeStyle = coneGradient;
         c.stroke();
         c.closePath();
