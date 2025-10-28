@@ -1,0 +1,2619 @@
+<!-- 
+PLINK(0) LAB :: a simulated particle kinetics toy ::
+copyright 2025 :: Frank Maiello :: maiello.frank@gmail.com ::
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. In no event shall the author or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort or otherwise, arising from, our of or in, connection with the software or the use of other dealings in the Software.
+-->
+
+<!DOCTYPE html>
+<html>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<head>
+		<title>Slosh 1.11</title>
+        <style>
+			body {font-family: monospace; 
+                font-size: 16px;
+                color: hsl(0, 0%, 60%);
+                text-align: center;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                padding-left: 5px;
+                padding-right: 10px;
+                }
+            h1 {font-family: monospace;
+                font-size: 10px;
+                text-align: center}
+            h2 {font-family: monospace;
+                font-size: 4px;
+                text-align: center}
+
+    /*  BUTTONS  ----------------------------------------------------------- */
+			.buttongreen:hover {opacity: 1}
+            .buttongreen {
+                width: 18px;
+                height: 18px;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 9px;
+                background-color: hsl(108, 50%, 50%);
+                opacity: 0.7;
+                border: none;
+				cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            
+            .buttongreenbig:hover {opacity: 1}
+            .buttongreenbig {
+                width: 24px;
+                height: 24px;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 12px;
+                color: hsl(0, 0%, 100%);
+                background-color: hsl(108, 50%, 50%);
+                opacity: 0.7;
+                border: none;
+				cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+
+            .buttonorange:hover {opacity: 1}
+            .buttonorange {
+                width: 24px;
+                height: 24px;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 12px;
+                background-color: hsl(23, 81%, 54%);
+                opacity: 0.7;
+                border: none;
+				cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+
+            .buttonmint:hover {opacity: 1}
+            .buttonmint {
+                width: 24px;
+                height: 24px;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 12px;
+                background-color: hsl(160, 80%, 50%);
+                opacity: 0.7;
+                border: none;
+				cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            
+            .buttonpink:hover {opacity: 1}
+            .buttonpink {
+                width: 24px;
+                height: 24px;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                color: hsl(58, 100%, 59%);
+                border-radius: 12px;
+                background-color: hsl(323, 80%, 60%);
+                opacity: 0.7;
+                border: none;
+				cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+
+
+    /*  SLIDERS  ---------------------------------------------------------- */
+            .slider-blue:hover {opacity: 1} 
+            .slider-blue {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 60px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-blue::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(220, 80%, 60%);
+                cursor: pointer}
+            
+            .slidersquare-shower:hover {opacity: 1}
+            .slidersquare-shower {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 60px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slidersquare-shower::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(350, 80%, 60%);
+                cursor: pointer}
+
+            .slidersquare-fountain:hover {opacity: 1}
+            .slidersquare-fountain {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 60px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slidersquare-fountain::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 18px;
+                height: 18px;
+                border-radius: 30%;
+                background: hsl(300, 60%, 60%);
+                cursor: pointer}
+
+            .slider-pink:hover {opacity: 1}
+            .slider-pink {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 100px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-pink::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(330, 100%, 70%);
+                cursor: pointer}
+
+            .slider-pinkshort:hover {opacity: 1}
+            .slider-pinkshort {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 50px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-pinkshort::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(330, 100%, 70%);
+                cursor: pointer}
+
+            .slider-purple:hover {opacity: 1}
+            .slider-purple {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 120px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-purple::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(300, 60%, 60%);
+                cursor: pointer} 
+
+            .slider-purple-short:hover {opacity: 1}
+            .slider-purple-short {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 60px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-purple-short::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(300, 60%, 60%);
+                cursor: pointer} 
+
+            .slider-purpleyellowleftright:hover {opacity: 1}
+            .slider-purpleyellowleftright {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 120px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-purpleyellowleftright::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 26px;
+                height: 12px;
+                border-radius: 30%;
+                background: hsl(350, 80%, 60%);
+                cursor: pointer} 
+
+            .sliderorange:hover {opacity: 1}
+            .sliderorange {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 50px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);   
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .sliderorange::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                background: hsl(23, 81%, 66%);
+                cursor: pointer}
+            
+            .slidercyan:hover {opacity: 1} 
+            .slidercyan {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 70px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slidercyan::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(181, 82%, 66%);
+                cursor: pointer}
+
+            .slider-yellow:hover {opacity: 1} 
+            .slider-yellow {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 70px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-yellow::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(60, 75%, 41%);
+                cursor: pointer}
+
+            .slider-organge:hover {opacity: 1} 
+            .slider-orange {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 70px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-orange::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 20%;
+                background: hsl(26, 91%, 46%);
+                cursor: pointer}
+
+            .slider-mint:hover {opacity: 1} 
+            .slider-mint {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 60px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-mint::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(160, 80%, 60%);
+                cursor: pointer}
+
+            .slider-green:hover {opacity: 1}
+            .slider-green {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                position: 10px;
+                width: 75px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-green::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(90, 70%, 50%);
+                cursor: pointer}
+
+
+
+    /*  FIELDS  ----------------------------------------------------------- */
+            .field-red {-webkit-appearance: none;
+                appearance: none;
+                font-family: monospace;
+                font-size: 16px;
+                background: hsl(0, 0%, 0%);
+                margin-top: 5px;
+                margin-bottom: 10px;
+                padding-top: 2px;
+                padding-left: 6px;
+				width: 54px;
+				height: 18px;
+                border-width: 0;
+				border-radius: 10px;
+                color: hsl(90, 70%, 50%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+				transition: opacity .2s}
+
+            .field:hover {opacity: 1}
+            .field {-webkit-appearance: none;
+                appearance: none;
+                font-family: monospace;
+                font-size: 16px;
+                text-align: center;
+                background: hsl(0, 0%, 0%);
+                margin-bottom: 10px;
+                padding-left: 6px;
+				width: 80px;
+				height: 22px;
+                border-width: 0;
+				border-radius: 10px;
+                color: hsl(90, 70%, 50%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+				transition: opacity .2s}
+            
+
+    /*  CHECKBOXES  -------------------------------------------------------- */
+
+            .checkbox-roundorange:hover {opacity: 1}
+            .checkbox-roundorange {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(23, 50%, 40%);
+                border-radius: 50%;
+                vertical-align: middle;
+                border: 3px solid hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-roundorange:checked {
+                background-color: hsl(23, 70%, 60%)}
+            
+            .checkbox-roundgray:hover {opacity: 1}
+            .checkbox-roundgray {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(9, 0%, 30%);
+                border-radius: 50%;
+                vertical-align: middle;
+                border: 3px solid hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-roundgray:checked {
+                background-color: hsl(0, 0%, 60%)}
+
+            .checkbox-oneshot:hover {opacity: 1}
+            .checkbox-oneshot {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(0, 50%, 20%);
+                border-radius: 50%;
+                vertical-align: middle;
+                border: 3px solid hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-oneshot:checked {
+                background-color: hsl(0, 50%, 50%)}
+
+            .checkbox-bumpers:hover {opacity: 1}
+            .checkbox-bumpers {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(56, 80%, 20%);
+                border-radius: 50%;
+                vertical-align: middle;
+                border: 3px solid hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-bumpers:checked {
+                background-color: hsl(60, 80%, 50%)}
+
+            .checkbox-pause:hover {opacity: 1}
+            .checkbox-pause {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(271, 58%, 40%);
+                border-radius: 50%;
+                vertical-align: middle;
+                border: 3px dotted hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-pause:checked {
+                background-color: hsl(54, 100%, 50%);
+                border: 3px dotted hsl(0, 0%, 10%);}
+
+            .checkbox-roundbluelight:hover {opacity: 1}    
+            .checkbox-roundbluelight {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(190, 50%, 30%);
+                border-radius: 50%;
+                vertical-align: middle;
+                border: 3px solid hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-roundbluelight:checked {
+                background-color: hsl(190, 70%, 50%)}
+                
+            .checkbox-ceiling:hover {opacity: 1}
+            .checkbox-ceiling {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(80, 50%, 20%);
+                border-radius: 50%;
+                vertical-align: middle;
+                border: 3px solid hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-ceiling:checked {
+                background-color: hsl(80, 50%, 50%)}
+
+            .checkbox-floor:hover {opacity: 1}
+            .checkbox-floor {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(160, 50%, 20%);
+                border-radius: 50%;
+                vertical-align: middle;
+                border: 3px solid hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-floor:checked {
+                background-color: hsl(160, 50%, 45%)}
+
+            .checkbox-leftwall:hover {opacity: 1}
+            .checkbox-leftwall {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(230, 70%, 20%);
+                border-radius: 50%;
+                vertical-align: middle;
+                border: 3px solid hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-leftwall:checked {
+                background-color: hsl(230, 70%, 70%)}
+
+            .checkbox-rightwall:hover {opacity: 1}
+            .checkbox-rightwall {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(310, 50%, 20%);
+                border-radius: 50%;
+                vertical-align: middle;
+                border: 3px solid hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-rightwall:checked {
+                background-color: hsl(310, 50%, 50%)}
+
+                
+    /*  RADIO BUTTONS  -------------------------------------------------------- */
+
+            .radio:hover {opacity: 1}
+            .radio {-webkit-appearance: none;
+                appearance: none;
+                padding: 0px;
+                border: 0px;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 20px;
+                height: 20px;
+                border-radius: 10px;
+                background-color: hsl(0, 0%, 20%);
+                opacity: 0.7;
+                border: 4px solid hsl(0, 0%, 60%);
+				cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .radio:checked {
+                background-color: hsl(313, 99%, 48%)
+            }
+
+            .radioball:hover {opacity: 1}
+            .radioball {-webkit-appearance: none;
+                appearance: none;
+                padding: 0px;
+                border: 0px;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 20px;
+                height: 20px;
+                border-radius: 10px;
+                background-color: hsl(0, 0%, 20%);
+                opacity: 0.7;
+                border: 4px solid hsl(0, 0%, 60%);
+				cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .radioball:checked {
+                background-color: hsl(184, 60%, 85%);
+            }
+
+            .radio-green:hover {opacity: 1}
+            .radio-green {-webkit-appearance: none;
+                appearance: none;
+                padding: 0px;
+                border: 0px;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 20px;
+                height: 20px;
+                border-radius: 10px;
+                background-color: hsl(0, 0%, 20%);
+                opacity: 0.7;
+                border: 4px solid hsl(0, 0%, 60%);
+				cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .radio-green:checked {
+                background: hsl(90, 70%, 50%);
+            }
+
+            .radio-blue:hover {opacity: 1}
+            .radio-blue {-webkit-appearance: none;
+                appearance: none;
+                padding: 0px;
+                border: 0px;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 20px;
+                height: 20px;
+                border-radius: 10px;
+                background-color: hsl(0, 0%, 20%);
+                opacity: 0.7;
+                border: 4px solid hsl(0, 0%, 60%);
+				cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .radio-blue:checked {
+                background-color: hsl(220, 80%, 50%);
+            }
+            
+		</style>
+	</head>
+<body> 
+
+	<body style="background: hsl(0, 0%, 10%); background-attachment: fixed; margin-left: 0px;"> 
+    <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-top: 10px; margin-left: 10px"></canvas>
+
+    <h2><br></h2>
+	<input type="button" title="Restart [r]" class="buttongreenbig" value="&#8629" onclick="makeBalls()">
+    <input type="radio" title="Round Cluster Start" name="rackemType" id="cluster" class="radioball">
+    <input type="radio" title="Square Array Start" name="rackemType" id="array" class="radioball" checked>
+    
+    walls&#8594
+    <input type="range"  title="Corner Radius" id="cornerRadiusSlider" min="0" max="100" value="50" class="slidercyan">
+    <input type="checkbox" title="Ceiling" id="ceilingButton" class="checkbox-ceiling" checked>
+    <input type="checkbox" title="Floor" value="F" id="floorButton"  class="checkbox-floor" checked>
+    <input type="checkbox" title="Left Wall" id="leftWallButton" class="checkbox-leftwall" checked>
+    <input type="checkbox" title="Right Wall" id="rightWallButton" class="checkbox-rightwall" checked>
+    
+    time&#8594
+    <input type="range"  title="Time  ::  <--- Slower : Normal" id="timeSlider" min="40" max="100" value="100" class="slider-mint">
+    <input type="range"  title="Persistence" id="trailSlider" min="0" max="30" value="12" class="slider-orange">
+    <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked>
+    
+    gravity&#8594
+    <input type="radio" title="Down" name="gravityType" id="gravityDown" class="radio-blue" checked>
+    <input type="radio" title="Right" name="gravityType" id="gravityRight" class="radio-blue">
+    <input type="range"  title="Gravity  ::  Zero Gravity : More Gravity --->" id="gravitySlider" min="0" max="100" value="0" class="slider-blue">
+    
+    repulsion&#8594
+    <input type="checkbox" title="Repulsion on/off" id="repulsionButton" value="false" class="checkbox-roundorange" checked>
+    <input type="range"  title="Repulsion Force between Particles" id="repulsionForceSlider" min="1" max="20" value="20" class="slider-orange">
+    <input type="range"  title="Coloration Threshold (faster = more violet)" id="velColorMapSlider" min="1" max="500" value="100" class="slider-orange">
+    
+    bounce&#8594
+    <input type="range"  title="Ball Restitution on Collision" id="ballRestSlider" min="0" max="20" value="0" class="slidercyan">
+    
+    balls&#8594
+    <select title="Particle Count" id="ballsInput" class="field">
+        <optgroup label="Number of Balls">
+            <option value="1">1</option>
+            <option value="100">100</option>
+            <option value="400">400</option>
+            <option value="1024" >1024</option>
+            <option value="1600">1600</option>
+            <option value="2025">2025</option>
+            <option value="2500" >2500</option>
+            <option value="3025">3025</option>
+            <option value="3600" selected>3600</option>
+            <option value="4096">4096</option>
+        </optgroup>
+    </select>
+    <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="5" class="field-red">
+	<input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="15" class="field-red">
+    <input type="radio" title="Spheres" name="ballType" id="ballSphere" class="radio-green">
+    <input type="radio" title="Discs" name="ballType" id="ballDisc" class="radio-green" checked>
+    <input type="radio" title="Circles" name="ballType" id="ballCircle" class="radio-green">
+    <input type="range"  title="Ball Saturation" id="saturationSlider" min="0" max="100" value="90" class="slider-green">
+    <input type="range"  title="Ball Lightness" id="lightnessSlider" min="5" max="100" value="40" class="slider-green">
+
+    pucks&#8594
+    <input type="checkbox" title="Pucks on/off" id="showPuckButton" value="true" class="checkbox-roundbluelight" checked>
+    <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="400" class="slidercyan">
+    
+    eaters&#8594
+    <input type="checkbox" title="Eaters on/off" id="showHungryPuckButton" value="false" class="checkbox-roundbluelight" unchecked>
+    <input type="range"  title="Eater Radius" id="hungryPuckRadiusSlider" min="10" max="1000" value="150" class="slidercyan">
+    <input type="button" title="Restart [r]" class="buttongreenbig" value="&#8629" onclick="makeBalls()">
+
+    respawn&#8594
+    <input type="checkbox" title="One Shot (no respawn)" id="oneShotButton" value="false" class="checkbox-oneshot" unchecked>
+    <input type="range"  title="Shower Width" id="dumpSlider" min="1" max="100" value="40" class="slidersquare-shower">
+    <input type="range"  title="Shower Position" id="dumpMoveSlider" min="-50" max="50" value="0" class="slider-purpleyellowleftright">
+    <input type="radio" title="Shower" name="spawnType" id="shower" value="shower" class="radio" checked>
+    <input type="radio" title="Mr. Mister" name="spawnType" id="fountain" value="fountain" class="radio" unchecked>
+    <input type="radio" title="Mr. & Mrs. Mister" name="spawnType" id="duelingFountains" value="duelingFountains" class="radio">
+    
+    mr.mister&#8594
+    <input type="range"  title="Spew Direction" id="respawnDirSlider" min="0" max="628" value="0" class="slider-purple">
+    <input type="range"  title="Yeet" id="yeetSlider" min="0" max="600" value="150" class="slider-purple-short">
+    <input type="range"  title="Mr. Mister Speed" id="misterSpeedSlider" min="0" max="200" value="100" class="slider-purple-short">
+    <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field">
+        <optgroup label="Mr. Mister Mode">
+            <option value="idle" selected>mouse</option>
+            <option value="billiard">pong</option>
+            <option value="scanner" >scan</option>
+            <option value="printer">printer</option>
+            <option value="typewriter">machine</option>
+            <option value="circle">circle</option>
+            <option value="oval">oval</option>
+            <option value="bernoulli">figure-8</option>
+        </optgroup>
+    </select>
+    sweep&#8594
+    <input type="range"  title="Auto Fountain Mode  ::  Rotate CCW : Sweep Back-and-Forth : Rotate CW" id="fountainModeSlider" min="-1" max="1" value="0" class="slider-pinkshort">       
+    <input type="range"  title="Auto Fountain Rotate Speed" id="sprinklerSpeedSlider" min="0" max="100" value="10" class="slider-pink">
+    
+    plinko&#8594
+    <input type="checkbox" title="Pegs on/off" id="showBumperEntry" value="false" class="checkbox-bumpers" unchecked>
+    <input type="range"  title="Peg Rows" id="rowsInput" min="1" max="20" value="3" class="slider-yellow">
+    <input type="range"  title="Peg Radius" id="bumperRadiusInput" min="20" max="100" value="40" class="slider-yellow">
+    <input type="button" title="Restart [r]" class="buttongreenbig" value="&#8629" onclick="makeBalls()">
+
+    <h2><br></h2><h1>:: SL0SH :: repulsive particle simulation ::</h1>
+
+<script>
+
+    //  CANVAS SETUP AND SCALING --------------------------------------------------------------
+    canvas = document.getElementById("myCanvas");
+	    c = canvas.getContext("2d");
+        canvas.style.cursor = "pointer";
+        if (window.innerWidth < window.innerHeight) {
+            canvas.width = window.innerWidth - 40;
+            canvas.height = window.innerHeight - 140; //124 for phone
+        } else if (window.innerWidth > 1.75 * window.innerHeight) {
+            canvas.width = window.innerWidth - 40;
+            canvas.height = window.innerHeight - 30;
+        } else {
+            canvas.width = window.innerWidth - 40;
+            canvas.height = window.innerHeight - 200;
+        }
+        simMinWidth = 2.0;
+        cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+        simWidth = canvas.width / cScale;
+        simHeight = canvas.height / cScale;
+        topMargin = 0;
+        bottomMargin = 0;
+    
+    function refreshPage() {
+        location.reload();
+    }
+    window.addEventListener("resize", refreshPage);
+    
+    //  KEYBOARD SHORTCUTS -----------------------------------------------------
+    document.addEventListener('keydown', event => {
+        switch(event.key) {
+            case 'n': physProps.paused = false; simulate(); physProps.paused = true; break;
+            case 'N': physProps.paused = false; simulate(); physProps.paused = true; break;
+            case 'm': physProps.paused = !physProps.paused; break;
+            case 'M': physProps.paused = !physProps.paused; break;
+            case 'p': physProps.paused = !physProps.paused; break;
+            case 'P': physProps.paused = !physProps.paused; break;
+            case 'r': forcedWipeRestart();
+            case 'R': forcedWipeRestart();
+        }
+    });
+
+    //  MOUSE -------------------------------------------------------------------
+    let cursorX = simWidth / 2;
+    let cursorY = 0;
+    let initialBumperPositions = []; // Store initial Y positions of bumpers for relative movement
+    
+    // CLICK MOUSE
+    canvas.addEventListener('mousedown', mouseDownHandler);
+
+    // UN-CLICK MOUSE
+    canvas.addEventListener('mouseup', mouseUp);
+
+    let newX = 0, newY = 0, startX = 0, startY = 0;
+
+    function mouseDownHandler() {
+        puck1 = Puck[0];
+        puck2 = Puck[1];
+        hungryPuck = Hungrypuck[0];
+        hungryPuck2 = Hungrypuck[1];
+        misterMister = MisterMister[0];
+        
+        bounds = canvas.getBoundingClientRect();
+		mX = event.clientX - bounds.left - canvas.clientLeft;
+        mY = event.clientY - bounds.top - canvas.clientTop;
+
+		cursorX = mX / cScale;
+        cursorY = (canvas.height - mY) / cScale;
+        mousePos = new Vector2(cursorX, cursorY)
+        
+        startX = event.clientX;
+        startY = canvas.height - event.clientY;
+
+        firstCornerX = mX;
+        firstCornerY = mY;
+        
+        // ESTABLISH OBJECT DISTANCES TO MOUSE POSITION  ------------------------
+        dirHungryPuck = new Vector2();
+		dirHungryPuck.subtractVectors(mousePos, hungryPuck.pos);
+		dHungryPuck = dirHungryPuck.length();
+
+        dirHungryPuck2 = new Vector2();
+		dirHungryPuck2.subtractVectors(mousePos, hungryPuck2.pos);
+		dHungryPuck2 = dirHungryPuck2.length();
+
+        dirMisterMister = new Vector2();
+		dirMisterMister.subtractVectors(mousePos, misterMister.pos);
+		dMisterMister = dirMisterMister.length();
+
+        dirPuck1 = new Vector2();
+		dirPuck1.subtractVectors(mousePos, puck1.pos);
+		dPuck1 = dirPuck1.length();
+
+        dirPuck2= new Vector2();
+		dirPuck2.subtractVectors(mousePos, puck2.pos);
+		dPuck2 = dirPuck2.length();
+
+        // Calculate bumper array bounds if bumpers exist
+        var bumperArrayBottom = -Infinity;
+        var bumperArrayTop = Infinity;
+        if (Bumpers.length > 0) {
+            var lowestBumper = Bumpers[0];
+            var highestBumper = Bumpers[Bumpers.length - 1];
+            bumperArrayBottom = lowestBumper.pos.y - lowestBumper.radius;
+            bumperArrayTop = highestBumper.pos.y + highestBumper.radius;
+        }
+        
+        // CHOOSE FOREGROUND OBJECTS UNDER CURSOR TO MOVE  ---------------------
+        
+        if (dMisterMister < misterMister.radius) {
+            dX = startX / cScale - misterMister.pos.x;
+            dY = startY / cScale - misterMister.pos.y;
+            document.addEventListener('mousemove', mouseMisterMisterMove)
+        } else {
+        if (dHungryPuck2 < hungryPuck2.radius) {
+            dX = startX / cScale - hungryPuck2.pos.x;
+            dY = startY / cScale - hungryPuck2.pos.y;
+            document.addEventListener('mousemove', mouseHungryPuck2Move)
+        } else {
+		if (dHungryPuck < hungryPuck.radius) {
+            dX = startX / cScale - hungryPuck.pos.x;
+            dY = startY / cScale - hungryPuck.pos.y;
+            document.addEventListener('mousemove', mouseHungryPuckMove)
+        } else {
+        if (dPuck2 < puck2.radius) {
+            dX = startX / cScale - puck2.pos.x;
+            dY = startY / cScale - puck2.pos.y;
+            mouseDown = true;
+            document.addEventListener('mousemove', mousePuck2Move)
+        } else {
+        if (dPuck1 < puck1.radius) {
+            dX = startX / cScale - puck1.pos.x;
+            dY = startY / cScale - puck1.pos.y;
+            mouseDown = true;
+            document.addEventListener('mousemove', mousePuck1Move)
+        } else {
+        if (Bumpers.length > 0 && mousePos.y < bumperArrayTop && mousePos.y > bumperArrayBottom) {
+            dY = startY / cScale - (bumperArrayTop + bumperArrayBottom) / 2;
+            // Store initial positions of all bumpers for relative movement
+            initialBumperPositions = [];
+            for (var i = 0; i < Bumpers.length; i++) {
+                initialBumperPositions[i] = Bumpers[i].pos.y;
+            }
+            document.addEventListener('mousemove', mouseBumperMove)
+        }}}}}}
+    }
+
+    function mouseBumperMove() {
+        newY = event.clientY;   
+        var currentMouseY = (simHeight - newY / cScale);
+        var targetCenterY = currentMouseY - dY;
+        var initialCenterY = (initialBumperPositions[0] + initialBumperPositions[initialBumperPositions.length - 1]) / 2;
+        var offsetY = targetCenterY - initialCenterY;
+        
+        for (var t = 0; t < Bumpers.length; t++) {
+            bumper = Bumpers[t];
+            bumper.pos.y = initialBumperPositions[t] + offsetY;
+        }
+    }
+    function mouseHungryPuckMove() {
+        hungryPuck = Hungrypuck[0];
+        newX = event.clientX;
+        newY = event.clientY;   
+        startX = event.clientX;
+        startY = event.clientY;
+        hungryPuck.pos.x = (newX / cScale) - dX;
+        hungryPuck.pos.y = (simHeight - newY / cScale) - dY;
+    }
+    function mouseHungryPuck2Move() {
+        hungryPuck2 = Hungrypuck[1];
+        newX = event.clientX;
+        newY = event.clientY;   
+        startX = event.clientX;
+        startY = event.clientY;
+        hungryPuck2.pos.x = (newX / cScale) - dX;
+        hungryPuck2.pos.y = (simHeight - newY / cScale) - dY;
+    }
+    function mouseMisterMisterMove() {
+        misterMister = MisterMister[0];
+        newX = event.clientX;
+        newY = event.clientY;   
+        startX = event.clientX;
+        startY = event.clientY;
+        misterMister.pos.x = (newX / cScale) - dX;
+        misterMister.pos.y = (simHeight - newY / cScale) - dY;
+    }
+    function mousePuck1Move() {
+        puck = Puck[0];
+        newX = event.clientX;
+        newY = event.clientY;   
+        startX = event.clientX;
+        startY = event.clientY;
+        puck.puckMoved = true;
+        puck.moving = true;
+        
+        // Store previous position for velocity calculation
+        puck.prevPos.set(puck.pos);
+        
+        // Update position
+        puck.pos.x = (newX / cScale) - dX;
+        puck.pos.y = (simHeight - newY / cScale) - dY;
+        
+        // Calculate velocity based on position change
+        puck.vel.subtractVectors(puck.pos, puck.prevPos);
+        // Scale velocity by frame rate approximation (assuming 60fps)
+        puck.vel.scale(60);
+    }
+    function mousePuck2Move() {
+        puck = Puck[1];
+        newX = event.clientX;
+        newY = event.clientY;   
+        startX = event.clientX;
+        startY = event.clientY;
+        puck.puckMoved = true;
+        puck.moving = true;
+        
+        // Store previous position for velocity calculation
+        puck.prevPos.set(puck.pos);
+        
+        // Update position
+        puck.pos.x = (newX / cScale) - dX;
+        puck.pos.y = (simHeight - newY / cScale) - dY;
+        
+        // Calculate velocity based on position change
+        puck.vel.subtractVectors(puck.pos, puck.prevPos);
+        // Scale velocity by frame rate approximation (assuming 60fps)
+        puck.vel.scale(60);
+    }
+    
+    function mouseUp() {
+        document.removeEventListener('mousemove', mouseHungryPuckMove);
+        document.removeEventListener('mousemove', mouseHungryPuck2Move);
+        document.removeEventListener('mousemove', mousePuck1Move);
+        document.removeEventListener('mousemove', mousePuck2Move);
+        document.removeEventListener('mousemove', mouseMisterMisterMove);
+        document.removeEventListener('mousemove', mouseBumperMove);
+        mouseDown = false;
+        mouseUpTime = Date.now();
+        for (var p = 0; p < Puck.length; p++) {
+            if (Puck[p].puckMoved == true) {
+                Puck[p].puckFadingIn = true;
+                Puck[p].puckMoved = false;
+            }
+            Puck[p].moving = false;
+        }
+    }
+    
+	//  BASIC FUNCTIONS -----------------------------------------------------------------------
+    function wipeRestart() {
+        c.fillStyle = 'hsl(0, 0%, 0%)';
+        c.fillRect(0, 0, canvas.width, canvas.height);
+        makeBalls()
+    }
+    function forcedWipeRestart() {
+        c.fillStyle = 'hsl(0, 0%, 0%)';
+        c.fillRect(0, 0, canvas.width, canvas.height);
+        makeBalls()
+    }
+    function pause() {
+		physProps.paused = !physProps.paused;
+        let input = document.querySelectorAll('.checkbox-pause');
+        if (physProps.paused == true) { 
+            for (i = 0; i < input.length; i++) {
+                input[i].checked = true;
+            }
+        } else {
+            for (i = 0; i < input.length; i++) {
+            input[i].checked = false;
+            }
+        }
+	}
+	function pauseAndStep() {
+        let input = document.querySelectorAll('.checkbox-pause');
+        for (i = 0; i < input.length; i++) {
+            input[i].checked = true;
+        }
+		physProps.paused = false;
+		simulate();
+		physProps.paused = true
+	}
+    function drawCircle(x, y, radius) {
+        c.beginPath();			
+		c.arc(x, y, radius, 0.0, 2.0 * Math.PI) 
+		c.closePath();
+	}
+    function drawEllipse(x, y, radiusX, radiusY) {
+        c.beginPath();			
+		c.ellipse(x * cScale, y * cScale, radiusX * cScale, radiusY * cScale, 0, 0, 2 * Math.PI) 
+		c.closePath();
+	}
+	
+	//  VECTOR OPERATIONS ---------------------------------------------------------------------
+	class Vector2 {
+		constructor(x = 0.0, y = 0.0) {
+			this.x = x; 
+			this.y = y;
+		}
+		set(v) {
+			this.x = v.x; 
+            this.y = v.y;
+		}
+		clone() {
+			return new Vector2(this.x, this.y);
+		}
+		add(v, s=1) {
+			this.x += v.x * s;
+			this.y += v.y * s;
+			return this;
+		}
+		addVectors(a, b) {
+			this.x = a.x + b.x;
+			this.y = a.y + b.y;
+			return this;
+		}
+		subtract(v, s = 1.0) {
+			this.x -= v.x * s;
+			this.y -= v.y * s;
+			return this;
+		}
+		subtractVectors(a, b) {
+			this.x = a.x - b.x;
+			this.y = a.y - b.y;
+			return this;			
+		}
+		length() {
+			return Math.sqrt(this.x * this.x + this.y * this.y);
+		}
+		scale(s) {
+			this.x *= s;
+			this.y *= s;
+		}
+		dot(v) {
+			return this.x * v.x + this.y * v.y;
+		}
+        perp() {
+			return new Vector2(-this.y, this.x);
+		}
+	}
+
+    function closestPointOnSegment(p, a, b) 
+	{
+		var ab = new Vector2();
+		ab.subtractVectors(b, a);
+		var t = ab.dot(ab);
+		if (t == 0.0)
+			return a.clone();
+		t = Math.max(0.0, Math.min(1.0, (p.dot(ab) - a.dot(ab)) / t));
+		var closest = a.clone();
+		return closest.add(ab, t);
+	}
+
+    function cX(pos) {
+        return pos.x * cScale;
+    }
+	function cY(pos) {
+        return canvas.height - pos.y * cScale;
+    }
+
+    //  GET WORLD PROPERTIES FROM SLIDERS ---------------------------------------------
+    document.getElementById("timeSlider").oninput = function() {
+        physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);}
+
+    document.getElementById("gravitySlider").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);
+        }}
+
+    document.getElementById("gravityDown").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);
+        }}
+        
+    document.getElementById("gravityRight").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);
+        }}
+    
+    document.getElementById("shower").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 + 1 * (10 ** (gravitySlider.value/100)), 0);
+        }
+        dumpSlider.value = 50;
+        dumpMoveSlider.value = 0;
+        if (shower.checked == true) {
+            var puck1 = Hungrypuck[0];
+            var puck2 = Hungrypuck[1];
+            puck1.pos.y = -0.1 * puck1.radius;
+            puck2.pos.y = -0.1 * puck2.radius;
+        }}
+    
+    document.getElementById("fountain").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 + 1 * (10 ** (gravitySlider.value/100)), 0);
+        }
+        respawnDirSlider.value = 0;
+        sprinklerSpeedSlider.value = 0;
+        dumpMoveSlider.value = -40;
+        dumpSlider.value = 50;
+        if (fountain.checked == true) {
+            var puck1 = Hungrypuck[0];
+            var puck2 = Hungrypuck[1];
+            puck1.pos.y = -0.1 * puck1.radius;
+            puck2.pos.y = -0.1 * puck2.radius;
+        }}
+
+    document.getElementById("duelingFountains").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 + 1 * (10 ** (gravitySlider.value/100)), 0);
+        }
+        dumpMoveSlider.value = -45;
+        respawnDirSlider.value = 610;
+        sprinklerSpeedSlider.value = 0;
+        yeetSlider.value = 200;
+        if (duelingFountains.checked == true) {
+            var puck1 = Hungrypuck[0];
+            var puck2 = Hungrypuck[1];
+            puck1.pos.y = -0.1 * puck1.radius;
+            puck2.pos.y = -0.1 * puck2.radius;
+        }}
+
+    document.getElementById("ballRestSlider").oninput = function() {
+	    physProps.ballRest = ballRestSlider.value / 20;
+        physProps.bumperRest = ballRestSlider.value / 20;}
+
+    document.getElementById("ballSphere").oninput = function() {
+            saturationSlider.value = 80;
+            lightnessSlider.value = 45;}
+    document.getElementById("ballDisc").oninput = function() {
+            saturationSlider.value = 90;
+            lightnessSlider.value = 40;}
+    document.getElementById("ballCircle").oninput = function() {
+            saturationSlider.value = 100;
+            lightnessSlider.value = 55;}
+
+    document.getElementById("ballsInput").onchange = function() {
+        makeBalls();}
+
+    document.getElementById("misterMode").oninput = function() {
+        if (misterMode.value == "billiard") {
+            mrMr = MisterMister[0];
+            mrMr.vel.x = .5;
+            mrMr.vel.y = 0.2;
+        }}
+
+    document.getElementById("misterSpeedSlider").oninput = function() {
+        misterSpeed = misterSpeedSlider.value / 100;}
+
+    document.getElementById('hungryPuckRadiusSlider').oninput = function() {
+        for (var h = 0; h < Hungrypuck.length; h++) {
+            hungryPuck = Hungrypuck[h]; 
+            hungryPuck.radius = 1.0 * hungryPuckRadiusSlider.value / 1000;
+        }}
+
+    document.getElementById('puckRadiusSlider').oninput = function() {
+        for (p = 0; p < Puck.length; p++) {
+            puck = Puck[p];
+            if (p == 0) {
+                puck.radius = 1.0 * puckRadiusSlider.value / 1000;
+                puck.OGradius = puck.radius;
+            }
+            if (p == 1) {
+                puck.radius = 0.7 * puckRadiusSlider.value / 1000;
+                puck.OGradius = puck.radius;
+            }
+        }}
+
+    document.getElementById("repulsionForceSlider").oninput = function() {
+	    physProps.repulsionForce = repulsionForceSlider.value / 10;}
+
+    document.getElementById("velColorMapSlider").oninput = function() {
+        physProps.velColorMap = velColorMapSlider.value;}
+
+    document.getElementById("dumpSlider").oninput = function() {
+        dumpSqueeze = dumpSlider.value / 100;}
+
+    document.getElementById("dumpMoveSlider").oninput = function() {
+        dumpShift = dumpMoveSlider.value / 100 * simWidth;}
+
+    document.getElementById('cornerRadiusSlider').oninput = function() {
+        for (var c = 0; c < Corners.length; c++) {
+            corner = Corners[c]; 
+            corner.radius = 0.01 * cornerRadiusSlider.value * 0.5 * simHeight;
+        }}
+
+    document.getElementById('showPuckButton').oninput = function() {
+        if (showPuckButton.checked == true) {
+            for (var p = 0; p < Puck.length; p++) {
+                Puck[p].radius = 0;
+                Puck[p].puckArriving = true;
+            }
+        }}
+
+    document.getElementById("rowsInput").oninput = function() {
+        makeBumpers();
+    }
+
+    document.getElementById("bumperRadiusInput").oninput = function() {
+        makeBumpers();
+    }
+
+    document.getElementById("smallBallInput").oninput = function() {
+        makeBalls();
+    }
+    document.getElementById("bigBallInput").oninput = function() {
+        makeBalls();
+    }
+
+    document.getElementById("showHungryPuckButton").oninput = function() {
+        if (showHungryPuckButton.checked == true)
+        fountain.checked = true;
+    }
+
+    window.addEventListener("resize", setupScene);
+        
+    //  WORLD PROPERTIES INIT DEFINITIONS ----------------------------------------------
+	var physProps = {
+		gravity : new Vector2(0, 0),
+		substeps: 1,
+		dt : 1 / (60 * 1), // updated when substeps changes
+		worldSize : new Vector2(simWidth, simHeight),
+
+		ballRest : ballRestSlider.value / 20,
+        bumperRest : 0.95,
+        floorRest : 1.0,
+        wallRest : 1.0,
+        ceilingRest : 1.0,
+        puckRest: 0.95,
+        
+        persistence: 0,
+        paused : false,
+
+        repulsionForce: repulsionForceSlider.value / 10,
+        repulsionDist: 4,
+
+        velColorMap: velColorMapSlider.value * 1
+	}
+    
+    // Function to update dt when substeps change
+    function updateSubsteps(newSubsteps) {
+        physProps.substeps = newSubsteps;
+        physProps.dt = 1 / (60 * physProps.substeps);
+    }
+
+	//  BALL CONSTRUCTOR  -----------------------------------------------------------------------
+	class BALL {
+		constructor(radius, mass, pos, vel, whiteBall) {
+			this.radius = radius;
+			this.mass = mass;
+			this.pos = pos.clone();
+			this.vel = vel.clone();
+            this.color = 0;
+            this.hiColor = 0;
+            this.whiteBall = whiteBall;
+		}
+        get top() {
+            return this.pos.y + this.radius;
+        }
+        get bottom() {
+            return this.pos.y - this.radius;
+        }
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+		simulate() {
+			this.vel.add(physProps.gravity, physProps.dt);
+            const maxSpeed = 3.0;
+            if (this.vel.length() > maxSpeed) {
+                this.vel.x *= maxSpeed / this.vel.length();
+                this.vel.y *= maxSpeed / this.vel.length();
+            }
+			this.pos.add(this.vel, physProps.dt)
+            if (this.whiteBall == true) {
+                this.color = `hsl(0, 0%, 80%)`;
+                this.hiColor = `hsl(0, 0%, ${lightnessSlider.value + 20}%)`;
+            } else {
+                var speedHue = this.vel.length() * physProps.velColorMap;
+                if (speedHue > 330) {speedHue = 330}
+                this.color = `hsl(${speedHue}, ${saturationSlider.value}%, ${lightnessSlider.value * 1}%)`;
+                this.hiColor = `hsl(${speedHue}, ${saturationSlider.value}%, ${lightnessSlider.value * 1 + 30}%)`;
+            }
+		}
+        draw() {
+            if (ballSphere.checked == true) {
+                const shineOffsetX = cScale * this.radius * 0.3; // old masterShineShiftX;
+                const shineOffsetY = cScale * this.radius * 0.4; // old masterShineShiftY;
+                const shineVector = Math.sqrt(shineOffsetX * shineOffsetX + shineOffsetY * shineOffsetY);
+                const shineRadius = 0.5 * cScale * this.radius + shineVector;
+                
+                const shading = c.createRadialGradient(
+                    cX(this.pos) - shineOffsetX, 
+                    cY(this.pos) - shineOffsetY, 
+                    shineRadius, 
+                    cX(this.pos) - shineOffsetX, 
+                    cY(this.pos) - shineOffsetY, 
+                    0);
+                shading.addColorStop(0, this.color);
+                shading.addColorStop(1, this.hiColor);
+                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+                c.fillStyle = shading;
+                c.fill()
+            } 
+            if (ballDisc.checked == true) {
+                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
+                c.fillStyle = this.color;
+                c.fill();
+
+                c.strokeStyle = this.hiColor;
+                c.lineWidth = 0.2 * this.radius * cScale;
+                c.stroke();
+            }
+            if (ballCircle.checked == true) {
+                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
+                c.strokeStyle = this.color;
+                c.lineWidth = 0.2 * this.radius * cScale;
+                c.stroke();
+            }
+        }
+	}
+
+
+    //  CORNER CONSTRUCTOR  ---------------------------------------------------------------------
+    class CORNER {
+		constructor(pos, corner) {
+			this.pos = pos.clone();
+            this.corner = corner;
+            this.radius = 0.01 * cornerRadiusSlider.value * 0.5 * simHeight;
+        }
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        draw() {
+            c.fillStyle = 'hsl(0, 0%, 10%)'; 
+            var budge = 0;
+            if (this.corner == 'northwest') {
+                c.beginPath();
+                c.moveTo(0, 0);
+                c.lineTo(this.radius * cScale, 0);
+                c.arc((this.pos.x + this.radius - budge) * cScale, (this.pos.y + this.radius - budge) * cScale, this.radius * cScale, 1.5 * Math.PI, Math.PI, true);
+                c.lineTo(0, this.radius * cScale);
+                c.closePath();
+                c.fill();
+            }
+            if (this.corner == 'southwest') {
+                c.beginPath();
+                c.moveTo(0, simHeight * cScale);
+                c.lineTo(0, (simHeight - this.radius) * cScale);
+                c.arc((this.pos.x + this.radius - budge) * cScale, (this.pos.y - this.radius + budge) * cScale, this.radius * cScale, Math.PI, 0.5 * Math.PI, true);
+                c.lineTo(this.radius * cScale, simHeight * cScale);
+                c.closePath();
+                c.fill();
+            }
+            if (this.corner == 'southeast') {
+                c.beginPath();
+                c.moveTo(simWidth * cScale, simHeight * cScale);
+                c.lineTo((simWidth - this.radius) * cScale, simHeight * cScale);
+                c.arc((this.pos.x - this.radius + budge) * cScale, (this.pos.y - this.radius + budge) * cScale, this.radius * cScale, 0.5 * Math.PI, 0, true);
+                c.lineTo(simWidth * cScale, (simHeight - this.radius) * cScale);
+                c.closePath();
+                c.fill();
+            }   
+            if (this.corner == 'northeast') {
+                c.beginPath();
+                c.moveTo(simWidth * cScale, 0);
+                c.lineTo(simWidth * cScale, this.radius * cScale);
+                c.arc((this.pos.x - this.radius + budge) * cScale, (this.pos.y + this.radius - budge) * cScale, this.radius * cScale, 0, 1.5 * Math.PI, true);
+                c.lineTo((simWidth - this.radius) * cScale, 0);
+                c.closePath();
+                c.fill();
+            }
+            
+            // Draw the arc outlines
+            c.strokeStyle = 'hsl(0, 0%, 60%)';
+            c.lineWidth = 0.005 * cScale;
+            c.lineCap = 'butt';
+            var budge = 0.0025;
+            if (this.corner == 'northwest') {
+                c.beginPath();
+                c.arc((this.pos.x + this.radius + budge) * cScale, (this.pos.y + this.radius + budge) * cScale, this.radius * cScale, Math.PI, 1.5 * Math.PI, false);
+            }
+            if (this.corner == 'southwest') {
+                c.beginPath();
+                c.arc((this.pos.x + this.radius + budge) * cScale, (this.pos.y - this.radius - budge) * cScale, this.radius * cScale, 0.5 * Math.PI, 1.0 * Math.PI, false);
+            }
+            if (this.corner == 'southeast') {
+                c.beginPath();
+                c.arc((this.pos.x - this.radius - budge) * cScale, (this.pos.y - this.radius - budge) * cScale, this.radius * cScale, 2 * Math.PI, 0.5 * Math.PI, false);
+            }   
+            if (this.corner == 'northeast') {
+                c.beginPath();
+                c.arc((this.pos.x - this.radius - budge) * cScale, (this.pos.y + this.radius + budge) * cScale, this.radius * cScale, 1.5 * Math.PI, 2 * Math.PI, false);
+            }
+            c.stroke();
+            // top edge
+            if (ceilingButton.checked == true) {
+                c.beginPath();
+                c.moveTo((this.radius + budge) * cScale, budge * cScale);
+                c.lineTo((simWidth - this.radius - budge) * cScale, budge * cScale);
+                c.closePath();
+                c.stroke();
+            }
+            // left edge
+            if (leftWallButton.checked == true) {
+                c.beginPath();
+                c.moveTo(budge * cScale, (this.radius + budge) * cScale);
+                c.lineTo(budge * cScale, (simHeight - this.radius - budge) * cScale);
+                c.closePath();
+                c.stroke();
+            }
+            // bottom edge
+            if (floorButton.checked == true) {
+                c.beginPath();
+                c.moveTo((this.radius + budge) * cScale, (simHeight - budge) * cScale);
+                c.lineTo((simWidth - this.radius - budge) * cScale, (simHeight - budge) * cScale);
+                c.closePath();
+                c.stroke();
+            }   
+            // right edge
+            if (rightWallButton.checked == true) {
+                c.beginPath();
+                c.moveTo((simWidth - budge) * cScale, (this.radius + budge) * cScale);
+                c.lineTo((simWidth - budge) * cScale, (simHeight - this.radius - budge) * cScale);
+                c.closePath();
+                c.stroke();
+            }   
+            
+        }
+	}
+
+    //  DEFINE CORNERS  ---------------------------------------------------------------------
+    function makeCorners() {
+        Corners = [];
+        Corners.push(new CORNER(new Vector2(0, 0), 'northwest'));
+        Corners.push(new CORNER(new Vector2(simWidth, 0), 'northeast'));
+        Corners.push(new CORNER(new Vector2(0, simHeight), 'southwest'));
+        Corners.push(new CORNER(new Vector2(simWidth, simHeight), 'southeast'));
+    }
+
+    //  DEFINE BUMPERS --------------------------------------------------------------
+    function makeBumpers() {
+        Bumpers = [];
+        bumperRows = rowsInput.value;
+        bumperRadius = bumperRadiusInput.value / 1000;
+        gapMultiplier = 1.1;
+        smallBumperRatio = 0.75;
+        vertBumperPadding = 0.30;
+        var smallBallRadius = smallBallInput.value / 1000;
+        var bigBallRadius = bigBallInput.value / 1000;
+        var maxBallRadius = Math.max(smallBallRadius, bigBallRadius);
+        bumperSpacing = (2 * maxBallRadius) * gapMultiplier;
+        combinedSpacing = (2 * bumperRadius) + bumperSpacing;
+        verticalBPD = vertBumperPadding * combinedSpacing;
+        combinedVerticalSpacing = (2 * bumperRadius) + bumperSpacing + verticalBPD;
+        paddingCorrectionShift = -0.5 * ((bumperRows - 1) * verticalBPD);
+        if (Math.trunc(simWidth / combinedSpacing) % 2 == 0) {
+            bumperCols = Math.trunc(simWidth / combinedSpacing); 
+        } else {
+            bumperCols = Math.trunc(simWidth / combinedSpacing) + 1; 
+        }
+        bumperBarLengthX = ((bumperCols - 1.0) * bumperSpacing) + ((2.0 * (bumperCols -1.0)) * bumperRadius);
+        bumperBarLengthY = ((bumperRows - 1.0) * bumperSpacing) + ((2.0 * (bumperRows -1.0)) * bumperRadius);
+        centeringOffsetX = (simWidth / 2.0) - (bumperBarLengthX / 2.0);
+        centeringOffsetY = (simHeight / 2.0) - (bumperBarLengthY / 2.0) + (-0.3 * simHeight + paddingCorrectionShift);
+        bottomMargin = ((simHeight - bumperBarLengthY) / 2) + 2 * bumperRadius;
+        topMargin = ((simHeight - bumperBarLengthY) / 2) + bumperBarLengthY + 2 * bumperRadius; 
+        centeringOffsetY - combinedVerticalSpacing/2
+        window.numBumpers = 0;
+        for (p = -1; p < bumperCols; p++) {
+            for (q = 0; q < bumperRows; q++) {
+                if (q % 2 == 0) {
+                    Bumpers.push(new BUMPER(bumperRadius, new Vector2((p * combinedSpacing) + (combinedSpacing / 2.0) + centeringOffsetX, (q * combinedVerticalSpacing) + centeringOffsetY)));        
+                    numBumpers += 1;
+                } else if (p > -1) {
+                    Bumpers.push(new BUMPER(bumperRadius * smallBumperRatio, new Vector2((p * combinedSpacing) + centeringOffsetX, (q * combinedVerticalSpacing) + centeringOffsetY)));    
+                    numBumpers += 1;
+                }
+            }
+        }
+    }
+
+    //  BUMPER CONSTRUCTOR  ---------------------------------------------------------------------
+	class BUMPER {
+		constructor(radius, pos) {
+			this.radius = radius;
+			this.pos = pos.clone();
+            this.OGpos = pos.clone();
+		}
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        draw() {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = `hsl(0, 0%, 70%)`;
+            c.fill();
+            drawCircle(cX(this.pos), cY(this.pos), (this.radius - .002 * simWidth) * cScale);
+            c.fillStyle = `hsl(0, 0%, 30%)`;
+            c.fill();
+        }
+	}
+
+    //  PUCK CONSTRUCTOR -----------------------------------------------------------------------
+    class PUCK {
+		constructor(radius, pos, color) {
+			this.radius = radius;
+            this.OGradius = radius;
+			this.pos = pos.clone();
+            this.vel = new Vector2(0, 0);
+            this.prevPos = pos.clone();
+            this.color = color;
+            this.mass = 0.001 * radius;
+            this.puckFadingIn = false;
+            this.moving = false;
+            this.puckArriving = false;
+		}
+        simulate() {
+            for (var r = 0; r < this.OGradius; r++) {
+                if (this.radius >= this.OGradius) {
+                    this.radius = this.OGradius;
+                    this.puckArriving = false;
+                } else {
+                    this.radius += this.OGradius * 0.0001;
+                }
+            }
+        }
+        draw() {
+            if (this.puckFadingIn == true) {
+                var fadeInTimer = 400; 
+                var timeSinceMouseUp = Date.now() - mouseUpTime;
+                var alphaPercent = timeSinceMouseUp / fadeInTimer;
+                if (timeSinceMouseUp >= fadeInTimer) {
+                    this.puckFadingIn = false;
+                }
+            } else {
+                var alphaPercent = 1;
+            }
+            if (this.moving == false) {
+                drawCircle(cX(this.pos), cY(this.pos), 0.985 * this.radius * cScale);
+                const grd = c.createRadialGradient(
+                    cX(this.pos), 
+                    cY(this.pos), 
+                    0, 
+                    cX(this.pos), 
+                    cY(this.pos), 
+                    1.3 *this.radius * cScale);
+                grd.addColorStop(1, `hsla(220, 70%, 30%, ${alphaPercent * 0.4})`);
+                grd.addColorStop(0.5, `hsla(220, 60%, 5%, ${alphaPercent * 0.4})`);
+                c.fillStyle = grd;
+                c.fill();
+
+                c.strokeStyle = `hsla(0, 0%, 60%, ${alphaPercent})`;
+                c.lineWidth = 4;
+                c.stroke();
+            }
+        }
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+	}
+    
+    //  HUNGRY PUCK CONSTRUCTOR ----------------------------------------------------------------
+    class HUNGRYPUCK {
+		constructor(radius, pos, vel, color) {
+			this.radius = radius;
+			this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.color = color;
+		}
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        draw1() {
+            // body
+            const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * this.radius * cScale, 
+            cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+            grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+            grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+            c.fillStyle = grd;
+            drawCircle(cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+            c.fill();
+            // eyes
+            c.strokeStyle = "hsl(120, 50%, 50%)";
+            c.lineWidth = 0.04 * this.radius * cScale;
+            c.beginPath();
+            c.moveTo(cX(this.pos) + 0.2 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+            c.lineTo(cX(this.pos) + 0.5 * this.radius * cScale, cY(this.pos) - 0.3 * this.radius * cScale);
+            c.stroke();
+            c.beginPath();
+            c.moveTo(cX(this.pos) - 0.2 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+            c.lineTo(cX(this.pos) - 0.5 * this.radius * cScale, cY(this.pos) - 0.3 * this.radius * cScale);
+            c.stroke();
+            // mouth
+            c.strokeStyle = "hsl(90, 40%, 20%)";
+            c.lineWidth = 0.06 * this.radius * cScale;
+            c.beginPath();
+            c.arc(cX(this.pos), cY(this.pos), 0.9 * this.radius * cScale, 0, Math.PI) 
+            c.stroke();
+            // dimples
+            c.fillStyle = "hsl(90, 40%, 30%)";
+            drawCircle(cX(this.pos) + 0.9 * this.radius * cScale, cY(this.pos), 0.07 * this.radius * cScale);
+            c.fill();
+            drawCircle(cX(this.pos) - 0.9 * this.radius * cScale, cY(this.pos), 0.07 * this.radius * cScale);
+            c.fill();
+            
+        }  
+        draw2() {
+                // body
+                const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * this.radius * cScale, 
+                cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+                grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+                grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+                c.fillStyle = grd;
+                drawCircle(cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+                c.fill();
+                // eyes
+                c.strokeStyle = "hsl(335, 70%, 60%)";
+                c.lineWidth = 0.04 * this.radius * cScale;
+                c.beginPath();
+                c.moveTo(cX(this.pos) + 0.25 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+                c.lineTo(cX(this.pos) + 0.55 * this.radius * cScale, cY(this.pos) - 0.25 * this.radius * cScale);
+                c.stroke();
+                c.beginPath();
+                c.moveTo(cX(this.pos) - 0.25 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+                c.lineTo(cX(this.pos) - 0.55 * this.radius * cScale, cY(this.pos) - 0.25 * this.radius * cScale);
+                c.stroke();
+                // mouth
+                c.strokeStyle = "hsl(335, 50%, 45%)";
+                c.lineWidth = 0.05 * this.radius * cScale;
+                c.beginPath();
+                c.arc(cX(this.pos), cY(this.pos) + 0.4 * this.radius * cScale, 0.2 * this.radius * cScale, Math.PI, 0);
+                c.stroke();
+                // cheeks
+                c.fillStyle = "hsl(335, 40%, 20%)";
+                drawCircle(cX(this.pos) + 0.8 * this.radius * cScale, cY(this.pos) + 0.2 * this.radius * cScale, 0.2 * this.radius * cScale);
+                c.fill();
+                drawCircle(cX(this.pos) - 0.8 * this.radius * cScale, cY(this.pos) + 0.2 * this.radius * cScale, 0.2 * this.radius * cScale);
+                c.fill();
+        }
+	}
+
+    //  MR. MISTER CONSTRUCTOR ----------------------------------------------------------------
+    class MISTERMISTER {
+		constructor(radius, pos, vel, color) {
+			this.radius = radius;
+			this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.color = color;
+		}
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        simulate() {
+            if (misterMode.value == "idle") {
+            }
+            if (misterMode.value == "billiard") {
+                this.pos.add(this.vel, physProps.dt)
+            }
+            if (misterMode.value == "typewriter") {
+                if (goLeft == false) {
+                    this.pos.x += this.vel.x * physProps.dt * misterSpeed;
+                        if (this.pos.x > simWidth) {
+                            goLeft = true;
+                        }
+                }
+                if (goLeft == true) {
+                    this.pos.x -= this.vel.x * 5 * physProps.dt * misterSpeed;
+                        if (this.pos.x < 0) {
+                            goLeft = false;
+                        };
+                }
+            }
+            if (misterMode.value == "printer") {
+                if (goLeft == false) {
+                    this.pos.x += this.vel.x * physProps.dt * misterSpeed;
+                        if (this.pos.x > simWidth) {
+                            goLeft = true;
+                        }
+                }
+                if (goLeft == true) {
+                    this.pos.x -= this.vel.x * physProps.dt * misterSpeed;
+                        if (this.pos.x < 0) {
+                            goLeft = false;
+                        };
+                }
+            }
+            if (misterMode.value == "scanner") {
+                if (this.pos.x < 1.5 * this.radius + simWidth) {
+                    this.pos.x += this.vel.x * physProps.dt * misterSpeed;
+                }
+                if (this.pos.x > 1.5 * this.radius + simWidth) {
+                    this.pos.x = -1.5 * this.radius;
+                }
+            }
+            
+            if (misterMode.value == "circle") {
+                delta += physProps.dt * misterSpeed;
+                this.pos.x = 0.5 * simWidth + 0.2 * simWidth * Math.cos(delta);
+                this.pos.y = 0.5 * simHeight + 0.2 * simWidth * Math.sin(delta);
+            }
+            if (misterMode.value == "oval") {
+                delta += physProps.dt * misterSpeed;
+                this.pos.x = 0.5 * simWidth + 0.3 * simWidth * Math.cos(delta);
+                this.pos.y = 0.5 * simHeight + 0.3 * simHeight * Math.sin(delta);
+            }
+            if (misterMode.value == "bernoulli") {
+                delta += physProps.dt * misterSpeed;
+                var pathScale = 2 / (3 - Math.cos(2 * delta));
+                this.pos.x = (0.5 * simWidth) + (0.4 * simWidth) * pathScale * Math.cos(delta);
+                this.pos.y = (0.5 * simHeight) + (0.3 * simWidth) * pathScale * Math.sin(2 * delta) / 2;
+            }
+        }
+        draw() {
+        mrMrTimer += .05;
+        var eyeLight = 30 + 70 * Math.abs(Math.sin(mrMrTimer));
+        this.radius = (700 * 20 / 100) / 1000 ;
+            // body
+            const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * 0.15 * cScale, 
+            cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+            grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+            grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+            c.fillStyle = grd;
+            drawCircle(cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+            c.fill();
+            // eyes
+            c.strokeStyle = `hsl(200, 80%, ${eyeLight}%)`;
+            c.lineWidth = 0.04 * 0.2 * cScale;
+            c.beginPath();
+            c.moveTo(cX(this.pos) + 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.lineTo(cX(this.pos) + 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.stroke();
+            c.beginPath();
+            c.moveTo(cX(this.pos) - 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.lineTo(cX(this.pos) - 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.stroke();
+            // mouth
+            drawCircle(cX(this.pos), cY(this.pos) + 0.45 * this.radius * cScale, .5 * this.radius * cScale);
+            c.lineWidth = 0.06 * this.radius * cScale;
+            c.strokeStyle = "hsl(0, 0%, 55%)";
+            c.stroke();
+        }
+        draw2() {
+        mrMrTimer += .05;
+        var eyeLight = 30 + 70 * Math.abs(Math.cos(mrMrTimer));
+        this.radius = (700 * 20 / 100) / 1000 ;
+            // body
+            const grd = c.createRadialGradient(simWidth * cScale - cX(this.pos), cY(this.pos), 1.2 * 0.15 * cScale, 
+            simWidth * cScale - cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+            grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+            grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+            c.fillStyle = grd;
+            drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+            c.fill();
+            // eyes
+            c.strokeStyle = "hsl(0, 0%, 60%)";
+            c.lineWidth = 0.04 * 0.2 * cScale;
+            c.beginPath();
+            c.moveTo(simWidth * cScale - cX(this.pos) + 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.lineTo(simWidth * cScale - cX(this.pos) + 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.stroke();
+            c.beginPath();
+            c.moveTo(simWidth * cScale - cX(this.pos) - 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.lineTo(simWidth * cScale - cX(this.pos) - 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.stroke();
+            // mouth
+            drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos) + 0.45 * this.radius * cScale, .5 * this.radius * cScale);
+            c.lineWidth = 0.06 * this.radius * cScale;
+            c.strokeStyle = "hsl(0, 0%, 55%)";
+            c.stroke();
+        }
+	}
+
+    //  DEFINE BALLS IN ORDERED GRID -------------------------------------------
+    function makeBalls() {
+        Balls = [];
+        var smallBallRadius = smallBallInput.value / 1000;
+        var bigBallRadius = bigBallInput.value / 1000;
+        var maxBallRadius = Math.max(smallBallRadius, bigBallRadius);
+        var getNumBalls = ballsInput.value;
+        var ballJitter = 0.20;
+        var brakes = 0;
+        var dumpSqueeze = dumpSlider.value / 100;
+        var dumpSqueeze2 = 0.2;
+        var dumpShift = dumpMoveSlider.value / 100 * simWidth;
+        var velX = 0;
+        var velY = 0;
+        if (array.checked == true) {  
+            var numCols = Math.floor(Math.sqrt(getNumBalls));
+            var numRows = Math.floor(Math.sqrt(getNumBalls));
+            var countDifference = getNumBalls - (numCols * numRows);
+            var addedRows = Math.ceil(countDifference / numCols);
+            var boxWidth = (numCols * 2.0 * maxBallRadius);
+            var boxHeight = ((numRows + addedRows) * 2.0 * maxBallRadius);
+            var horizBias = 0.5 * (simWidth - boxWidth);
+            var vertBias = 0.5 * (simHeight - boxHeight);
+            for (j = 0; j < (numRows + addedRows); j++) {
+                for (i = 0; i < numCols; i++) {
+                    if (smallBallRadius == 0) {
+                        var radius = bigBallRadius;
+                    } else {
+                        var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
+                    }          
+                    var mass = 2 * Math.PI * radius * radius; 
+                    var vel = new Vector2((-0.5 + 1.0 * Math.random()) * brakes, (-0.5 + 1.0 * Math.random()) * brakes);
+                    var boxedPosX = (i + 1) * (boxWidth / (numCols +1)) + (Math.random() * radius * ballJitter) + horizBias;
+                    var boxedPosY = (j + 1) * (boxHeight / (numRows + 1)) + vertBias;
+                    var pos = new Vector2(boxedPosX, boxedPosY);
+                    if (Math.random() * 100 < 5) {
+                            var whiteBall = true;
+                        } else {
+                            var whiteBall = false;
+                        }
+                    
+                    if (Balls.length < getNumBalls) {
+                        Balls.push(new BALL(radius, mass, pos, vel, whiteBall));
+                    }
+                }
+            }
+        }
+        //  DEFINE BALLS IN ROUND CLUSTER -----------------------------------------------
+        if (cluster.checked == true) {
+            for (q = 0; q < getNumBalls; q++) {
+                var clusterRadius = 0.2 * simWidth;
+                var randomRadius = Math.random() * clusterRadius;
+                var randomTheta = Math.random() * 2 * Math.PI;
+                var circleXpos = 0.5 * simWidth + Math.cos(randomTheta) * randomRadius;
+                var circleYpos = 0.5 * simHeight + Math.sin(randomTheta) * randomRadius;
+                if (smallBallRadius == 0) {
+                    var radius = bigBallRadius;
+                    } else {
+                    var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
+                }
+                var mass = 2 * Math.PI * radius * radius; 
+                var pos = new Vector2(circleXpos, circleYpos);   
+                var vel = new Vector2(Math.cos(randomTheta) * brakes, Math.sin(randomTheta) * brakes);
+                if (Math.random() * 100 < 5) {
+                    var whiteBall = true;
+                } else {
+                    var whiteBall = false;
+                }
+
+                Balls.push(new BALL(radius, mass, pos, vel, whiteBall));
+            }   
+        }
+    }
+    
+	//  SETUP SCENE ======================================================
+	function setupScene() {
+        Bumpers = [];
+        Puck = [];
+        Hungrypuck = [];
+        MisterMister = [];
+        
+        mouseDown = false;
+        physProps.paused = false;
+        let input = document.querySelectorAll('.checkbox-pause');
+        for (i = 0; i < input.length; i++) {
+            input[i].checked = false;
+        }
+
+        currentDate = new Date();
+        mSecs = currentDate.getMilliseconds();
+        
+        dumpSqueeze = dumpSlider.value / 100;
+        dumpSqueeze2 = 0.2;
+        dumpShift = dumpMoveSlider.value / 100 * simWidth;
+
+        alpha = 0;
+        sweepDir = 1;
+        dir = 0;
+        spawnLeft = true;
+        misterSpeed = misterSpeedSlider.value / 100;
+    
+        huePos = 0;
+        delta = 0;
+        goLeft = false;
+        mrMrTimer = 0;
+        
+        if (firstRun == true) {
+            makeBalls();
+            makeCorners()
+            makeBumpers();
+            firstRun = false;
+        }
+        
+        mouseUpTime = 0;
+        mouseDownTime = 0;
+        
+        //  DEFINE PUCKS -----------------------------------------------------------------         
+        puck1color = `hsla(70, 20%, 40%, 65%)`;
+        puck2color = `hsla(160, 20%, 30%, 65%)`;
+        Puck.push (new PUCK(1.0 * puckRadiusSlider.value / 1000, new Vector2(simWidth - 1.7 * puckRadiusSlider.value / 1000, 0.6 * simHeight), puck1color));
+        Puck.push (new PUCK(0.7 * puckRadiusSlider.value / 1000, new Vector2(1.5 * puckRadiusSlider.value / 1000, 0.3 * simHeight), puck2color));
+        
+        //  DEFINE HUNGRY PUCKS ----------------------------------------------------------        
+        hungryPuckVel = new Vector2(0, 0);
+        Hungrypuck.push (new HUNGRYPUCK(hungryPuckRadiusSlider.value / 1000, new Vector2(0.65 * simWidth + hungryPuckRadiusSlider.value / 1000 * simWidth, -0.1 * hungryPuckRadiusSlider.value / 1000), hungryPuckVel, `hsl(0, 50%, 50%)`));
+        Hungrypuck.push (new HUNGRYPUCK(hungryPuckRadiusSlider.value / 1000, new Vector2(0.45 * simWidth - hungryPuckRadiusSlider.value / 1000 * simWidth, -0.1 * hungryPuckRadiusSlider.value / 1000), hungryPuckVel, `hsl(0, 50%, 50%)`));
+       
+        // DEFINE MR. MISTER  ------------------------------------------------------------
+        mrMrVel = new Vector2(1, 0);
+        MisterMister.push (new MISTERMISTER(hungryPuckRadiusSlider.value / 1000, new Vector2(0.2 * simWidth, 0.7 * simHeight), mrMrVel, `hsl(0, 50%, 50%)`));}
+        
+    // END OF PUSH DEFINITIONS =======================================================
+
+    //  DRAW EVERYTHING ==============================================================
+	function drawEverything() {
+        wipeOpacity = Math.pow(2.718, trailSlider.value / -10);
+        c.fillStyle = `hsla(0, 0%, 0%, ${wipeOpacity})`;
+        c.fillRect(0, 0, canvas.width, canvas.height);
+
+        // DRAW GRID -----------------------------------------------------------------
+        if (trailSlider.value < 20) {
+            var gridSpacing = .07;
+            var horizGrids = simWidth / gridSpacing;
+            var vertGrids = simHeight / gridSpacing;
+            c.setLineDash([4, 4]);
+            for (var h = 1; h < horizGrids; h++) {
+                if (h % 5 == 0) {
+                    c.lineWidth = 2;
+                } else {
+                    c.lineWidth = 1;
+                }
+                c.beginPath();
+                c.moveTo(h * gridSpacing * cScale, 0);
+                c.lineTo(h * gridSpacing * cScale, simHeight * cScale);
+                c.strokeStyle = `hsl(0, 0%, 15%)`;
+                c.stroke();
+            }
+            for (var v = 1; v < vertGrids; v++) {
+                if (v % 5 == 0) {
+                    c.lineWidth = 2;
+                } else {
+                    c.lineWidth = 1;
+                }
+                c.beginPath();
+                c.moveTo(0, v * gridSpacing * cScale);
+                c.lineTo(simWidth * cScale, v * gridSpacing * cScale);
+                c.stroke();
+            }
+            c.setLineDash([0, 0]);
+        }
+        // DRAW MR. MISTER --------------------------------------------------------------
+        if (fountain.checked == true || duelingFountains.checked == true) {
+            MrMr = MisterMister[0];
+            MrMr.draw();
+        }
+        // DRAW MR. & MRS. MISTER -------------------------------------------------------
+        if (duelingFountains.checked == true) {
+            MrsMr = MisterMister[0];
+            MrsMr.draw2();
+        }
+        //  DRAW BALLS-------------------------------------------------------------------
+        for (i = 0; i < Balls.length; i++) {
+			ball = Balls[i];
+            ball.draw();
+		}
+        
+        //  DRAW BUMPERS ----------------------------------------------------------------
+        if (showBumperEntry.checked == true) {
+            for (k = 0; k < Bumpers.length; k++) {
+            bumpers = Bumpers[k];   
+            bumpers.draw();
+            }
+        }
+        //  DRAW HUNGRY PUCKS ---------------------------------------------------------------     
+        if (showHungryPuckButton.checked == true) {
+            // draw first hungry puck
+            var hungryPuck = Hungrypuck[0];
+            hungryPuck.draw1();
+            
+            // draw second hungry puck
+            var hungryPuck = Hungrypuck[1];
+            hungryPuck.draw2();
+        }
+        //  DRAW PUCKS ----------------------------------------------------------------         
+        if (showPuckButton.checked == true) {
+            for (p=0; p < Puck.length; p++) { 
+                var puck = Puck[p];
+                puck.draw();
+            }
+        }       
+        //  DRAW CORNERS  ---------------------------------------------------------------------
+        for (var v = 0; v < Corners.length; v++) {
+            corner = Corners[v];
+            corner.draw();
+        } 
+	}
+
+    // COLLISIONS AND BOUNDARIES =============================================================
+
+    //  HANDLE BALL TO BALL HITS --------------------------------------------------------------------
+	function handleBallHits(ball1, ball2) 
+	{
+		var dir = new Vector2();
+		dir.subtractVectors(ball2.pos, ball1.pos);
+		var d = dir.length();
+		if (d == 0.0 || d >= ball1.radius + ball2.radius)
+			return;
+
+		dir.scale(1.0 / d);
+		var corr = (ball1.radius + ball2.radius - d) / 2.0;
+		var v1 = ball1.vel.dot(dir);
+		var v2 = ball2.vel.dot(dir);
+		var m1 = ball1.mass;
+		var m2 = ball2.mass;
+		var newV1 = (m1 * v1 + m2 * v2 - m2 * (v1 - v2) * physProps.ballRest) / (m1 + m2);
+		var newV2 = (m1 * v1 + m2 * v2 - m1 * (v2 - v1) * physProps.ballRest) / (m1 + m2);
+
+        ball1.pos.add(dir, -corr);
+		ball2.pos.add(dir, corr);
+		ball1.vel.add(dir, newV1 - v1);
+		ball2.vel.add(dir, newV2 - v2);
+	}
+
+    //  HANDLE BALL TO BALL COMPRESSION --------------------------------------------------------------------
+	function handleBallRepulsion(ball1, ball2) 
+	{
+		var dir = new Vector2();
+		dir.subtractVectors(ball2.pos, ball1.pos);
+		var d = dir.length();
+		var repulsionThreshold = physProps.repulsionDist * (ball1.radius + ball2.radius);
+		if (d == 0.0 || d >= repulsionThreshold)
+			return;
+		dir.scale(1.0 / d);
+		var compression = Math.abs(repulsionThreshold - d);
+		var force = physProps.repulsionForce * compression;
+		var totalMass = ball1.mass + ball2.mass;
+		var force1 = force * (ball2.mass / totalMass);
+		var force2 = force * (ball1.mass / totalMass);
+		
+		ball1.vel.add(dir, -force1);
+		ball2.vel.add(dir, force2);
+	}
+
+    //  HANDLE BUMPER HITS ------------------------------------------------------------------- 
+	function handleBumperHits(ball, bumper) 
+    {
+        var dir = new Vector2();
+		dir.subtractVectors(ball.pos, bumper.pos);
+		var d = dir.length();
+		if (d == 0.0 || d >= ball.radius + bumper.radius)
+			return;
+
+		dir.scale(1.0 / d);
+		var corr = (ball.radius + bumper.radius - d);
+		var v = ball.vel.dot(dir);
+        ball.pos.add(dir, corr);
+        ball.vel.add(dir, v * -2.0 * physProps.bumperRest);
+
+	}
+    
+    //  HANDLE PUCK TO BALL HITS  -------------------------------------------------------------------- 
+	function handlePuckHits(ball, puck) 
+    {
+        var dir = new Vector2();
+		dir.subtractVectors(ball.pos, puck.pos);
+		var d = dir.length();
+		if (d == 0.0 || d >= ball.radius + puck.radius)
+			return;
+
+		dir.scale(1.0 / d);
+		var overlap = ball.radius + puck.radius - d;
+		
+		// For puck collisions, push the ball out completely to prevent clipping
+		// Use a slightly larger separation to ensure clean separation
+		var corr = overlap + 0.001; // Small buffer to prevent immediate re-collision
+		ball.pos.add(dir, corr);
+
+        if (puck.moving == true) {
+            var relativeVel = new Vector2();
+            relativeVel.subtractVectors(ball.vel, puck.vel);
+            var velAlongNormal = relativeVel.dot(dir);
+            // Only apply velocity impulse if objects are approaching each other
+            if (velAlongNormal <= 0) {
+                var e = physProps.puckRest;
+                // Calculate impulse scalar
+                var j = -(1 + e) * velAlongNormal;
+                j /= (1 / ball.mass) + (1 / puck.mass);
+                var impulse = new Vector2();
+                impulse.set(dir);
+                impulse.scale(j);
+                
+                ball.vel.add(impulse, 1 / ball.mass);
+            }
+        } else {
+            var v = ball.vel.dot(dir);
+            ball.vel.add(dir, v * -2.0 * physProps.puckRest);
+        }
+	}
+
+    //  HANDLE CORNER HITS  --------------------------------------------------------------------
+    function handleCornerHits(ball1, corner) {
+        // Find arc center based on corner type
+        let arcCenterX, arcCenterY;
+        if (corner.corner === 'northwest') {
+            arcCenterX = corner.radius; 
+            arcCenterY = corner.radius;
+        } else if (corner.corner === 'northeast') {
+            arcCenterX = simWidth - corner.radius; 
+            arcCenterY = corner.radius;
+        } else if (corner.corner === 'southwest') {
+            arcCenterX = corner.radius; 
+            arcCenterY = simHeight - corner.radius;
+        } else { // southeast
+            arcCenterX = simWidth - corner.radius; 
+            arcCenterY = simHeight - corner.radius;
+        }
+        
+        const dx = ball1.pos.x - arcCenterX;
+        const dy = ball1.pos.y - arcCenterY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Check if ball is colliding with the inside of the arc
+        if (distance > corner.radius - ball1.radius) {
+            // Surface normal points from arc center toward ball
+            const normalX = dx / distance;
+            const normalY = dy / distance;
+            
+            ball1.pos.x = arcCenterX + normalX * (corner.radius - ball1.radius);
+            ball1.pos.y = arcCenterY + normalY * (corner.radius - ball1.radius);
+            
+            const dot = ball1.vel.x * normalX + ball1.vel.y * normalY;
+            ball1.vel.x -= 2 * dot * normalX;
+            ball1.vel.y -= 2 * dot * normalY;
+        }
+    }
+    
+    //  HANDLE SHOWER  -------------------------------------------------------------------- 
+    function goShower(ball) {
+        if (gravityDown.checked == true) {
+            ball.pos.y = simHeight + ball.radius + 30 * Math.random() * ball.radius;
+            ball.pos.x = dumpShift + ((Math.random() * simWidth * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simWidth * dumpSqueeze);
+            ball.vel.x = 0;
+            ball.vel.y = 0;
+        } else if (gravityRight.checked == true) {
+            ball.pos.x = -ball.radius - 30 * Math.random() * ball.radius;
+            ball.pos.y = dumpShift + ((Math.random() * simHeight * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simHeight * dumpSqueeze);
+            ball.vel.x = 0;
+            ball.vel.y = 0;
+        }
+    }
+    
+    //  HANDLE MR. MISTER  --------------------------------------------------------------------
+    function goFountain(ball) {
+        var hP = MisterMister[0];
+        ball.pos.x = hP.pos.x - (0.5 * simWidth * 0.02) + (Math.random() * simWidth * 0.02);
+        ball.pos.y = hP.pos.y - 0.45 * hP.radius - (0.5 * simWidth * 0.02) + (Math.random() * simWidth * 0.02);
+        ball.vel.x = velX;
+        ball.vel.y = velY;
+    }
+
+    //  HANDLE DUELING FOUNTAINS  -------------------------------------------------------------
+    function goDuelingFountains(ball) {
+        var hP = MisterMister[0];
+        if (spawnLeft == true) {
+            ball.pos.x = hP.pos.x - (0.5 * simWidth * 0.02) + (Math.random() * simWidth * 0.02);
+            ball.pos.y = hP.pos.y - 0.45 * hP.radius - (0.5 * simWidth * 0.02) + (Math.random() * simWidth * 0.02);
+            ball.vel.x = velX;
+            ball.vel.y = velY;      
+            spawnLeft = false
+        } else {
+            ball.pos.x = simWidth - (hP.pos.x - (0.5 * simWidth * 0.02) + (Math.random() * simWidth * 0.02));
+            ball.pos.y = hP.pos.y - 0.45 * hP.radius - (0.5 * simWidth * 0.02) + (Math.random() * simWidth * 0.02);
+            ball.vel.x = -velX;
+            ball.vel.y = velY;       
+            spawnLeft = true
+        }
+    }
+    //  HUNGRY PUCK HITS  --------------------------------------------------------------------
+	function handleHungryPuckHits(ball, hungryPuck) 
+    {
+        var dir = new Vector2();
+		dir.subtractVectors(ball.pos, hungryPuck.pos);
+		var d = dir.length();
+		if (d == 0.0 || d > ball.radius + hungryPuck.radius)
+			return;
+
+		dir.scale(1.0 / d);
+        // FOUNTAIN AND SWEEPER SETUP FOR HUNGRY PUCK--------------------------------------------------
+        var sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;
+        if (fountainModeSlider.value > 0 || fountainModeSlider.value < 0) {
+            sweepAngle = 2 * Math.PI;
+            alpha += sprinklerSpeed * -fountainModeSlider.value * physProps.dt;
+            if (alpha > 2*Math.PI || alpha < -2*Math.PI) {
+                alpha = 0
+            }
+        } else {
+            sweepAngle = 0.35 * Math.PI;
+            alpha += sprinklerSpeed * sweepDir * physProps.dt;
+            if (alpha > (sweepAngle * 1.01) || alpha < (-sweepAngle * 1.01)) { // small chance of stalling
+                alpha = 0
+            }
+            if (alpha > sweepAngle || alpha < -sweepAngle) {
+                sweepDir *= -1;
+            }
+        }
+
+        // HANDLE SHOWER AND FOUNTAIN FOR HUNGRY PUCK -------------------------------------------------------------  
+        if (oneShotButton.checked == false) {
+            if (shower.checked == true) {
+                goShower(ball); 
+            }
+            
+            dir = -respawnDirSlider.value / 100;
+            velX = yeetSlider.value / 100 * Math.cos(dir + alpha);
+            velY = yeetSlider.value / 100 * Math.sin(dir + alpha);
+            if (fountain.checked == true) {
+                goFountain(ball);
+            }
+            if (duelingFountains.checked == true) {
+                goDuelingFountains(ball);
+            }
+        }
+	}
+
+    
+    //  HANDLE BOUNDARIES = FLOOR, WALLS, CEILING -------------------------------------------------------
+	function handleOutOfBounds(ball, worldSize) {
+        var sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;
+        // FOUNTAIN AND SWEEPER SETUP ----------------------------------------------------
+        if (fountainModeSlider.value > 0 || fountainModeSlider.value < 0) {
+            sweepAngle = 2 * Math.PI;
+            alpha += sprinklerSpeed * -fountainModeSlider.value * physProps.dt;
+            if (alpha > 2 * Math.PI || alpha < -2 * Math.PI) {
+                alpha = 0
+            }
+        } else {
+            sweepAngle = 0.35 * Math.PI;
+            alpha += sprinklerSpeed * sweepDir * physProps.dt;
+            if (alpha > (sweepAngle * 1.01) || alpha < (-sweepAngle * 1.01)) { // small chance of stalling
+                alpha = 0
+            }
+            if (alpha > sweepAngle || alpha < -sweepAngle) {
+                sweepDir *= -1;
+            }
+        }
+        // HANDLE WALL BOUNCES ------------------------------------------------------------  
+        if (ceilingButton.checked == true) {
+            if (ball.pos.y > worldSize.y - ball.radius) {
+                ball.pos.y = worldSize.y - ball.radius;
+                ball.vel.y = -ball.vel.y * physProps.ceilingRest;
+		    }
+        }
+        if (floorButton.checked == true) {
+            if (ball.pos.y < ball.radius) {
+		        ball.pos.y = ball.radius;
+		        ball.vel.y = -ball.vel.y * physProps.floorRest;
+		        }
+        }
+        if (leftWallButton.checked == true) {
+            if (ball.pos.x < ball.radius) {
+                ball.pos.x = ball.radius;
+                ball.vel.x = -ball.vel.x * physProps.wallRest;
+            }
+        }
+        if (rightWallButton.checked == true) {
+            if (ball.pos.x > worldSize.x -ball.radius) {
+                ball.pos.x = worldSize.x - 1.3 * ball.radius;
+                ball.vel.x = -ball.vel.x * physProps.wallRest;
+            }  
+        }
+        // HANDLE BOUNDS FOR SHOWER AND FOUNTAIN -------------------------------------------------------------  
+        if (oneShotButton.checked == false) {
+            if (shower.checked == true) {
+                if (ball.pos.y < -2.0 * ball.radius || 
+                    ball.pos.y > simHeight + 2.0 * ball.radius ||
+                    ball.pos.x < -2.0 * ball.radius || 
+                    ball.pos.x > 2.0 * simWidth + 2.0 * ball.radius) {
+                    goShower(ball);
+                }
+            } 
+        }
+        dir = -respawnDirSlider.value / 100;
+        velX = yeetSlider.value / 100 * Math.cos(dir + alpha);
+        velY = yeetSlider.value / 100 * Math.sin(dir + alpha);
+        if (fountain.checked == true) {
+            if (ball.pos.y < -2.0 * ball.radius || 
+                ball.pos.y > simHeight + 2.0 * ball.radius ||
+                ball.pos.x < -2.0 * ball.radius || 
+                ball.pos.x > 2.0 * simWidth + 2.0 * ball.radius) {
+                goFountain(ball);
+            }
+        }
+        if (duelingFountains.checked == true) {
+            if (ball.pos.y < -2.0 * ball.radius || 
+                ball.pos.y > simHeight + 2.0 * ball.radius ||
+                ball.pos.x < -2.0 * ball.radius || 
+                ball.pos.x > 2.0 * simWidth + 2.0 * ball.radius) {
+                goDuelingFountains(ball);
+            }
+        }
+	}
+
+    // HANDLE MR. MISTER BOUNDS ------------------------------------------------------------  
+    function handleMrMrBounds(hungryPuck, worldSize) 
+    {
+        mrMr = MisterMister[0];
+            if (mrMr.pos.y > worldSize.y - mrMr.radius) {
+                mrMr.pos.y = worldSize.y - mrMr.radius;
+                mrMr.vel.y = -mrMr.vel.y;
+            }
+            if (mrMr.pos.y < mrMr.radius) {
+                mrMr.pos.y = mrMr.radius;
+                mrMr.vel.y = -mrMr.vel.y;
+            }
+            if (mrMr.pos.x < mrMr.radius) {
+                mrMr.pos.x = mrMr.radius;
+                mrMr.vel.x = -mrMr.vel.x;
+            }
+            if (mrMr.pos.x > worldSize.x - mrMr.radius) {
+                mrMr.pos.x = worldSize.x - mrMr.radius;
+                mrMr.vel.x = -mrMr.vel.x;
+            }
+    }
+
+	//  SIMULATION --------------------------------------------------------------------------
+	function simulate() {
+        if (physProps.paused)
+            return;	
+
+        //  MR. & MRS. MISTER  ----------------------------------
+        if (fountain.checked == true || duelingFountains.checked == true) {
+            var mrMr = MisterMister[0];
+            mrMr.simulate();
+        }
+        
+        //  BALLS ----------------------------------
+        var sortedBalls = Balls.sort((a, b) => a.left - b.left);     
+        for (i = 0; i < Balls.length; i++) {
+            var ball1 = sortedBalls[i];
+            ball1.simulate();    
+            
+            //  HANDLE BALL TO BALL REPULSION AND HITS -----------------------------
+            //  HANDLE BALL TO BALL REPULSION  -----------------------------
+            if (repulsionButton.checked == true) {  
+                for (var j = i + 1; j < Balls.length; j++) {
+                    var ball2 = sortedBalls[j];   
+                    if (ball2.left - physProps.repulsionDist * (ball1.radius + ball2.radius) > ball1.right + 4 * (ball1.radius + ball2.radius)) {
+                        break;
+                    }     
+                    if (Math.abs(ball1.pos.y - ball2.pos.y) < 4 * (ball1.radius + ball2.radius)) {
+                        handleBallRepulsion(ball1, ball2);
+                    }
+                }
+            }
+            
+            //  HANDLE BALL TO BALL HITS  -----------------------------
+            for (var j = i + 1; j < Balls.length; j++) {
+                var ball2 = sortedBalls[j];   
+                
+                if (ball2.left > ball1.right) {
+                    break;
+                }     
+                if (Math.abs(ball1.pos.y - ball2.pos.y) <= ball1.radius + ball2.radius) {
+                    handleBallHits(ball1, ball2);
+                }
+            }
+
+            if (showBumperEntry.checked == true) { 
+                lowestBumper = Bumpers[0];
+                highestBumper = Bumpers[Bumpers.length - 1];
+                arrayBottom = lowestBumper.pos.y - lowestBumper.radius;
+                arrayTop = highestBumper.pos.y + highestBumper.radius;
+
+                if (ball1.bottom <= arrayTop && ball1.top >= arrayBottom) {
+                    var sortedBumpers = Bumpers.sort((a, b) => a.left - b.left);
+                    for (k = 0; k < Bumpers.length; k++) {
+                        var bumper = sortedBumpers[k];
+                        if (bumper.left > ball1.right) {
+                            break;
+                        }
+                        if (Math.abs(ball1.pos.y - bumper.pos.y) <= ball1.radius + bumper.radius) {
+                            handleBumperHits(ball1, bumper)
+                        }
+                    }
+                } 
+            }
+            
+            //  HUNGRY PUCK CHECKS  -----------------------------
+            if (showHungryPuckButton.checked == true) {
+                var hungryPuck = Hungrypuck[0];
+                if (hungryPuck.right > ball1.left) {
+                    if (Math.abs(ball1.pos.y - hungryPuck.pos.y) <= ball1.radius + hungryPuck.radius) {
+                        handleHungryPuckHits(ball1, hungryPuck)
+                    }
+                }
+                var hungryPuck = Hungrypuck[1];
+                if (hungryPuck.right > ball1.left) {
+                    if (Math.abs(ball1.pos.y - hungryPuck.pos.y) <= ball1.radius + hungryPuck.radius) {
+                        handleHungryPuckHits(ball1, hungryPuck)
+                    }
+                }
+            } 
+
+            //  PUCK ARRIVING AND GROW  -----------------------------
+            for (var p=0; p < Puck.length; p++) {
+                var puck = Puck[p];
+                if (puck.puckArriving == true) {
+                    puck.simulate();
+                }
+            }
+            
+            //  PUCK CHECKS  -----------------------------
+            if (showPuckButton.checked == true) {
+                for (var p=0; p < Puck.length; p++) {
+                    var puck = Puck[p];
+                    if (puck.right > ball1.left) {
+                        if (Math.abs(ball1.pos.y - puck.pos.y) <= ball1.radius + puck.radius) {
+                            handlePuckHits(ball1, puck)
+                        }
+                    }
+                }     
+            } 
+
+            //  CORNER CHECKS  -----------------------------
+            for (var v = 0; v < Corners.length; v++) {
+                var corner = Corners[v];
+                if (corner.corner == 'northwest' || corner.corner == 'southwest') {
+                    if (corner.right > ball1.left) {
+                        if (Math.abs(ball1.pos.y - corner.pos.y) <= ball1.radius + corner.radius) {
+                            handleCornerHits(ball1, corner)
+                        }
+                    }
+                }
+                if (corner.corner == 'northeast' || corner.corner == 'southeast') {
+                    if (corner.left < ball1.left) {
+                        if (Math.abs(ball1.pos.y - corner.pos.y) <= ball1.radius + corner.radius) {
+                            handleCornerHits(ball1, corner)
+                        }
+                    }
+                }
+            }
+
+            //  MR. MR. OUT OF BOUNDS CHECKS  -----------------------------
+            if (misterMode.value == "billiard") {
+                var hungryPuck = MisterMister[0];
+                handleMrMrBounds(hungryPuck, physProps.worldSize);
+            }
+
+            //  BALL OUT OF BOUNDS CHECKS  -----------------------------
+            handleOutOfBounds(ball1, physProps.worldSize);
+		}
+    }
+
+    //  MAIN SEQUENCE ----------------------------------------------------------------------------
+	firstRun = true;
+    setupScene();
+    
+    function update() {
+        // Run multiple simulation substeps per frame
+        for (let substep = 0; substep < physProps.substeps; substep++) {
+            simulate();
+        }
+        drawEverything();
+        requestAnimationFrame(update);
+    }
+    
+    update();
+
+</script> 
+</body>
+</html>
