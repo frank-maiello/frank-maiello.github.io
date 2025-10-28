@@ -2426,24 +2426,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     goShower(ball);
                 }
             } 
-        }
-        dir = -respawnDirSlider.value / 100;
-        velX = yeetSlider.value / 100 * Math.cos(dir + alpha);
-        velY = yeetSlider.value / 100 * Math.sin(dir + alpha);
-        if (fountain.checked == true) {
-            if (ball.pos.y < -2.0 * ball.radius || 
-                ball.pos.y > simHeight + 2.0 * ball.radius ||
-                ball.pos.x < -2.0 * ball.radius || 
-                ball.pos.x > 2.0 * simWidth + 2.0 * ball.radius) {
-                goFountain(ball);
+        
+            dir = -respawnDirSlider.value / 100;
+            velX = yeetSlider.value / 100 * Math.cos(dir + alpha);
+            velY = yeetSlider.value / 100 * Math.sin(dir + alpha);
+            if (fountain.checked == true) {
+                if (ball.pos.y < -2.0 * ball.radius || 
+                    ball.pos.y > simHeight + 2.0 * ball.radius ||
+                    ball.pos.x < -2.0 * ball.radius || 
+                    ball.pos.x > 2.0 * simWidth + 2.0 * ball.radius) {
+                    goFountain(ball);
+                }
             }
-        }
-        if (duelingFountains.checked == true) {
-            if (ball.pos.y < -2.0 * ball.radius || 
-                ball.pos.y > simHeight + 2.0 * ball.radius ||
-                ball.pos.x < -2.0 * ball.radius || 
-                ball.pos.x > 2.0 * simWidth + 2.0 * ball.radius) {
-                goDuelingFountains(ball);
+            if (duelingFountains.checked == true) {
+                if (ball.pos.y < -2.0 * ball.radius || 
+                    ball.pos.y > simHeight + 2.0 * ball.radius ||
+                    ball.pos.x < -2.0 * ball.radius || 
+                    ball.pos.x > 2.0 * simWidth + 2.0 * ball.radius) {
+                    goDuelingFountains(ball);
+                }
             }
         }
 	}
