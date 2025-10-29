@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<head>
-		<title>Slosh 1.11</title>
+		<title>Slosh 1.12</title>
         <style>
 			body {font-family: monospace; 
                 font-size: 16px;
@@ -1265,13 +1265,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     document.getElementById("ballSphere").oninput = function() {
             saturationSlider.value = 80;
-            lightnessSlider.value = 45;}
+            ballSaturation = 80;
+            lightnessSlider.value = 45;
+            ballLightness = 45;}
     document.getElementById("ballDisc").oninput = function() {
             saturationSlider.value = 90;
-            lightnessSlider.value = 40;}
+            ballSaturation = 90;
+            lightnessSlider.value = 40;
+            ballLightness = 40;}
     document.getElementById("ballCircle").oninput = function() {
             saturationSlider.value = 100;
-            lightnessSlider.value = 55;}
+            ballSaturation = 100;
+            lightnessSlider.value = 55;
+            ballLightness = 55;}
+
+    document.getElementById("saturationSlider").oninput = function() {
+            ballSaturation = saturationSlider.value * 1;}
+
+     document.getElementById("lightnessSlider").oninput = function() {
+            ballLightness = lightnessSlider.value * 1;}
 
     document.getElementById("ballsInput").onchange = function() {
         makeBalls();}
@@ -1345,6 +1357,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     document.getElementById("bigBallInput").oninput = function() {
         makeBalls();
     }
+    document.getElementById("cluster").oninput = function() {
+        makeBalls();
+    }
+    document.getElementById("array").oninput = function() {
+        makeBalls();
+    }
 
     document.getElementById("showHungryPuckButton").oninput = function() {
         if (showHungryPuckButton.checked == true)
@@ -1384,13 +1402,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 	//  BALL CONSTRUCTOR  -----------------------------------------------------------------------
 	class BALL {
-		constructor(radius, mass, pos, vel, whiteBall) {
+		constructor(radius, mass, pos, vel, saturation, whiteBall) {
 			this.radius = radius;
 			this.mass = mass;
 			this.pos = pos.clone();
 			this.vel = vel.clone();
             this.color = 0;
             this.hiColor = 0;
+            this.saturation = saturation;
             this.whiteBall = whiteBall;
 		}
         get top() {
@@ -1414,13 +1433,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
 			this.pos.add(this.vel, physProps.dt)
             if (this.whiteBall == true) {
-                this.color = `hsl(0, 0%, 80%)`;
-                this.hiColor = `hsl(0, 0%, ${lightnessSlider.value + 20}%)`;
+                this.color = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                this.hiColor = `hsl(0, 0%, ${ballLightness + 50}%)`;
             } else {
                 var speedHue = this.vel.length() * physProps.velColorMap;
                 if (speedHue > 330) {speedHue = 330}
-                this.color = `hsl(${speedHue}, ${saturationSlider.value}%, ${lightnessSlider.value * 1}%)`;
-                this.hiColor = `hsl(${speedHue}, ${saturationSlider.value}%, ${lightnessSlider.value * 1 + 30}%)`;
+                this.color = `hsl(${speedHue}, ${ballSaturation * this.saturation}%, ${ballLightness}%)`;
+                this.hiColor = `hsl(${speedHue}, ${ballSaturation * this.saturation}%, ${ballLightness + 15}%)`;
             }
 		}
         draw() {
@@ -1966,9 +1985,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         } else {
                             var whiteBall = false;
                         }
+
+                    var saturation = 0.5 + 0.5 * Math.random();
                     
                     if (Balls.length < getNumBalls) {
-                        Balls.push(new BALL(radius, mass, pos, vel, whiteBall));
+                        Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall));
                     }
                 }
             }
@@ -1992,10 +2013,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (Math.random() * 100 < 5) {
                     var whiteBall = true;
                 } else {
-                    var whiteBall = false;
+                    var whiteBall =false;
                 }
 
-                Balls.push(new BALL(radius, mass, pos, vel, whiteBall));
+                var saturation = 0.5 + 0.5 * Math.random();
+
+                Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall));
             }   
         }
     }
@@ -2031,7 +2054,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         delta = 0;
         goLeft = false;
         mrMrTimer = 0;
-        
+
+        ballSaturation = saturationSlider.value * 1;
+        ballLightness = lightnessSlider.value * 1;
+
         if (firstRun == true) {
             makeBalls();
             makeCorners()
