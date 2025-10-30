@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.13</title>
+		<title>Slosh 1.14</title>
         <style>
 			body {font-family: monospace; 
                 font-size: 16px;
@@ -423,7 +423,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 
     /*  FIELDS  ----------------------------------------------------------- */
-            .field-red {-webkit-appearance: none;
+            .field-green-short:hover {opacity: 1}       
+            .field-green-short {-webkit-appearance: none;
                 appearance: none;
                 font-family: monospace;
                 font-size: 16px;
@@ -436,15 +437,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				height: 18px;
                 border-width: 0;
 				border-radius: 10px;
-                color: hsl(90, 70%, 50%);
+                color: hsl(116, 70%, 50%);
 				outline: none;
 				opacity: 0.7;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
 				-webkit-transition: .2s;
 				transition: opacity .2s}
 
-            .field:hover {opacity: 1}
-            .field {-webkit-appearance: none;
+            .field-green:hover {opacity: 1}
+            .field-green {-webkit-appearance: none;
                 appearance: none;
                 font-family: monospace;
                 font-size: 16px;
@@ -457,6 +458,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 border-width: 0;
 				border-radius: 10px;
                 color: hsl(90, 70%, 50%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+				transition: opacity .2s}
+
+            .field-purple {-webkit-appearance: none;
+                appearance: none;
+                font-family: monospace;
+                font-size: 16px;
+                text-align: center;
+                background: hsl(0, 0%, 0%);
+                margin-top: 5px;
+                margin-bottom: 10px;
+                padding-left: 6px;
+				width: 120px;
+				height: 18px;
+                border-width: 0;
+				border-radius: 10px;
+                color: hsl(300, 60%, 60%);
 				outline: none;
 				opacity: 0.7;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
@@ -768,7 +789,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="range"  title="Ball Restitution on Collision" id="ballRestSlider" min="0" max="20" value="0" class="slidercyan">
     
     balls&#8594
-    <select title="Particle Count" id="ballsInput" class="field">
+    <select title="Particle Count" id="ballsInput" class="field-green">
         <optgroup label="Number of Balls">
             <option value="1">1</option>
             <option value="100">100</option>
@@ -786,8 +807,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             <option value="6400">6400</option>
         </optgroup>
     </select>
-    <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="5" class="field-red">
-	<input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="15" class="field-red">
+    <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="5" class="field-green-short">
+	<input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="15" class="field-green-short">
     <input type="radio" title="Spheres" name="ballType" id="ballSphere" class="radio-green">
     <input type="radio" title="Discs" name="ballType" id="ballDisc" class="radio-green" checked>
     <input type="radio" title="Circles" name="ballType" id="ballCircle" class="radio-green">
@@ -815,13 +836,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="range"  title="Spew Direction" id="respawnDirSlider" min="0" max="628" value="0" class="slider-purple">
     <input type="range"  title="Yeet" id="yeetSlider" min="0" max="600" value="150" class="slider-purple-short">
     <input type="range"  title="Mr. Mister Speed" id="misterSpeedSlider" min="0" max="200" value="100" class="slider-purple-short">
-    <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field">
+    <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field-purple">
         <optgroup label="Mr. Mister Mode">
             <option value="idle" selected>mouse</option>
             <option value="billiard">pong</option>
             <option value="scanner" >scan</option>
             <option value="printer">printer</option>
-            <option value="typewriter">machine</option>
+            <option value="typewriter">typewriter</option>
             <option value="circle">circle</option>
             <option value="oval">oval</option>
             <option value="bernoulli">figure-8</option>
@@ -892,15 +913,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         } else if (gravityRight.checked == true) {
             physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);}}
     document.getElementById("gravityDown").oninput = function() {
-        if (gravityDown.checked == true) {
-            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
-        } else if (gravityRight.checked == true) {
-            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);}}  
+        doGravityDown = true;
+        doGravityRight = false;
+        physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)))}  
     document.getElementById("gravityRight").oninput = function() {
-        if (gravityDown.checked == true) {
-            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
-        } else if (gravityRight.checked == true) {
-            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);}}
+        doGravityDown = false;
+        doGravityRight = true;
+        physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);}
     document.getElementById("shower").oninput = function() {
         if (gravityDown.checked == true) {
             physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
@@ -913,6 +932,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var puck2 = Hungrypuck[1];
             puck1.pos.y = -0.1 * puck1.radius;
             puck2.pos.y = -0.1 * puck2.radius;
+            doShower = true;
             doFountain = false;
             doDualFountains = false
         }}
@@ -964,16 +984,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     document.getElementById("ballsInput").onchange = function() {
         makeBalls();}
     document.getElementById("ballSphere").oninput = function() {
+            doSpheres = true;
+            doDiscs = false;
+            doCircles = false;
             saturationSlider.value = 80;
             ballSaturation = 80;
             lightnessSlider.value = 45;
             ballLightness = 45;}
     document.getElementById("ballDisc").oninput = function() {
+            doDiscs = true;
+            doSpheres = false;
+            doCircles = false;
             saturationSlider.value = 90;
             ballSaturation = 90;
             lightnessSlider.value = 40;
             ballLightness = 40;}
     document.getElementById("ballCircle").oninput = function() {
+            doCircles = true;
+            doDiscs = false;
+            doSpheres = false;
             saturationSlider.value = 100;
             ballSaturation = 100;
             lightnessSlider.value = 55;
@@ -1042,11 +1071,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 puck.radius = 0.7 * puckRadiusSlider.value / 1000;
                 puck.OGradius = puck.radius;}}}
     document.getElementById('cornerRadiusSlider').oninput = function() {
+        cornerRad = 1.0 * cornerRadiusSlider.value;
         for (var c = 0; c < Corners.length; c++) {
             corner = Corners[c]; 
-            corner.radius = 0.01 * cornerRadiusSlider.value * 0.5 * simHeight;}} 
+            corner.radius = 0.01 * cornerRad * 0.5 * simHeight;}} 
     document.getElementById('misterMode').oninput = function() {
-        if (misterMode.value == "billiard") {
+        if (misterMode.value == "idle") {
+            mrMode = 'idle';
+        } else if (misterMode.value == "billiard") {
             mrMode = 'billiard';
         } else if (misterMode.value == "typewriter") {
             mrMode = 'typewriter';
@@ -1060,22 +1092,55 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             mrMode = 'oval';
         } else if (misterMode.value == "bernoulli") {
             mrMode = 'bernoulli';}}
+    document.getElementById('ceilingButton').oninput = function() {
+        if (ceilingButton.checked == true) {
+            doCeiling = true;
+        } else {
+            doCeiling = false;}}
+    document.getElementById('floorButton').oninput = function() {
+        if (floorButton.checked == true) {
+            doFloor = true;
+        } else {
+            doFloor = false;}}
+    document.getElementById('leftWallButton').oninput = function() {
+        if (leftWallButton.checked == true) {
+            doLeftWall = true;
+        } else {
+            doLeftWall = false;}}
+    document.getElementById('rightWallButton').oninput = function() {
+        if (rightWallButton.checked == true) {
+            doRightWall = true;
+        } else {
+            doRightWall = false;}}
+    document.getElementById('oneShotButton').oninput = function() {
+        if (oneShotButton.checked == true) {
+            doOneShot = true;
+        } else {
+            doOneShot = false;}}
+    document.getElementById('fountainModeSlider').oninput = function() {
+            if (fountainModeSlider.value > 0) {
+                fountainSpinMode = 'cw';
+            } else 
+            if (fountainModeSlider.value < 0) {
+                fountainSpinMode = 'ccw';
+            } else {
+                fountainSpinMode = 'sweep';}}
+    document.getElementById('yeetSlider').oninput = function() {
+        yeet = 1.0 * yeetSlider.value;}
 
-    //  MOUSE STUFF  -------------------------------------------------------------------
+
+    //  MOUSE AND TOUCH STUFF  -------------------------------------------------------------------
     let cursorX = simWidth / 2;
     let cursorY = 0;
     let initialBumperPositions = []; // Store initial Y positions of bumpers for relative movement
     let mouseDown = false;
+    let newX = 0, newY = 0, startX = 0, startY = 0;
     canvas.addEventListener('mousedown', mouseDownHandler);
     canvas.addEventListener('mouseup', mouseUp);
-    
-    // Touch event listeners
     canvas.addEventListener('touchstart', touchStartHandler, {passive: false});
     canvas.addEventListener('touchend', touchEndHandler, {passive: false});
     canvas.addEventListener('touchcancel', touchEndHandler, {passive: false});
     
-    let newX = 0, newY = 0, startX = 0, startY = 0;
-
     function mouseDownHandler() {
         puck1 = Puck[0];
         puck2 = Puck[1];
@@ -1512,8 +1577,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // COLLISIONS AND BOUNDARIES =============================================================
 
     //  HANDLE BALL TO BALL HITS --------------------------------------------------------------------
-	function handleBallHits(ball1, ball2) 
-	{
+	function handleBallHits(ball1, ball2) {
 		var dir = new Vector2();
 		dir.subtractVectors(ball2.pos, ball1.pos);
 		var d = dir.length();
@@ -1536,8 +1600,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	}
 
     //  HANDLE BALL TO BALL COMPRESSION --------------------------------------------------------------------
-	function handleBallRepulsion(ball1, ball2) 
-	{
+	function handleBallRepulsion(ball1, ball2) {
 		var dir = new Vector2();
 		dir.subtractVectors(ball2.pos, ball1.pos);
 		var d = dir.length();
@@ -1556,8 +1619,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	}
 
     //  HANDLE BUMPER HITS ------------------------------------------------------------------- 
-	function handleBumperHits(ball, bumper) 
-    {
+	function handleBumperHits(ball, bumper) {
         var dir = new Vector2();
 		dir.subtractVectors(ball.pos, bumper.pos);
 		var d = dir.length();
@@ -1573,8 +1635,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	}
     
     //  HANDLE PUCK TO BALL HITS  -------------------------------------------------------------------- 
-	function handlePuckHits(ball, puck) 
-    {
+	function handlePuckHits(ball, puck) {
         var dir = new Vector2();
 		dir.subtractVectors(ball.pos, puck.pos);
 		var d = dir.length();
@@ -1650,12 +1711,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     //  HANDLE SHOWER  -------------------------------------------------------------------- 
     function goShower(ball) {
-        if (gravityDown.checked == true) {
+        if (doGravityDown == true) {
             ball.pos.y = simHeight + ball.radius + 30 * Math.random() * ball.radius;
             ball.pos.x = dumpShift + ((Math.random() * simWidth * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simWidth * dumpSqueeze);
             ball.vel.x = 0;
             ball.vel.y = 0;
-        } else if (gravityRight.checked == true) {
+        } else if (doGravityRight == true) {
             ball.pos.x = -ball.radius - 30 * Math.random() * ball.radius;
             ball.pos.y = dumpShift + ((Math.random() * simHeight * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simHeight * dumpSqueeze);
             ball.vel.x = 0;
@@ -1690,8 +1751,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
     //  HUNGRY PUCK HITS  --------------------------------------------------------------------
-	function handleHungryPuckHits(ball, hungryPuck) 
-    {
+	function handleHungryPuckHits(ball, hungryPuck) {
         var dir = new Vector2();
 		dir.subtractVectors(ball.pos, hungryPuck.pos);
 		var d = dir.length();
@@ -1700,52 +1760,57 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 		dir.scale(1.0 / d);
         // FOUNTAIN AND SWEEPER SETUP FOR HUNGRY PUCK--------------------------------------------------
-        var sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;
-        if (fountainModeSlider.value > 0 || fountainModeSlider.value < 0) {
-            sweepAngle = 2 * Math.PI;
-            alpha += sprinklerSpeed * -fountainModeSlider.value * physProps.dt;
+        var sprinklerSpeed = 0.0001;
+        if (fountainSpinMode == 'cw') {
+            alpha += sprinklerSpeed * -1.0 * physProps.dt;
+            if (alpha > 2*Math.PI || alpha < -2*Math.PI) {
+                alpha = 0
+            }
+        } else if (fountainSpinMode == 'ccw') {
+            alpha += sprinklerSpeed * 1.0 * physProps.dt;
             if (alpha > 2*Math.PI || alpha < -2*Math.PI) {
                 alpha = 0
             }
         } else {
-            sweepAngle = 0.35 * Math.PI;
-            alpha += sprinklerSpeed * sweepDir * physProps.dt;
-            if (alpha > (sweepAngle * 1.01) || alpha < (-sweepAngle * 1.01)) { // small chance of stalling
+            alpha += sprinklerSpeed * -1.0 * physProps.dt;
+            if (alpha > 2*Math.PI || alpha < -2*Math.PI) {
                 alpha = 0
-            }
-            if (alpha > sweepAngle || alpha < -sweepAngle) {
-                sweepDir *= -1;
             }
         }
 
         // HANDLE SHOWER AND FOUNTAIN FOR HUNGRY PUCK -------------------------------------------------------------  
-        if (oneShotButton.checked == false) {
-            if (shower.checked == true) {
+        if (doOneShot == false) {
+            if (doShower == true) {
                 goShower(ball); 
             }
             
-            dir = -respawnDirSlider.value / 100;
-            velX = yeetSlider.value / 100 * Math.cos(dir + alpha);
-            velY = yeetSlider.value / 100 * Math.sin(dir + alpha);
-            if (fountain.checked == true) {
+            dir = -0.01;
+            velX = yeet / 100 * Math.cos(dir + alpha);
+            velY = yeet / 100 * Math.sin(dir + alpha);
+            if (doFountain == true) {
                 goFountain(ball);
             }
-            if (duelingFountains.checked == true) {
+            if (doDualFountains == true) {
                 goDuelingFountains(ball);
             }
         }
-	}
+    }
 
-    
     //  HANDLE BOUNDARIES = FLOOR, WALLS, CEILING -------------------------------------------------------
 	function handleOutOfBounds(ball, worldSize) {
         var sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;
         // FOUNTAIN AND SWEEPER SETUP ----------------------------------------------------
-        if (fountainModeSlider.value > 0 || fountainModeSlider.value < 0) {
+        if (fountainSpinMode == 'cw') {
             sweepAngle = 2 * Math.PI;
-            alpha += sprinklerSpeed * -fountainModeSlider.value * physProps.dt;
+            alpha += sprinklerSpeed * -1.0 * physProps.dt;
             if (alpha > 2 * Math.PI || alpha < -2 * Math.PI) {
-                alpha = 0
+                alpha = 0;
+            }
+        } else if (fountainSpinMode == 'ccw') {
+            sweepAngle = 2 * Math.PI;
+            alpha += sprinklerSpeed * 1.0 * physProps.dt;
+            if (alpha > 2 * Math.PI || alpha < -2 * Math.PI) {
+                alpha = 0;
             }
         } else {
             sweepAngle = 0.35 * Math.PI;
@@ -1757,34 +1822,35 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 sweepDir *= -1;
             }
         }
+
         // HANDLE WALL BOUNCES ------------------------------------------------------------  
-        if (ceilingButton.checked == true) {
+        if (doCeiling == true) {
             if (ball.pos.y > worldSize.y - ball.radius) {
                 ball.pos.y = worldSize.y - ball.radius;
                 ball.vel.y = -ball.vel.y * physProps.ceilingRest;
 		    }
         }
-        if (floorButton.checked == true) {
+        if (doFloor == true) {
             if (ball.pos.y < ball.radius) {
 		        ball.pos.y = ball.radius;
 		        ball.vel.y = -ball.vel.y * physProps.floorRest;
 		        }
         }
-        if (leftWallButton.checked == true) {
+        if (doLeftWall == true) {
             if (ball.pos.x < ball.radius) {
                 ball.pos.x = ball.radius;
                 ball.vel.x = -ball.vel.x * physProps.wallRest;
             }
         }
-        if (rightWallButton.checked == true) {
+        if (doRightWall == true) {
             if (ball.pos.x > worldSize.x -ball.radius) {
                 ball.pos.x = worldSize.x - 1.3 * ball.radius;
                 ball.vel.x = -ball.vel.x * physProps.wallRest;
             }  
         }
         // HANDLE BOUNDS FOR SHOWER AND FOUNTAIN -------------------------------------------------------------  
-        if (oneShotButton.checked == false) {
-            if (shower.checked == true) {
+        if (doOneShot == false) {
+            if (doShower == true) {
                 if (ball.pos.y < -2.0 * ball.radius || 
                     ball.pos.y > simHeight + 2.0 * ball.radius ||
                     ball.pos.x < -2.0 * ball.radius || 
@@ -1794,9 +1860,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             } 
         
             dir = -respawnDirSlider.value / 100;
-            velX = yeetSlider.value / 100 * Math.cos(dir + alpha);
-            velY = yeetSlider.value / 100 * Math.sin(dir + alpha);
-            if (fountain.checked == true) {
+            velX = yeet / 100 * Math.cos(dir + alpha);
+            velY = yeet / 100 * Math.sin(dir + alpha);
+            if (doFountain == true) {
                 if (ball.pos.y < -2.0 * ball.radius || 
                     ball.pos.y > simHeight + 2.0 * ball.radius ||
                     ball.pos.x < -2.0 * ball.radius || 
@@ -1804,7 +1870,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     goFountain(ball);
                 }
             }
-            if (duelingFountains.checked == true) {
+            if (doDualFountains == true) {
                 if (ball.pos.y < -2.0 * ball.radius || 
                     ball.pos.y > simHeight + 2.0 * ball.radius ||
                     ball.pos.x < -2.0 * ball.radius || 
@@ -1816,8 +1882,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	}
 
     // HANDLE MR. MISTER BOUNDS ------------------------------------------------------------  
-    function handleMrMrBounds(hungryPuck, worldSize) 
-    {
+    function handleMrMrBounds(hungryPuck, worldSize) {
         mrMr = MisterMister[0];
             if (mrMr.pos.y > worldSize.y - mrMr.radius) {
                 mrMr.pos.y = worldSize.y - mrMr.radius;
@@ -1844,7 +1909,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		dt : 1 / (60 * 1), // updated when substeps changes
 		worldSize : new Vector2(simWidth, simHeight),
 
-		ballRest : ballRestSlider.value / 20,
+		ballRest : 0,
         bumperRest : 0.95,
         floorRest : 1.0,
         wallRest : 1.0,
@@ -1854,7 +1919,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         persistence: 0,
         paused : false,
 
-        repulsionForce: repulsionForceSlider.value / 10,
+        repulsionForce: 2,
         repulsionDist: 4,
 
         velColorMap: velColorMapSlider.value * 1
@@ -1874,11 +1939,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         currentDate = new Date();
         mSecs = currentDate.getMilliseconds();
-        
-        dumpSqueeze = dumpSlider.value / 100;
         dumpSqueeze2 = 0.2;
-        dumpShift = dumpMoveSlider.value / 100 * simWidth;
-
         alpha = 0;
         sweepDir = 1;
         dir = 0;
@@ -1887,19 +1948,44 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         mrMrTimer = 0;
         mouseUpTime = 0;
         mouseDownTime = 0;
+        
         goLeft = false;
         spawnLeft = true;
         showEaters = false;
         mrMode = "";
+
+        dumpShift = 0.01 * dumpMoveSlider.value * simWidth;
+        dumpSqueeze = 0.01 * dumpSlider.value;
         showBumpers = showBumperEntry.checked;
         showPucks = showPuckButton.checked;
+        doShower = shower.checked;
         doFountain = fountain.checked;
         doDualFountains = duelingFountains.checked;
         ballRepulsion = repulsionButton.checked;
-        misterSpeed = misterSpeedSlider.value / 100;
-        ballSaturation = saturationSlider.value * 1;
-        ballLightness = lightnessSlider.value * 1;
-        trailValue = trailSlider.value;
+        misterSpeed = 0.01 * misterSpeedSlider.value;
+        ballSaturation = 1 * saturationSlider.value;
+        ballLightness = 1 *  lightnessSlider.value;
+        trailValue = 1.0 * trailSlider.value;
+        doCeiling = ceilingButton.checked;
+        doFloor = floorButton.checked;
+        doLeftWall = leftWallButton.checked;
+        doRightWall = rightWallButton.checked;
+        cornerRad = 1.0 * cornerRadiusSlider.value;
+        doSpheres = ballSphere.checked;
+        doDiscs = ballDisc.checked;
+        doCircles = ballCircle.checked;
+        doOneShot = oneShotButton.checked;
+        yeet = 1.0 * yeetSlider.value;
+        doGravityDown = gravityDown.checked;
+        doGravityRight = gravityRight.checked;
+        if (fountainModeSlider.value > 0) {
+            fountainSpinMode = 'cw';
+        } else 
+        if (fountainModeSlider.value < 0) {
+            fountainSpinMode = 'ccw';
+        } else {
+            fountainSpinMode = 'sweep';
+        }
 
         makePucks();
         makeHungryPucks();
@@ -1956,7 +2042,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
 		}
         draw() {
-            if (ballSphere.checked == true) {
+            if (doSpheres == true) {
                 const shineOffsetX = cScale * this.radius * 0.3; // old masterShineShiftX;
                 const shineOffsetY = cScale * this.radius * 0.4; // old masterShineShiftY;
                 const shineVector = Math.sqrt(shineOffsetX * shineOffsetX + shineOffsetY * shineOffsetY);
@@ -1975,7 +2061,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.fillStyle = shading;
                 c.fill()
             } 
-            if (ballDisc.checked == true) {
+            if (doDiscs == true) {
                 drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
                 c.fillStyle = this.color;
                 c.fill();
@@ -1984,7 +2070,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.lineWidth = 0.2 * this.radius * cScale;
                 c.stroke();
             }
-            if (ballCircle.checked == true) {
+            if (doCircles == true) {
                 drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
                 c.strokeStyle = this.color;
                 c.lineWidth = 0.2 * this.radius * cScale;
@@ -1993,13 +2079,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 	}
 
-
     //  CORNER CONSTRUCTOR  ---------------------------------------------------------------------
     class CORNER {
 		constructor(pos, corner) {
 			this.pos = pos.clone();
             this.corner = corner;
-            this.radius = 0.01 * cornerRadiusSlider.value * 0.5 * simHeight;
+            this.radius = 0.01 * cornerRad * 0.5 * simHeight;
         }
         get left() {
             return this.pos.x - this.radius;
@@ -2070,7 +2155,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             c.stroke();
             // top edge
-            if (ceilingButton.checked == true) {
+            if (doCeiling == true) {
                 c.beginPath();
                 c.moveTo((this.radius + budge) * cScale, budge * cScale);
                 c.lineTo((simWidth - this.radius - budge) * cScale, budge * cScale);
@@ -2078,7 +2163,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.stroke();
             }
             // left edge
-            if (leftWallButton.checked == true) {
+            if (doLeftWall == true) {
                 c.beginPath();
                 c.moveTo(budge * cScale, (this.radius + budge) * cScale);
                 c.lineTo(budge * cScale, (simHeight - this.radius - budge) * cScale);
@@ -2086,7 +2171,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.stroke();
             }
             // bottom edge
-            if (floorButton.checked == true) {
+            if (doFloor == true) {
                 c.beginPath();
                 c.moveTo((this.radius + budge) * cScale, (simHeight - budge) * cScale);
                 c.lineTo((simWidth - this.radius - budge) * cScale, (simHeight - budge) * cScale);
@@ -2094,16 +2179,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.stroke();
             }   
             // right edge
-            if (rightWallButton.checked == true) {
+            if (doRightWall == true) {
                 c.beginPath();
                 c.moveTo((simWidth - budge) * cScale, (this.radius + budge) * cScale);
                 c.lineTo((simWidth - budge) * cScale, (simHeight - this.radius - budge) * cScale);
                 c.closePath();
                 c.stroke();
             }   
-            
         }
-	}
+    }
 
     //  DEFINE CORNERS  ---------------------------------------------------------------------
     function makeCorners() {
