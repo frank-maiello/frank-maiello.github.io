@@ -9,9 +9,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 <!DOCTYPE html>
 <html>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.12</title>
+		<title>Slosh 1.13</title>
         <style>
 			body {font-family: monospace; 
                 font-size: 16px;
@@ -20,6 +20,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
                 padding-left: 5px;
                 padding-right: 10px;
+                /* Touch optimization */
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                -khtml-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;
+                -webkit-tap-highlight-color: transparent;
                 }
             h1 {font-family: monospace;
                 font-size: 10px;
@@ -772,6 +780,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             <option value="3025">3025</option>
             <option value="3600" selected>3600</option>
             <option value="4096">4096</option>
+            <option value="4624">4624</option>
+            <option value="5184">5184</option>
+            <option value="5776">5776</option>
+            <option value="6400">6400</option>
         </optgroup>
     </select>
     <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="5" class="field-red">
@@ -831,24 +843,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  CANVAS SETUP AND SCALING --------------------------------------------------------------
     canvas = document.getElementById("myCanvas");
-	    c = canvas.getContext("2d");
-        canvas.style.cursor = "pointer";
-        if (window.innerWidth < window.innerHeight) {
-            canvas.width = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 140; //124 for phone
-        } else if (window.innerWidth > 1.75 * window.innerHeight) {
-            canvas.width = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 30;
-        } else {
-            canvas.width = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 200;
-        }
-        simMinWidth = 2.0;
-        cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
-        simWidth = canvas.width / cScale;
-        simHeight = canvas.height / cScale;
-        topMargin = 0;
-        bottomMargin = 0;
+    c = canvas.getContext("2d");
+    canvas.style.cursor = "pointer";
+    if (window.innerWidth < window.innerHeight) {
+        canvas.width = window.innerWidth - 40;
+        canvas.height = window.innerHeight - 140; //124 for phone
+    } else if (window.innerWidth > 1.75 * window.innerHeight) {
+        canvas.width = window.innerWidth - 40;
+        canvas.height = window.innerHeight - 30;
+    } else {
+        canvas.width = window.innerWidth - 40;
+        canvas.height = window.innerHeight - 200;
+    }
+    simMinWidth = 2.0;
+    cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+    simWidth = canvas.width / cScale;
+    simHeight = canvas.height / cScale;
+    topMargin = 0;
+    bottomMargin = 0;
     
     function refreshPage() {
         location.reload();
@@ -869,17 +881,199 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     });
 
-    //  MOUSE -------------------------------------------------------------------
+    //  GET WORLD PROPERTIES FROM SLIDERS ---------------------------------------------
+    document.getElementById("timeSlider").oninput = function() {
+        physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);}
+    document.getElementById('trailSlider').oninput = function() {
+        trailValue = trailSlider.value;}
+    document.getElementById("gravitySlider").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);}}
+    document.getElementById("gravityDown").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);}}  
+    document.getElementById("gravityRight").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);}}
+    document.getElementById("shower").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 + 1 * (10 ** (gravitySlider.value/100)), 0);}
+        dumpSlider.value = 50;
+        dumpMoveSlider.value = 0;
+        if (shower.checked == true) {
+            var puck1 = Hungrypuck[0];
+            var puck2 = Hungrypuck[1];
+            puck1.pos.y = -0.1 * puck1.radius;
+            puck2.pos.y = -0.1 * puck2.radius;
+            doFountain = false;
+            doDualFountains = false
+        }}
+    document.getElementById("fountain").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 + 1 * (10 ** (gravitySlider.value/100)), 0);
+        }
+        respawnDirSlider.value = 0;
+        sprinklerSpeedSlider.value = 0;
+        dumpMoveSlider.value = -40;
+        dumpSlider.value = 50;
+        if (fountain.checked == true) {
+            var puck1 = Hungrypuck[0];
+            var puck2 = Hungrypuck[1];
+            puck1.pos.y = -0.1 * puck1.radius;
+            puck2.pos.y = -0.1 * puck2.radius;
+            doFountain = true;
+            doDualFountains = false;}}
+    document.getElementById("duelingFountains").oninput = function() {
+        if (gravityDown.checked == true) {
+            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+        } else if (gravityRight.checked == true) {
+            physProps.gravity = new Vector2(1 + 1 * (10 ** (gravitySlider.value/100)), 0);}
+        dumpMoveSlider.value = -45;
+        respawnDirSlider.value = 610;
+        sprinklerSpeedSlider.value = 0;
+        yeetSlider.value = 200;
+        if (duelingFountains.checked == true) {
+            var puck1 = Hungrypuck[0];
+            var puck2 = Hungrypuck[1];
+            puck1.pos.y = -0.1 * puck1.radius;
+            puck2.pos.y = -0.1 * puck2.radius;
+            doDualFountains = true;
+            doFountain = true;}}
+    document.getElementById("ballRestSlider").oninput = function() {
+	    physProps.ballRest = ballRestSlider.value / 20;
+        physProps.bumperRest = ballRestSlider.value / 20;}
+    document.getElementById('repulsionButton').oninput = function() {
+        if (repulsionButton.checked == true) {  
+            ballRepulsion = true;
+        } else {
+            ballRepulsion = false;}}
+    document.getElementById("repulsionForceSlider").oninput = function() {
+	    physProps.repulsionForce = repulsionForceSlider.value / 10;}
+    document.getElementById("velColorMapSlider").oninput = function() {
+        physProps.velColorMap = velColorMapSlider.value;}
+    document.getElementById("ballsInput").onchange = function() {
+        makeBalls();}
+    document.getElementById("ballSphere").oninput = function() {
+            saturationSlider.value = 80;
+            ballSaturation = 80;
+            lightnessSlider.value = 45;
+            ballLightness = 45;}
+    document.getElementById("ballDisc").oninput = function() {
+            saturationSlider.value = 90;
+            ballSaturation = 90;
+            lightnessSlider.value = 40;
+            ballLightness = 40;}
+    document.getElementById("ballCircle").oninput = function() {
+            saturationSlider.value = 100;
+            ballSaturation = 100;
+            lightnessSlider.value = 55;
+            ballLightness = 55;}
+    document.getElementById("saturationSlider").oninput = function() {
+            ballSaturation = saturationSlider.value * 1;}
+     document.getElementById("lightnessSlider").oninput = function() {
+            ballLightness = lightnessSlider.value * 1;}
+    document.getElementById("misterMode").oninput = function() {
+        if (misterMode.value == "billiard") {
+            mrMr = MisterMister[0];
+            mrMr.vel.x = .5;
+            mrMr.vel.y = 0.2;}}
+    document.getElementById("misterSpeedSlider").oninput = function() {
+        misterSpeed = misterSpeedSlider.value / 100;}
+    document.getElementById("dumpSlider").oninput = function() {
+        dumpSqueeze = dumpSlider.value / 100;}
+    document.getElementById("dumpMoveSlider").oninput = function() {
+        dumpShift = dumpMoveSlider.value / 100 * simWidth;}
+    document.getElementById("rowsInput").oninput = function() {
+        makeBumpers();}
+    document.getElementById("bumperRadiusInput").oninput = function() {
+        makeBumpers();}
+    document.getElementById("smallBallInput").oninput = function() {
+        makeBalls();}
+    document.getElementById("bigBallInput").oninput = function() {
+        makeBalls();}
+    document.getElementById("cluster").oninput = function() {
+        makeBalls();}
+    document.getElementById("array").oninput = function() {
+        makeBalls();}
+    document.getElementById("showHungryPuckButton").oninput = function() {
+        if (showHungryPuckButton.checked == true)
+        fountain.checked = true;}
+    document.getElementById('showBumperEntry').oninput = function() {
+        if (showBumperEntry.checked == true) {
+            showBumpers = true;
+        } else {
+            showBumpers = false;}}
+    document.getElementById('showHungryPuckButton').oninput = function() {
+        if (showHungryPuckButton.checked == true) {
+            showEaters = true;
+        } else {
+            showEaters = false;}}
+    document.getElementById('hungryPuckRadiusSlider').oninput = function() {
+        for (var h = 0; h < Hungrypuck.length; h++) {
+            hungryPuck = Hungrypuck[h]; 
+            hungryPuck.radius = 1.0 * hungryPuckRadiusSlider.value / 1000;}}
+    document.getElementById('showPuckButton').oninput = function() {
+        if (showPuckButton.checked == true) {
+            for (var p = 0; p < Puck.length; p++) {
+                Puck[p].radius = 0;
+                Puck[p].puckArriving = true;
+            }
+            showPucks = true;
+        } else {
+            showPucks = false;}}
+    document.getElementById('puckRadiusSlider').oninput = function() {
+        for (p = 0; p < Puck.length; p++) {
+            puck = Puck[p];
+            if (p == 0) {
+                puck.radius = 1.0 * puckRadiusSlider.value / 1000;
+                puck.OGradius = puck.radius;
+            }
+            if (p == 1) {
+                puck.radius = 0.7 * puckRadiusSlider.value / 1000;
+                puck.OGradius = puck.radius;}}}
+    document.getElementById('cornerRadiusSlider').oninput = function() {
+        for (var c = 0; c < Corners.length; c++) {
+            corner = Corners[c]; 
+            corner.radius = 0.01 * cornerRadiusSlider.value * 0.5 * simHeight;}} 
+    document.getElementById('misterMode').oninput = function() {
+        if (misterMode.value == "billiard") {
+            mrMode = 'billiard';
+        } else if (misterMode.value == "typewriter") {
+            mrMode = 'typewriter';
+        } else if (misterMode.value == "printer") {
+            mrMode = 'printer';
+        } else if (misterMode.value == "scanner") {
+            mrMode = 'scanner';
+        } else if (misterMode.value == "circle") {
+            mrMode = 'circle';
+        } else if (misterMode.value == "oval") {
+            mrMode = 'oval';
+        } else if (misterMode.value == "bernoulli") {
+            mrMode = 'bernoulli';}}
+
+    //  MOUSE STUFF  -------------------------------------------------------------------
     let cursorX = simWidth / 2;
     let cursorY = 0;
     let initialBumperPositions = []; // Store initial Y positions of bumpers for relative movement
-    
-    // CLICK MOUSE
+    let mouseDown = false;
     canvas.addEventListener('mousedown', mouseDownHandler);
-
-    // UN-CLICK MOUSE
     canvas.addEventListener('mouseup', mouseUp);
-
+    
+    // Touch event listeners
+    canvas.addEventListener('touchstart', touchStartHandler, {passive: false});
+    canvas.addEventListener('touchend', touchEndHandler, {passive: false});
+    canvas.addEventListener('touchcancel', touchEndHandler, {passive: false});
+    
     let newX = 0, newY = 0, startX = 0, startY = 0;
 
     function mouseDownHandler() {
@@ -939,29 +1133,34 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         if (dMisterMister < misterMister.radius) {
             dX = startX / cScale - misterMister.pos.x;
             dY = startY / cScale - misterMister.pos.y;
-            document.addEventListener('mousemove', mouseMisterMisterMove)
+            document.addEventListener('mousemove', mouseMisterMisterMove);
+            document.addEventListener('touchmove', touchMisterMisterMove, {passive: false});
         } else {
         if (dHungryPuck2 < hungryPuck2.radius) {
             dX = startX / cScale - hungryPuck2.pos.x;
             dY = startY / cScale - hungryPuck2.pos.y;
-            document.addEventListener('mousemove', mouseHungryPuck2Move)
+            document.addEventListener('mousemove', mouseHungryPuck2Move);
+            document.addEventListener('touchmove', touchHungryPuck2Move, {passive: false});
         } else {
 		if (dHungryPuck < hungryPuck.radius) {
             dX = startX / cScale - hungryPuck.pos.x;
             dY = startY / cScale - hungryPuck.pos.y;
-            document.addEventListener('mousemove', mouseHungryPuckMove)
+            document.addEventListener('mousemove', mouseHungryPuckMove);
+            document.addEventListener('touchmove', touchHungryPuckMove, {passive: false});
         } else {
         if (dPuck2 < puck2.radius) {
             dX = startX / cScale - puck2.pos.x;
             dY = startY / cScale - puck2.pos.y;
             mouseDown = true;
-            document.addEventListener('mousemove', mousePuck2Move)
+            document.addEventListener('mousemove', mousePuck2Move);
+            document.addEventListener('touchmove', touchPuck2Move, {passive: false});
         } else {
         if (dPuck1 < puck1.radius) {
             dX = startX / cScale - puck1.pos.x;
             dY = startY / cScale - puck1.pos.y;
             mouseDown = true;
-            document.addEventListener('mousemove', mousePuck1Move)
+            document.addEventListener('mousemove', mousePuck1Move);
+            document.addEventListener('touchmove', touchPuck1Move, {passive: false});
         } else {
         if (Bumpers.length > 0 && mousePos.y < bumperArrayTop && mousePos.y > bumperArrayBottom) {
             dY = startY / cScale - (bumperArrayTop + bumperArrayBottom) / 2;
@@ -970,7 +1169,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             for (var i = 0; i < Bumpers.length; i++) {
                 initialBumperPositions[i] = Bumpers[i].pos.y;
             }
-            document.addEventListener('mousemove', mouseBumperMove)
+            document.addEventListener('mousemove', mouseBumperMove);
+            document.addEventListener('touchmove', touchBumperMove, {passive: false});
         }}}}}}
     }
 
@@ -1063,6 +1263,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         document.removeEventListener('mousemove', mousePuck2Move);
         document.removeEventListener('mousemove', mouseMisterMisterMove);
         document.removeEventListener('mousemove', mouseBumperMove);
+        
+        // Also remove touch move listeners
+        document.removeEventListener('touchmove', touchHungryPuckMove);
+        document.removeEventListener('touchmove', touchHungryPuck2Move);
+        document.removeEventListener('touchmove', touchPuck1Move);
+        document.removeEventListener('touchmove', touchPuck2Move);
+        document.removeEventListener('touchmove', touchMisterMisterMove);
+        document.removeEventListener('touchmove', touchBumperMove);
+        
         mouseDown = false;
         mouseUpTime = Date.now();
         for (var p = 0; p < Puck.length; p++) {
@@ -1074,51 +1283,122 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
     
+    // TOUCH STUFF -------------------------------------------------------------------
+    let touchDown = false;
+    
+    function touchStartHandler(event) {
+        event.preventDefault(); // Prevent scrolling and other default touch behaviors
+        
+        // Use the first touch point
+        var touch = event.touches[0];
+        if (!touch) return;
+        
+        // Create a synthetic event object that mimics the mouse event structure
+        var syntheticEvent = {
+            clientX: touch.clientX,
+            clientY: touch.clientY
+        };
+        
+        // Store the original event object temporarily
+        var originalEvent = window.event;
+        window.event = syntheticEvent;
+        
+        // Call the existing mouse down handler
+        mouseDownHandler();
+        
+        // Restore the original event
+        window.event = originalEvent;
+        
+        touchDown = true;
+    }
+    
+    function touchEndHandler(event) {
+        event.preventDefault();
+        
+        if (touchDown) {
+            // Remove touch move listeners
+            document.removeEventListener('touchmove', touchHungryPuckMove);
+            document.removeEventListener('touchmove', touchHungryPuck2Move);
+            document.removeEventListener('touchmove', touchPuck1Move);
+            document.removeEventListener('touchmove', touchPuck2Move);
+            document.removeEventListener('touchmove', touchMisterMisterMove);
+            document.removeEventListener('touchmove', touchBumperMove);
+            
+            // Call the existing mouse up handler
+            mouseUp();
+            
+            touchDown = false;
+        }
+    }
+    
+    // Touch move functions that mirror the mouse move functions
+    function touchBumperMove(event) {
+        event.preventDefault();
+        var touch = event.touches[0];
+        if (!touch) return;
+        
+        var originalEvent = window.event;
+        window.event = { clientY: touch.clientY };
+        mouseBumperMove();
+        window.event = originalEvent;
+    }
+    
+    function touchHungryPuckMove(event) {
+        event.preventDefault();
+        var touch = event.touches[0];
+        if (!touch) return;
+        
+        var originalEvent = window.event;
+        window.event = { clientX: touch.clientX, clientY: touch.clientY };
+        mouseHungryPuckMove();
+        window.event = originalEvent;
+    }
+    
+    function touchHungryPuck2Move(event) {
+        event.preventDefault();
+        var touch = event.touches[0];
+        if (!touch) return;
+        
+        var originalEvent = window.event;
+        window.event = { clientX: touch.clientX, clientY: touch.clientY };
+        mouseHungryPuck2Move();
+        window.event = originalEvent;
+    }
+    
+    function touchMisterMisterMove(event) {
+        event.preventDefault();
+        var touch = event.touches[0];
+        if (!touch) return;
+        
+        var originalEvent = window.event;
+        window.event = { clientX: touch.clientX, clientY: touch.clientY };
+        mouseMisterMisterMove();
+        window.event = originalEvent;
+    }
+    
+    function touchPuck1Move(event) {
+        event.preventDefault();
+        var touch = event.touches[0];
+        if (!touch) return;
+        
+        var originalEvent = window.event;
+        window.event = { clientX: touch.clientX, clientY: touch.clientY };
+        mousePuck1Move();
+        window.event = originalEvent;
+    }
+    
+    function touchPuck2Move(event) {
+        event.preventDefault();
+        var touch = event.touches[0];
+        if (!touch) return;
+        
+        var originalEvent = window.event;
+        window.event = { clientX: touch.clientX, clientY: touch.clientY };
+        mousePuck2Move();
+        window.event = originalEvent;
+    }
+    
 	//  BASIC FUNCTIONS -----------------------------------------------------------------------
-    function wipeRestart() {
-        c.fillStyle = 'hsl(0, 0%, 0%)';
-        c.fillRect(0, 0, canvas.width, canvas.height);
-        makeBalls()
-    }
-    function forcedWipeRestart() {
-        c.fillStyle = 'hsl(0, 0%, 0%)';
-        c.fillRect(0, 0, canvas.width, canvas.height);
-        makeBalls()
-    }
-    function pause() {
-		physProps.paused = !physProps.paused;
-        let input = document.querySelectorAll('.checkbox-pause');
-        if (physProps.paused == true) { 
-            for (i = 0; i < input.length; i++) {
-                input[i].checked = true;
-            }
-        } else {
-            for (i = 0; i < input.length; i++) {
-            input[i].checked = false;
-            }
-        }
-	}
-	function pauseAndStep() {
-        let input = document.querySelectorAll('.checkbox-pause');
-        for (i = 0; i < input.length; i++) {
-            input[i].checked = true;
-        }
-		physProps.paused = false;
-		simulate();
-		physProps.paused = true
-	}
-    function drawCircle(x, y, radius) {
-        c.beginPath();			
-		c.arc(x, y, radius, 0.0, 2.0 * Math.PI) 
-		c.closePath();
-	}
-    function drawEllipse(x, y, radiusX, radiusY) {
-        c.beginPath();			
-		c.ellipse(x * cScale, y * cScale, radiusX * cScale, radiusY * cScale, 0, 0, 2 * Math.PI) 
-		c.closePath();
-	}
-	
-	//  VECTOR OPERATIONS ---------------------------------------------------------------------
 	class Vector2 {
 		constructor(x = 0.0, y = 0.0) {
 			this.x = x; 
@@ -1184,992 +1464,52 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	function cY(pos) {
         return canvas.height - pos.y * cScale;
     }
-
-    //  GET WORLD PROPERTIES FROM SLIDERS ---------------------------------------------
-    document.getElementById("timeSlider").oninput = function() {
-        physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);}
-
-    document.getElementById("gravitySlider").oninput = function() {
-        if (gravityDown.checked == true) {
-            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
-        } else if (gravityRight.checked == true) {
-            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);
-        }}
-
-    document.getElementById("gravityDown").oninput = function() {
-        if (gravityDown.checked == true) {
-            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
-        } else if (gravityRight.checked == true) {
-            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);
-        }}
-        
-    document.getElementById("gravityRight").oninput = function() {
-        if (gravityDown.checked == true) {
-            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
-        } else if (gravityRight.checked == true) {
-            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);
-        }}
     
-    document.getElementById("shower").oninput = function() {
-        if (gravityDown.checked == true) {
-            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
-        } else if (gravityRight.checked == true) {
-            physProps.gravity = new Vector2(1 + 1 * (10 ** (gravitySlider.value/100)), 0);
-        }
-        dumpSlider.value = 50;
-        dumpMoveSlider.value = 0;
-        if (shower.checked == true) {
-            var puck1 = Hungrypuck[0];
-            var puck2 = Hungrypuck[1];
-            puck1.pos.y = -0.1 * puck1.radius;
-            puck2.pos.y = -0.1 * puck2.radius;
-        }}
     
-    document.getElementById("fountain").oninput = function() {
-        if (gravityDown.checked == true) {
-            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
-        } else if (gravityRight.checked == true) {
-            physProps.gravity = new Vector2(1 + 1 * (10 ** (gravitySlider.value/100)), 0);
-        }
-        respawnDirSlider.value = 0;
-        sprinklerSpeedSlider.value = 0;
-        dumpMoveSlider.value = -40;
-        dumpSlider.value = 50;
-        if (fountain.checked == true) {
-            var puck1 = Hungrypuck[0];
-            var puck2 = Hungrypuck[1];
-            puck1.pos.y = -0.1 * puck1.radius;
-            puck2.pos.y = -0.1 * puck2.radius;
-        }}
-
-    document.getElementById("duelingFountains").oninput = function() {
-        if (gravityDown.checked == true) {
-            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
-        } else if (gravityRight.checked == true) {
-            physProps.gravity = new Vector2(1 + 1 * (10 ** (gravitySlider.value/100)), 0);
-        }
-        dumpMoveSlider.value = -45;
-        respawnDirSlider.value = 610;
-        sprinklerSpeedSlider.value = 0;
-        yeetSlider.value = 200;
-        if (duelingFountains.checked == true) {
-            var puck1 = Hungrypuck[0];
-            var puck2 = Hungrypuck[1];
-            puck1.pos.y = -0.1 * puck1.radius;
-            puck2.pos.y = -0.1 * puck2.radius;
-        }}
-
-    document.getElementById("ballRestSlider").oninput = function() {
-	    physProps.ballRest = ballRestSlider.value / 20;
-        physProps.bumperRest = ballRestSlider.value / 20;}
-
-    document.getElementById("ballSphere").oninput = function() {
-            saturationSlider.value = 80;
-            ballSaturation = 80;
-            lightnessSlider.value = 45;
-            ballLightness = 45;}
-    document.getElementById("ballDisc").oninput = function() {
-            saturationSlider.value = 90;
-            ballSaturation = 90;
-            lightnessSlider.value = 40;
-            ballLightness = 40;}
-    document.getElementById("ballCircle").oninput = function() {
-            saturationSlider.value = 100;
-            ballSaturation = 100;
-            lightnessSlider.value = 55;
-            ballLightness = 55;}
-
-    document.getElementById("saturationSlider").oninput = function() {
-            ballSaturation = saturationSlider.value * 1;}
-
-     document.getElementById("lightnessSlider").oninput = function() {
-            ballLightness = lightnessSlider.value * 1;}
-
-    document.getElementById("ballsInput").onchange = function() {
-        makeBalls();}
-
-    document.getElementById("misterMode").oninput = function() {
-        if (misterMode.value == "billiard") {
-            mrMr = MisterMister[0];
-            mrMr.vel.x = .5;
-            mrMr.vel.y = 0.2;
-        }}
-
-    document.getElementById("misterSpeedSlider").oninput = function() {
-        misterSpeed = misterSpeedSlider.value / 100;}
-
-    document.getElementById('hungryPuckRadiusSlider').oninput = function() {
-        for (var h = 0; h < Hungrypuck.length; h++) {
-            hungryPuck = Hungrypuck[h]; 
-            hungryPuck.radius = 1.0 * hungryPuckRadiusSlider.value / 1000;
-        }}
-
-    document.getElementById('puckRadiusSlider').oninput = function() {
-        for (p = 0; p < Puck.length; p++) {
-            puck = Puck[p];
-            if (p == 0) {
-                puck.radius = 1.0 * puckRadiusSlider.value / 1000;
-                puck.OGradius = puck.radius;
-            }
-            if (p == 1) {
-                puck.radius = 0.7 * puckRadiusSlider.value / 1000;
-                puck.OGradius = puck.radius;
-            }
-        }}
-
-    document.getElementById("repulsionForceSlider").oninput = function() {
-	    physProps.repulsionForce = repulsionForceSlider.value / 10;}
-
-    document.getElementById("velColorMapSlider").oninput = function() {
-        physProps.velColorMap = velColorMapSlider.value;}
-
-    document.getElementById("dumpSlider").oninput = function() {
-        dumpSqueeze = dumpSlider.value / 100;}
-
-    document.getElementById("dumpMoveSlider").oninput = function() {
-        dumpShift = dumpMoveSlider.value / 100 * simWidth;}
-
-    document.getElementById('cornerRadiusSlider').oninput = function() {
-        for (var c = 0; c < Corners.length; c++) {
-            corner = Corners[c]; 
-            corner.radius = 0.01 * cornerRadiusSlider.value * 0.5 * simHeight;
-        }}
-
-    document.getElementById('showPuckButton').oninput = function() {
-        if (showPuckButton.checked == true) {
-            for (var p = 0; p < Puck.length; p++) {
-                Puck[p].radius = 0;
-                Puck[p].puckArriving = true;
-            }
-        }}
-
-    document.getElementById("rowsInput").oninput = function() {
-        makeBumpers();
+    function wipeRestart() {
+        c.fillStyle = 'hsl(0, 0%, 0%)';
+        c.fillRect(0, 0, canvas.width, canvas.height);
+        makeBalls()
     }
-
-    document.getElementById("bumperRadiusInput").oninput = function() {
-        makeBumpers();
+    function forcedWipeRestart() {
+        c.fillStyle = 'hsl(0, 0%, 0%)';
+        c.fillRect(0, 0, canvas.width, canvas.height);
+        makeBalls()
     }
-
-    document.getElementById("smallBallInput").oninput = function() {
-        makeBalls();
-    }
-    document.getElementById("bigBallInput").oninput = function() {
-        makeBalls();
-    }
-    document.getElementById("cluster").oninput = function() {
-        makeBalls();
-    }
-    document.getElementById("array").oninput = function() {
-        makeBalls();
-    }
-
-    document.getElementById("showHungryPuckButton").oninput = function() {
-        if (showHungryPuckButton.checked == true)
-        fountain.checked = true;
-    }
-
-    window.addEventListener("resize", setupScene);
-        
-    //  WORLD PROPERTIES INIT DEFINITIONS ----------------------------------------------
-	var physProps = {
-		gravity : new Vector2(0, 0),
-		substeps: 1,
-		dt : 1 / (60 * 1), // updated when substeps changes
-		worldSize : new Vector2(simWidth, simHeight),
-
-		ballRest : ballRestSlider.value / 20,
-        bumperRest : 0.95,
-        floorRest : 1.0,
-        wallRest : 1.0,
-        ceilingRest : 1.0,
-        puckRest: 0.95,
-        
-        persistence: 0,
-        paused : false,
-
-        repulsionForce: repulsionForceSlider.value / 10,
-        repulsionDist: 4,
-
-        velColorMap: velColorMapSlider.value * 1
-	}
-    
-    // Function to update dt when substeps change
-    function updateSubsteps(newSubsteps) {
-        physProps.substeps = newSubsteps;
-        physProps.dt = 1 / (60 * physProps.substeps);
-    }
-
-	//  BALL CONSTRUCTOR  -----------------------------------------------------------------------
-	class BALL {
-		constructor(radius, mass, pos, vel, saturation, whiteBall) {
-			this.radius = radius;
-			this.mass = mass;
-			this.pos = pos.clone();
-			this.vel = vel.clone();
-            this.color = 0;
-            this.hiColor = 0;
-            this.saturation = saturation;
-            this.whiteBall = whiteBall;
-		}
-        get top() {
-            return this.pos.y + this.radius;
-        }
-        get bottom() {
-            return this.pos.y - this.radius;
-        }
-        get left() {
-            return this.pos.x - this.radius;
-        }
-        get right() {
-            return this.pos.x + this.radius;
-        }
-		simulate() {
-			this.vel.add(physProps.gravity, physProps.dt);
-            const maxSpeed = 3.0;
-            if (this.vel.length() > maxSpeed) {
-                this.vel.x *= maxSpeed / this.vel.length();
-                this.vel.y *= maxSpeed / this.vel.length();
+    function pause() {
+		physProps.paused = !physProps.paused;
+        let input = document.querySelectorAll('.checkbox-pause');
+        if (physProps.paused == true) { 
+            for (i = 0; i < input.length; i++) {
+                input[i].checked = true;
             }
-			this.pos.add(this.vel, physProps.dt)
-            if (this.whiteBall == true) {
-                this.color = `hsl(0, 0%, ${ballLightness + 20}%)`;
-                this.hiColor = `hsl(0, 0%, ${ballLightness + 50}%)`;
-            } else {
-                var speedHue = this.vel.length() * physProps.velColorMap;
-                if (speedHue > 330) {speedHue = 330}
-                this.color = `hsl(${speedHue}, ${ballSaturation * this.saturation}%, ${ballLightness}%)`;
-                this.hiColor = `hsl(${speedHue}, ${ballSaturation * this.saturation}%, ${ballLightness + 15}%)`;
-            }
-		}
-        draw() {
-            if (ballSphere.checked == true) {
-                const shineOffsetX = cScale * this.radius * 0.3; // old masterShineShiftX;
-                const shineOffsetY = cScale * this.radius * 0.4; // old masterShineShiftY;
-                const shineVector = Math.sqrt(shineOffsetX * shineOffsetX + shineOffsetY * shineOffsetY);
-                const shineRadius = 0.5 * cScale * this.radius + shineVector;
-                
-                const shading = c.createRadialGradient(
-                    cX(this.pos) - shineOffsetX, 
-                    cY(this.pos) - shineOffsetY, 
-                    shineRadius, 
-                    cX(this.pos) - shineOffsetX, 
-                    cY(this.pos) - shineOffsetY, 
-                    0);
-                shading.addColorStop(0, this.color);
-                shading.addColorStop(1, this.hiColor);
-                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
-                c.fillStyle = shading;
-                c.fill()
-            } 
-            if (ballDisc.checked == true) {
-                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
-                c.fillStyle = this.color;
-                c.fill();
-
-                c.strokeStyle = this.hiColor;
-                c.lineWidth = 0.2 * this.radius * cScale;
-                c.stroke();
-            }
-            if (ballCircle.checked == true) {
-                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
-                c.strokeStyle = this.color;
-                c.lineWidth = 0.2 * this.radius * cScale;
-                c.stroke();
-            }
-        }
-	}
-
-
-    //  CORNER CONSTRUCTOR  ---------------------------------------------------------------------
-    class CORNER {
-		constructor(pos, corner) {
-			this.pos = pos.clone();
-            this.corner = corner;
-            this.radius = 0.01 * cornerRadiusSlider.value * 0.5 * simHeight;
-        }
-        get left() {
-            return this.pos.x - this.radius;
-        }
-        get right() {
-            return this.pos.x + this.radius;
-        }
-        draw() {
-            c.fillStyle = 'hsl(0, 0%, 10%)'; 
-            var budge = 0;
-            if (this.corner == 'northwest') {
-                c.beginPath();
-                c.moveTo(0, 0);
-                c.lineTo(this.radius * cScale, 0);
-                c.arc((this.pos.x + this.radius - budge) * cScale, (this.pos.y + this.radius - budge) * cScale, this.radius * cScale, 1.5 * Math.PI, Math.PI, true);
-                c.lineTo(0, this.radius * cScale);
-                c.closePath();
-                c.fill();
-            }
-            if (this.corner == 'southwest') {
-                c.beginPath();
-                c.moveTo(0, simHeight * cScale);
-                c.lineTo(0, (simHeight - this.radius) * cScale);
-                c.arc((this.pos.x + this.radius - budge) * cScale, (this.pos.y - this.radius + budge) * cScale, this.radius * cScale, Math.PI, 0.5 * Math.PI, true);
-                c.lineTo(this.radius * cScale, simHeight * cScale);
-                c.closePath();
-                c.fill();
-            }
-            if (this.corner == 'southeast') {
-                c.beginPath();
-                c.moveTo(simWidth * cScale, simHeight * cScale);
-                c.lineTo((simWidth - this.radius) * cScale, simHeight * cScale);
-                c.arc((this.pos.x - this.radius + budge) * cScale, (this.pos.y - this.radius + budge) * cScale, this.radius * cScale, 0.5 * Math.PI, 0, true);
-                c.lineTo(simWidth * cScale, (simHeight - this.radius) * cScale);
-                c.closePath();
-                c.fill();
-            }   
-            if (this.corner == 'northeast') {
-                c.beginPath();
-                c.moveTo(simWidth * cScale, 0);
-                c.lineTo(simWidth * cScale, this.radius * cScale);
-                c.arc((this.pos.x - this.radius + budge) * cScale, (this.pos.y + this.radius - budge) * cScale, this.radius * cScale, 0, 1.5 * Math.PI, true);
-                c.lineTo((simWidth - this.radius) * cScale, 0);
-                c.closePath();
-                c.fill();
-            }
-            
-            // Draw the arc outlines
-            c.strokeStyle = 'hsl(0, 0%, 60%)';
-            c.lineWidth = 0.005 * cScale;
-            c.lineCap = 'butt';
-            var budge = 0.0025;
-            if (this.corner == 'northwest') {
-                c.beginPath();
-                c.arc((this.pos.x + this.radius + budge) * cScale, (this.pos.y + this.radius + budge) * cScale, this.radius * cScale, Math.PI, 1.5 * Math.PI, false);
-            }
-            if (this.corner == 'southwest') {
-                c.beginPath();
-                c.arc((this.pos.x + this.radius + budge) * cScale, (this.pos.y - this.radius - budge) * cScale, this.radius * cScale, 0.5 * Math.PI, 1.0 * Math.PI, false);
-            }
-            if (this.corner == 'southeast') {
-                c.beginPath();
-                c.arc((this.pos.x - this.radius - budge) * cScale, (this.pos.y - this.radius - budge) * cScale, this.radius * cScale, 2 * Math.PI, 0.5 * Math.PI, false);
-            }   
-            if (this.corner == 'northeast') {
-                c.beginPath();
-                c.arc((this.pos.x - this.radius - budge) * cScale, (this.pos.y + this.radius + budge) * cScale, this.radius * cScale, 1.5 * Math.PI, 2 * Math.PI, false);
-            }
-            c.stroke();
-            // top edge
-            if (ceilingButton.checked == true) {
-                c.beginPath();
-                c.moveTo((this.radius + budge) * cScale, budge * cScale);
-                c.lineTo((simWidth - this.radius - budge) * cScale, budge * cScale);
-                c.closePath();
-                c.stroke();
-            }
-            // left edge
-            if (leftWallButton.checked == true) {
-                c.beginPath();
-                c.moveTo(budge * cScale, (this.radius + budge) * cScale);
-                c.lineTo(budge * cScale, (simHeight - this.radius - budge) * cScale);
-                c.closePath();
-                c.stroke();
-            }
-            // bottom edge
-            if (floorButton.checked == true) {
-                c.beginPath();
-                c.moveTo((this.radius + budge) * cScale, (simHeight - budge) * cScale);
-                c.lineTo((simWidth - this.radius - budge) * cScale, (simHeight - budge) * cScale);
-                c.closePath();
-                c.stroke();
-            }   
-            // right edge
-            if (rightWallButton.checked == true) {
-                c.beginPath();
-                c.moveTo((simWidth - budge) * cScale, (this.radius + budge) * cScale);
-                c.lineTo((simWidth - budge) * cScale, (simHeight - this.radius - budge) * cScale);
-                c.closePath();
-                c.stroke();
-            }   
-            
-        }
-	}
-
-    //  DEFINE CORNERS  ---------------------------------------------------------------------
-    function makeCorners() {
-        Corners = [];
-        Corners.push(new CORNER(new Vector2(0, 0), 'northwest'));
-        Corners.push(new CORNER(new Vector2(simWidth, 0), 'northeast'));
-        Corners.push(new CORNER(new Vector2(0, simHeight), 'southwest'));
-        Corners.push(new CORNER(new Vector2(simWidth, simHeight), 'southeast'));
-    }
-
-    //  DEFINE BUMPERS --------------------------------------------------------------
-    function makeBumpers() {
-        Bumpers = [];
-        bumperRows = rowsInput.value;
-        bumperRadius = bumperRadiusInput.value / 1000;
-        gapMultiplier = 1.1;
-        smallBumperRatio = 0.75;
-        vertBumperPadding = 0.30;
-        var smallBallRadius = smallBallInput.value / 1000;
-        var bigBallRadius = bigBallInput.value / 1000;
-        var maxBallRadius = Math.max(smallBallRadius, bigBallRadius);
-        bumperSpacing = (2 * maxBallRadius) * gapMultiplier;
-        combinedSpacing = (2 * bumperRadius) + bumperSpacing;
-        verticalBPD = vertBumperPadding * combinedSpacing;
-        combinedVerticalSpacing = (2 * bumperRadius) + bumperSpacing + verticalBPD;
-        paddingCorrectionShift = -0.5 * ((bumperRows - 1) * verticalBPD);
-        if (Math.trunc(simWidth / combinedSpacing) % 2 == 0) {
-            bumperCols = Math.trunc(simWidth / combinedSpacing); 
         } else {
-            bumperCols = Math.trunc(simWidth / combinedSpacing) + 1; 
-        }
-        bumperBarLengthX = ((bumperCols - 1.0) * bumperSpacing) + ((2.0 * (bumperCols -1.0)) * bumperRadius);
-        bumperBarLengthY = ((bumperRows - 1.0) * bumperSpacing) + ((2.0 * (bumperRows -1.0)) * bumperRadius);
-        centeringOffsetX = (simWidth / 2.0) - (bumperBarLengthX / 2.0);
-        centeringOffsetY = (simHeight / 2.0) - (bumperBarLengthY / 2.0) + (-0.3 * simHeight + paddingCorrectionShift);
-        bottomMargin = ((simHeight - bumperBarLengthY) / 2) + 2 * bumperRadius;
-        topMargin = ((simHeight - bumperBarLengthY) / 2) + bumperBarLengthY + 2 * bumperRadius; 
-        centeringOffsetY - combinedVerticalSpacing/2
-        window.numBumpers = 0;
-        for (p = -1; p < bumperCols; p++) {
-            for (q = 0; q < bumperRows; q++) {
-                if (q % 2 == 0) {
-                    Bumpers.push(new BUMPER(bumperRadius, new Vector2((p * combinedSpacing) + (combinedSpacing / 2.0) + centeringOffsetX, (q * combinedVerticalSpacing) + centeringOffsetY)));        
-                    numBumpers += 1;
-                } else if (p > -1) {
-                    Bumpers.push(new BUMPER(bumperRadius * smallBumperRatio, new Vector2((p * combinedSpacing) + centeringOffsetX, (q * combinedVerticalSpacing) + centeringOffsetY)));    
-                    numBumpers += 1;
-                }
+            for (i = 0; i < input.length; i++) {
+            input[i].checked = false;
             }
-        }
-    }
-
-    //  BUMPER CONSTRUCTOR  ---------------------------------------------------------------------
-	class BUMPER {
-		constructor(radius, pos) {
-			this.radius = radius;
-			this.pos = pos.clone();
-            this.OGpos = pos.clone();
-		}
-        get left() {
-            return this.pos.x - this.radius;
-        }
-        get right() {
-            return this.pos.x + this.radius;
-        }
-        draw() {
-            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
-            c.fillStyle = `hsl(0, 0%, 70%)`;
-            c.fill();
-            drawCircle(cX(this.pos), cY(this.pos), (this.radius - .002 * simWidth) * cScale);
-            c.fillStyle = `hsl(0, 0%, 30%)`;
-            c.fill();
         }
 	}
-
-    //  PUCK CONSTRUCTOR -----------------------------------------------------------------------
-    class PUCK {
-		constructor(radius, pos, color) {
-			this.radius = radius;
-            this.OGradius = radius;
-			this.pos = pos.clone();
-            this.vel = new Vector2(0, 0);
-            this.prevPos = pos.clone();
-            this.color = color;
-            this.mass = 0.001 * radius;
-            this.puckFadingIn = false;
-            this.moving = false;
-            this.puckArriving = false;
-		}
-        simulate() {
-            for (var r = 0; r < this.OGradius; r++) {
-                if (this.radius >= this.OGradius) {
-                    this.radius = this.OGradius;
-                    this.puckArriving = false;
-                } else {
-                    this.radius += this.OGradius * 0.0001;
-                }
-            }
-        }
-        draw() {
-            if (this.puckFadingIn == true) {
-                var fadeInTimer = 400; 
-                var timeSinceMouseUp = Date.now() - mouseUpTime;
-                var alphaPercent = timeSinceMouseUp / fadeInTimer;
-                if (timeSinceMouseUp >= fadeInTimer) {
-                    this.puckFadingIn = false;
-                }
-            } else {
-                var alphaPercent = 1;
-            }
-            if (this.moving == false) {
-                drawCircle(cX(this.pos), cY(this.pos), 0.985 * this.radius * cScale);
-                const grd = c.createRadialGradient(
-                    cX(this.pos), 
-                    cY(this.pos), 
-                    0, 
-                    cX(this.pos), 
-                    cY(this.pos), 
-                    1.3 *this.radius * cScale);
-                grd.addColorStop(1, `hsla(220, 70%, 30%, ${alphaPercent * 0.4})`);
-                grd.addColorStop(0.5, `hsla(220, 60%, 5%, ${alphaPercent * 0.4})`);
-                c.fillStyle = grd;
-                c.fill();
-
-                c.strokeStyle = `hsla(0, 0%, 60%, ${alphaPercent})`;
-                c.lineWidth = 4;
-                c.stroke();
-            }
-        }
-        get left() {
-            return this.pos.x - this.radius;
-        }
-        get right() {
-            return this.pos.x + this.radius;
-        }
-	}
-    
-    //  HUNGRY PUCK CONSTRUCTOR ----------------------------------------------------------------
-    class HUNGRYPUCK {
-		constructor(radius, pos, vel, color) {
-			this.radius = radius;
-			this.pos = pos.clone();
-            this.vel = vel.clone();
-            this.color = color;
-		}
-        get left() {
-            return this.pos.x - this.radius;
-        }
-        get right() {
-            return this.pos.x + this.radius;
-        }
-        draw1() {
-            // body
-            const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * this.radius * cScale, 
-            cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
-            grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
-            grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
-            c.fillStyle = grd;
-            drawCircle(cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
-            c.fill();
-            // eyes
-            c.strokeStyle = "hsl(120, 50%, 50%)";
-            c.lineWidth = 0.04 * this.radius * cScale;
-            c.beginPath();
-            c.moveTo(cX(this.pos) + 0.2 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
-            c.lineTo(cX(this.pos) + 0.5 * this.radius * cScale, cY(this.pos) - 0.3 * this.radius * cScale);
-            c.stroke();
-            c.beginPath();
-            c.moveTo(cX(this.pos) - 0.2 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
-            c.lineTo(cX(this.pos) - 0.5 * this.radius * cScale, cY(this.pos) - 0.3 * this.radius * cScale);
-            c.stroke();
-            // mouth
-            c.strokeStyle = "hsl(90, 40%, 20%)";
-            c.lineWidth = 0.06 * this.radius * cScale;
-            c.beginPath();
-            c.arc(cX(this.pos), cY(this.pos), 0.9 * this.radius * cScale, 0, Math.PI) 
-            c.stroke();
-            // dimples
-            c.fillStyle = "hsl(90, 40%, 30%)";
-            drawCircle(cX(this.pos) + 0.9 * this.radius * cScale, cY(this.pos), 0.07 * this.radius * cScale);
-            c.fill();
-            drawCircle(cX(this.pos) - 0.9 * this.radius * cScale, cY(this.pos), 0.07 * this.radius * cScale);
-            c.fill();
-            
-        }  
-        draw2() {
-                // body
-                const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * this.radius * cScale, 
-                cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
-                grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
-                grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
-                c.fillStyle = grd;
-                drawCircle(cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
-                c.fill();
-                // eyes
-                c.strokeStyle = "hsl(335, 70%, 60%)";
-                c.lineWidth = 0.04 * this.radius * cScale;
-                c.beginPath();
-                c.moveTo(cX(this.pos) + 0.25 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
-                c.lineTo(cX(this.pos) + 0.55 * this.radius * cScale, cY(this.pos) - 0.25 * this.radius * cScale);
-                c.stroke();
-                c.beginPath();
-                c.moveTo(cX(this.pos) - 0.25 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
-                c.lineTo(cX(this.pos) - 0.55 * this.radius * cScale, cY(this.pos) - 0.25 * this.radius * cScale);
-                c.stroke();
-                // mouth
-                c.strokeStyle = "hsl(335, 50%, 45%)";
-                c.lineWidth = 0.05 * this.radius * cScale;
-                c.beginPath();
-                c.arc(cX(this.pos), cY(this.pos) + 0.4 * this.radius * cScale, 0.2 * this.radius * cScale, Math.PI, 0);
-                c.stroke();
-                // cheeks
-                c.fillStyle = "hsl(335, 40%, 20%)";
-                drawCircle(cX(this.pos) + 0.8 * this.radius * cScale, cY(this.pos) + 0.2 * this.radius * cScale, 0.2 * this.radius * cScale);
-                c.fill();
-                drawCircle(cX(this.pos) - 0.8 * this.radius * cScale, cY(this.pos) + 0.2 * this.radius * cScale, 0.2 * this.radius * cScale);
-                c.fill();
-        }
-	}
-
-    //  MR. MISTER CONSTRUCTOR ----------------------------------------------------------------
-    class MISTERMISTER {
-		constructor(radius, pos, vel, color) {
-			this.radius = radius;
-			this.pos = pos.clone();
-            this.vel = vel.clone();
-            this.color = color;
-		}
-        get left() {
-            return this.pos.x - this.radius;
-        }
-        get right() {
-            return this.pos.x + this.radius;
-        }
-        simulate() {
-            if (misterMode.value == "idle") {
-            }
-            if (misterMode.value == "billiard") {
-                this.pos.add(this.vel, physProps.dt)
-            }
-            if (misterMode.value == "typewriter") {
-                if (goLeft == false) {
-                    this.pos.x += this.vel.x * physProps.dt * misterSpeed;
-                        if (this.pos.x > simWidth) {
-                            goLeft = true;
-                        }
-                }
-                if (goLeft == true) {
-                    this.pos.x -= this.vel.x * 5 * physProps.dt * misterSpeed;
-                        if (this.pos.x < 0) {
-                            goLeft = false;
-                        };
-                }
-            }
-            if (misterMode.value == "printer") {
-                if (goLeft == false) {
-                    this.pos.x += this.vel.x * physProps.dt * misterSpeed;
-                        if (this.pos.x > simWidth) {
-                            goLeft = true;
-                        }
-                }
-                if (goLeft == true) {
-                    this.pos.x -= this.vel.x * physProps.dt * misterSpeed;
-                        if (this.pos.x < 0) {
-                            goLeft = false;
-                        };
-                }
-            }
-            if (misterMode.value == "scanner") {
-                if (this.pos.x < 1.5 * this.radius + simWidth) {
-                    this.pos.x += this.vel.x * physProps.dt * misterSpeed;
-                }
-                if (this.pos.x > 1.5 * this.radius + simWidth) {
-                    this.pos.x = -1.5 * this.radius;
-                }
-            }
-            
-            if (misterMode.value == "circle") {
-                delta += physProps.dt * misterSpeed;
-                this.pos.x = 0.5 * simWidth + 0.2 * simWidth * Math.cos(delta);
-                this.pos.y = 0.5 * simHeight + 0.2 * simWidth * Math.sin(delta);
-            }
-            if (misterMode.value == "oval") {
-                delta += physProps.dt * misterSpeed;
-                this.pos.x = 0.5 * simWidth + 0.3 * simWidth * Math.cos(delta);
-                this.pos.y = 0.5 * simHeight + 0.3 * simHeight * Math.sin(delta);
-            }
-            if (misterMode.value == "bernoulli") {
-                delta += physProps.dt * misterSpeed;
-                var pathScale = 2 / (3 - Math.cos(2 * delta));
-                this.pos.x = (0.5 * simWidth) + (0.4 * simWidth) * pathScale * Math.cos(delta);
-                this.pos.y = (0.5 * simHeight) + (0.3 * simWidth) * pathScale * Math.sin(2 * delta) / 2;
-            }
-        }
-        draw() {
-        mrMrTimer += .05;
-        var eyeLight = 30 + 70 * Math.abs(Math.sin(mrMrTimer));
-        this.radius = (700 * 20 / 100) / 1000 ;
-            // body
-            const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * 0.15 * cScale, 
-            cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
-            grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
-            grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
-            c.fillStyle = grd;
-            drawCircle(cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
-            c.fill();
-            // eyes
-            c.strokeStyle = `hsl(200, 80%, ${eyeLight}%)`;
-            c.lineWidth = 0.04 * 0.2 * cScale;
-            c.beginPath();
-            c.moveTo(cX(this.pos) + 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
-            c.lineTo(cX(this.pos) + 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
-            c.stroke();
-            c.beginPath();
-            c.moveTo(cX(this.pos) - 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
-            c.lineTo(cX(this.pos) - 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
-            c.stroke();
-            // mouth
-            drawCircle(cX(this.pos), cY(this.pos) + 0.45 * this.radius * cScale, .5 * this.radius * cScale);
-            c.lineWidth = 0.06 * this.radius * cScale;
-            c.strokeStyle = "hsl(0, 0%, 55%)";
-            c.stroke();
-        }
-        draw2() {
-        mrMrTimer += .05;
-        var eyeLight = 30 + 70 * Math.abs(Math.cos(mrMrTimer));
-        this.radius = (700 * 20 / 100) / 1000 ;
-            // body
-            const grd = c.createRadialGradient(simWidth * cScale - cX(this.pos), cY(this.pos), 1.2 * 0.15 * cScale, 
-            simWidth * cScale - cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
-            grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
-            grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
-            c.fillStyle = grd;
-            drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
-            c.fill();
-            // eyes
-            c.strokeStyle = "hsl(0, 0%, 60%)";
-            c.lineWidth = 0.04 * 0.2 * cScale;
-            c.beginPath();
-            c.moveTo(simWidth * cScale - cX(this.pos) + 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
-            c.lineTo(simWidth * cScale - cX(this.pos) + 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
-            c.stroke();
-            c.beginPath();
-            c.moveTo(simWidth * cScale - cX(this.pos) - 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
-            c.lineTo(simWidth * cScale - cX(this.pos) - 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
-            c.stroke();
-            // mouth
-            drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos) + 0.45 * this.radius * cScale, .5 * this.radius * cScale);
-            c.lineWidth = 0.06 * this.radius * cScale;
-            c.strokeStyle = "hsl(0, 0%, 55%)";
-            c.stroke();
-        }
-	}
-
-    //  DEFINE BALLS IN ORDERED GRID -------------------------------------------
-    function makeBalls() {
-        Balls = [];
-        var smallBallRadius = smallBallInput.value / 1000;
-        var bigBallRadius = bigBallInput.value / 1000;
-        var maxBallRadius = Math.max(smallBallRadius, bigBallRadius);
-        var getNumBalls = ballsInput.value;
-        var ballJitter = 0.20;
-        var brakes = 0;
-        var dumpSqueeze = dumpSlider.value / 100;
-        var dumpSqueeze2 = 0.2;
-        var dumpShift = dumpMoveSlider.value / 100 * simWidth;
-        var velX = 0;
-        var velY = 0;
-        if (array.checked == true) {  
-            var numCols = Math.floor(Math.sqrt(getNumBalls));
-            var numRows = Math.floor(Math.sqrt(getNumBalls));
-            var countDifference = getNumBalls - (numCols * numRows);
-            var addedRows = Math.ceil(countDifference / numCols);
-            var boxWidth = (numCols * 2.0 * maxBallRadius);
-            var boxHeight = ((numRows + addedRows) * 2.0 * maxBallRadius);
-            var horizBias = 0.5 * (simWidth - boxWidth);
-            var vertBias = 0.5 * (simHeight - boxHeight);
-            for (j = 0; j < (numRows + addedRows); j++) {
-                for (i = 0; i < numCols; i++) {
-                    if (smallBallRadius == 0) {
-                        var radius = bigBallRadius;
-                    } else {
-                        var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
-                    }          
-                    var mass = 2 * Math.PI * radius * radius; 
-                    var vel = new Vector2((-0.5 + 1.0 * Math.random()) * brakes, (-0.5 + 1.0 * Math.random()) * brakes);
-                    var boxedPosX = (i + 1) * (boxWidth / (numCols +1)) + (Math.random() * radius * ballJitter) + horizBias;
-                    var boxedPosY = (j + 1) * (boxHeight / (numRows + 1)) + vertBias;
-                    var pos = new Vector2(boxedPosX, boxedPosY);
-                    if (Math.random() * 100 < 5) {
-                            var whiteBall = true;
-                        } else {
-                            var whiteBall = false;
-                        }
-
-                    var saturation = 0.5 + 0.5 * Math.random();
-                    
-                    if (Balls.length < getNumBalls) {
-                        Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall));
-                    }
-                }
-            }
-        }
-        //  DEFINE BALLS IN ROUND CLUSTER -----------------------------------------------
-        if (cluster.checked == true) {
-            for (q = 0; q < getNumBalls; q++) {
-                var clusterRadius = 0.2 * simWidth;
-                var randomRadius = Math.random() * clusterRadius;
-                var randomTheta = Math.random() * 2 * Math.PI;
-                var circleXpos = 0.5 * simWidth + Math.cos(randomTheta) * randomRadius;
-                var circleYpos = 0.5 * simHeight + Math.sin(randomTheta) * randomRadius;
-                if (smallBallRadius == 0) {
-                    var radius = bigBallRadius;
-                    } else {
-                    var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
-                }
-                var mass = 2 * Math.PI * radius * radius; 
-                var pos = new Vector2(circleXpos, circleYpos);   
-                var vel = new Vector2(Math.cos(randomTheta) * brakes, Math.sin(randomTheta) * brakes);
-                if (Math.random() * 100 < 5) {
-                    var whiteBall = true;
-                } else {
-                    var whiteBall =false;
-                }
-
-                var saturation = 0.5 + 0.5 * Math.random();
-
-                Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall));
-            }   
-        }
-    }
-    
-	//  SETUP SCENE ======================================================
-	function setupScene() {
-        Bumpers = [];
-        Puck = [];
-        Hungrypuck = [];
-        MisterMister = [];
-        
-        mouseDown = false;
-        physProps.paused = false;
+	function pauseAndStep() {
         let input = document.querySelectorAll('.checkbox-pause');
         for (i = 0; i < input.length; i++) {
-            input[i].checked = false;
+            input[i].checked = true;
         }
-
-        currentDate = new Date();
-        mSecs = currentDate.getMilliseconds();
-        
-        dumpSqueeze = dumpSlider.value / 100;
-        dumpSqueeze2 = 0.2;
-        dumpShift = dumpMoveSlider.value / 100 * simWidth;
-
-        alpha = 0;
-        sweepDir = 1;
-        dir = 0;
-        spawnLeft = true;
-        misterSpeed = misterSpeedSlider.value / 100;
-    
-        huePos = 0;
-        delta = 0;
-        goLeft = false;
-        mrMrTimer = 0;
-
-        ballSaturation = saturationSlider.value * 1;
-        ballLightness = lightnessSlider.value * 1;
-
-        if (firstRun == true) {
-            makeBalls();
-            makeCorners()
-            makeBumpers();
-            firstRun = false;
-        }
-        
-        mouseUpTime = 0;
-        mouseDownTime = 0;
-        
-        //  DEFINE PUCKS -----------------------------------------------------------------         
-        puck1color = `hsla(70, 20%, 40%, 65%)`;
-        puck2color = `hsla(160, 20%, 30%, 65%)`;
-        Puck.push (new PUCK(1.0 * puckRadiusSlider.value / 1000, new Vector2(simWidth - 1.7 * puckRadiusSlider.value / 1000, 0.6 * simHeight), puck1color));
-        Puck.push (new PUCK(0.7 * puckRadiusSlider.value / 1000, new Vector2(1.5 * puckRadiusSlider.value / 1000, 0.3 * simHeight), puck2color));
-        
-        //  DEFINE HUNGRY PUCKS ----------------------------------------------------------        
-        hungryPuckVel = new Vector2(0, 0);
-        Hungrypuck.push (new HUNGRYPUCK(hungryPuckRadiusSlider.value / 1000, new Vector2(0.65 * simWidth + hungryPuckRadiusSlider.value / 1000 * simWidth, -0.1 * hungryPuckRadiusSlider.value / 1000), hungryPuckVel, `hsl(0, 50%, 50%)`));
-        Hungrypuck.push (new HUNGRYPUCK(hungryPuckRadiusSlider.value / 1000, new Vector2(0.45 * simWidth - hungryPuckRadiusSlider.value / 1000 * simWidth, -0.1 * hungryPuckRadiusSlider.value / 1000), hungryPuckVel, `hsl(0, 50%, 50%)`));
-       
-        // DEFINE MR. MISTER  ------------------------------------------------------------
-        mrMrVel = new Vector2(1, 0);
-        MisterMister.push (new MISTERMISTER(hungryPuckRadiusSlider.value / 1000, new Vector2(0.2 * simWidth, 0.7 * simHeight), mrMrVel, `hsl(0, 50%, 50%)`));}
-        
-    // END OF PUSH DEFINITIONS =======================================================
-
-    //  DRAW EVERYTHING ==============================================================
-	function drawEverything() {
-        wipeOpacity = Math.pow(2.718, trailSlider.value / -10);
-        c.fillStyle = `hsla(0, 0%, 0%, ${wipeOpacity})`;
-        c.fillRect(0, 0, canvas.width, canvas.height);
-
-        // DRAW GRID -----------------------------------------------------------------
-        if (trailSlider.value < 20) {
-            var gridSpacing = .07;
-            var horizGrids = simWidth / gridSpacing;
-            var vertGrids = simHeight / gridSpacing;
-            c.setLineDash([4, 4]);
-            for (var h = 1; h < horizGrids; h++) {
-                if (h % 5 == 0) {
-                    c.lineWidth = 2;
-                } else {
-                    c.lineWidth = 1;
-                }
-                c.beginPath();
-                c.moveTo(h * gridSpacing * cScale, 0);
-                c.lineTo(h * gridSpacing * cScale, simHeight * cScale);
-                c.strokeStyle = `hsl(0, 0%, 15%)`;
-                c.stroke();
-            }
-            for (var v = 1; v < vertGrids; v++) {
-                if (v % 5 == 0) {
-                    c.lineWidth = 2;
-                } else {
-                    c.lineWidth = 1;
-                }
-                c.beginPath();
-                c.moveTo(0, v * gridSpacing * cScale);
-                c.lineTo(simWidth * cScale, v * gridSpacing * cScale);
-                c.stroke();
-            }
-            c.setLineDash([0, 0]);
-        }
-        // DRAW MR. MISTER --------------------------------------------------------------
-        if (fountain.checked == true || duelingFountains.checked == true) {
-            MrMr = MisterMister[0];
-            MrMr.draw();
-        }
-        // DRAW MR. & MRS. MISTER -------------------------------------------------------
-        if (duelingFountains.checked == true) {
-            MrsMr = MisterMister[0];
-            MrsMr.draw2();
-        }
-        //  DRAW BALLS-------------------------------------------------------------------
-        for (i = 0; i < Balls.length; i++) {
-			ball = Balls[i];
-            ball.draw();
-		}
-        
-        //  DRAW BUMPERS ----------------------------------------------------------------
-        if (showBumperEntry.checked == true) {
-            for (k = 0; k < Bumpers.length; k++) {
-            bumpers = Bumpers[k];   
-            bumpers.draw();
-            }
-        }
-        //  DRAW HUNGRY PUCKS ---------------------------------------------------------------     
-        if (showHungryPuckButton.checked == true) {
-            // draw first hungry puck
-            var hungryPuck = Hungrypuck[0];
-            hungryPuck.draw1();
-            
-            // draw second hungry puck
-            var hungryPuck = Hungrypuck[1];
-            hungryPuck.draw2();
-        }
-        //  DRAW PUCKS ----------------------------------------------------------------         
-        if (showPuckButton.checked == true) {
-            for (p=0; p < Puck.length; p++) { 
-                var puck = Puck[p];
-                puck.draw();
-            }
-        }       
-        //  DRAW CORNERS  ---------------------------------------------------------------------
-        for (var v = 0; v < Corners.length; v++) {
-            corner = Corners[v];
-            corner.draw();
-        } 
+		physProps.paused = false;
+		simulate();
+		physProps.paused = true
+	}
+    function drawCircle(x, y, radius) {
+        c.beginPath();			
+		c.arc(x, y, radius, 0.0, 2.0 * Math.PI) 
+		c.closePath();
+	}
+    function drawEllipse(x, y, radiusX, radiusY) {
+        c.beginPath();			
+		c.ellipse(x * cScale, y * cScale, radiusX * cScale, radiusY * cScale, 0, 0, 2 * Math.PI) 
+		c.closePath();
 	}
 
-    // COLLISIONS AND BOUNDARIES =============================================================
+        // COLLISIONS AND BOUNDARIES =============================================================
 
     //  HANDLE BALL TO BALL HITS --------------------------------------------------------------------
 	function handleBallHits(ball1, ball2) 
@@ -2497,13 +1837,735 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
     }
 
-	//  SIMULATION --------------------------------------------------------------------------
+    //  WORLD PROPERTIES INIT DEFINITIONS ----------------------------------------------
+	var physProps = {
+		gravity : new Vector2(0, 0),
+		substeps: 1,
+		dt : 1 / (60 * 1), // updated when substeps changes
+		worldSize : new Vector2(simWidth, simHeight),
+
+		ballRest : ballRestSlider.value / 20,
+        bumperRest : 0.95,
+        floorRest : 1.0,
+        wallRest : 1.0,
+        ceilingRest : 1.0,
+        puckRest: 0.95,
+        
+        persistence: 0,
+        paused : false,
+
+        repulsionForce: repulsionForceSlider.value / 10,
+        repulsionDist: 4,
+
+        velColorMap: velColorMapSlider.value * 1
+	}
+    
+    // Function to update dt when substeps change
+    function updateSubsteps(newSubsteps) {
+        physProps.substeps = newSubsteps;
+        physProps.dt = 1 / (60 * physProps.substeps);
+    }
+    
+	//  SETUP SCENE ======================================================
+	function setupScene() {
+        let input = document.querySelectorAll('.checkbox-pause');
+        for (i = 0; i < input.length; i++) {
+            input[i].checked = false;
+        }
+        currentDate = new Date();
+        mSecs = currentDate.getMilliseconds();
+        
+        dumpSqueeze = dumpSlider.value / 100;
+        dumpSqueeze2 = 0.2;
+        dumpShift = dumpMoveSlider.value / 100 * simWidth;
+
+        alpha = 0;
+        sweepDir = 1;
+        dir = 0;
+        huePos = 0;
+        delta = 0;
+        mrMrTimer = 0;
+        mouseUpTime = 0;
+        mouseDownTime = 0;
+        goLeft = false;
+        spawnLeft = true;
+        showEaters = false;
+        mrMode = "";
+        showBumpers = showBumperEntry.checked;
+        showPucks = showPuckButton.checked;
+        doFountain = fountain.checked;
+        doDualFountains = duelingFountains.checked;
+        ballRepulsion = repulsionButton.checked;
+        misterSpeed = misterSpeedSlider.value / 100;
+        ballSaturation = saturationSlider.value * 1;
+        ballLightness = lightnessSlider.value * 1;
+        trailValue = trailSlider.value;
+
+        makePucks();
+        makeHungryPucks();
+        makeMisterMister();
+        
+        if (firstRun == true) {
+            makeBalls();
+            makeCorners()
+            makeBumpers();
+            firstRun = false;
+        }
+    }
+
+	//  BALL CONSTRUCTOR  -----------------------------------------------------------------------
+	class BALL {
+		constructor(radius, mass, pos, vel, saturation, whiteBall) {
+			this.radius = radius;
+			this.mass = mass;
+			this.pos = pos.clone();
+			this.vel = vel.clone();
+            this.color = 0;
+            this.hiColor = 0;
+            this.saturation = saturation;
+            this.whiteBall = whiteBall;
+		}
+        get top() {
+            return this.pos.y + this.radius;
+        }
+        get bottom() {
+            return this.pos.y - this.radius;
+        }
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+		simulate() {
+			this.vel.add(physProps.gravity, physProps.dt);
+            const maxSpeed = 3.0;
+            if (this.vel.length() > maxSpeed) {
+                this.vel.x *= maxSpeed / this.vel.length();
+                this.vel.y *= maxSpeed / this.vel.length();
+            }
+			this.pos.add(this.vel, physProps.dt)
+            if (this.whiteBall == true) {
+                this.color = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                this.hiColor = `hsl(0, 0%, ${ballLightness + 50}%)`;
+            } else {
+                var speedHue = this.vel.length() * physProps.velColorMap;
+                if (speedHue > 330) {speedHue = 330}
+                this.color = `hsl(${speedHue}, ${ballSaturation * this.saturation}%, ${ballLightness}%)`;
+                this.hiColor = `hsl(${speedHue}, ${ballSaturation * this.saturation}%, ${ballLightness + 15}%)`;
+            }
+		}
+        draw() {
+            if (ballSphere.checked == true) {
+                const shineOffsetX = cScale * this.radius * 0.3; // old masterShineShiftX;
+                const shineOffsetY = cScale * this.radius * 0.4; // old masterShineShiftY;
+                const shineVector = Math.sqrt(shineOffsetX * shineOffsetX + shineOffsetY * shineOffsetY);
+                const shineRadius = 0.5 * cScale * this.radius + shineVector;
+                
+                const shading = c.createRadialGradient(
+                    cX(this.pos) - shineOffsetX, 
+                    cY(this.pos) - shineOffsetY, 
+                    shineRadius, 
+                    cX(this.pos) - shineOffsetX, 
+                    cY(this.pos) - shineOffsetY, 
+                    0);
+                shading.addColorStop(0, this.color);
+                shading.addColorStop(1, this.hiColor);
+                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+                c.fillStyle = shading;
+                c.fill()
+            } 
+            if (ballDisc.checked == true) {
+                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
+                c.fillStyle = this.color;
+                c.fill();
+
+                c.strokeStyle = this.hiColor;
+                c.lineWidth = 0.2 * this.radius * cScale;
+                c.stroke();
+            }
+            if (ballCircle.checked == true) {
+                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
+                c.strokeStyle = this.color;
+                c.lineWidth = 0.2 * this.radius * cScale;
+                c.stroke();
+            }
+        }
+	}
+
+
+    //  CORNER CONSTRUCTOR  ---------------------------------------------------------------------
+    class CORNER {
+		constructor(pos, corner) {
+			this.pos = pos.clone();
+            this.corner = corner;
+            this.radius = 0.01 * cornerRadiusSlider.value * 0.5 * simHeight;
+        }
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        draw() {
+            c.fillStyle = 'hsl(0, 0%, 10%)'; 
+            var budge = 0;
+            if (this.corner == 'northwest') {
+                c.beginPath();
+                c.moveTo(0, 0);
+                c.lineTo(this.radius * cScale, 0);
+                c.arc((this.pos.x + this.radius - budge) * cScale, (this.pos.y + this.radius - budge) * cScale, this.radius * cScale, 1.5 * Math.PI, Math.PI, true);
+                c.lineTo(0, this.radius * cScale);
+                c.closePath();
+                c.fill();
+            }
+            if (this.corner == 'southwest') {
+                c.beginPath();
+                c.moveTo(0, simHeight * cScale);
+                c.lineTo(0, (simHeight - this.radius) * cScale);
+                c.arc((this.pos.x + this.radius - budge) * cScale, (this.pos.y - this.radius + budge) * cScale, this.radius * cScale, Math.PI, 0.5 * Math.PI, true);
+                c.lineTo(this.radius * cScale, simHeight * cScale);
+                c.closePath();
+                c.fill();
+            }
+            if (this.corner == 'southeast') {
+                c.beginPath();
+                c.moveTo(simWidth * cScale, simHeight * cScale);
+                c.lineTo((simWidth - this.radius) * cScale, simHeight * cScale);
+                c.arc((this.pos.x - this.radius + budge) * cScale, (this.pos.y - this.radius + budge) * cScale, this.radius * cScale, 0.5 * Math.PI, 0, true);
+                c.lineTo(simWidth * cScale, (simHeight - this.radius) * cScale);
+                c.closePath();
+                c.fill();
+            }   
+            if (this.corner == 'northeast') {
+                c.beginPath();
+                c.moveTo(simWidth * cScale, 0);
+                c.lineTo(simWidth * cScale, this.radius * cScale);
+                c.arc((this.pos.x - this.radius + budge) * cScale, (this.pos.y + this.radius - budge) * cScale, this.radius * cScale, 0, 1.5 * Math.PI, true);
+                c.lineTo((simWidth - this.radius) * cScale, 0);
+                c.closePath();
+                c.fill();
+            }
+            
+            // Draw the arc outlines
+            c.strokeStyle = 'hsl(0, 0%, 60%)';
+            c.lineWidth = 0.005 * cScale;
+            c.lineCap = 'butt';
+            var budge = 0.0025;
+            if (this.corner == 'northwest') {
+                c.beginPath();
+                c.arc((this.pos.x + this.radius + budge) * cScale, (this.pos.y + this.radius + budge) * cScale, this.radius * cScale, Math.PI, 1.5 * Math.PI, false);
+            }
+            if (this.corner == 'southwest') {
+                c.beginPath();
+                c.arc((this.pos.x + this.radius + budge) * cScale, (this.pos.y - this.radius - budge) * cScale, this.radius * cScale, 0.5 * Math.PI, 1.0 * Math.PI, false);
+            }
+            if (this.corner == 'southeast') {
+                c.beginPath();
+                c.arc((this.pos.x - this.radius - budge) * cScale, (this.pos.y - this.radius - budge) * cScale, this.radius * cScale, 2 * Math.PI, 0.5 * Math.PI, false);
+            }   
+            if (this.corner == 'northeast') {
+                c.beginPath();
+                c.arc((this.pos.x - this.radius - budge) * cScale, (this.pos.y + this.radius + budge) * cScale, this.radius * cScale, 1.5 * Math.PI, 2 * Math.PI, false);
+            }
+            c.stroke();
+            // top edge
+            if (ceilingButton.checked == true) {
+                c.beginPath();
+                c.moveTo((this.radius + budge) * cScale, budge * cScale);
+                c.lineTo((simWidth - this.radius - budge) * cScale, budge * cScale);
+                c.closePath();
+                c.stroke();
+            }
+            // left edge
+            if (leftWallButton.checked == true) {
+                c.beginPath();
+                c.moveTo(budge * cScale, (this.radius + budge) * cScale);
+                c.lineTo(budge * cScale, (simHeight - this.radius - budge) * cScale);
+                c.closePath();
+                c.stroke();
+            }
+            // bottom edge
+            if (floorButton.checked == true) {
+                c.beginPath();
+                c.moveTo((this.radius + budge) * cScale, (simHeight - budge) * cScale);
+                c.lineTo((simWidth - this.radius - budge) * cScale, (simHeight - budge) * cScale);
+                c.closePath();
+                c.stroke();
+            }   
+            // right edge
+            if (rightWallButton.checked == true) {
+                c.beginPath();
+                c.moveTo((simWidth - budge) * cScale, (this.radius + budge) * cScale);
+                c.lineTo((simWidth - budge) * cScale, (simHeight - this.radius - budge) * cScale);
+                c.closePath();
+                c.stroke();
+            }   
+            
+        }
+	}
+
+    //  DEFINE CORNERS  ---------------------------------------------------------------------
+    function makeCorners() {
+        Corners = [];
+        Corners.push(new CORNER(new Vector2(0, 0), 'northwest'));
+        Corners.push(new CORNER(new Vector2(simWidth, 0), 'northeast'));
+        Corners.push(new CORNER(new Vector2(0, simHeight), 'southwest'));
+        Corners.push(new CORNER(new Vector2(simWidth, simHeight), 'southeast'));
+    }
+
+    //  DEFINE BUMPERS --------------------------------------------------------------
+    function makeBumpers() {
+        Bumpers = [];
+        bumperRows = rowsInput.value;
+        bumperRadius = bumperRadiusInput.value / 1000;
+        gapMultiplier = 1.1;
+        smallBumperRatio = 0.75;
+        vertBumperPadding = 0.30;
+        var smallBallRadius = smallBallInput.value / 1000;
+        var bigBallRadius = bigBallInput.value / 1000;
+        var maxBallRadius = Math.max(smallBallRadius, bigBallRadius);
+        bumperSpacing = (2 * maxBallRadius) * gapMultiplier;
+        combinedSpacing = (2 * bumperRadius) + bumperSpacing;
+        verticalBPD = vertBumperPadding * combinedSpacing;
+        combinedVerticalSpacing = (2 * bumperRadius) + bumperSpacing + verticalBPD;
+        paddingCorrectionShift = -0.5 * ((bumperRows - 1) * verticalBPD);
+        if (Math.trunc(simWidth / combinedSpacing) % 2 == 0) {
+            bumperCols = Math.trunc(simWidth / combinedSpacing); 
+        } else {
+            bumperCols = Math.trunc(simWidth / combinedSpacing) + 1; 
+        }
+        bumperBarLengthX = ((bumperCols - 1.0) * bumperSpacing) + ((2.0 * (bumperCols -1.0)) * bumperRadius);
+        bumperBarLengthY = ((bumperRows - 1.0) * bumperSpacing) + ((2.0 * (bumperRows -1.0)) * bumperRadius);
+        centeringOffsetX = (simWidth / 2.0) - (bumperBarLengthX / 2.0);
+        centeringOffsetY = (simHeight / 2.0) - (bumperBarLengthY / 2.0) + (-0.3 * simHeight + paddingCorrectionShift);
+        bottomMargin = ((simHeight - bumperBarLengthY) / 2) + 2 * bumperRadius;
+        topMargin = ((simHeight - bumperBarLengthY) / 2) + bumperBarLengthY + 2 * bumperRadius; 
+        centeringOffsetY - combinedVerticalSpacing/2
+        numBumpers = 0;
+        for (p = -1; p < bumperCols; p++) {
+            for (q = 0; q < bumperRows; q++) {
+                if (q % 2 == 0) {
+                    Bumpers.push(new BUMPER(bumperRadius, new Vector2((p * combinedSpacing) + (combinedSpacing / 2.0) + centeringOffsetX, (q * combinedVerticalSpacing) + centeringOffsetY)));        
+                    numBumpers += 1;
+                } else if (p > -1) {
+                    Bumpers.push(new BUMPER(bumperRadius * smallBumperRatio, new Vector2((p * combinedSpacing) + centeringOffsetX, (q * combinedVerticalSpacing) + centeringOffsetY)));    
+                    numBumpers += 1;
+                }
+            }
+        }
+    }
+
+    //  BUMPER CONSTRUCTOR  ---------------------------------------------------------------------
+	class BUMPER {
+		constructor(radius, pos) {
+			this.radius = radius;
+			this.pos = pos.clone();
+            this.OGpos = pos.clone();
+		}
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        draw() {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = `hsl(0, 0%, 70%)`;
+            c.fill();
+            drawCircle(cX(this.pos), cY(this.pos), (this.radius - .002 * simWidth) * cScale);
+            c.fillStyle = `hsl(0, 0%, 30%)`;
+            c.fill();
+        }
+	}
+
+    //  PUCK CONSTRUCTOR -----------------------------------------------------------------------
+    class PUCK {
+		constructor(radius, pos, color) {
+			this.radius = radius;
+            this.OGradius = radius;
+			this.pos = pos.clone();
+            this.vel = new Vector2(0, 0);
+            this.prevPos = pos.clone();
+            this.color = color;
+            this.mass = 0.001 * radius;
+            this.puckFadingIn = false;
+            this.moving = false;
+            this.puckArriving = false;
+		}
+        simulate() {
+            for (var r = 0; r < this.OGradius; r++) {
+                if (this.radius >= this.OGradius) {
+                    this.radius = this.OGradius;
+                    this.puckArriving = false;
+                } else {
+                    this.radius += this.OGradius * 0.0001;
+                }
+            }
+        }
+        draw() {
+            if (this.puckFadingIn == true) {
+                var fadeInTimer = 400; 
+                var timeSinceMouseUp = Date.now() - mouseUpTime;
+                var alphaPercent = timeSinceMouseUp / fadeInTimer;
+                if (timeSinceMouseUp >= fadeInTimer) {
+                    this.puckFadingIn = false;
+                }
+            } else {
+                var alphaPercent = 1;
+            }
+            if (this.moving == false) {
+                drawCircle(cX(this.pos), cY(this.pos), 0.985 * this.radius * cScale);
+                const grd = c.createRadialGradient(
+                    cX(this.pos), 
+                    cY(this.pos), 
+                    0, 
+                    cX(this.pos), 
+                    cY(this.pos), 
+                    1.3 *this.radius * cScale);
+                grd.addColorStop(1, `hsla(220, 70%, 30%, ${alphaPercent * 0.4})`);
+                grd.addColorStop(0.5, `hsla(220, 60%, 5%, ${alphaPercent * 0.4})`);
+                c.fillStyle = grd;
+                c.fill();
+
+                c.strokeStyle = `hsla(0, 0%, 60%, ${alphaPercent})`;
+                c.lineWidth = 4;
+                c.stroke();
+            }
+        }
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+	}
+    
+    //  HUNGRY PUCK CONSTRUCTOR ----------------------------------------------------------------
+    class HUNGRYPUCK {
+		constructor(radius, pos, vel, color) {
+			this.radius = radius;
+			this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.color = color;
+		}
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        draw1() {
+            // body
+            const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * this.radius * cScale, 
+            cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+            grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+            grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+            c.fillStyle = grd;
+            drawCircle(cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+            c.fill();
+            // eyes
+            c.strokeStyle = "hsl(120, 50%, 50%)";
+            c.lineWidth = 0.04 * this.radius * cScale;
+            c.beginPath();
+            c.moveTo(cX(this.pos) + 0.2 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+            c.lineTo(cX(this.pos) + 0.5 * this.radius * cScale, cY(this.pos) - 0.3 * this.radius * cScale);
+            c.stroke();
+            c.beginPath();
+            c.moveTo(cX(this.pos) - 0.2 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+            c.lineTo(cX(this.pos) - 0.5 * this.radius * cScale, cY(this.pos) - 0.3 * this.radius * cScale);
+            c.stroke();
+            // mouth
+            c.strokeStyle = "hsl(90, 40%, 20%)";
+            c.lineWidth = 0.06 * this.radius * cScale;
+            c.beginPath();
+            c.arc(cX(this.pos), cY(this.pos), 0.9 * this.radius * cScale, 0, Math.PI) 
+            c.stroke();
+            // dimples
+            c.fillStyle = "hsl(90, 40%, 30%)";
+            drawCircle(cX(this.pos) + 0.9 * this.radius * cScale, cY(this.pos), 0.07 * this.radius * cScale);
+            c.fill();
+            drawCircle(cX(this.pos) - 0.9 * this.radius * cScale, cY(this.pos), 0.07 * this.radius * cScale);
+            c.fill();
+            
+        }  
+        draw2() {
+                // body
+                const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * this.radius * cScale, 
+                cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+                grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+                grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+                c.fillStyle = grd;
+                drawCircle(cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+                c.fill();
+                // eyes
+                c.strokeStyle = "hsl(335, 70%, 60%)";
+                c.lineWidth = 0.04 * this.radius * cScale;
+                c.beginPath();
+                c.moveTo(cX(this.pos) + 0.25 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+                c.lineTo(cX(this.pos) + 0.55 * this.radius * cScale, cY(this.pos) - 0.25 * this.radius * cScale);
+                c.stroke();
+                c.beginPath();
+                c.moveTo(cX(this.pos) - 0.25 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+                c.lineTo(cX(this.pos) - 0.55 * this.radius * cScale, cY(this.pos) - 0.25 * this.radius * cScale);
+                c.stroke();
+                // mouth
+                c.strokeStyle = "hsl(335, 50%, 45%)";
+                c.lineWidth = 0.05 * this.radius * cScale;
+                c.beginPath();
+                c.arc(cX(this.pos), cY(this.pos) + 0.4 * this.radius * cScale, 0.2 * this.radius * cScale, Math.PI, 0);
+                c.stroke();
+                // cheeks
+                c.fillStyle = "hsl(335, 40%, 20%)";
+                drawCircle(cX(this.pos) + 0.8 * this.radius * cScale, cY(this.pos) + 0.2 * this.radius * cScale, 0.2 * this.radius * cScale);
+                c.fill();
+                drawCircle(cX(this.pos) - 0.8 * this.radius * cScale, cY(this.pos) + 0.2 * this.radius * cScale, 0.2 * this.radius * cScale);
+                c.fill();
+        }
+	}
+
+    //  MR. MISTER CONSTRUCTOR ----------------------------------------------------------------
+    class MISTERMISTER {
+		constructor(radius, pos, vel, color) {
+			this.radius = radius;
+			this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.color = color;
+		}
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        simulate() {
+            if (mrMode == 'billiard') {
+                this.pos.add(this.vel, physProps.dt)
+            }
+            if (mrMode == "typewriter") {
+                if (goLeft == false) {
+                    this.pos.x += this.vel.x * physProps.dt * misterSpeed;
+                        if (this.pos.x > simWidth) {
+                            goLeft = true;
+                        }
+                }
+                if (goLeft == true) {
+                    this.pos.x -= this.vel.x * 5 * physProps.dt * misterSpeed;
+                        if (this.pos.x < 0) {
+                            goLeft = false;
+                        };
+                }
+            }
+            if (mrMode == "printer") {
+                if (goLeft == false) {
+                    this.pos.x += this.vel.x * physProps.dt * misterSpeed;
+                        if (this.pos.x > simWidth) {
+                            goLeft = true;
+                        }
+                }
+                if (goLeft == true) {
+                    this.pos.x -= this.vel.x * physProps.dt * misterSpeed;
+                        if (this.pos.x < 0) {
+                            goLeft = false;
+                        };
+                }
+            }
+            if (mrMode == "scanner") {
+                if (this.pos.x < 1.5 * this.radius + simWidth) {
+                    this.pos.x += this.vel.x * physProps.dt * misterSpeed;
+                }
+                if (this.pos.x > 1.5 * this.radius + simWidth) {
+                    this.pos.x = -1.5 * this.radius;
+                }
+            }
+            
+            if (mrMode == "circle") {
+                delta += physProps.dt * misterSpeed;
+                this.pos.x = 0.5 * simWidth + 0.2 * simWidth * Math.cos(delta);
+                this.pos.y = 0.5 * simHeight + 0.2 * simWidth * Math.sin(delta);
+            }
+            if (mrMode == "oval") {
+                delta += physProps.dt * misterSpeed;
+                this.pos.x = 0.5 * simWidth + 0.3 * simWidth * Math.cos(delta);
+                this.pos.y = 0.5 * simHeight + 0.3 * simHeight * Math.sin(delta);
+            }
+            if (mrMode == "bernoulli") {
+                delta += physProps.dt * misterSpeed;
+                var pathScale = 2 / (3 - Math.cos(2 * delta));
+                this.pos.x = (0.5 * simWidth) + (0.4 * simWidth) * pathScale * Math.cos(delta);
+                this.pos.y = (0.5 * simHeight) + (0.3 * simWidth) * pathScale * Math.sin(2 * delta) / 2;
+            }
+        }
+        draw() {
+        mrMrTimer += .05;
+        var eyeLight = 30 + 70 * Math.abs(Math.sin(mrMrTimer));
+        this.radius = (700 * 20 / 100) / 1000 ;
+            // body
+            const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * 0.15 * cScale, 
+            cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+            grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+            grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+            c.fillStyle = grd;
+            drawCircle(cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+            c.fill();
+            // eyes
+            c.strokeStyle = `hsl(200, 80%, ${eyeLight}%)`;
+            c.lineWidth = 0.04 * 0.2 * cScale;
+            c.beginPath();
+            c.moveTo(cX(this.pos) + 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.lineTo(cX(this.pos) + 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.stroke();
+            c.beginPath();
+            c.moveTo(cX(this.pos) - 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.lineTo(cX(this.pos) - 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.stroke();
+            // mouth
+            drawCircle(cX(this.pos), cY(this.pos) + 0.45 * this.radius * cScale, .5 * this.radius * cScale);
+            c.lineWidth = 0.06 * this.radius * cScale;
+            c.strokeStyle = "hsl(0, 0%, 55%)";
+            c.stroke();
+        }
+        draw2() {
+        mrMrTimer += .05;
+        var eyeLight = 30 + 70 * Math.abs(Math.cos(mrMrTimer));
+        this.radius = (700 * 20 / 100) / 1000 ;
+            // body
+            const grd = c.createRadialGradient(simWidth * cScale - cX(this.pos), cY(this.pos), 1.2 * 0.15 * cScale, 
+            simWidth * cScale - cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+            grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+            grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+            c.fillStyle = grd;
+            drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+            c.fill();
+            // eyes
+            c.strokeStyle = "hsl(0, 0%, 60%)";
+            c.lineWidth = 0.04 * 0.2 * cScale;
+            c.beginPath();
+            c.moveTo(simWidth * cScale - cX(this.pos) + 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.lineTo(simWidth * cScale - cX(this.pos) + 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.stroke();
+            c.beginPath();
+            c.moveTo(simWidth * cScale - cX(this.pos) - 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.lineTo(simWidth * cScale - cX(this.pos) - 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.stroke();
+            // mouth
+            drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos) + 0.45 * this.radius * cScale, .5 * this.radius * cScale);
+            c.lineWidth = 0.06 * this.radius * cScale;
+            c.strokeStyle = "hsl(0, 0%, 55%)";
+            c.stroke();
+        }
+	}
+
+    //  DEFINE PUCKS -----------------------------------------------------------------         
+    function makePucks() {
+        Puck = [];
+        puck1color = `hsla(70, 20%, 40%, 65%)`;
+        puck2color = `hsla(160, 20%, 30%, 65%)`;
+        Puck.push (new PUCK(1.0 * puckRadiusSlider.value / 1000, new Vector2(simWidth - 1.7 * puckRadiusSlider.value / 1000, 0.6 * simHeight), puck1color));
+        Puck.push (new PUCK(0.7 * puckRadiusSlider.value / 1000, new Vector2(1.5 * puckRadiusSlider.value / 1000, 0.3 * simHeight), puck2color));
+    }
+    
+    //  DEFINE HUNGRY PUCKS ----------------------------------------------------------        
+    function makeHungryPucks() {
+        Hungrypuck = [];
+        hungryPuckVel = new Vector2(0, 0);
+        Hungrypuck.push (new HUNGRYPUCK(hungryPuckRadiusSlider.value / 1000, new Vector2(0.65 * simWidth + hungryPuckRadiusSlider.value / 1000 * simWidth, -0.1 * hungryPuckRadiusSlider.value / 1000), hungryPuckVel, `hsl(0, 50%, 50%)`));
+        Hungrypuck.push (new HUNGRYPUCK(hungryPuckRadiusSlider.value / 1000, new Vector2(0.45 * simWidth - hungryPuckRadiusSlider.value / 1000 * simWidth, -0.1 * hungryPuckRadiusSlider.value / 1000), hungryPuckVel, `hsl(0, 50%, 50%)`));
+    }
+    
+    // DEFINE MR. MISTER  ------------------------------------------------------------
+    function makeMisterMister() {
+        MisterMister = [];
+        mrMrVel = new Vector2(1, 0);
+        MisterMister.push (new MISTERMISTER(hungryPuckRadiusSlider.value / 1000, new Vector2(0.2 * simWidth, 0.7 * simHeight), mrMrVel, `hsl(0, 50%, 50%)`));
+    }
+
+    //  DEFINE BALLS IN ORDERED GRID -------------------------------------------
+    function makeBalls() {
+        Balls = [];
+        var smallBallRadius = smallBallInput.value / 1000;
+        var bigBallRadius = bigBallInput.value / 1000;
+        var maxBallRadius = Math.max(smallBallRadius, bigBallRadius);
+        var getNumBalls = ballsInput.value;
+        var ballJitter = 0.20;
+        var brakes = 0;
+        var dumpSqueeze = dumpSlider.value / 100;
+        var dumpSqueeze2 = 0.2;
+        var dumpShift = dumpMoveSlider.value / 100 * simWidth;
+        var velX = 0;
+        var velY = 0;
+        if (array.checked == true) {  
+            var numCols = Math.floor(Math.sqrt(getNumBalls));
+            var numRows = Math.floor(Math.sqrt(getNumBalls));
+            var countDifference = getNumBalls - (numCols * numRows);
+            var addedRows = Math.ceil(countDifference / numCols);
+            var boxWidth = (numCols * 2.0 * maxBallRadius);
+            var boxHeight = ((numRows + addedRows) * 2.0 * maxBallRadius);
+            var horizBias = 0.5 * (simWidth - boxWidth);
+            var vertBias = 0.5 * (simHeight - boxHeight);
+            for (j = 0; j < (numRows + addedRows); j++) {
+                for (i = 0; i < numCols; i++) {
+                    if (smallBallRadius == 0) {
+                        var radius = bigBallRadius;
+                    } else {
+                        var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
+                    }          
+                    var mass = 2 * Math.PI * radius * radius; 
+                    var vel = new Vector2((-0.5 + 1.0 * Math.random()) * brakes, (-0.5 + 1.0 * Math.random()) * brakes);
+                    var boxedPosX = (i + 1) * (boxWidth / (numCols +1)) + (Math.random() * radius * ballJitter) + horizBias;
+                    var boxedPosY = (j + 1) * (boxHeight / (numRows + 1)) + vertBias;
+                    var pos = new Vector2(boxedPosX, boxedPosY);
+                    if (Math.random() * 100 < 5) {
+                            var whiteBall = true;
+                        } else {
+                            var whiteBall = false;
+                        }
+
+                    var saturation = 0.5 + 0.5 * Math.random();
+                    
+                    if (Balls.length < getNumBalls) {
+                        Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall));
+                    }
+                }
+            }
+        }
+        //  DEFINE BALLS IN ROUND CLUSTER -----------------------------------------------
+        if (cluster.checked == true) {
+            for (q = 0; q < getNumBalls; q++) {
+                var clusterRadius = 0.2 * simWidth;
+                var randomRadius = Math.random() * clusterRadius;
+                var randomTheta = Math.random() * 2 * Math.PI;
+                var circleXpos = 0.5 * simWidth + Math.cos(randomTheta) * randomRadius;
+                var circleYpos = 0.5 * simHeight + Math.sin(randomTheta) * randomRadius;
+                if (smallBallRadius == 0) {
+                    var radius = bigBallRadius;
+                    } else {
+                    var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
+                }
+                var mass = 2 * Math.PI * radius * radius; 
+                var pos = new Vector2(circleXpos, circleYpos);   
+                var vel = new Vector2(Math.cos(randomTheta) * brakes, Math.sin(randomTheta) * brakes);
+                if (Math.random() * 100 < 5) {
+                    var whiteBall = true;
+                } else {
+                    var whiteBall =false;
+                }
+
+                var saturation = 0.5 + 0.5 * Math.random();
+
+                Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall));
+            }   
+        }
+    }
+    // END OF PUSH DEFINITIONS =======================================================
+
+    //  SIMULATION --------------------------------------------------------------------------
 	function simulate() {
         if (physProps.paused)
             return;	
 
         //  MR. & MRS. MISTER  ----------------------------------
-        if (fountain.checked == true || duelingFountains.checked == true) {
+        if (doFountain == true || doDualFountains == true) {
             var mrMr = MisterMister[0];
             mrMr.simulate();
         }
@@ -2516,7 +2578,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             //  HANDLE BALL TO BALL REPULSION AND HITS -----------------------------
             //  HANDLE BALL TO BALL REPULSION  -----------------------------
-            if (repulsionButton.checked == true) {  
+            if (ballRepulsion == true) {  
                 for (var j = i + 1; j < Balls.length; j++) {
                     var ball2 = sortedBalls[j];   
                     if (ball2.left - physProps.repulsionDist * (ball1.radius + ball2.radius) > ball1.right + 4 * (ball1.radius + ball2.radius)) {
@@ -2540,12 +2602,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
             }
 
-            if (showBumperEntry.checked == true) { 
+            if (showBumpers == true) { 
                 lowestBumper = Bumpers[0];
                 highestBumper = Bumpers[Bumpers.length - 1];
                 arrayBottom = lowestBumper.pos.y - lowestBumper.radius;
                 arrayTop = highestBumper.pos.y + highestBumper.radius;
-
                 if (ball1.bottom <= arrayTop && ball1.top >= arrayBottom) {
                     var sortedBumpers = Bumpers.sort((a, b) => a.left - b.left);
                     for (k = 0; k < Bumpers.length; k++) {
@@ -2561,7 +2622,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             //  HUNGRY PUCK CHECKS  -----------------------------
-            if (showHungryPuckButton.checked == true) {
+            if (showEaters == true) {
                 var hungryPuck = Hungrypuck[0];
                 if (hungryPuck.right > ball1.left) {
                     if (Math.abs(ball1.pos.y - hungryPuck.pos.y) <= ball1.radius + hungryPuck.radius) {
@@ -2585,7 +2646,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             //  PUCK CHECKS  -----------------------------
-            if (showPuckButton.checked == true) {
+            if (showPucks == true) {
                 for (var p=0; p < Puck.length; p++) {
                     var puck = Puck[p];
                     if (puck.right > ball1.left) {
@@ -2616,7 +2677,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
 
             //  MR. MR. OUT OF BOUNDS CHECKS  -----------------------------
-            if (misterMode.value == "billiard") {
+            if (mrMode == "billiard") {
                 var hungryPuck = MisterMister[0];
                 handleMrMrBounds(hungryPuck, physProps.worldSize);
             }
@@ -2625,6 +2686,89 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             handleOutOfBounds(ball1, physProps.worldSize);
 		}
     }
+
+    //  DRAW EVERYTHING -----------------------------------------------------------------
+	function drawEverything() {
+        wipeOpacity = Math.pow(2.718, trailValue / -10);
+        c.fillStyle = `hsla(0, 0%, 0%, ${wipeOpacity})`;
+        c.fillRect(0, 0, canvas.width, canvas.height);
+
+        // DRAW GRID -----------------------------------------------------------------
+        if (trailValue < 20) {
+            var gridSpacing = .07;
+            var horizGrids = simWidth / gridSpacing;
+            var vertGrids = simHeight / gridSpacing;
+            c.setLineDash([4, 4]);
+            for (var h = 1; h < horizGrids; h++) {
+                if (h % 5 == 0) {
+                    c.lineWidth = 2;
+                } else {
+                    c.lineWidth = 1;
+                }
+                c.beginPath();
+                c.moveTo(h * gridSpacing * cScale, 0);
+                c.lineTo(h * gridSpacing * cScale, simHeight * cScale);
+                c.strokeStyle = `hsl(0, 0%, 15%)`;
+                c.stroke();
+            }
+            for (var v = 1; v < vertGrids; v++) {
+                if (v % 5 == 0) {
+                    c.lineWidth = 2;
+                } else {
+                    c.lineWidth = 1;
+                }
+                c.beginPath();
+                c.moveTo(0, v * gridSpacing * cScale);
+                c.lineTo(simWidth * cScale, v * gridSpacing * cScale);
+                c.stroke();
+            }
+            c.setLineDash([0, 0]);
+        }
+        // DRAW MR. MISTER --------------------------------------------------------------
+        if (doFountain == true) {
+            MrMr = MisterMister[0];
+            MrMr.draw();
+        }
+        // DRAW MR. & MRS. MISTER -------------------------------------------------------
+        if (doDualFountains == true) {
+            MrsMr = MisterMister[0];
+            MrsMr.draw2();
+        }
+        //  DRAW BALLS-------------------------------------------------------------------
+        for (i = 0; i < Balls.length; i++) {
+			ball = Balls[i];
+            ball.draw();
+		}
+        //  DRAW BUMPERS ----------------------------------------------------------------
+        if (showBumpers == true) {
+            for (k = 0; k < Bumpers.length; k++) {
+            bumpers = Bumpers[k];   
+            bumpers.draw();
+            }
+        }
+        //  DRAW HUNGRY PUCKS ---------------------------------------------------------------     
+        if (showEaters == true) {
+            // draw first hungry puck
+            var hungryPuck = Hungrypuck[0];
+            hungryPuck.draw1();
+            
+            // draw second hungry puck
+            var hungryPuck = Hungrypuck[1];
+            hungryPuck.draw2();
+        }
+        //  DRAW PUCKS ----------------------------------------------------------------         
+        if (showPucks == true) {
+            for (p=0; p < Puck.length; p++) { 
+                var puck = Puck[p];
+                puck.draw();
+            }
+        }       
+        //  DRAW CORNERS  ---------------------------------------------------------------------
+        for (var v = 0; v < Corners.length; v++) {
+            corner = Corners[v];
+            corner.draw();
+        } 
+	}
 
     //  MAIN SEQUENCE ----------------------------------------------------------------------------
 	firstRun = true;
