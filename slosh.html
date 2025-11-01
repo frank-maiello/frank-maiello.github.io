@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.18</title>
+		<title>Slosh 1.19</title>
         <style>
 			body {font-family: monospace; 
                 font-size: 16px;
@@ -183,28 +183,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 vertical-align: middle;
                 margin-top: 5px;
                 margin-bottom: 10px;
-                width: 100px;
-				height: 4px;
-				border-radius: 5px;
-                background: hsl(0, 0%, 0%);
-				outline: none;
-				opacity: 0.7;
-                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-				-webkit-transition: .2s;
-			    transition: opacity .2s}
-            .slider-pink::-webkit-slider-thumb {-webkit-appearance: none;
-                width: 10px;
-                height: 22px;
-                border-radius: 30%;
-                background: hsl(330, 100%, 70%);
-                cursor: pointer}
-
-            .slider-pinkshort:hover {opacity: 1}
-            .slider-pinkshort {-webkit-appearance: none;
-				appearance: none;
-                vertical-align: middle;
-                margin-top: 5px;
-                margin-bottom: 10px;
                 width: 50px;
 				height: 4px;
 				border-radius: 5px;
@@ -214,7 +192,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
 				-webkit-transition: .2s;
 			    transition: opacity .2s}
-            .slider-pinkshort::-webkit-slider-thumb {-webkit-appearance: none;
+            .slider-pink::-webkit-slider-thumb {-webkit-appearance: none;
                 width: 10px;
                 height: 22px;
                 border-radius: 30%;
@@ -922,41 +900,47 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="radio" title="Discs" name="ballType" id="ballDisc" class="radio-green" checked>
     <input type="radio" title="Circles" name="ballType" id="ballCircle" class="radio-green">
     
-    time&#8594
+    <span style="white-space: nowrap">time&#8594
     <input type="range"  title="Time  ::  <--- Slower : Normal" id="timeSlider" min="40" max="100" value="100" class="slider-mint">
     <input type="range"  title="Persistence" id="trailSlider" min="0" max="30" value="12" class="slider-mint">
-    <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked>
+    <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked></span>
     
+    <span style="white-space: nowrap">
     gravity&#8594
     <input type="radio" title="Down" name="gravityType" id="gravityDown" class="radio-blue" checked>
     <input type="radio" title="Right" name="gravityType" id="gravityRight" class="radio-blue">
-    <input type="range"  title="Gravity  ::  Zero Gravity : More Gravity --->" id="gravitySlider" min="0" max="100" value="0" class="slider-blue">
+    <input type="range"  title="Gravity  ::  Zero Gravity : More Gravity --->" id="gravitySlider" min="0" max="100" value="0" class="slider-blue"></span>
     
+    <span style="white-space: nowrap">
     repulsion&#8594
     <input type="checkbox" title="Repulsion on/off" id="repulsionButton" value="false" class="checkbox-lime" checked>
     <input type="range"  title="Repulsion Force between Particles" id="repulsionForceSlider" min="1" max="20" value="20" class="slider-lime">
     
     bounce&#8594
-    <input type="range"  title="Ball Restitution on Collision" id="ballRestSlider" min="0" max="20" value="0" class="slider-lime">
+    <input type="range"  title="Ball Restitution on Collision" id="ballRestSlider" min="0" max="20" value="0" class="slider-lime"></span>
     
+    <span style="white-space: nowrap">
     pucks&#8594
     <input type="checkbox" title="Pucks on/off" id="showPuckButton" value="true" class="checkbox-roundbluelight" checked>
-    <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="400" class="slidercyan">
+    <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="400" class="slidercyan"></span>
     
+    <span style="white-space: nowrap">
     eaters&#8594
-    <input type="checkbox" title="Eaters on/off" id="showHungryPuckButton" value="false" class="checkbox-roundbluelight" unchecked>
+    <input type="checkbox" title="Eaters on/off" id="showHungryPuckButton" value="false" class="checkbox-roundbluelight" unchecked></span>
     
     respawn&#8594
     <input type="checkbox" title="One Shot (no respawn)" id="oneShotButton" value="false" class="checkbox-oneshot" unchecked>
     <input type="range"  title="Shower Width" id="dumpSlider" min="1" max="100" value="40" class="slidersquare-shower">
     <input type="range"  title="Shower Position" id="dumpMoveSlider" min="-50" max="50" value="0" class="slider-purpleyellowleftright">
-    shower &#8592
+    <span style="white-space: nowrap">shower &#8592
     <input type="radio" title="Shower" name="spawnType" id="shower" value="shower" class="radio2">
     / <input type="radio" title="Mr. Mister" name="spawnType" id="fountain" value="fountain" class="radio" checked>
     
-    &#8594 mr.mister
+    &#8594 mr.mister</span>
     <input type="range"  title="Yeet" id="yeetSlider" min="0" max="600" value="250" class="slider-purple-short">
-    <input type="range"  title="Yeet Direction" id="respawnDirSlider" min="0" max="628" value="0" class="slider-purple">
+    <input type="range"  title="Spew Direction" id="respawnDirSlider" min="0" max="628" value="0" class="slider-purple">
+    <input type="range"  title="Sweeper Speed" id="sprinklerSpeedSlider" min="0" max="30" value="10" class="slider-pink">
+    
     <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field-purple">
         <optgroup label="Mr. Mister Motion">
             <option value="idle" selected>mouse</option>
@@ -971,23 +955,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         </optgroup>
     </select>
     <input type="range"  title="Mr. Mister Orbit Speed" id="misterSpeedSlider" min="10" max="200" value="100" class="slider-purple-short">
-    <input type="range"  title="Auto Fountain Rotate Speed" id="sprinklerSpeedSlider" min="0" max="30" value="10" class="slider-pink">
     
-    plinko&#8594
+    <span style="white-space: nowrap">plinko&#8594
     <input type="checkbox" title="Pegs on/off" id="showBumperEntry" value="false" class="checkbox-yellow" unchecked>
     <input type="range"  title="Peg Rows" id="rowsInput" min="1" max="20" value="3" class="slider-yellow">
-    <input type="range"  title="Peg Radius" id="bumperRadiusInput" min="20" max="100" value="40" class="slider-yellow">
+    <input type="range"  title="Peg Radius" id="bumperRadiusInput" min="20" max="100" value="40" class="slider-yellow"></span>
     
-    worm&#8594
+    <span style="white-space: nowrap">worm&#8594
     <input type="checkbox" title="Worm on/off" id="wormButton" value="false" class="checkbox-orange" unchecked>
     <input type="range"  title="Worm Tail Radius" id="wormEndRadiusSlider" min="40" max="300" value="40" class="slider-orange">
     <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="70" max="300" value="150" class="slider-orange">
-    <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz">
+    <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz"></span>
 
-    color&#8594
+    <span style="white-space: nowrap">color&#8594
     <input type="range"  title="Speed Sensitivity" id="velColorMapSlider" min="1" max="500" value="100" class="slider-red2">
     <input type="range"  title="Saturation" id="saturationSlider" min="0" max="100" value="90" class="slider-lightred">
-    <input type="range"  title="Lightness" id="lightnessSlider" min="5" max="100" value="50" class="slider-red">
+    <input type="range"  title="Lightness" id="lightnessSlider" min="5" max="100" value="50" class="slider-red"></span>
     
     <input type="button" title="Restart [r]" class="buttongreenbig" value="&#8629" onclick="makeBalls()">
     
@@ -1007,7 +990,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         canvas.height = window.innerHeight - 30;
     } else {
         canvas.width = window.innerWidth - 40;
-        canvas.height = window.innerHeight - 200;
+        canvas.height = window.innerHeight - 230;
     }
     simMinWidth = 2.0;
     cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
@@ -1082,6 +1065,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         var puck2 = Hungrypuck[1];
         puck1.pos.y = -0.1 * puck1.radius;
         puck2.pos.y = -0.1 * puck2.radius;
+        doShower = false;
         doFountain = true;}
     document.getElementById("ballRestSlider").oninput = function() {
 	    physProps.ballRest = ballRestSlider.value / 20;
@@ -1240,7 +1224,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         } else {
             doWorm = false;}}
     document.getElementById('respawnDirSlider').oninput = function() {
-        respawnDir = 0.01 *respawnDirSlider.value;}
+        var MrMr = MisterMister[0];
+        MrMr.respawnDir = 0.01 *respawnDirSlider.value;}
     document.getElementById('wormStartRadiusSlider').oninput = function() {
         WormProps.startRadius = 0.001 * wormStartRadiusSlider.value;
         makeWorm();}
@@ -1250,8 +1235,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     document.getElementById('wormNumNodesSlider').oninput = function() {
         WormProps.numNodes = 1 * wormNumNodesSlider.value;
         makeWorm();}
+    document.getElementById('sprinklerSpeedSlider').oninput = function() {
+        sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;};
+    document.getElementById('wormStartRadiusSlider').oninput = function() {
+        WormProps.startRadius = 0.001 * wormStartRadiusSlider.value;}
+    document.getElementById('wormEndRadiusSlider').oninput = function() {
+        WormProps.endRadius = 0.001 * wormEndRadiusSlider.value;}
+    document.getElementById('wormNumNodesSlider').oninput = function() {
+        WormProps.numNodes = 1 * wormNumNodesSlider.value;}
     
-
     //  end get world properties from sliders 
 
     //  MOUSE AND TOUCH STUFF  -------------------------------------------------------------------
@@ -1362,7 +1354,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             document.addEventListener('mousemove', mouseBumperMove);
             document.addEventListener('touchmove', touchBumperMove, {passive: false});
+        } else {
+            mouseDown = true;
+            document.addEventListener('mousemove', setNewDir);
+            document.addEventListener('touchmove', setNewDir, {passive: false});
         }}}}}}
+    }
+
+    function setNewDir() {
+        misterMister = MisterMister[0];
+        newX = event.clientX;
+        newY = event.clientY;   
+        startX = event.clientX;
+        startY = event.clientY;
+        misterMister.respawnDir = Math.atan2((simHeight - newY / cScale) - misterMister.pos.y, (newX / cScale) - misterMister.pos.x);
     }
 
     function mouseBumperMove() {
@@ -1887,48 +1892,41 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
     
-    //  HANDLE MR. MISTER  --------------------------------------------------------------------
+    //  HANDLE MR. MISTER go fountain --------------------------------------------------------------------
     function goFountain(ball) {
-        // In typewriter mode, don't spawn particles during fast return movement (right to left)
         if (mrMode == "typewriter" && goLeft == true) {
             return;
         }
-        
-        var hP = MisterMister[0];
+        var mrMr = MisterMister[0];
         if (mrMode == "worm") {
-            // Set immunity for particles spawned from worm lead segment
             ball.immuneToWorm = true;
-            ball.immunityFramesLeft = 20; // Immunity lasts for 30 frames (~0.5 seconds at 60fps)
-            
-            if (hP.pos.x < 0 || hP.pos.x > simWidth || 
-                hP.pos.y < 0 || hP.pos.y > simHeight) {
+            ball.immunityFramesLeft = 10; 
+            if (mrMr.pos.x < 0 || mrMr.pos.x > simWidth || 
+                mrMr.pos.y < 0 || mrMr.pos.y > simHeight) {
                 return;
             }
-            // In worm mode, spawn particles with smaller, clamped offsets to ensure they stay in bounds
-            var offsetRange = 0.015; // Smaller offset than normal
-            var offsetX = (Math.random() - 0.5) * simWidth * offsetRange;
-            var offsetY = (Math.random() - 0.5) * simWidth * offsetRange;
-            
-            // Calculate spawn position with offset
-            var spawnX = hP.pos.x + offsetX;
-            var spawnY = hP.pos.y - 0.45 * hP.radius + offsetY;
-            
-            // Clamp to simulation boundaries
+            var spawnX = mrMr.pos.x - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.9 * mrMr.radius - 6 * ball.radius));
+            var spawnY = mrMr.pos.y - 0.3 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.7 * mrMr.radius - 4 * ball.radius));
             ball.pos.x = Math.max(0, Math.min(simWidth, spawnX));
             ball.pos.y = Math.max(0, Math.min(simHeight, spawnY));
+
+            var velX = 0.01 * yeet * Math.cos(-mrMr.respawnDir + alpha);
+            var velY = 0.01 * yeet * Math.sin(-mrMr.respawnDir + alpha);
+
         } else {
-            // Normal spawning behavior for other modes
-            ball.pos.x = hP.pos.x - (0.5 * simWidth * 0.02) + (Math.random() * simWidth * 0.02);
-            ball.pos.y = hP.pos.y - 0.45 * hP.radius - (0.5 * simWidth * 0.02) + (Math.random() * simWidth * 0.02);
+            var spawnX = mrMr.pos.x - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.9 * mrMr.radius - 6 * ball.radius));
+            var spawnY = mrMr.pos.y - 0.65 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.6 * mrMr.radius - 4 * ball.radius));
+            ball.pos.x = Math.max(0, Math.min(simWidth, spawnX));
+            ball.pos.y = Math.max(0, Math.min(simHeight, spawnY));
+            if (fountainSpinMode == "sweep") { 
+            var velX = 0.01 * yeet * Math.cos(-mrMr.respawnDir + alpha);
+            var velY = 0.01 * yeet * Math.sin(-mrMr.respawnDir + alpha);
+            } else {
+                var velX = 0.01 * yeet * Math.cos(-mrMr.respawnDir);
+                var velY = 0.01 * yeet * Math.sin(-mrMr.respawnDir);
+            }
         }
-        // Set initial velocity based on fountain mode
-        if (fountainSpinMode == "sweep") { 
-            var velX = yeet / 100 * Math.cos(-respawnDir + alpha);
-            var velY = yeet / 100 * Math.sin(-respawnDir + alpha);
-        } else {
-            var velX = yeet / 100 * Math.cos(-respawnDir);
-            var velY = yeet / 100 * Math.sin(-respawnDir);
-        }
+        
         ball.vel.x = velX;
         ball.vel.y = velY;
     }
@@ -1975,7 +1973,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  HANDLE BOUNDARIES = FLOOR, WALLS, CEILING -------------------------------------------------------
 	function handleOutOfBounds(ball, worldSize) {
-        var sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;
         // FOUNTAIN AND SWEEPER SETUP ----------------------------------------------------
         if (fountainSpinMode == 'cw') {
             sweepAngle = 2 * Math.PI;
@@ -2021,7 +2018,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         if (doRightWall == true) {
             if (ball.pos.x > worldSize.x -ball.radius) {
-                ball.pos.x = worldSize.x - 1.3 * ball.radius;
+                ball.pos.x = worldSize.x - ball.radius;
                 ball.vel.x = -ball.vel.x * physProps.wallRest;
             }  
         }
@@ -2031,22 +2028,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (ball.pos.y < -2.0 * ball.radius || 
                     ball.pos.y > simHeight + 2.0 * ball.radius ||
                     ball.pos.x < -2.0 * ball.radius || 
-                    ball.pos.x > 2.0 * simWidth + 2.0 * ball.radius) {
+                    ball.pos.x > simWidth + 2.0 * ball.radius) {
                     goShower(ball);
                 }
             } 
-            dir = -respawnDir;
-            velX = yeet / 100 * Math.cos(dir + alpha);
+            var hP = MisterMister[0];
+            var dir = -hP.respawnDir;
+            var velX = yeet / 100 * Math.cos(dir + alpha);
             velY = yeet / 100 * Math.sin(dir + alpha);
             if (doFountain == true) {
                 if (ball.pos.y < -2.0 * ball.radius || 
                     ball.pos.y > simHeight + 2.0 * ball.radius ||
                     ball.pos.x < -2.0 * ball.radius || 
-                    ball.pos.x > 2.0 * simWidth + 2.0 * ball.radius) {
+                    ball.pos.x > simWidth + 2.0 * ball.radius) {
                     
                     // Additional check for worm mode: only respawn if Mr. Mister is within bounds
                     if (mrMode == "worm") {
-                        var hP = MisterMister[0];
+                        
                         if (hP.pos.x >= 0 && hP.pos.x <= simWidth && 
                             hP.pos.y >= 0 && hP.pos.y <= simHeight) {
                             goFountain(ball);
@@ -2099,7 +2097,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         paused : false,
         repulsionForce: 2,
         repulsionDist: 4,
-        velColorMap: velColorMapSlider.value * 1,
+        velColorMap: 0,
 	}
 
     var WormProps = {
@@ -2118,10 +2116,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         prevHeadVY: 0.0,
         wiggleToggle: 1, // alternates sign each cycle
         wiggleAdvancePerFrame: 0.0,
-
-        startRadius: 0.001 * wormStartRadiusSlider.value,
-        endRadius: 0.001 * wormEndRadiusSlider.value,
-        numNodes: 1 * wormNumNodesSlider.value,
+        startRadius: 0,
+        endRadius: 0,
+        numNodes: 0,
     }
     
     // Function to update dt when substeps change
@@ -2159,17 +2156,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         showPucks = showPuckButton.checked;
         doShower = shower.checked;
         doFountain = fountain.checked;
+        sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;
         respawnDir = 0.01 * respawnDirSlider.value;
         ballRepulsion = repulsionButton.checked;
         misterSpeed = 0.01 * misterSpeedSlider.value;
         ballSaturation = 1 * saturationSlider.value;
         ballLightness = 1 *  lightnessSlider.value;
         trailValue = 1.0 * trailSlider.value;
-        // Boundary variables are controlled by event handlers only
-        // doCeiling = ceilingButton.checked;
-        // doFloor = floorButton.checked;
-        // doLeftWall = leftWallButton.checked;
-        // doRightWall = rightWallButton.checked;
         cornerRad = 1.0 * cornerRadiusSlider.value;
         doSpheres = ballSphere.checked;
         doDiscs = ballDisc.checked;
@@ -2179,8 +2172,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         doGravityDown = gravityDown.checked;
         doGravityRight = gravityRight.checked;
         doWorm = wormButton.checked;
+
+        physProps.velColorMap = velColorMapSlider.value;
+
+        WormProps.startRadius = 0.001 * wormStartRadiusSlider.value,
+        WormProps.endRadius = 0.001 * wormEndRadiusSlider.value,
+        WormProps.numNodes = 1 * wormNumNodesSlider.value,
         
-            fountainSpinMode = 'sweep';
+        fountainSpinMode = 'sweep';
 
         makePucks();
         makeHungryPucks();
@@ -2332,8 +2331,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Draw the arc outlines
-            c.strokeStyle = 'hsl(0, 0%, 60%)';
-            c.lineWidth = 0.005 * cScale;
+            c.strokeStyle = 'hsl(0, 0%, 30%)';
+            c.lineWidth = 0.007 * cScale;
             c.lineCap = 'butt';
             var budge = 0.0025;
             if (this.corner == 'northwest') {
@@ -2997,6 +2996,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.vel = vel.clone();
             this.color = color;
             this.radius = 0.15;
+            this.respawnDir = 0;
 		}
         get left() {
             return this.pos.x - this.radius;
@@ -3103,30 +3103,45 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             c.fill();
             // eyes  ----------
-            c.lineWidth = 0.04 * 0.2 * cScale;
+            c.lineWidth = 0.05 * 0.2 * cScale;
             c.beginPath();
-            c.moveTo(cX(this.pos) + 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
-            c.lineTo(cX(this.pos) + 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.moveTo(cX(this.pos) + 0.35 * 0.15 * cScale, cY(this.pos) - 0.1 * 0.15 * cScale);
+            c.lineTo(cX(this.pos) + 0.7 * 0.15 * cScale, cY(this.pos) - 0.1 * 0.15 * cScale);
             c.stroke();
             c.beginPath();
-            c.moveTo(cX(this.pos) - 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
-            c.lineTo(cX(this.pos) - 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+            c.moveTo(cX(this.pos) - 0.3 * 0.15 * cScale, cY(this.pos) - 0.1 * 0.15 * cScale);
+            c.lineTo(cX(this.pos) - 0.65 * 0.15 * cScale, cY(this.pos) - 0.1 * 0.15 * cScale);
             c.stroke();
             // mouth  ----------
-            c.lineWidth = 0.1 * 0.2 * cScale;
-            c.beginPath();
-            c.ellipse(
+            if (mrMode == 'worm') {
+                c.fillStyle = `black`;
+                c.lineWidth = 0.05 * 0.2 * cScale;
+                c.beginPath();
+                c.ellipse(
                 cX(this.pos), 
-                cY(this.pos) + 0.35 * 0.15 * cScale, 
+                cY(this.pos) + 0.45 * 0.15 * cScale, 
                 0.45 * 0.15 * cScale, 
                 0.35 * 0.15 * cScale, 
                 0, 
                 0, 
                 2 * Math.PI, false);
-            c.stroke();
-
-            c.fillStyle = 'black';
+                c.fillStyle = `black`;
+            } else {
+                c.fillStyle = `hsl(200, 80%, ${40 - eyeLight / 3}%)`;
+                c.lineWidth = 0.05 * 0.2 * cScale;
+                c.beginPath();
+                c.ellipse(
+                cX(this.pos), 
+                cY(this.pos) + 0.7 * 0.15 * cScale, 
+                0.45 * 0.15 * cScale, 
+                0.35 * 0.15 * cScale, 
+                0, 
+                0, 
+                2 * Math.PI, false);
+            }
+            
             c.fill();
+            c.stroke();
         }
 	}
 
@@ -3259,7 +3274,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (ball1.immuneToWorm) {
                 // Initialize immunityFramesLeft for existing balls that might not have it
                 if (typeof ball1.immunityFramesLeft === 'undefined') {
-                    ball1.immunityFramesLeft = 20; // Give existing immune balls some frames
+                    ball1.immunityFramesLeft = 10; // Give existing immune balls some frames
                 }
                 
                 if (ball1.immunityFramesLeft > 0) {
