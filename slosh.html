@@ -1007,12 +1007,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     c = canvas.getContext("2d");
     canvas.style.cursor = "pointer";
     if (window.innerWidth < window.innerHeight) {
+        // vertical orientation
+        screenVertical = true;
+        ballsInput.value = 1600;
         canvas.width = window.innerWidth - 40;
-        canvas.height = window.innerHeight - 140; //124 for phone
+        canvas.height = window.innerHeight - 140; 
     } else if (window.innerWidth > 1.75 * window.innerHeight) {
+        screenVertical = false;
         canvas.width = window.innerWidth - 40;
         canvas.height = window.innerHeight - 30;
     } else {
+        screenVertical = false;
         canvas.width = window.innerWidth - 40;
         canvas.height = window.innerHeight - 230;
     }
@@ -1022,13 +1027,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     simHeight = canvas.height / cScale;
     topMargin = 0;
     bottomMargin = 0;
-    
-    // Initialize boundary variables as globals
-    var doCeiling = true;
-    var doFloor = true; 
-    var doLeftWall = true;
-    var doRightWall = true;
-    
+
     function refreshPage() {
         location.reload();
     }
@@ -1184,10 +1183,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 puck.radius = 0.5 * puckRadiusSlider.value / 1000;
                 puck.OGradius = puck.radius;}}}
     document.getElementById('cornerRadiusSlider').oninput = function() {
-        cornerRad = 1.0 * cornerRadiusSlider.value;
+        cornerRad = 1 * cornerRadiusSlider.value;
         for (var c = 0; c < Corners.length; c++) {
             corner = Corners[c]; 
-            corner.radius = 0.01 * cornerRad * 0.5 * simHeight;}} 
+            if (screenVertical == true) {
+                corner.radius = 0.01 * cornerRad * 0.5 * simWidth;
+            } else {
+            corner.radius = 0.01 * cornerRad * 0.5 * simHeight;}}}
     document.getElementById('misterMode').oninput = function() {
         fountain.checked = true;
         doFountain = true;
@@ -2190,6 +2192,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         showEaters = false;
         mrMode = "";
 
+        doCeiling = ceilingButton.checked;
+        doFloor = floorButton.checked;
+        doLeftWall = leftWallButton.checked;
+        doRightWall = rightWallButton.checked;
         dumpShift = 0.01 * dumpMoveSlider.value * simWidth;
         dumpSqueeze = 0.01 * dumpSlider.value;
         showBumpers = showBumperEntry.checked;
@@ -2475,6 +2481,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			this.pos = pos.clone();
             this.corner = corner;
             this.radius = 0.01 * cornerRad * 0.5 * simHeight;
+            if (screenVertical == true) {
+                this.radius = 0.01 * cornerRad * 0.5 * simWidth;
+            } else {
+                this.radius = 0.01 * cornerRad * 0.5 * simHeight;
+            }
         }
         get left() {
             return this.pos.x - this.radius;
