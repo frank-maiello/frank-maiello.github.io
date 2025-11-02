@@ -977,18 +977,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     </select>
     <input type="range"  title="Mr. Mister Orbit Speed" id="misterSpeedSlider" min="10" max="200" value="100" class="slider-purple-short">
     
-    <span style="white-space: nowrap">plinko&#8594
+    <span style="white-space: nowrap">
+    plinko&#8594
     <input type="checkbox" title="Pegs on/off" id="showBumperEntry" value="false" class="checkbox-yellow" unchecked>
     <input type="range"  title="Peg Rows" id="rowsInput" min="1" max="20" value="3" class="slider-yellow">
     <input type="range"  title="Peg Radius" id="bumperRadiusInput" min="20" max="100" value="40" class="slider-yellow"></span>
     
-    <span style="white-space: nowrap">worm&#8594
-    <input type="checkbox" title="Worm on/off" id="wormButton" value="false" class="checkbox-orange" unchecked>
+    <span style="white-space: nowrap">
+    worm&#8594
+    <input type="checkbox" title="Worm on/off" id="wormButton" class="checkbox-orange" checked>
     <input type="range"  title="Worm Tail Radius" id="wormEndRadiusSlider" min="40" max="300" value="40" class="slider-orange">
     <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="70" max="300" value="150" class="slider-orange">
     <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz"></span>
 
-    <span style="white-space: nowrap">color&#8594
+    <span style="white-space: nowrap">
+    color&#8594
     <input type="range"  title="Speed Sensitivity" id="velColorMapSlider" min="1" max="500" value="100" class="slider-red2">
     <input type="range"  title="Saturation" id="saturationSlider" min="0" max="100" value="90" class="slider-lightred">
     <input type="range"  title="Lightness" id="lightnessSlider" min="5" max="100" value="50" class="slider-red"></span>
@@ -3610,15 +3613,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var gridSpacing = .07;
             var horizGrids = simWidth / gridSpacing;
             var vertGrids = simHeight / gridSpacing;
-            
             // Calculate center positions for heavy lines
             var centerX = simWidth * 0.5;
             var centerY = simHeight * 0.5;
             var centerGridX = Math.round(centerX / gridSpacing);
             var centerGridY = Math.round(centerY / gridSpacing);
-            
             c.setLineDash([4, 4]);
-            
             // Draw vertical lines
             for (var h = 1; h < horizGrids; h++) {
                 // Make line heavy if it's at center or every 5th line from center
@@ -3634,7 +3634,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.strokeStyle = `hsl(0, 0%, 15%)`;
                 c.stroke();
             }
-            
             // Draw horizontal lines
             for (var v = 1; v < vertGrids; v++) {
                 // Make line heavy if it's at center or every 5th line from center
@@ -3660,7 +3659,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             MrMr = MisterMister[0];
             MrMr.draw();
         }
-
         //  DRAW BALLS-------------------------------------------------------------------
         for (i = 0; i < Balls.length; i++) {
 			ball = Balls[i];
