@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.19</title>
+		<title>Slosh 1.21</title>
         <style>
 			body {font-family: monospace; 
                 font-size: 16px;
@@ -589,6 +589,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .checkbox-lime:checked {
                 background-color: hsl(75, 70%, 60%)}
 
+            .checkbox-gray:hover {opacity: 1}
+            .checkbox-gray {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(0, 0%, 20%);
+                border-radius: 50%;
+                vertical-align: middle;
+                border: 3px solid hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-gray:checked {
+                background-color: hsl(0, 0%, 60%);}
+
             .checkbox-roundgray:hover {opacity: 1}
             .checkbox-roundgray {-webkit-appearance: none;
                 appearance: none;
@@ -900,9 +918,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="radio" title="Discs" name="ballType" id="ballDisc" class="radio-green" checked>
     <input type="radio" title="Circles" name="ballType" id="ballCircle" class="radio-green">
     
+    tracer&#8594
+    <input type="checkbox" title="Particle Trace on/off" id="tracerButton" class="checkbox-gray" checked>
+    
     <span style="white-space: nowrap">time&#8594
     <input type="range"  title="Time  ::  <--- Slower : Normal" id="timeSlider" min="40" max="100" value="100" class="slider-mint">
-    <input type="range"  title="Persistence" id="trailSlider" min="0" max="30" value="12" class="slider-mint">
+    <input type="range"  title="Persistence" id="persistenceSlider" min="0" max="30" value="12" class="slider-mint">
     <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked></span>
     
     <span style="white-space: nowrap">
@@ -913,7 +934,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     <span style="white-space: nowrap">
     repulsion&#8594
-    <input type="checkbox" title="Repulsion on/off" id="repulsionButton" value="false" class="checkbox-lime" checked>
+    <input type="checkbox" title="Repulsion on/off" id="repulsionButton" class="checkbox-lime" checked>
     <input type="range"  title="Repulsion Force between Particles" id="repulsionForceSlider" min="1" max="20" value="20" class="slider-lime">
     
     bounce&#8594
@@ -922,7 +943,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <span style="white-space: nowrap">
     pucks&#8594
     <input type="checkbox" title="Pucks on/off" id="showPuckButton" value="true" class="checkbox-roundbluelight" checked>
-    <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="400" class="slidercyan"></span>
+    <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="200" class="slidercyan"></span>
     
     <span style="white-space: nowrap">
     eaters&#8594
@@ -1029,8 +1050,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     document.getElementById("timeSlider").oninput = function() {
         physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);}
-    document.getElementById('trailSlider').oninput = function() {
-        trailValue = trailSlider.value;}
+    document.getElementById('persistenceSlider').oninput = function() {
+        persistence = persistenceSlider.value;}
     document.getElementById("gravitySlider").oninput = function() {
         if (gravityDown.checked == true) {
             physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
@@ -1243,6 +1264,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         WormProps.endRadius = 0.001 * wormEndRadiusSlider.value;}
     document.getElementById('wormNumNodesSlider').oninput = function() {
         WormProps.numNodes = 1 * wormNumNodesSlider.value;}
+    document.getElementById('tracerButton').oninput = function() {
+        if (tracerButton.checked == true) {
+            doTracer = true;
+            // Clear existing traces when tracer is turned on
+            for (let i = 0; i < Balls.length; i++) {
+                if (Balls[i].tracerBall == true) {
+                    Balls[i].resetTrace();
+                }
+            }
+        } else {
+            doTracer = false;}}
     
     //  end get world properties from sliders 
 
@@ -2119,6 +2151,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         startRadius: 0,
         endRadius: 0,
         numNodes: 0,
+        
+        // Worm delay properties
+        isHiding: false,
+        hideStartTime: 0,
+        hideDelay: 10000, // 10 seconds in milliseconds
     }
     
     // Function to update dt when substeps change
@@ -2156,13 +2193,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         showPucks = showPuckButton.checked;
         doShower = shower.checked;
         doFountain = fountain.checked;
+        doTracer = tracerButton.checked;
         sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;
         respawnDir = 0.01 * respawnDirSlider.value;
         ballRepulsion = repulsionButton.checked;
         misterSpeed = 0.01 * misterSpeedSlider.value;
         ballSaturation = 1 * saturationSlider.value;
         ballLightness = 1 *  lightnessSlider.value;
-        trailValue = 1.0 * trailSlider.value;
+        persistence = 1.0 * persistenceSlider.value;
         cornerRad = 1.0 * cornerRadiusSlider.value;
         doSpheres = ballSphere.checked;
         doDiscs = ballDisc.checked;
@@ -2196,7 +2234,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 	//  BALL CONSTRUCTOR  -----------------------------------------------------------------------
 	class BALL {
-		constructor(radius, mass, pos, vel, saturation, whiteBall) {
+		constructor(radius, mass, pos, vel, saturation, whiteBall, tracerBall, maxBallRadius) {
 			this.radius = radius;
 			this.mass = mass;
 			this.pos = pos.clone();
@@ -2206,7 +2244,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.saturation = saturation;
             this.whiteBall = whiteBall;
             this.immuneToWorm = false;
-            this.immunityFramesLeft = 0; // Simple frame counter for immunity duration
+            this.immunityFramesLeft = 0; 
+            this.tracerBall = tracerBall;
+            if (tracerBall == true) {
+                this.radius = maxBallRadius;
+                this.trail = new Float32Array(1000);
+                this.trailFirst = 0;
+                this.trailLast = 0;
+                this.tracer = true;
+            }
 		}
         get top() {
             return this.pos.y + this.radius;
@@ -2220,6 +2266,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         get right() {
             return this.pos.x + this.radius;
         }
+        updateTrace() {
+            if (this.pos.x < 0 || this.pos.x > simWidth || 
+                this.pos.y < 0 || this.pos.y > simHeight) {
+                this.resetTrace();
+                return;
+            }
+            this.trail[this.trailLast] = this.pos.x;
+            this.trail[this.trailLast + 1] = this.pos.y;
+            this.trailLast = (this.trailLast + 2) % this.trail.length;
+            if (this.trailLast == this.trailFirst)
+                this.trailFirst = (this.trailFirst + 2) % this.trail.length;
+        }
+        resetTrace() {
+            this.trailFirst = 0;
+            this.trailLast = 0;
+        }
 		simulate() {
 			this.vel.add(physProps.gravity, physProps.dt);
             const maxSpeed = 3.0;
@@ -2228,7 +2290,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 this.vel.y *= maxSpeed / this.vel.length();
             }
 			this.pos.add(this.vel, physProps.dt)
-            if (this.whiteBall == true) {
+            if (this.whiteBall == true || this.tracerBall == true) {
                 this.color = `hsl(0, 0%, ${ballLightness + 20}%)`;
                 this.hiColor = `hsl(0, 0%, ${ballLightness + 50}%)`;
             } else {
@@ -2240,6 +2302,48 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 this.hiColor = `hsl(${speedHue}, ${ballSaturation * this.saturation}%, ${speedHueRatio * ballLightness + 15}%)`;
             }
 		}
+        drawTrace() {
+            c.lineCap = 'round';
+            c.lineWidth = this.radius * cScale;
+            if (this.trailLast != this.trailFirst) {
+                var i = this.trailFirst;
+                var segmentCount = 0;
+                var totalSegments = 0;
+                
+                // First, count total segments
+                var tempI = this.trailFirst;
+                while (tempI != this.trailLast) {
+                    totalSegments++;
+                    tempI = (tempI + 2) % this.trail.length;
+                }
+                
+                // Draw each segment with fading
+                i = this.trailFirst;
+                var prevX = this.trail[i] * cScale;
+                var prevY = canvas.height - this.trail[i + 1] * cScale;
+                i = (i + 2) % this.trail.length;
+                
+                while (i != this.trailLast) {
+                    var currentX = this.trail[i] * cScale;
+                    var currentY = canvas.height - this.trail[i + 1] * cScale;
+                    
+                    // Calculate fade: older segments are more transparent
+                    var fadeRatio = segmentCount / totalSegments;
+                    var alpha = 1.0 - fadeRatio; // Start opaque, fade to transparent
+                    
+                    c.strokeStyle = `hsl(0, 0%, 70%, ${1 - alpha})`;
+                    c.beginPath();
+                    c.moveTo(prevX, prevY);
+                    c.lineTo(currentX, currentY);
+                    c.stroke();
+                    
+                    prevX = currentX;
+                    prevY = currentY;
+                    segmentCount++;
+                    i = (i + 2) % this.trail.length;
+                }
+            }
+        }
         draw() {
             if (doSpheres == true) {
                 const shineOffsetX = cScale * this.radius * 0.3; // old masterShineShiftX;
@@ -2276,6 +2380,91 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
 	}
+
+    //  MAKE BALLS -------------------------------------------
+    //  SQUARE ARRAY 
+    function makeBalls() {
+        Balls = [];
+        var smallBallRadius = smallBallInput.value / 1000;
+        var bigBallRadius = bigBallInput.value / 1000;
+        var maxBallRadius = Math.max(smallBallRadius, bigBallRadius);
+        var getNumBalls = ballsInput.value * 1;
+        var ballJitter = 0.20;
+        var brakes = 0;
+        var dumpSqueeze = dumpSlider.value / 100;
+        var dumpSqueeze2 = 0.2;
+        var dumpShift = dumpMoveSlider.value / 100 * simWidth;
+        var velX = 0;
+        var velY = 0;
+        if (array.checked == true) {  
+            var numCols = Math.floor(Math.sqrt(getNumBalls));
+            var numRows = Math.floor(Math.sqrt(getNumBalls));
+            var countDifference = getNumBalls - (numCols * numRows);
+            var addedRows = Math.ceil(countDifference / numCols);
+            var boxWidth = (numCols * 2.0 * maxBallRadius);
+            var boxHeight = ((numRows + addedRows) * 2.0 * maxBallRadius);
+            var horizBias = 0.5 * (simWidth - boxWidth);
+            var vertBias = 0.5 * (simHeight - boxHeight);
+            var middleRow = Math.floor((numRows + addedRows) / 2);
+            var middleCol = Math.floor(numCols / 2);
+            for (var j = 0; j < (numRows + addedRows); j++) {
+                for (var i = 0; i < numCols; i++) {
+                    if (smallBallRadius == 0) {
+                        var radius = bigBallRadius;
+                    } else {
+                        var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
+                    }          
+                    var mass = 2 * Math.PI * radius * radius; 
+                    var vel = new Vector2((-0.5 + 1.0 * Math.random()) * brakes, (-0.5 + 1.0 * Math.random()) * brakes);
+                    var boxedPosX = (i + 1) * (boxWidth / (numCols +1)) + (Math.random() * radius * ballJitter) + horizBias;
+                    var boxedPosY = (j + 1) * (boxHeight / (numRows + 1)) + vertBias;
+                    var pos = new Vector2(boxedPosX, boxedPosY);
+                    var saturation = 0.5 + 0.5 * Math.random();
+                    if (Math.random() * 100 < 5) {
+                            var whiteBall = true;
+                        } else {
+                            var whiteBall = false;
+                        }
+                    var tracerBall = (j == middleRow && i == middleCol);
+                    if (Balls.length < getNumBalls) {
+                        Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, maxBallRadius));
+                    }
+                }
+            }
+        }
+        //  ROUND CLUSTER
+        if (cluster.checked == true) {
+            for (var q = 0; q < getNumBalls; q++) {
+                var clusterRadius = 0.2 * simWidth;
+                var randomRadius = Math.random() * clusterRadius;
+                var randomTheta = Math.random() * 2 * Math.PI;
+                var circleXpos = 0.5 * simWidth + Math.cos(randomTheta) * randomRadius;
+                var circleYpos = 0.5 * simHeight + Math.sin(randomTheta) * randomRadius;
+                if (smallBallRadius == 0) {
+                    var radius = bigBallRadius;
+                    } else {
+                    var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
+                }
+                var mass = 2 * Math.PI * radius * radius; 
+                var pos = new Vector2(circleXpos, circleYpos);   
+                var vel = new Vector2(Math.cos(randomTheta) * brakes, Math.sin(randomTheta) * brakes);
+                if (Math.random() * 100 < 5) {
+                    var whiteBall = true;
+                } else {
+                    var whiteBall =false;
+                }
+                if (q == 0) {
+                    var tracerBall = true;
+                } else {
+                    var tracerBall = false;
+                }   
+
+                var saturation = 0.5 + 0.5 * Math.random();
+
+                Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, maxBallRadius));
+            }   
+        }
+    }
 
     //  CORNER CONSTRUCTOR  ---------------------------------------------------------------------
     class CORNER {
@@ -2601,7 +2790,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         // Run movement/wrap logic once per frame (per dT) instead of every substep.
-        if (WormProps.SpaceWorm) {
+        if (WormProps.SpaceWorm && !WormProps.isHiding) {
             var p = WormProps.SpaceWorm;
             // regular horizontal advance of the pivot (scaled to dT)
             // apply once per full time-step
@@ -2634,28 +2823,45 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             // keep pivot vertically anchored to the spawn baseline so the whole body follows
             p.pos[0].y = SPAWN_INITIAL_Y_SIM + ampSim * Math.sin(WormProps.phase - (0 * WAVE_NODE_LAG));
+        }
+        
+        // Handle worm wrap-around and delay logic
+        if (WormProps.SpaceWorm) {
+            var p = WormProps.SpaceWorm;
 
-            // If the entire chain has passed the right edge, shift the whole assembly
-            // far to the left so it can re-enter smoothly 
+            // If the entire chain has passed the right edge, start hiding delay
+            // or check if delay has elapsed to reappear on left side
             var minX = Infinity, maxX = -Infinity;
             for (var i = 0; i < p.pos.length; i++) {
                 if (p.pos[i].x < minX) minX = p.pos[i].x;
                 if (p.pos[i].x > maxX) maxX = p.pos[i].x;
             }
             var canvasRightSim = canvas.width / cScale;
-            // Wrap when the last circle (tail) has fully passed the right edge.
+            // Check when the last circle (tail) has fully passed the right edge.
             // Compute the left edge of the last circle (center.x - radius) in sim units
             var lastIdx = p.pos.length - 1;
             var lastRadius = (lastIdx < p.radii.length) ? p.radii[lastIdx] : 0.02;
             var lastLeftEdge = p.pos[lastIdx].x - lastRadius;
-            if (lastLeftEdge > canvasRightSim) {
-                // spawnGap in sim units: pick either a pixel-based min or a fraction of canvas width
-                var spawnGapSim = Math.max(SPAWN_GAP_MIN_PIXELS / cScale, SPAWN_GAP_WIDTH_FACTOR * canvas.width / cScale, SPAWN_GAP_MIN_SIM);
-                var shiftSim = - (maxX + spawnGapSim);
-                for (var i = 0; i < p.pos.length; i++) {
-                    p.pos[i].x += shiftSim;
-                    p.prevPos[i].x += shiftSim; // keep prevPos in sync to avoid velocity spikes
+            
+            if (lastLeftEdge > canvasRightSim && !WormProps.isHiding) {
+                // Worm has completely passed right edge - start hiding period
+                WormProps.isHiding = true;
+                WormProps.hideStartTime = Date.now();
+            } else if (WormProps.isHiding) {
+                // Check if hiding delay has elapsed
+                var currentTime = Date.now();
+                if (currentTime - WormProps.hideStartTime >= WormProps.hideDelay) {
+                    // Delay has elapsed - use original repositioning logic
+                    WormProps.isHiding = false;
+                    // spawnGap in sim units: pick either a pixel-based min or a fraction of canvas width
+                    var spawnGapSim = Math.max(SPAWN_GAP_MIN_PIXELS / cScale, SPAWN_GAP_WIDTH_FACTOR * canvas.width / cScale, SPAWN_GAP_MIN_SIM);
+                    var shiftSim = - (maxX + spawnGapSim);
+                    for (var i = 0; i < p.pos.length; i++) {
+                        p.pos[i].x += shiftSim;
+                        p.prevPos[i].x += shiftSim; // keep prevPos in sync to avoid velocity spikes
+                    }
                 }
+                // If still hiding, don't move the worm at all
             }
         }
     }
@@ -2725,6 +2931,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         WormProps.SpaceWorm = new WORM(masses, lengths, angles, radii);
+        
+        // Initialize worm delay state
+        WormProps.isHiding = false;
+        WormProps.hideStartTime = 0;
         
         // spawn the  chain
         (function(){
@@ -3150,9 +3360,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         Puck = [];
         puck1color = `hsla(70, 20%, 40%, 65%)`;
         puck2color = `hsla(160, 20%, 30%, 65%)`;
-        Puck.push (new PUCK(1.0 * puckRadiusSlider.value / 1000, new Vector2(simWidth - 1.7 * puckRadiusSlider.value / 1000, 0.6 * simHeight), puck1color));
-        Puck.push (new PUCK(0.5 * puckRadiusSlider.value / 1000, new Vector2(1.5 * puckRadiusSlider.value / 1000, 0.3 * simHeight), puck2color));
-    }
+        Puck.push (new PUCK(
+            1.0 * puckRadiusSlider.value / 1000, 
+            new Vector2(0.7 * simWidth, 
+            0.8 * simHeight), puck1color));
+        Puck.push (new PUCK(0.5 * puckRadiusSlider.value / 1000, 
+            new Vector2(0.3 * simWidth, 
+            0.25 * simHeight), puck2color));
+        }
     
     //  DEFINE HUNGRY PUCKS ----------------------------------------------------------        
     function makeHungryPucks() {
@@ -3169,83 +3384,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         MisterMister.push (new MISTERMISTER(new Vector2(0.2 * simWidth, 0.7 * simHeight), mrMrVel, `hsl(0, 50%, 50%)`));
     }
 
-    //  DEFINE BALLS IN ORDERED GRID -------------------------------------------
-    function makeBalls() {
-        Balls = [];
-        var smallBallRadius = smallBallInput.value / 1000;
-        var bigBallRadius = bigBallInput.value / 1000;
-        var maxBallRadius = Math.max(smallBallRadius, bigBallRadius);
-        var getNumBalls = ballsInput.value;
-        var ballJitter = 0.20;
-        var brakes = 0;
-        var dumpSqueeze = dumpSlider.value / 100;
-        var dumpSqueeze2 = 0.2;
-        var dumpShift = dumpMoveSlider.value / 100 * simWidth;
-        var velX = 0;
-        var velY = 0;
-        if (array.checked == true) {  
-            var numCols = Math.floor(Math.sqrt(getNumBalls));
-            var numRows = Math.floor(Math.sqrt(getNumBalls));
-            var countDifference = getNumBalls - (numCols * numRows);
-            var addedRows = Math.ceil(countDifference / numCols);
-            var boxWidth = (numCols * 2.0 * maxBallRadius);
-            var boxHeight = ((numRows + addedRows) * 2.0 * maxBallRadius);
-            var horizBias = 0.5 * (simWidth - boxWidth);
-            var vertBias = 0.5 * (simHeight - boxHeight);
-            for (j = 0; j < (numRows + addedRows); j++) {
-                for (i = 0; i < numCols; i++) {
-                    if (smallBallRadius == 0) {
-                        var radius = bigBallRadius;
-                    } else {
-                        var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
-                    }          
-                    var mass = 2 * Math.PI * radius * radius; 
-                    var vel = new Vector2((-0.5 + 1.0 * Math.random()) * brakes, (-0.5 + 1.0 * Math.random()) * brakes);
-                    var boxedPosX = (i + 1) * (boxWidth / (numCols +1)) + (Math.random() * radius * ballJitter) + horizBias;
-                    var boxedPosY = (j + 1) * (boxHeight / (numRows + 1)) + vertBias;
-                    var pos = new Vector2(boxedPosX, boxedPosY);
-                    if (Math.random() * 100 < 5) {
-                            var whiteBall = true;
-                        } else {
-                            var whiteBall = false;
-                        }
-
-                    var saturation = 0.5 + 0.5 * Math.random();
-                    
-                    if (Balls.length < getNumBalls) {
-                        Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall));
-                    }
-                }
-            }
-        }
-        //  DEFINE BALLS IN ROUND CLUSTER -----------------------------------------------
-        if (cluster.checked == true) {
-            for (q = 0; q < getNumBalls; q++) {
-                var clusterRadius = 0.2 * simWidth;
-                var randomRadius = Math.random() * clusterRadius;
-                var randomTheta = Math.random() * 2 * Math.PI;
-                var circleXpos = 0.5 * simWidth + Math.cos(randomTheta) * randomRadius;
-                var circleYpos = 0.5 * simHeight + Math.sin(randomTheta) * randomRadius;
-                if (smallBallRadius == 0) {
-                    var radius = bigBallRadius;
-                    } else {
-                    var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
-                }
-                var mass = 2 * Math.PI * radius * radius; 
-                var pos = new Vector2(circleXpos, circleYpos);   
-                var vel = new Vector2(Math.cos(randomTheta) * brakes, Math.sin(randomTheta) * brakes);
-                if (Math.random() * 100 < 5) {
-                    var whiteBall = true;
-                } else {
-                    var whiteBall =false;
-                }
-
-                var saturation = 0.5 + 0.5 * Math.random();
-
-                Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall));
-            }   
-        }
-    }
     // END OF PUSH DEFINITIONS =======================================================
 
     //  SIMULATION --------------------------------------------------------------------------
@@ -3269,6 +3407,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         for (i = 0; i < Balls.length; i++) {
             var ball1 = sortedBalls[i];
             ball1.simulate();    
+
+            if (doTracer == true && ball1.tracerBall == true) {
+                ball1.updateTrace();
+            }
             
             // Update worm immunity frame counter
             if (ball1.immuneToWorm) {
@@ -3296,18 +3438,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     if (Math.abs(ball1.pos.y - ball2.pos.y) < 4 * (ball1.radius + ball2.radius)) {
                         handleBallRepulsion(ball1, ball2);
                     }
+                    if (Math.abs(ball1.pos.y - ball2.pos.y) <= ball1.radius + ball2.radius) {
+                        handleBallHits(ball1, ball2);
+                    }
                 }
-            }
-            
-            //  HANDLE BALL TO BALL HITS  -----------------------------
-            for (var j = i + 1; j < Balls.length; j++) {
-                var ball2 = sortedBalls[j];   
-                
-                if (ball2.left > ball1.right) {
-                    break;
-                }     
-                if (Math.abs(ball1.pos.y - ball2.pos.y) <= ball1.radius + ball2.radius) {
-                    handleBallHits(ball1, ball2);
+            } else {
+                //  HANDLE BALL TO BALL HITS  -----------------------------
+                for (var j = i + 1; j < Balls.length; j++) {
+                    var ball2 = sortedBalls[j];   
+                    
+                    if (ball2.left > ball1.right) {
+                        break;
+                    }     
+                    if (Math.abs(ball1.pos.y - ball2.pos.y) <= ball1.radius + ball2.radius) {
+                        handleBallHits(ball1, ball2);
+                    }
                 }
             }
 
@@ -3456,18 +3601,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  DRAW EVERYTHING -----------------------------------------------------------------
 	function drawEverything() {
-        wipeOpacity = Math.pow(2.718, trailValue / -10);
+        wipeOpacity = Math.pow(2.718, persistence / -10);
         c.fillStyle = `hsla(0, 0%, 0%, ${wipeOpacity})`;
         c.fillRect(0, 0, canvas.width, canvas.height);
 
         // DRAW GRID -----------------------------------------------------------------
-        if (trailValue < 20) {
+        if (persistence < 20) {
             var gridSpacing = .07;
             var horizGrids = simWidth / gridSpacing;
             var vertGrids = simHeight / gridSpacing;
+            
+            // Calculate center positions for heavy lines
+            var centerX = simWidth * 0.5;
+            var centerY = simHeight * 0.5;
+            var centerGridX = Math.round(centerX / gridSpacing);
+            var centerGridY = Math.round(centerY / gridSpacing);
+            
             c.setLineDash([4, 4]);
+            
+            // Draw vertical lines
             for (var h = 1; h < horizGrids; h++) {
-                if (h % 5 == 0) {
+                // Make line heavy if it's at center or every 5th line from center
+                var distanceFromCenter = Math.abs(h - centerGridX);
+                if (distanceFromCenter % 5 == 0) {
                     c.lineWidth = 2;
                 } else {
                     c.lineWidth = 1;
@@ -3478,8 +3634,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.strokeStyle = `hsl(0, 0%, 15%)`;
                 c.stroke();
             }
+            
+            // Draw horizontal lines
             for (var v = 1; v < vertGrids; v++) {
-                if (v % 5 == 0) {
+                // Make line heavy if it's at center or every 5th line from center
+                var distanceFromCenter = Math.abs(v - centerGridY);
+                if (distanceFromCenter % 5 == 0) {
                     c.lineWidth = 2;
                 } else {
                     c.lineWidth = 1;
@@ -3500,10 +3660,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             MrMr = MisterMister[0];
             MrMr.draw();
         }
-        
+
         //  DRAW BALLS-------------------------------------------------------------------
         for (i = 0; i < Balls.length; i++) {
 			ball = Balls[i];
+            if (doTracer == true && ball.tracerBall == true) {
+                ball.drawTrace(); 
+            }
             ball.draw();
 		}
         //  DRAW WORM ---------------------------------------------------------------------
