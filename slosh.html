@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.22</title>
+		<title>Slosh 1.24</title>
         <style>
 			body {font-family: monospace; 
                 font-size: 16px;
@@ -132,28 +132,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 border-radius: 30%;
                 background: hsl(220, 80%, 60%);
                 cursor: pointer}
-            
-            .slidersquare-shower:hover {opacity: 1}
-            .slidersquare-shower {-webkit-appearance: none;
-				appearance: none;
-                vertical-align: middle;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                width: 60px;
-				height: 4px;
-				border-radius: 5px;
-                background: hsl(0, 0%, 0%);
-				outline: none;
-				opacity: 0.7;
-                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-				-webkit-transition: .2s;
-			    transition: opacity .2s}
-            .slidersquare-shower::-webkit-slider-thumb {-webkit-appearance: none;
-                width: 10px;
-                height: 22px;
-                border-radius: 30%;
-                background: hsl(350, 80%, 60%);
-                cursor: pointer}
 
             .slidersquare-fountain:hover {opacity: 1}
             .slidersquare-fountain {-webkit-appearance: none;
@@ -243,8 +221,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 background: hsl(300, 60%, 60%);
                 cursor: pointer} 
 
-            .slider-purpleyellowleftright:hover {opacity: 1}
-            .slider-purpleyellowleftright {-webkit-appearance: none;
+            .slider-redspawn:hover {opacity: 1}
+            .slider-redspawn {-webkit-appearance: none;
 				appearance: none;
                 vertical-align: middle;
                 margin-top: 5px;
@@ -258,20 +236,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
 				-webkit-transition: .2s;
 			    transition: opacity .2s}
-            .slider-purpleyellowleftright::-webkit-slider-thumb {-webkit-appearance: none;
+            .slider-redspawn::-webkit-slider-thumb {-webkit-appearance: none;
                 width: 26px;
                 height: 12px;
                 border-radius: 30%;
-                background: hsl(350, 80%, 60%);
+                background: hsl(350, 70%, 50%);
                 cursor: pointer} 
-            
-            .slidercyan:hover {opacity: 1} 
-            .slidercyan {-webkit-appearance: none;
+
+            .slider-redspawn2:hover {opacity: 1}
+            .slider-redspawn2 {-webkit-appearance: none;
 				appearance: none;
                 vertical-align: middle;
                 margin-top: 5px;
                 margin-bottom: 10px;
-                width: 70px;
+                width: 60px;
 				height: 4px;
 				border-radius: 5px;
                 background: hsl(0, 0%, 0%);
@@ -280,12 +258,71 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
 				-webkit-transition: .2s;
 			    transition: opacity .2s}
-            .slidercyan::-webkit-slider-thumb {-webkit-appearance: none;
+            .slider-redspawn2::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(350, 70%, 50%);
+                cursor: pointer}
+            
+            .slider-cyan:hover {opacity: 1} 
+            .slider-cyan {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 110px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-cyan::-webkit-slider-thumb {-webkit-appearance: none;
                 width: 10px;
                 height: 22px;
                 border-radius: 30%;
                 background: hsl(181, 82%, 66%);
                 cursor: pointer}
+
+            /* Corner radius slider with detent at value 100 */
+            .slider-corner-detent {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 110px;
+				height: 4px;
+				border-radius: 5px;
+                background: linear-gradient(to right, 
+                    hsl(0, 0%, 0%) 0%, 
+                    hsl(0, 0%, 0%) 49%, 
+                    hsl(181, 82%, 66%) 49.5%, 
+                    hsl(181, 82%, 66%) 50.5%, 
+                    hsl(0, 0%, 0%) 51%, 
+                    hsl(0, 0%, 0%) 100%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s;
+                /* Add snap points */
+                scroll-snap-type: x mandatory;
+                scroll-snap-points-x: repeat(50%);
+                -webkit-scroll-snap-points-x: repeat(50%);
+                -ms-scroll-snap-points-x: repeat(50%);}
+            .slider-corner-detent:hover {opacity: 1}
+            .slider-corner-detent::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                margin-bottom: 0px;
+                background: hsl(181, 82%, 66%);
+                cursor: pointer;
+                /* Snap point for the thumb */
+                scroll-snap-align: center;}
 
             .slider-yellow:hover {opacity: 1} 
             .slider-yellow {-webkit-appearance: none;
@@ -384,7 +421,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 100px;
 				height: 4px;
 				border-radius: 5px;
-                background: hsl(0, 0%, 0%);
+                background: linear-gradient(to right, 
+                    hsl(0, 0%, 10%) 0%, 
+                    hsl(0, 0%, 80%) 100%);
 				outline: none;
 				opacity: 0.7;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
@@ -394,7 +433,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 10px;
                 height: 22px;
                 border-radius: 30%;
-                background: hsl(0, 80%, 50%);
+                background: hsl(0, 60%, 70%);
                 cursor: pointer}
 
             .slider-red2:hover {opacity: 1} 
@@ -406,17 +445,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 130px;
 				height: 4px;
 				border-radius: 5px;
-                background: hsl(0, 0%, 0%);
+                background: linear-gradient(to right, 
+                    hsl(0, 70%, 50%) 17%, 
+                    hsl(60, 70%, 50%) 34%, 
+                    hsl(120, 70%, 50%) 50%,
+                    hsl(180, 70%, 50%) 67%, 
+                    hsl(240, 70%, 50%) 84%, 
+                    hsl(300, 70%, 50%) 100%);
 				outline: none;
 				opacity: 0.7;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
 				-webkit-transition: .2s;
 			    transition: opacity .2s}
             .slider-red2::-webkit-slider-thumb {-webkit-appearance: none;
-                width: 24px;
-                height: 12px;
+                width: 10px;
+                height: 22px;
                 border-radius: 30%;
-                background: hsl(0, 80%, 50%);
+                background: hsl(0, 60%, 70%);
                 cursor: pointer}
 
 
@@ -430,7 +475,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 75px;
 				height: 4px;
 				border-radius: 5px;
-                background: hsl(0, 0%, 0%);
+                background: linear-gradient(to right, 
+                    hsl(0, 0%, 0%) 0%, 
+                    hsl(0, 90%, 50%) 100%);
 				outline: none;
 				opacity: 0.7;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
@@ -440,7 +487,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 10px;
                 height: 22px;
                 border-radius: 30%;
-                background: hsl(0, 30%, 70%);
+                background: hsl(0, 60%, 70%);
                 cursor: pointer}
 
             .slider-mint:hover {opacity: 1} 
@@ -579,7 +626,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 height: 24px;
                 margin-top: 5px;
                 margin-bottom: 10px;
-                background-color: hsl(75, 50%, 40%);
+                background-color: hsl(75, 80%, 20%);
                 border-radius: 50%;
                 vertical-align: middle;
                 border: 3px solid hsl(0, 0%, 80%);
@@ -587,7 +634,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 cursor: pointer;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
             .checkbox-lime:checked {
-                background-color: hsl(75, 70%, 60%)}
+                background-color: hsl(75, 80%, 50%)}
 
             .checkbox-gray:hover {opacity: 1}
             .checkbox-gray {-webkit-appearance: none;
@@ -669,7 +716,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 height: 24px;
                 margin-top: 5px;
                 margin-bottom: 10px;
-                background-color: hsl(150, 80%, 60%);
+                background-color: hsl(150, 80%, 50%);
                 border-radius: 50%;
                 vertical-align: middle;
                 border: 3px solid hsl(0, 0%, 80%);
@@ -877,8 +924,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	</head>
 <body> 
 
-	<body style="background: hsl(0, 0%, 10%); background-attachment: fixed; margin-left: 0px;"> 
-    <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-top: 10px; margin-left: 10px"></canvas>
+	<!-- <body style="background: hsl(0, 0%, 10%); background-attachment: fixed; margin-left: 0px;"> -->
+    <body style="background: linear-gradient(to bottom, hsl(0, 0%, 0%) 0%, hsl(195, 64%, 8%) 100%); background-attachment: fixed; margin-left: 0px;"> 
+    <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-left: 10px"></canvas>
 
     <h2><br></h2>
 	<input type="button" title="Restart [r]" class="buttongreenbig" value="&#8629" onclick="makeBalls()">
@@ -886,7 +934,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="radio" title="Square Array Start" name="rackemType" id="array" class="radioball" checked>
     
     walls&#8594
-    <input type="range"  title="Corner Radius" id="cornerRadiusSlider" min="0" max="100" value="100" class="slidercyan">
+    <input type="range"  title="Corner Radius" id="cornerRadiusSlider" min="0" max="200" value="100" list="detents"class="slider-corner-detent">
+    
     <input type="checkbox" title="Ceiling" id="ceilingButton" class="checkbox-ceiling" checked>
     <input type="checkbox" title="Floor" value="F" id="floorButton"  class="checkbox-floor" checked>
     <input type="checkbox" title="Left Wall" id="leftWallButton" class="checkbox-leftwall" checked>
@@ -896,6 +945,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <select title="Particle Count" id="ballsInput" class="field-cyan">
         <optgroup label="Number of Balls">
             <option value="1">1</option>
+            <option value="25">25</option>
             <option value="100">100</option>
             <option value="400">400</option>
             <option value="1024">1024</option>
@@ -918,13 +968,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="radio" title="Discs" name="ballType" id="ballDisc" class="radio-green" checked>
     <input type="radio" title="Circles" name="ballType" id="ballCircle" class="radio-green">
     
-    tracer&#8594
-    <input type="checkbox" title="Particle Trace on/off" id="tracerButton" class="checkbox-gray" checked>
-    
     <span style="white-space: nowrap">time&#8594
+    <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked></span>
     <input type="range"  title="Time  ::  <--- Slower : Normal" id="timeSlider" min="40" max="100" value="100" class="slider-mint">
     <input type="range"  title="Persistence" id="persistenceSlider" min="0" max="30" value="12" class="slider-mint">
-    <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked></span>
     
     <span style="white-space: nowrap">
     gravity&#8594
@@ -938,12 +985,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="range"  title="Repulsion Force between Particles" id="repulsionForceSlider" min="1" max="20" value="20" class="slider-lime">
     
     bounce&#8594
-    <input type="range"  title="Ball Restitution on Collision" id="ballRestSlider" min="0" max="20" value="0" class="slider-lime"></span>
+    <input type="range"  title="Ball Restitution on Collision" id="ballRestSlider" min="0" max="100" value="0" class="slider-lime"></span>
     
     <span style="white-space: nowrap">
     pucks&#8594
     <input type="checkbox" title="Pucks on/off" id="showPuckButton" value="true" class="checkbox-roundbluelight" checked>
-    <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="200" class="slidercyan"></span>
+    <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="200" class="slider-cyan"></span>
     
     <span style="white-space: nowrap">
     eaters&#8594
@@ -951,15 +998,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     respawn&#8594
     <input type="checkbox" title="One Shot (no respawn)" id="oneShotButton" value="false" class="checkbox-oneshot" unchecked>
-    <input type="range"  title="Shower Width" id="dumpSlider" min="1" max="100" value="40" class="slidersquare-shower">
-    <input type="range"  title="Shower Position" id="dumpMoveSlider" min="-50" max="50" value="0" class="slider-purpleyellowleftright">
+    <input type="range"  title="Shower Width" id="dumpSlider" min="1" max="100" value="40" class="slider-redspawn2">
+    <input type="range"  title="Shower Position" id="dumpMoveSlider" min="-50" max="50" value="0" class="slider-redspawn">
     <span style="white-space: nowrap">shower &#8592
     <input type="radio" title="Shower" name="spawnType" id="shower" value="shower" class="radio2">
     / <input type="radio" title="Mr. Mister" name="spawnType" id="fountain" value="fountain" class="radio" checked>
     
     &#8594 mr.mister</span>
     <input type="range"  title="Yeet" id="yeetSlider" min="0" max="600" value="250" class="slider-purple-short">
-    <input type="range"  title="Spew Direction" id="respawnDirSlider" min="0" max="628" value="0" class="slider-purple">
     <input type="range"  title="Sweeper Speed" id="sprinklerSpeedSlider" min="0" max="30" value="10" class="slider-pink">
     
     <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field-purple">
@@ -990,6 +1036,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="70" max="300" value="150" class="slider-orange">
     <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz"></span>
 
+    <span style="white-space: nowrap">
+    tracer&#8594
+    <input type="checkbox" title="Particle Trace on/off" id="tracerButton" class="checkbox-gray" checked></span>
+    
     <span style="white-space: nowrap">
     color&#8594
     <input type="range"  title="Speed Sensitivity" id="velColorMapSlider" min="1" max="500" value="100" class="slider-red2">
@@ -1032,6 +1082,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         location.reload();
     }
     window.addEventListener("resize", refreshPage);
+    // Gradient used to fill canvas corners/masks to match page background
+    let cornerFillGradient = null;
+    function updateCornerFillGradient() {
+        // Align the canvas gradient with the page's background gradient (to bottom)
+        // using viewport-relative coordinates so the transition is seamless.
+        const rect = canvas.getBoundingClientRect();
+        const y0 = -rect.top;                 // where the canvas starts relative to viewport (px)
+        const y1 = y0 + window.innerHeight;   // viewport bottom relative to canvas
+        const g = c.createLinearGradient(0, y0, 0, y1);
+        // Match body CSS: linear-gradient(to bottom, hsl(0, 0%, 0%) 0%, hsl(195, 64%, 8%) 100%)
+        g.addColorStop(0.0, 'hsl(0, 0%, 0%)');
+        g.addColorStop(1.0, 'hsl(195, 64%, 8%)');
+        cornerFillGradient = g;
+    }
+    // Initialize gradient now
+    updateCornerFillGradient();
+    // Keep it updated on scroll (viewport relative) for a fixed page background
+    window.addEventListener('scroll', updateCornerFillGradient, { passive: true });
     
     //  KEYBOARD SHORTCUTS -----------------------------------------------------
     
@@ -1091,8 +1159,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         doShower = false;
         doFountain = true;}
     document.getElementById("ballRestSlider").oninput = function() {
-	    physProps.ballRest = ballRestSlider.value / 20;
-        physProps.bumperRest = ballRestSlider.value / 20;}
+        // Logarithmic growth mapping for fine control near 1.0
+        // t in [0,1], ballRest in [0,1]
+        const t = parseFloat(this.value) / 100;
+        const k = 1000000; // shape parameter; ~0.95 at midpoint when k≈1e6
+        physProps.ballRest = Math.log(1 + k * t) / Math.log(1 + k);
+    }
     document.getElementById('repulsionButton').oninput = function() {
         if (repulsionButton.checked == true) {  
             ballRepulsion = true;
@@ -1184,12 +1256,47 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 puck.OGradius = puck.radius;}}}
     document.getElementById('cornerRadiusSlider').oninput = function() {
         cornerRad = 1 * cornerRadiusSlider.value;
-        for (var c = 0; c < Corners.length; c++) {
-            corner = Corners[c]; 
-            if (screenVertical == true) {
-                corner.radius = 0.01 * cornerRad * 0.5 * simWidth;
-            } else {
-            corner.radius = 0.01 * cornerRad * 0.5 * simHeight;}}}
+        if (cornerRadiusSlider.value < 100) {
+            for (var c = 0; c < Corners.length; c++) {
+                corner = Corners[c]; 
+                if (screenVertical == true) {
+                    corner.radius = 0.01 * cornerRad * 0.5 * simWidth;
+                } else {
+                    corner.radius = 0.01 * cornerRad * 0.5 * simHeight;
+                }
+                if (corner.corner == 'northwest' || corner.corner == 'southwest') {
+                    corner.pos.x = 0;
+                } else if (corner.corner == 'northeast' || corner.corner == 'southeast') {
+                    corner.pos.x = simWidth;
+                } 
+}
+        } else {
+            for (var c = 0; c < Corners.length; c++) {
+                corner = Corners[c]; 
+                if (screenVertical == true) {
+                    corner.radius = 0.5 * simWidth;
+                } else {
+                    corner.radius = 0.5 * simHeight;
+                }
+
+                // shift corners
+                // calculate distance between corners
+                var cornerSeparation = simWidth - 2 * corner.radius;
+                var cornerClosureRatio = 1 - 0.01 * (200 - cornerRadiusSlider.value);
+                var maximumShift = 0.5 * simWidth - corner.radius;
+                var shiftAmount = Math.min(maximumShift, cornerSeparation * cornerClosureRatio);
+                
+                if (cornerClosureRatio > 0) {
+                    if (corner.corner == 'northwest' || corner.corner == 'southwest') {
+                        corner.pos.x = shiftAmount;
+                    } else if (corner.corner == 'northeast' || corner.corner == 'southeast') {
+                        corner.pos.x = simWidth - shiftAmount;
+                    }
+                }
+            }
+        }
+    }
+
     document.getElementById('misterMode').oninput = function() {
         fountain.checked = true;
         doFountain = true;
@@ -1249,9 +1356,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doWorm = true;
         } else {
             doWorm = false;}}
-    document.getElementById('respawnDirSlider').oninput = function() {
-        var MrMr = MisterMister[0];
-        MrMr.respawnDir = 0.01 *respawnDirSlider.value;}
     document.getElementById('wormStartRadiusSlider').oninput = function() {
         WormProps.startRadius = 0.001 * wormStartRadiusSlider.value;
         makeWorm();}
@@ -1283,7 +1387,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     //  end get world properties from sliders 
 
-    //  MOUSE AND TOUCH STUFF  -------------------------------------------------------------------
+    //  MOUSE STUFF AND TOUCH STUFF  -------------------------------------------------------------------
     
     let cursorX = simWidth / 2;
     let cursorY = 0;
@@ -1296,7 +1400,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     canvas.addEventListener('touchend', touchEndHandler, {passive: false});
     canvas.addEventListener('touchcancel', touchEndHandler, {passive: false});
     
-    function mouseDownHandler() {
+    function mouseDownHandler(ev) {
+        const e = ev || window.event;
         puck1 = Puck[0];
         puck2 = Puck[1];
         hungryPuck = Hungrypuck[0];
@@ -1304,15 +1409,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         misterMister = MisterMister[0];
         
         bounds = canvas.getBoundingClientRect();
-		mX = event.clientX - bounds.left - canvas.clientLeft;
-        mY = event.clientY - bounds.top - canvas.clientTop;
+		mX = e.clientX - bounds.left - canvas.clientLeft;
+        mY = e.clientY - bounds.top - canvas.clientTop;
 
 		cursorX = mX / cScale;
         cursorY = (canvas.height - mY) / cScale;
         mousePos = new Vector2(cursorX, cursorY)
         
-        startX = event.clientX;
-        startY = canvas.height - event.clientY;
+        startX = e.clientX;
+        startY = canvas.height - e.clientY;
 
         firstCornerX = mX;
         firstCornerY = mY;
@@ -1334,21 +1439,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		dirPuck1.subtractVectors(mousePos, puck1.pos);
 		dPuck1 = dirPuck1.length();
 
-        dirPuck2= new Vector2();
+        dirPuck2 = new Vector2();
 		dirPuck2.subtractVectors(mousePos, puck2.pos);
 		dPuck2 = dirPuck2.length();
 
-        // Calculate bumper array bounds if bumpers exist
-        var bumperArrayBottom = -Infinity;
-        var bumperArrayTop = Infinity;
-        if (Bumpers.length > 0) {
-            var lowestBumper = Bumpers[0];
-            var highestBumper = Bumpers[Bumpers.length - 1];
-            bumperArrayBottom = lowestBumper.pos.y - lowestBumper.radius;
-            bumperArrayTop = highestBumper.pos.y + highestBumper.radius;
+        if (showBumpers == true) {
+            // Calculate bumper array bounds if bumpers exist
+            var bumperArrayBottom = -Infinity;
+            var bumperArrayTop = Infinity;
+            if (Bumpers.length > 0) {
+                var lowestBumper = Bumpers[0];
+                var highestBumper = Bumpers[Bumpers.length - 1];
+                bumperArrayBottom = lowestBumper.pos.y - lowestBumper.radius;
+                bumperArrayTop = highestBumper.pos.y + highestBumper.radius;
+            }
         }
         
-        // CHOOSE FOREGROUND OBJECTS UNDER CURSOR TO MOVE  ---------------------
+    // CHOOSE FOREGROUND OBJECTS UNDER CURSOR TO MOVE  ---------------------
         
         if (dMisterMister < misterMister.radius) {
             dX = startX / cScale - misterMister.pos.x;
@@ -1382,7 +1489,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             document.addEventListener('mousemove', mousePuck1Move);
             document.addEventListener('touchmove', touchPuck1Move, {passive: false});
         } else {
-        if (Bumpers.length > 0 && mousePos.y < bumperArrayTop && mousePos.y > bumperArrayBottom) {
+        if (showBumpers == true && Bumpers.length > 0 && mousePos.y < bumperArrayTop && mousePos.y > bumperArrayBottom) {
             dY = startY / cScale - (bumperArrayTop + bumperArrayBottom) / 2;
             // Store initial positions of all bumpers for relative movement
             initialBumperPositions = [];
@@ -1392,19 +1499,37 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             document.addEventListener('mousemove', mouseBumperMove);
             document.addEventListener('touchmove', touchBumperMove, {passive: false});
         } else {
+            // Nothing else selected: update spray direction immediately and start tracking drag
+            setNewDir(e);
             mouseDown = true;
-            document.addEventListener('mousemove', setNewDir);
+            document.addEventListener('mousemove', setNewDir, false);
             document.addEventListener('touchmove', setNewDir, {passive: false});
         }}}}}}
     }
 
-    function setNewDir() {
-        misterMister = MisterMister[0];
-        newX = event.clientX;
-        newY = event.clientY;   
-        startX = event.clientX;
-        startY = event.clientY;
-        misterMister.respawnDir = Math.atan2((simHeight - newY / cScale) - misterMister.pos.y, (newX / cScale) - misterMister.pos.x);
+    function setNewDir(e) {
+        const ev = e || window.event;
+        if (!ev) return;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = ev.clientX;
+        const clientY = ev.clientY;
+        if (typeof clientX !== 'number' || typeof clientY !== 'number') return;
+
+        // Convert to simulation coordinates
+        const mx = (clientX - rect.left - canvas.clientLeft) / cScale;
+        const my = (canvas.height - (clientY - rect.top - canvas.clientTop)) / cScale;
+
+    const misterMister = MisterMister[0];
+    // Center of particle spawn region (use center, not random). Ignore ball.radius for direction.
+    // spawnX center: mr.pos.x - 0.35R + 0.5*(0.9R) = mr.pos.x + 0.10R
+    const originX = misterMister.pos.x + 0.10 * misterMister.radius;
+    // spawnY center differs by mode:
+    //  worm:    mr.pos.y - 0.30R  (from -0.3R - 0.35R + 0.5*0.7R)
+    //  default: mr.pos.y - 0.70R  (from -0.65R - 0.35R + 0.5*0.6R)
+    const originYOffset = (typeof mrMode === 'string' && mrMode === 'worm') ? 0.30 : 0.70;
+    const originY = misterMister.pos.y - originYOffset * misterMister.radius;
+    // Angle from spawn-region center to cursor
+    misterMister.respawnDir = Math.atan2(my - originY, mx - originX);
     }
 
     function mouseBumperMove() {
@@ -1496,6 +1621,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         document.removeEventListener('mousemove', mousePuck2Move);
         document.removeEventListener('mousemove', mouseMisterMisterMove);
         document.removeEventListener('mousemove', mouseBumperMove);
+        document.removeEventListener('mousemove', setNewDir);
         
         // Also remove touch move listeners
         document.removeEventListener('touchmove', touchHungryPuckMove);
@@ -1879,20 +2005,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  HANDLE CORNER HITS  --------------------------------------------------------------------
     function handleCornerHits(ball1, corner) {
-        // Find arc center based on corner type
+        // Find arc center based on corner position and type
         let arcCenterX, arcCenterY;
         if (corner.corner === 'northwest') {
-            arcCenterX = corner.radius; 
-            arcCenterY = corner.radius;
+            arcCenterX = corner.pos.x + corner.radius; 
+            arcCenterY = corner.pos.y + corner.radius;
         } else if (corner.corner === 'northeast') {
-            arcCenterX = simWidth - corner.radius; 
-            arcCenterY = corner.radius;
+            arcCenterX = corner.pos.x - corner.radius; 
+            arcCenterY = corner.pos.y + corner.radius;
         } else if (corner.corner === 'southwest') {
-            arcCenterX = corner.radius; 
-            arcCenterY = simHeight - corner.radius;
+            arcCenterX = corner.pos.x + corner.radius; 
+            arcCenterY = corner.pos.y - corner.radius;
         } else { // southeast
-            arcCenterX = simWidth - corner.radius; 
-            arcCenterY = simHeight - corner.radius;
+            arcCenterX = corner.pos.x - corner.radius; 
+            arcCenterY = corner.pos.y - corner.radius;
         }
         
         const dx = ball1.pos.x - arcCenterX;
@@ -1946,21 +2072,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var spawnY = mrMr.pos.y - 0.3 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.7 * mrMr.radius - 4 * ball.radius));
             ball.pos.x = Math.max(0, Math.min(simWidth, spawnX));
             ball.pos.y = Math.max(0, Math.min(simHeight, spawnY));
-
-            var velX = 0.01 * yeet * Math.cos(-mrMr.respawnDir + alpha);
-            var velY = 0.01 * yeet * Math.sin(-mrMr.respawnDir + alpha);
-
+            var velX = 0.01 * yeet * Math.cos(mrMr.respawnDir + alpha);
+            var velY = 0.01 * yeet * Math.sin(mrMr.respawnDir + alpha);
         } else {
             var spawnX = mrMr.pos.x - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.9 * mrMr.radius - 6 * ball.radius));
             var spawnY = mrMr.pos.y - 0.65 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.6 * mrMr.radius - 4 * ball.radius));
             ball.pos.x = Math.max(0, Math.min(simWidth, spawnX));
             ball.pos.y = Math.max(0, Math.min(simHeight, spawnY));
-            if (fountainSpinMode == "sweep") { 
-            var velX = 0.01 * yeet * Math.cos(-mrMr.respawnDir + alpha);
-            var velY = 0.01 * yeet * Math.sin(-mrMr.respawnDir + alpha);
+            if (sprinklerSpeed > 0 && fountainSpinMode == "sweep") {
+                var velX = 0.01 * yeet * Math.cos(mrMr.respawnDir + alpha);
+                var velY = 0.01 * yeet * Math.sin(mrMr.respawnDir + alpha);
             } else {
-                var velX = 0.01 * yeet * Math.cos(-mrMr.respawnDir);
-                var velY = 0.01 * yeet * Math.sin(-mrMr.respawnDir);
+                var velX = 0.01 * yeet * Math.cos(mrMr.respawnDir);
+                var velY = 0.01 * yeet * Math.sin(mrMr.respawnDir);
             }
         }
         
@@ -2034,7 +2158,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
 
-        // HANDLE WALL BOUNCES ------------------------------------------------------------  
+        // HANDLE WALL HITS ------------------------------------------------------------  
         if (doCeiling == true) {
             if (ball.pos.y > worldSize.y - ball.radius) {
                 ball.pos.y = worldSize.y - ball.radius;
@@ -2048,17 +2172,34 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		        }
         }
         if (doLeftWall == true) {
-            if (ball.pos.x < ball.radius) {
-                ball.pos.x = ball.radius;
-                ball.vel.x = -ball.vel.x * physProps.wallRest;
+            if (cornerRad <= 100) {
+                if (ball.pos.x < ball.radius) {
+                    ball.pos.x = ball.radius;
+                    ball.vel.x = -ball.vel.x * physProps.wallRest;
+                }
+            } else {
+                NWCorner = Corners[0];
+                if (ball.pos.x < NWCorner.pos.x + ball.radius) {
+                    ball.pos.x = NWCorner.pos.x + ball.radius
+                    ball.vel.x = -ball.vel.x * physProps.wallRest;
+                }
             }
         }
         if (doRightWall == true) {
-            if (ball.pos.x > worldSize.x -ball.radius) {
-                ball.pos.x = worldSize.x - ball.radius;
-                ball.vel.x = -ball.vel.x * physProps.wallRest;
-            }  
+            if (cornerRad <= 100) {
+                if (ball.pos.x > worldSize.x - ball.radius) {
+                    ball.pos.x = worldSize.x - ball.radius;
+                    ball.vel.x = -ball.vel.x * physProps.wallRest;
+                }    
+            } else {
+                NECorner = Corners[1];
+                if (ball.pos.x > NECorner.pos.x - ball.radius) {
+                    ball.pos.x = NECorner.pos.x - ball.radius;
+                    ball.vel.x = -ball.vel.x * physProps.wallRest;
+                }  
+            }
         }
+
         // HANDLE BOUNDS FOR SHOWER AND FOUNTAIN -------------------------------------------------------------  
         if (doOneShot == false) {
             if (doShower == true) {
@@ -2070,7 +2211,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
             } 
             var hP = MisterMister[0];
-            var dir = -hP.respawnDir;
+            var dir = hP.respawnDir;
             var velX = yeet / 100 * Math.cos(dir + alpha);
             velY = yeet / 100 * Math.sin(dir + alpha);
             if (doFountain == true) {
@@ -2204,7 +2345,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         doFountain = fountain.checked;
         doTracer = tracerButton.checked;
         sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;
-        respawnDir = 0.01 * respawnDirSlider.value;
+        respawnDir = 0;
+        
         ballRepulsion = repulsionButton.checked;
         misterSpeed = 0.01 * misterSpeedSlider.value;
         ballSaturation = 1 * saturationSlider.value;
@@ -2221,6 +2363,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         doWorm = wormButton.checked;
 
         physProps.velColorMap = velColorMapSlider.value;
+        // Initialize ball restitution from slider using the same log mapping
+        (function(){
+            const el = document.getElementById('ballRestSlider');
+            if (el) {
+                const t = parseFloat(el.value) / 100;
+                const k = 1000000;
+                physProps.ballRest = Math.log(1 + k * t) / Math.log(1 + k);
+            }
+        })();
 
         WormProps.startRadius = 0.001 * wormStartRadiusSlider.value,
         WormProps.endRadius = 0.001 * wormEndRadiusSlider.value,
@@ -2243,7 +2394,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 	//  BALL CONSTRUCTOR  -----------------------------------------------------------------------
 	class BALL {
-		constructor(radius, mass, pos, vel, saturation, whiteBall, tracerBall, maxBallRadius) {
+		constructor(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius) {
 			this.radius = radius;
 			this.mass = mass;
 			this.pos = pos.clone();
@@ -2255,9 +2406,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.immuneToWorm = false;
             this.immunityFramesLeft = 0; 
             this.tracerBall = tracerBall;
+            this.artificialMovement = false; // Flag to track when ball is being repositioned artificially
             if (tracerBall == true) {
-                this.radius = maxBallRadius;
-                this.trail = new Float32Array(1000);
+                this.radius = 0.5 * (smallBallRadius + bigBallRadius);
+                this.trail = new Float32Array(1500); // Increased size to accommodate flags
                 this.trailFirst = 0;
                 this.trailLast = 0;
                 this.tracer = true;
@@ -2276,16 +2428,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             return this.pos.x + this.radius;
         }
         updateTrace() {
-            if (this.pos.x < 0 || this.pos.x > simWidth || 
-                this.pos.y < 0 || this.pos.y > simHeight) {
-                this.resetTrace();
-                return;
+            // Check if ball is outside simulation boundaries
+            var isOutsideBounds = (this.pos.x < 0 || this.pos.x > simWidth || 
+                                 this.pos.y < 0 || this.pos.y > simHeight);
+            
+            if (isOutsideBounds) {
+                this.artificialMovement = true; // Mark as outside/artificial movement
+                return; // Don't record trace when outside
             }
+            
+            // Ball is back inside bounds - resume normal tracing (don't reset trace)
+            var wasArtificial = this.artificialMovement;
+            if (this.artificialMovement) {
+                this.artificialMovement = false; // Resume normal tracing
+            }
+            
+            // Record normal trace point (x, y, discontinuity_flag)
             this.trail[this.trailLast] = this.pos.x;
             this.trail[this.trailLast + 1] = this.pos.y;
-            this.trailLast = (this.trailLast + 2) % this.trail.length;
+            this.trail[this.trailLast + 2] = wasArtificial ? 1.0 : 0.0; // Flag discontinuity
+            this.trailLast = (this.trailLast + 3) % this.trail.length;
             if (this.trailLast == this.trailFirst)
-                this.trailFirst = (this.trailFirst + 2) % this.trail.length;
+                this.trailFirst = (this.trailFirst + 3) % this.trail.length;
         }
         resetTrace() {
             this.trailFirst = 0;
@@ -2323,33 +2487,38 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 var tempI = this.trailFirst;
                 while (tempI != this.trailLast) {
                     totalSegments++;
-                    tempI = (tempI + 2) % this.trail.length;
+                    tempI = (tempI + 3) % this.trail.length;
                 }
                 
                 // Draw each segment with fading
                 i = this.trailFirst;
                 var prevX = this.trail[i] * cScale;
                 var prevY = canvas.height - this.trail[i + 1] * cScale;
-                i = (i + 2) % this.trail.length;
+                i = (i + 3) % this.trail.length;
                 
                 while (i != this.trailLast) {
                     var currentX = this.trail[i] * cScale;
                     var currentY = canvas.height - this.trail[i + 1] * cScale;
+                    var isDiscontinuity = this.trail[i + 2] > 0.5; // Check discontinuity flag
                     
-                    // Calculate fade: older segments are more transparent
-                    var fadeRatio = segmentCount / totalSegments;
-                    var alpha = 1.0 - fadeRatio; // Start opaque, fade to transparent
-                    
-                    c.strokeStyle = `hsl(0, 0%, 70%, ${1 - alpha})`;
-                    c.beginPath();
-                    c.moveTo(prevX, prevY);
-                    c.lineTo(currentX, currentY);
-                    c.stroke();
+                    // Skip drawing if this point represents a discontinuity (post-teleportation)
+                    if (!isDiscontinuity) {
+                        // Calculate fade: older segments are more transparent
+                        var fadeRatio = segmentCount / totalSegments;
+                        var alpha = 1.0 - fadeRatio; // Start opaque, fade to transparent
+                        
+                        c.strokeStyle = `hsl(200, 60%, 70%, ${1 - alpha})`;
+                        c.beginPath();
+                        c.moveTo(prevX, prevY);
+                        c.lineTo(currentX, currentY);
+                        c.stroke();
+                    }
+                    // If isDiscontinuity is true, skip drawing this segment (creates gap)
                     
                     prevX = currentX;
                     prevY = currentY;
                     segmentCount++;
-                    i = (i + 2) % this.trail.length;
+                    i = (i + 3) % this.trail.length;
                 }
             }
         }
@@ -2436,7 +2605,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         }
                     var tracerBall = (j == middleRow && i == middleCol);
                     if (Balls.length < getNumBalls) {
-                        Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, maxBallRadius));
+                        Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius));
                     }
                 }
             }
@@ -2467,10 +2636,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 } else {
                     var tracerBall = false;
                 }   
-
                 var saturation = 0.5 + 0.5 * Math.random();
 
-                Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, maxBallRadius));
+                Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius));
             }   
         }
     }
@@ -2494,7 +2662,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             return this.pos.x + this.radius;
         }
         draw() {
-            c.fillStyle = 'hsl(0, 0%, 10%)'; 
+            // Use canvas gradient that matches page background for seamless edges
+            if (!cornerFillGradient) { updateCornerFillGradient(); }
+            c.fillStyle = cornerFillGradient; 
             var budge = 0;
             if (this.corner == 'northwest') {
                 c.beginPath();
@@ -2534,10 +2704,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Draw the arc outlines
-            c.strokeStyle = 'hsl(0, 0%, 30%)';
+            c.strokeStyle = 'hsl(0, 0%, 60%)';
             c.lineWidth = 0.007 * cScale;
             c.lineCap = 'butt';
-            var budge = 0.0025;
+            var budge = 0.0035;
             if (this.corner == 'northwest') {
                 c.beginPath();
                 c.arc((this.pos.x + this.radius + budge) * cScale, (this.pos.y + this.radius + budge) * cScale, this.radius * cScale, Math.PI, 1.5 * Math.PI, false);
@@ -2555,13 +2725,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.arc((this.pos.x - this.radius - budge) * cScale, (this.pos.y + this.radius + budge) * cScale, this.radius * cScale, 1.5 * Math.PI, 2 * Math.PI, false);
             }
             c.stroke();
-
+            c.lineWidth = 0.009 * cScale;
             // top edge (ceiling)
             if (doCeiling == true) {
                 c.beginPath();
-                // When corner radius > 0, connect to corner arcs; when corner radius = 0 or adjacent wall disabled, extend to edge
-                var leftX = (doLeftWall && this.radius > 0) ? (this.radius + budge) * cScale : budge * cScale;
-                var rightX = (doRightWall && this.radius > 0) ? (simWidth - this.radius - budge) * cScale : (simWidth - budge) * cScale;
+                // Connect to actual corner positions when corners exist
+                var leftCorner = Corners.find(c => c.corner === 'northwest');
+                var rightCorner = Corners.find(c => c.corner === 'northeast');
+                var leftX = (doLeftWall && this.radius > 0) ? (leftCorner.pos.x + this.radius + budge) * cScale : budge * cScale;
+                var rightX = (doRightWall && this.radius > 0) ? (rightCorner.pos.x - this.radius - budge) * cScale : (simWidth - budge) * cScale;
                 c.moveTo(leftX, budge * cScale);
                 c.lineTo(rightX, budge * cScale);
                 c.closePath();
@@ -2570,35 +2742,94 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // bottom edge (floor)
             if (doFloor == true) {
                 c.beginPath();
-                // When corner radius > 0, connect to corner arcs; when corner radius = 0 or adjacent wall disabled, extend to edge
-                var leftX = (doLeftWall && this.radius > 0) ? (this.radius + budge) * cScale : budge * cScale;
-                var rightX = (doRightWall && this.radius > 0) ? (simWidth - this.radius - budge) * cScale : (simWidth - budge) * cScale;
+                // Connect to actual corner positions when corners exist
+                var leftCorner = Corners.find(c => c.corner === 'southwest');
+                var rightCorner = Corners.find(c => c.corner === 'southeast');
+                var leftX = (doLeftWall && this.radius > 0) ? (leftCorner.pos.x + this.radius + budge) * cScale : budge * cScale;
+                var rightX = (doRightWall && this.radius > 0) ? (rightCorner.pos.x - this.radius - budge) * cScale : (simWidth - budge) * cScale;
                 c.moveTo(leftX, (simHeight - budge) * cScale);
                 c.lineTo(rightX, (simHeight - budge) * cScale);
                 c.closePath();
                 c.stroke();
-            } 
+            }
+            
+            // When corners move inward, we normally skip side outlines in horizontal mode,
+            // but if either ceiling or floor is disabled, keep drawing the side outlines.
+            if (cornerRad >= 100 && screenVertical == false && doCeiling && doFloor) {  
+                return;
+            }
             // left edge
+            budge = 0.0;
+            c.lineWidth = 0.015 * cScale;
             if (doLeftWall == true) {
                 c.beginPath();
                 // When corner radius > 0, connect to corner arcs; when corner radius = 0 or adjacent wall disabled, extend to edge
-                var topY = (doCeiling && this.radius > 0) ? (this.radius + budge) * cScale : budge * cScale;
-                var bottomY = (doFloor && this.radius > 0) ? (simHeight - this.radius - budge) * cScale : (simHeight - budge) * cScale;
-                c.moveTo(budge * cScale, topY);
-                c.lineTo(budge * cScale, bottomY);
+                var topY = (!doCeiling && cornerRad > 100) ? 0 : ((doCeiling && this.radius > 0) ? (this.radius + budge) * cScale : budge * cScale);
+                var bottomY = (!doFloor && cornerRad > 100) ? (simHeight * cScale) : ((doFloor && this.radius > 0) ? (simHeight - this.radius - budge) * cScale : (simHeight - budge) * cScale);
+                var leftWallX;
+                if (cornerRad > 100 && (!doCeiling || !doFloor)) {
+                    var leftCorner = (Corners && Corners.find(c => c.corner === 'northwest')) || (Corners && Corners.find(c => c.corner === 'southwest'));
+                    if (leftCorner && typeof leftCorner.pos?.x === 'number') {
+                        // Align with the vertical boundary defined by the corner center X
+                        leftWallX = (leftCorner.pos.x + budge) * cScale;
+                    } else {
+                        leftWallX = budge * cScale; // fallback
+                    }
+                } else {
+                    leftWallX = budge * cScale;
+                }
+                c.moveTo(leftWallX, topY);
+                c.lineTo(leftWallX, bottomY);
                 c.closePath();
                 c.stroke();
+
+                // Fill outside area to the left when corridor is constricted and a horizontal boundary is open
+                if (cornerRad > 100 && (!doCeiling || !doFloor)) {
+                    var prevFill = c.fillStyle;
+                    // Match corner fill gradient
+                    if (!cornerFillGradient) { updateCornerFillGradient(); }
+                    c.fillStyle = cornerFillGradient;
+                    c.beginPath();
+                    c.rect(0, topY, Math.max(0, leftWallX), Math.max(0, bottomY - topY));
+                    c.fill();
+                    c.fillStyle = prevFill;
+                }
             }  
             // right edge
             if (doRightWall == true) {
                 c.beginPath();
                 // When corner radius > 0, connect to corner arcs; when corner radius = 0 or adjacent wall disabled, extend to edge
-                var topY = (doCeiling && this.radius > 0) ? (this.radius + budge) * cScale : budge * cScale;
-                var bottomY = (doFloor && this.radius > 0) ? (simHeight - this.radius - budge) * cScale : (simHeight - budge) * cScale;
-                c.moveTo((simWidth - budge) * cScale, topY);
-                c.lineTo((simWidth - budge) * cScale, bottomY);
+                var topY = (!doCeiling && cornerRad > 100) ? 0 : ((doCeiling && this.radius > 0) ? (this.radius + budge) * cScale : budge * cScale);
+                var bottomY = (!doFloor && cornerRad > 100) ? (simHeight * cScale) : ((doFloor && this.radius > 0) ? (simHeight - this.radius - budge) * cScale : (simHeight - budge) * cScale);
+                var rightWallX;
+                if (cornerRad > 100 && (!doCeiling || !doFloor)) {
+                    var rightCorner = (Corners && Corners.find(c => c.corner === 'northeast')) || (Corners && Corners.find(c => c.corner === 'southeast'));
+                    if (rightCorner && typeof rightCorner.pos?.x === 'number') {
+                        // Align with the vertical boundary defined by the corner center X
+                        rightWallX = (rightCorner.pos.x) * cScale;
+                    } else {
+                        rightWallX = (simWidth - budge) * cScale; // fallback
+                    }
+                } else {
+                    rightWallX = (simWidth - budge) * cScale;
+                }
+                c.moveTo(rightWallX, topY);
+                c.lineTo(rightWallX, bottomY);
                 c.closePath();
                 c.stroke();
+
+                // Fill outside area to the right when corridor is constricted and a horizontal boundary is open
+                if (cornerRad > 100 && (!doCeiling || !doFloor)) {
+                    var prevFill2 = c.fillStyle;
+                    // Match corner fill gradient
+                    if (!cornerFillGradient) { updateCornerFillGradient(); }
+                    c.fillStyle = cornerFillGradient;
+                    c.beginPath();
+                    var rx = Math.min(rightWallX, simWidth * cScale);
+                    c.rect(rx, topY, Math.max(0, simWidth * cScale - rx), Math.max(0, bottomY - topY));
+                    c.fill();
+                    c.fillStyle = prevFill2;
+                }
             }
         }
     }
@@ -3449,11 +3680,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     if (ball2.left - physProps.repulsionDist * (ball1.radius + ball2.radius) > ball1.right + 4 * (ball1.radius + ball2.radius)) {
                         break;
                     }     
-                    if (Math.abs(ball1.pos.y - ball2.pos.y) < 4 * (ball1.radius + ball2.radius)) {
+                    if (Math.abs(ball1.pos.y - ball2.pos.y) < physProps.repulsionDist * (ball1.radius + ball2.radius)) {
                         handleBallRepulsion(ball1, ball2);
-                    }
-                    if (Math.abs(ball1.pos.y - ball2.pos.y) <= ball1.radius + ball2.radius) {
-                        handleBallHits(ball1, ball2);
+                        if (Math.abs(ball1.pos.y - ball2.pos.y) <= ball1.radius + ball2.radius) {
+                            handleBallHits(ball1, ball2);
+                        }
                     }
                 }
             } else {
@@ -3470,7 +3701,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
             }
 
-            if (showBumpers == true) { 
+            if (showBumpers == true) {
                 lowestBumper = Bumpers[0];
                 highestBumper = Bumpers[Bumpers.length - 1];
                 arrayBottom = lowestBumper.pos.y - lowestBumper.radius;
@@ -3517,10 +3748,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (showPucks == true) {
                 for (var p=0; p < Puck.length; p++) {
                     var puck = Puck[p];
-                    if (puck.right > ball1.left) {
-                        if (Math.abs(ball1.pos.y - puck.pos.y) <= ball1.radius + puck.radius) {
-                            handlePuckHits(ball1, puck)
-                        }
+                    if (puck.right < ball1.left) {
+                        break;
+                    }
+                    if (Math.abs(ball1.pos.y - puck.pos.y) <= ball1.radius + puck.radius) {
+                        handlePuckHits(ball1, puck)
                     }
                 }     
             } 
@@ -3618,6 +3850,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         wipeOpacity = Math.pow(2.718, persistence / -10);
         c.fillStyle = `hsla(0, 0%, 0%, ${wipeOpacity})`;
         c.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Ensure the corner/mask gradient tracks the viewport each frame
+        updateCornerFillGradient();
 
         // DRAW GRID -----------------------------------------------------------------
         if (persistence < 20) {
@@ -3726,6 +3961,52 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 corner.draw();
             }
         } 
+        if (!doCeiling && !doFloor) {
+            var leftXSim = 0;
+            var rightXSim = simWidth;
+            if (cornerRad > 100 && Array.isArray(Corners) && Corners.length >= 2) {
+                var nw = Corners[0]; 
+                var ne = Corners[1]; 
+                if (nw && typeof nw.pos?.x === 'number') leftXSim = nw.pos.x;
+                if (ne && typeof ne.pos?.x === 'number') rightXSim = ne.pos.x;
+            }
+            // Fill masks beyond the left/right bounds using the same gradient as corners
+            if (!cornerFillGradient) { updateCornerFillGradient(); }
+            var prevFill = c.fillStyle;
+            c.fillStyle = cornerFillGradient;
+            var leftPX = Math.max(0, leftXSim * cScale);
+            var rightPX = Math.min(simWidth * cScale, rightXSim * cScale);
+            // Left mask: from canvas left to left bound
+            if (doLeftWall == true && leftPX > 0) {
+                c.beginPath();
+                c.rect(0, 0, leftPX, simHeight * cScale);
+                c.fill();
+            }
+            // Right mask: from right bound to canvas right
+            if (doRightWall == true && rightPX < simWidth * cScale) {
+                c.beginPath();
+                c.rect(rightPX, 0, (simWidth * cScale - rightPX), simHeight * cScale);
+                c.fill();
+            }
+            c.fillStyle = prevFill;
+            c.strokeStyle = 'hsl(0, 0%, 60%)';
+            c.lineWidth = 0.012 * cScale;
+            c.lineCap = 'butt';
+            // Left bound
+            if (doLeftWall == true) {
+                c.beginPath();
+                c.moveTo(leftXSim * cScale, 0);
+                c.lineTo(leftXSim * cScale, simHeight * cScale);
+                c.stroke();
+            }
+            // Right bound
+            if (doRightWall == true) {
+                c.beginPath();
+                c.moveTo(rightXSim * cScale, 0);
+                c.lineTo(rightXSim * cScale, simHeight * cScale);
+                c.stroke();
+            }
+        }
 	}
 
     //  MAIN SEQUENCE ----------------------------------------------------------------------------
