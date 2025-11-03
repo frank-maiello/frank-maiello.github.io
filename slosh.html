@@ -963,7 +963,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         </optgroup>
     </select>
     <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="3" class="field-cyan-short">
-	<input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="14" class="field-cyan-short">
+	<input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="15" class="field-cyan-short">
     <input type="radio" title="Spheres" name="ballType" id="ballSphere" class="radio-green">
     <input type="radio" title="Discs" name="ballType" id="ballDisc" class="radio-green" checked>
     <input type="radio" title="Circles" name="ballType" id="ballCircle" class="radio-green">
@@ -1374,8 +1374,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         WormProps.startRadius = 0.001 * wormStartRadiusSlider.value;}
     document.getElementById('wormEndRadiusSlider').oninput = function() {
         WormProps.endRadius = 0.001 * wormEndRadiusSlider.value;}
-    document.getElementById('wormNumNodesSlider').oninput = function() {
-        WormProps.numNodes = 1 * wormNumNodesSlider.value;}
     document.getElementById('tracerButton').oninput = function() {
         if (tracerButton.checked == true) {
             doTracer = true;
