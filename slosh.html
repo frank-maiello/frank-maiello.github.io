@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.24</title>
+		<title>Slosh 1.25</title>
         <style>
 			body {font-family: monospace; 
                 font-size: 16px;
@@ -496,7 +496,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 vertical-align: middle;
                 margin-top: 5px;
                 margin-bottom: 10px;
-                width: 60px;
+                width: 75px;
 				height: 4px;
 				border-radius: 5px;
                 background: hsl(0, 0%, 0%);
@@ -962,13 +962,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             <option value="9025">9025</option>
         </optgroup>
     </select>
-    <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="4" class="field-cyan-short">
-	<input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="16" class="field-cyan-short">
+    <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="3" class="field-cyan-short">
+	<input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="14" class="field-cyan-short">
     <input type="radio" title="Spheres" name="ballType" id="ballSphere" class="radio-green">
     <input type="radio" title="Discs" name="ballType" id="ballDisc" class="radio-green" checked>
     <input type="radio" title="Circles" name="ballType" id="ballCircle" class="radio-green">
     
-    <span style="white-space: nowrap">time&#8594
+    <span style="white-space: nowrap">
+    time&#8594
     <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked></span>
     <input type="range"  title="Time  ::  <--- Slower : Normal" id="timeSlider" min="40" max="100" value="100" class="slider-mint">
     <input type="range"  title="Persistence" id="persistenceSlider" min="0" max="30" value="12" class="slider-mint">
@@ -1006,7 +1007,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     &#8594 mr.mister</span>
     <input type="range"  title="Yeet" id="yeetSlider" min="0" max="600" value="250" class="slider-purple-short">
-    <input type="range"  title="Sweeper Speed" id="sprinklerSpeedSlider" min="0" max="30" value="10" class="slider-pink">
+    <input type="range"  title="Sweeper Speed" id="sprinklerSpeedSlider" min="0" max="30" value="0" class="slider-pink">
     
     <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field-purple">
         <optgroup label="Mr. Mister Motion">
@@ -2525,7 +2526,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
         draw() {
-            if (doSpheres == true) {
+            if (doDiscs == true) {
+                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
+                c.fillStyle = this.color;
+                c.fill();
+                c.strokeStyle = this.hiColor;
+                c.lineWidth = 0.2 * this.radius * cScale;
+                c.stroke();
+            } else if (doSpheres == true) {
                 const shineOffsetX = cScale * this.radius * 0.3; // old masterShineShiftX;
                 const shineOffsetY = cScale * this.radius * 0.4; // old masterShineShiftY;
                 const shineVector = Math.sqrt(shineOffsetX * shineOffsetX + shineOffsetY * shineOffsetY);
@@ -2543,16 +2551,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
                 c.fillStyle = shading;
                 c.fill()
-            } 
-            if (doDiscs == true) {
-                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
-                c.fillStyle = this.color;
-                c.fill();
-                c.strokeStyle = this.hiColor;
-                c.lineWidth = 0.2 * this.radius * cScale;
-                c.stroke();
-            }
-            if (doCircles == true) {
+            } else if (doCircles == true) {
                 drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
                 c.strokeStyle = this.color;
                 c.lineWidth = 0.2 * this.radius * cScale;
@@ -2612,26 +2611,52 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
             }
         }
-        //  ROUND CLUSTER
+        //  ROUND CLUSTER - SINGLE TIGHT SPIRAL
         if (cluster.checked == true) {
+            var centerX = 0.5 * simWidth;
+            var centerY = 0.5 * simHeight;
+            var ballDiameter = bigBallRadius * 2;
+            var angle = 0;
+            var spiralRadius = 0;
+            
             for (var q = 0; q < getNumBalls; q++) {
-                var clusterRadius = 0.2 * simWidth;
-                var randomRadius = Math.random() * clusterRadius;
-                var randomTheta = Math.random() * 2 * Math.PI;
-                var circleXpos = 0.5 * simWidth + Math.cos(randomTheta) * randomRadius;
-                var circleYpos = 0.5 * simHeight + Math.sin(randomTheta) * randomRadius;
+                // Determine ball radius first
                 if (smallBallRadius == 0) {
                     var radius = bigBallRadius;
-                    } else {
+                } else {
                     var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
                 }
+                
+                // Place first ball at center
+                if (q == 0) {
+                    var circleXpos = centerX;
+                    var circleYpos = centerY;
+                } else {
+                    // Calculate position on spiral
+                    var circleXpos = centerX + Math.cos(angle) * spiralRadius;
+                    var circleYpos = centerY + Math.sin(angle) * spiralRadius;
+                    
+                    // Calculate next position based on ball diameter
+                    // Angular step ensures balls are spaced by their diameter along the arc
+                    var arcLength = ballDiameter * 1.05; // Small gap between balls
+                    var angleStep = arcLength / Math.max(spiralRadius, ballDiameter);
+                    angle += angleStep;
+                    
+                    // Increase radius slowly: one ball diameter per full rotation (2π)
+                    spiralRadius += (ballDiameter * angleStep) / (2 * Math.PI);
+                }
+                
                 var mass = 2 * Math.PI * radius * radius; 
                 var pos = new Vector2(circleXpos, circleYpos);   
-                var vel = new Vector2(Math.cos(randomTheta) * brakes, Math.sin(randomTheta) * brakes);
+                
+                // Give balls slight outward velocity based on their position
+                var outwardAngle = Math.atan2(circleYpos - centerY, circleXpos - centerX);
+                var vel = new Vector2(Math.cos(outwardAngle) * brakes, Math.sin(outwardAngle) * brakes);
+                
                 if (Math.random() * 100 < 5) {
                     var whiteBall = true;
                 } else {
-                    var whiteBall =false;
+                    var whiteBall = false;
                 }
                 if (q == 0) {
                     var tracerBall = true;
