@@ -1,0 +1,403 @@
+<!--
+Copyright 2021 Matthias Müller - Ten Minute Physics
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+
+<!DOCTYPE html>
+<html>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>w0rm</title>
+<style>
+    body {
+        font-family: verdana; 
+        font-size: 15px;
+    }			
+    .button:hover {opacity: 1}
+    .button {
+            appearance: none;
+            padding: 0px;
+            border: 0px;
+            vertical-align: middle;
+            margin-top: 0px;
+            margin-bottom: 5px;
+            margin-left: 5px;
+            margin-right: 5px;
+            width: 15px;
+            height: 15px;
+            border-radius: 10px;
+            color: black;
+            background-color: hsl(30, 80%, 47%);
+            opacity: 0.7;
+            cursor: pointer;
+            box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+    /* cursor removed to eliminate mouse interaction */
+</style>
+
+<body style="background: linear-gradient(to bottom, hsl(0, 0%, 8%) 0%, hsl(0, 0%, 15%) 50%); background-attachment: fixed; margin-left: 0px; margin-right: 0px">
+	<canvas id = "myCanvas"></canvas>
+<script>
+   	var canvas = document.getElementById("myCanvas");
+	var c = canvas.getContext("2d");
+	canvas.width = window.innerWidth - 20;
+	canvas.height = window.innerHeight - 20;
+
+	var simMinWidth = 1.0;
+	var cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+
+    //  VECTOR OPERATIONS -----------
+    class Vector2 {
+        constructor(x = 0.0, y = 0.0) {
+            this.x = x; 
+            this.y = y;
+        }
+        add(v, s=1) {
+            this.x += v.x * s;
+            this.y += v.y * s;
+            return this;
+        }
+        length() {
+            return Math.sqrt(this.x * this.x + this.y * this.y);
+        }
+        scale(s) {
+            this.x *= s;
+            this.y *= s;
+            return this;
+        }
+        dot(v) {
+            return this.x * v.x + this.y * v.y;
+        }
+    }
+
+    function cX(pos) {
+        return pos.x * cScale;
+    }
+    function cY(pos) {
+        return pos.y * cScale;
+    }
+
+    
+
+    var WormProps = {
+        gravity : new Vector2(0, 10),  // Downward gravity
+        dt : 0.01,
+        wormSubSteps : 10,
+        paused : false,
+        mouseControl: false,
+        mousePos: new Vector2(0, 0),
+        firstFrame: true,  // Skip velocity calculation on first frame
+    };
+
+    // Mouse control variables
+    var mouseDown = false;
+    var simWidth = canvas.width / cScale;
+    var simHeight = canvas.height / cScale;
+
+    // Mouse event handlers
+    canvas.addEventListener('mousedown', function(e) {
+        mouseDown = true;
+        WormProps.mouseControl = true;
+        updateMousePosition(e);
+    });
+
+    canvas.addEventListener('mouseup', function(e) {
+        mouseDown = false;
+        WormProps.mouseControl = false;
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+        if (mouseDown) {
+            updateMousePosition(e);
+        }
+    });
+
+    function updateMousePosition(e) {
+        var rect = canvas.getBoundingClientRect();
+        var mouseX = (e.clientX - rect.left) / cScale;
+        var mouseY = (e.clientY - rect.top) / cScale;
+        WormProps.mousePos.x = mouseX;
+        WormProps.mousePos.y = mouseY;
+    }
+
+    //  MAKE WORM  ---------------------------------
+    function makeWorm() {
+        //  WORM CONSTANTS -----------
+        var leadRradius = 0.04;
+        var minRradius = 0.01;
+        var numNodes = 15;
+
+        var angles = [];
+        var lengths = [];
+        var masses = [];
+        var radii = [];
+        
+        if (numNodes == 1) {
+            radii.push(leadRradius);
+        } else {
+            // progression from leadRradius to minRradius
+            var ratio = Math.pow(minRradius / leadRradius, 1.0 / (numNodes - 1));
+            for (var i = 0; i < numNodes; i++)
+                radii.push(leadRradius * Math.pow(ratio, i));
+        }
+        
+        //  Lengths are chosen so neighboring circles touch (center distance = r_prev + r_curr).
+        lengths = [];
+        for (var i = 0; i < numNodes - 1; i++) {
+            // Distance between segment i and segment i+1
+            lengths.push(radii[i] + radii[i + 1]);
+        }
+        
+        //  set mass
+        var massScale = 200.0;
+        for (var i = 0; i < radii.length; i++) {
+            masses.push(Math.max(0.0001, radii[i] * radii[i] * massScale));
+        }
+
+        WormProps.SpaceWorm = new WORM(masses, lengths, angles, radii);
+        
+        // Position the worm initially in center of screen
+        var p = WormProps.SpaceWorm;
+        if (p) {
+            var centerX = simWidth / 2;
+            var centerY = simHeight / 2;
+            
+            // Position segments vertically downward from center
+            // Head segment (index 0) starts at center
+            var currentY = centerY;
+            for (var i = 0; i < p.pos.length; i++) {
+                p.pos[i].x = centerX;
+                p.pos[i].y = currentY;
+                p.prevPos[i].x = centerX;
+                p.prevPos[i].y = currentY;
+                
+                // Move down by the distance to next segment
+                if (i < p.lengths.length) {
+                    currentY += p.lengths[i];
+                }
+            }
+        }
+    }
+
+    class WORM {
+        constructor(masses, lengths, angles, radii) {
+            this.masses = [];
+            this.lengths = [];
+            this.radii = [];
+            this.pos = [];
+            this.prevPos = [];
+            this.vel = [];
+            this.theta = [];
+            this.omega = [];
+
+            this.waver = 0.0;
+
+            // Create segments directly without dummy pivot
+            var x = 0.0, y = 0.0;
+            for (var i = 0; i < masses.length; i++) {
+                var mi = masses[i];
+                var li = lengths[i];
+                var ai = angles[i];
+                var ri = radii[i];
+                this.masses.push(mi);
+                this.lengths.push(li);
+                this.radii.push(ri);
+                this.theta.push(ai);
+                this.omega.push(0.0);
+
+                this.pos.push({ x:x, y:y});
+                this.prevPos.push({ x:x, y:y});
+                this.vel.push({x:0, y:0});
+                
+                // Position next segment below current one
+                y += li;
+            }
+        }
+        
+        simulate(dt, gravity) {
+            var p = this;
+            
+            // Handle mouse control for head segment (now index 0)
+            if (WormProps.mouseControl && p.pos.length > 0) {
+                p.pos[0].x = WormProps.mousePos.x;
+                p.pos[0].y = WormProps.mousePos.y;
+                p.vel[0].x = 0;
+                p.vel[0].y = 0;
+            }
+            
+            // Apply gravity and physics to ALL segments
+            for (var i = 0; i < p.masses.length; i++) {
+                // Skip physics for head segment only when under mouse control
+                if (WormProps.mouseControl && i === 0) {
+                    continue;
+                }
+                
+                p.vel[i].x += dt * WormProps.gravity.x;
+                p.vel[i].y += dt * WormProps.gravity.y;
+                p.prevPos[i].x = p.pos[i].x;
+                p.prevPos[i].y = p.pos[i].y;
+                p.pos[i].x += p.vel[i].x * dt;
+                p.pos[i].y += p.vel[i].y * dt;
+            }
+            
+            // Boundary collision for all segments (including head when not under mouse control)
+            for (var i = 0; i < p.pos.length; i++) {
+                // Skip boundary collision for head segment only when under mouse control
+                if (WormProps.mouseControl && i === 0) {
+                    continue;
+                }
+                
+                var segment = p.pos[i];
+                var segmentVel = p.vel[i];
+                var radius = p.radii[i] || 0.02;
+                var restitution = 0.8;
+                
+                // Left boundary
+                if (segment.x - radius < 0) {
+                    segment.x = radius;
+                    segmentVel.x = Math.abs(segmentVel.x) * restitution;
+                }
+                // Right boundary
+                if (segment.x + radius > simWidth) {
+                    segment.x = simWidth - radius;
+                    segmentVel.x = -Math.abs(segmentVel.x) * restitution;
+                }
+                // Top boundary
+                if (segment.y - radius < 0) {
+                    segment.y = radius;
+                    segmentVel.y = Math.abs(segmentVel.y) * restitution;
+                }
+                // Bottom boundary
+                if (segment.y + radius > simHeight) {
+                    segment.y = simHeight - radius;
+                    segmentVel.y = -Math.abs(segmentVel.y) * restitution;
+                }
+            }
+            
+            // Constraint solving (keep segments connected)
+            for (var i = 1; i < p.masses.length; i++) {
+                var dx = p.pos[i].x - p.pos[i-1].x;
+                var dy = p.pos[i].y - p.pos[i-1].y;
+                var d = Math.sqrt(dx * dx + dy * dy);
+                if (d > 1e-9) {
+                    var w0 = p.masses[i - 1] > 0.0 ? 1.0 / p.masses[i - 1] : 0.0;
+                    var w1 = p.masses[i] > 0.0 ? 1.0 / p.masses[i] : 0.0;
+                    // The length between segment (i-1) and segment i is stored at index (i-1)
+                    var targetLength = p.lengths[i - 1];
+                    var corr = (targetLength - d) / d / (w0 + w1);
+                    p.pos[i - 1].x -= w0 * corr * dx; 
+                    p.pos[i - 1].y -= w0 * corr * dy; 
+                    p.pos[i].x += w1 * corr * dx; 
+                    p.pos[i].y += w1 * corr * dy; 
+                }
+            }
+            
+            // Update velocities for all segments (except head when under mouse control)
+            if (!WormProps.firstFrame) {
+                for (var i = 0; i < p.masses.length; i++) {
+                    // Skip velocity update for head segment only when under mouse control
+                    if (WormProps.mouseControl && i === 0) {
+                        continue;
+                    }
+                    
+                    p.vel[i].x = 0.99 * (p.pos[i].x - p.prevPos[i].x) / dt;
+                    p.vel[i].y = 0.99 * (p.pos[i].y - p.prevPos[i].y) / dt;
+                }
+            } else {
+                // First frame: just update prevPos to current pos without calculating velocity
+                for (var i = 0; i < p.masses.length; i++) {
+                    p.prevPos[i].x = p.pos[i].x;
+                    p.prevPos[i].y = p.pos[i].y;
+                }
+                WormProps.firstFrame = false;
+            }
+        }
+        draw() {
+            var p = this;
+
+            //  CIRCLES  ----------
+            c.lineWidth = 3;         
+            c.strokeStyle = "cyan";
+            for (var i = p.pos.length - 1; i >= 0; i--) {
+                var ri = (i < p.radii.length && typeof p.radii[i] === 'number') ? p.radii[i] : 0.02;
+                var r = ri;
+                c.beginPath();
+                c.arc(
+                    cX(p.pos[i]), cY(p.pos[i]), cScale * r, 0.0, 2 * Math.PI);
+                c.closePath();
+                var sphereGradient = c.createRadialGradient(
+                        (cX(p.pos[i]) - (0.2 * r * cScale)), 
+                        (cY(p.pos[i]) - (0.4 * r * cScale)), 
+                        0, 
+                        (cX(p.pos[i]) - (0.2 * r * cScale)), 
+                        (cY(p.pos[i]) - (0.4 * r * cScale)), 
+                        1.2 * r * cScale
+                    );
+                
+                // Different colors for head segment (index 0) vs other segments
+                var highlight, midtone, shadow;
+                if (i === 0) {
+                    // Red coloring for head segment
+                    highlight = 'hsl(0, 80%, 80%)';
+                    midtone = 'hsl(0, 80%, 60%)';
+                    shadow = 'hsl(0, 80%, 10%)';
+                } else {
+                    // Original orange/brown coloring for other segments
+                    highlight = 'hsl(30, 80%, 80%)';
+                    midtone = 'hsl(30, 80%, 60%)';
+                    shadow = 'hsl(30, 80%, 10%)';
+                }
+                
+                sphereGradient.addColorStop(0.0, highlight);
+                sphereGradient.addColorStop(0.15, midtone);
+                sphereGradient.addColorStop(1.0, shadow);
+                c.fillStyle = sphereGradient;
+                c.fill();
+            }
+            // pos[0] is now the head of the chain.
+
+            /*
+            //  SPINE  ----------
+            c.strokeStyle = "green";
+            c.lineWidth = 0.003 * cScale;
+            // draw the polyline starting at the head (pos[0])
+            if (p.pos.length > 0) {
+                c.beginPath();
+                c.moveTo(cX(p.pos[0]), cY(p.pos[0]));
+                for (var i = 1; i < p.pos.length; i++)
+                    c.lineTo(cX(p.pos[i]), cY(p.pos[i]));
+                c.stroke();
+            }*/
+        }
+    }
+
+    function drawWorm() {
+        c.fillStyle = "black";
+        c.fillRect(0, 0, canvas.width, canvas.height);
+        if (WormProps.SpaceWorm)
+            WormProps.SpaceWorm.draw();
+    }
+
+    function simulateWorm() {
+        var sdt = WormProps.dt / WormProps.wormSubSteps;
+
+        for (var step = 0; step < WormProps.wormSubSteps; step++) {
+            WormProps.SpaceWorm.simulate(sdt, WormProps.gravity);
+        }
+    }
+
+	function update() {
+		simulateWorm();
+		drawWorm();
+		requestAnimationFrame(update);
+	}
+
+    makeWorm();
+    update();
+
+</script> 
+</body>
+</html>
