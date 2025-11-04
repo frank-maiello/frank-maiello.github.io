@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.25</title>
+		<title>Slosh 1.26</title>
         <style>
 			body {font-family: monospace; 
                 font-size: 16px;
@@ -34,6 +34,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 text-align: center}
             h2 {font-family: monospace;
                 font-size: 0px;
+                text-align: center;}
+            h3 {font-family: monospace;
+                font-size: 2px;
                 text-align: center;}
 
     /*  BUTTONS  ----------------------------------------------------------- */
@@ -727,8 +730,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 background-color: hsl(54, 100%, 50%);
                 border: 3px dotted hsl(0, 0%, 10%);}
 
-            .checkbox-roundbluelight:hover {opacity: 1}    
-            .checkbox-roundbluelight {-webkit-appearance: none;
+            .checkbox-cyan:hover {opacity: 1}    
+            .checkbox-cyan {-webkit-appearance: none;
                 appearance: none;
                 opacity: 0.8;
                 width: 24px;
@@ -742,21 +745,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 outline: none;
                 cursor: pointer;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
-            .checkbox-roundbluelight:checked {
+            .checkbox-cyan:checked {
                 background-color: hsl(190, 70%, 50%)}
-                
-            .checkbox-ceiling:hover {opacity: 1}
-            .checkbox-ceiling {-webkit-appearance: none;
+
+            .checkbox-blue-dark:hover {opacity: 1}    
+            .checkbox-blue-dark {-webkit-appearance: none;
                 appearance: none;
                 opacity: 0.8;
                 width: 24px;
                 height: 24px;
                 margin-top: 5px;
                 margin-bottom: 10px;
-                background-color: hsl(80, 50%, 20%);
+                background-color: hsl(220, 50%, 30%);
                 border-radius: 50%;
                 vertical-align: middle;
                 border: 3px solid hsl(0, 0%, 80%);
+                outline: none;
+                cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .checkbox-blue-dark:checked {
+                background-color: hsl(220, 70%, 50%)}
+                
+            .checkbox-ceiling:hover {opacity: 1}
+            .checkbox-ceiling {-webkit-appearance: none;
+                appearance: none;
+                opacity: 0.8;
+                width: 24px;
+                height: 12px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                background-color: hsl(80, 50%, 20%);
+                border-radius: 24px 24px 0 0;
+                vertical-align: middle;
+                border: 3px solid hsl(0, 0%, 80%);
+                border-bottom: none;
                 outline: none;
                 cursor: pointer;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
@@ -768,13 +790,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 appearance: none;
                 opacity: 0.8;
                 width: 24px;
-                height: 24px;
+                height: 12px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 background-color: hsl(160, 50%, 20%);
-                border-radius: 50%;
+                border-radius: 0 0 24px 24px;
                 vertical-align: middle;
                 border: 3px solid hsl(0, 0%, 80%);
+                border-top: none;
                 outline: none;
                 cursor: pointer;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
@@ -785,14 +808,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .checkbox-leftwall {-webkit-appearance: none;
                 appearance: none;
                 opacity: 0.8;
-                width: 24px;
+                width: 12px;
                 height: 24px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 background-color: hsl(230, 70%, 20%);
-                border-radius: 50%;
+                border-radius: 24px 0 0 24px;
                 vertical-align: middle;
                 border: 3px solid hsl(0, 0%, 80%);
+                border-right: none;
                 outline: none;
                 cursor: pointer;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
@@ -803,14 +827,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .checkbox-rightwall {-webkit-appearance: none;
                 appearance: none;
                 opacity: 0.8;
-                width: 24px;
+                width: 12px;
                 height: 24px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 background-color: hsl(310, 50%, 20%);
-                border-radius: 50%;
+                border-radius: 0 24px 24px 0;
                 vertical-align: middle;
                 border: 3px solid hsl(0, 0%, 80%);
+                border-left: none;
                 outline: none;
                 cursor: pointer;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
@@ -928,7 +953,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <body style="background: linear-gradient(to bottom, hsl(0, 0%, 0%) 0%, hsl(195, 64%, 8%) 100%); background-attachment: fixed; margin-left: 0px;"> 
     <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-left: 10px"></canvas>
 
-    <h2><br></h2>
+    <h3><br><br></h3>
 	<input type="button" title="Restart [r]" class="buttongreenbig" value="&#8629" onclick="makeBalls()">
     <input type="radio" title="Round Cluster Start" name="rackemType" id="cluster" class="radioball">
     <input type="radio" title="Square Array Start" name="rackemType" id="array" class="radioball" checked>
@@ -955,7 +980,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             <option value="3600">3600</option>
             <option value="4096" selected>4096</option>
             <option value="4900">4900</option>
+            <option value="5329">5329</option>
             <option value="5625">5625</option>
+            <option value="6084">6084</option>
             <option value="6400">6400</option>
             <option value="7056">7056</option>
             <option value="8100">8100</option>
@@ -990,24 +1017,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     <span style="white-space: nowrap">
     pucks&#8594
-    <input type="checkbox" title="Pucks on/off" id="showPuckButton" value="true" class="checkbox-roundbluelight" checked>
+    <input type="checkbox" title="Pucks on/off" id="showPuckButton" value="true" class="checkbox-cyan" checked>
     <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="200" class="slider-cyan"></span>
     
     <span style="white-space: nowrap">
     eaters&#8594
-    <input type="checkbox" title="Eaters on/off" id="showHungryPuckButton" value="false" class="checkbox-roundbluelight" unchecked></span>
+    <input type="checkbox" title="Eaters on/off" id="showHungryPuckButton" value="false" class="checkbox-blue-dark" unchecked></span>
     
-    respawn&#8594
+    <span style="white-space: nowrap">
+    tracer&#8594
+    <input type="checkbox" title="Particle Trace on/off" id="tracerButton" class="checkbox-gray" checked></span>
+    
+    oneshot&#8594
     <input type="checkbox" title="One Shot (no respawn)" id="oneShotButton" value="false" class="checkbox-oneshot" unchecked>
+    |spawn&#8594&#8594
     <input type="range"  title="Shower Width" id="dumpSlider" min="1" max="100" value="40" class="slider-redspawn2">
     <input type="range"  title="Shower Position" id="dumpMoveSlider" min="-50" max="50" value="0" class="slider-redspawn">
-    <span style="white-space: nowrap">shower &#8592
+    
+    <span style="white-space: nowrap">
+    shower &#8592
     <input type="radio" title="Shower" name="spawnType" id="shower" value="shower" class="radio2">
     / <input type="radio" title="Mr. Mister" name="spawnType" id="fountain" value="fountain" class="radio" checked>
     
     &#8594 mr.mister</span>
     <input type="range"  title="Yeet" id="yeetSlider" min="0" max="600" value="250" class="slider-purple-short">
-    <input type="range"  title="Sweeper Speed" id="sprinklerSpeedSlider" min="0" max="30" value="0" class="slider-pink">
+    <input type="range"  title="Sweep" id="sprinklerSpeedSlider" min="0" max="30" value="0" class="slider-pink">
     
     <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field-purple">
         <optgroup label="Mr. Mister Motion">
@@ -1023,7 +1057,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         </optgroup>
     </select>
     <input type="range"  title="Mr. Mister Orbit Speed" id="misterSpeedSlider" min="10" max="200" value="100" class="slider-purple-short">
-    
+    &#8592&#8592|
+
     <span style="white-space: nowrap">
     plinko&#8594
     <input type="checkbox" title="Pegs on/off" id="showBumperEntry" value="false" class="checkbox-yellow" unchecked>
@@ -1037,10 +1072,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="70" max="300" value="150" class="slider-orange">
     <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz"></span>
 
-    <span style="white-space: nowrap">
-    tracer&#8594
-    <input type="checkbox" title="Particle Trace on/off" id="tracerButton" class="checkbox-gray" checked></span>
-    
     <span style="white-space: nowrap">
     color&#8594
     <input type="range"  title="Speed Sensitivity" id="velColorMapSlider" min="1" max="500" value="100" class="slider-red2">
@@ -1072,7 +1103,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // normal
         screenVertical = false;
         canvas.width = window.innerWidth - 40;
-        canvas.height = window.innerHeight - 210;
+        canvas.height = window.innerHeight - 200;
     }
     simMinWidth = 2.0;
     cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
