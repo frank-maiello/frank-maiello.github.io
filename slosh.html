@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.29
+		<title>Slosh 1.30
         </title>
         <style>
 			body {font-family: monospace; 
@@ -356,7 +356,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 10px;
                 height: 22px;
                 border-radius: 30%;
-                background: hsl(45, 75%, 41%);
+                background: hsl(45, 80%, 50%);
                 box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
                 cursor: pointer}
 
@@ -379,9 +379,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 10px;
                 height: 22px;
                 border-radius: 20%;
-                background: hsl(26, 91%, 46%);
+                background: var(--worm-ui-color);
                 box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
                 cursor: pointer}
+            .slider-orange::-moz-range-thumb {
+                width: 10px;
+                height: 22px;
+                border: none;
+                border-radius: 20%;
+                background: var(--worm-ui-color);
+                box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
+                cursor: pointer;
+            }
 
             .slider-organge-horiz:hover {opacity: 1} 
             .slider-orange-horiz {-webkit-appearance: none;
@@ -402,9 +411,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 26px;
                 height: 12px;
                 border-radius: 30%;
-                background: hsl(26, 91%, 46%);
+                background: var(--worm-ui-color);
                 box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
                 cursor: pointer}
+            .slider-orange-horiz::-moz-range-thumb {
+                width: 26px;
+                height: 12px;
+                border: none;
+                border-radius: 30%;
+                background: var(--worm-ui-color);
+                box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
+                cursor: pointer;
+            }
 
             .slider-lime:hover {opacity: 1} 
             .slider-lime {-webkit-appearance: none;
@@ -422,6 +440,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				-webkit-transition: .2s;
 			    transition: opacity .2s}
             .slider-lime::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 20%;
+                background: hsl(75, 91%, 46%);
+                box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
+                cursor: pointer}
+
+            .slider-lime2:hover {opacity: 1} 
+            .slider-lime2 {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 70px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-lime2::-webkit-slider-thumb {-webkit-appearance: none;
                 width: 10px;
                 height: 22px;
                 border-radius: 20%;
@@ -589,6 +630,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 margin-bottom: 10px;
                 padding-left: 6px;
 				width: 80px;
+				height: 22px;
+                border-width: 0;
+				border-radius: 10px;
+                color: hsl(170, 75%, 50%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+				transition: opacity .2s}
+
+            .field-cyan2:hover {opacity: 1}
+            .field-cyan2 {-webkit-appearance: none;
+                appearance: none;
+                font-family: monospace;
+                font-size: 16px;
+                text-align: center;
+                background: hsl(0, 0%, 0%);
+                margin-bottom: 10px;
+                padding-left: 6px;
+				width: 100px;
 				height: 22px;
                 border-width: 0;
 				border-radius: 10px;
@@ -785,9 +846,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 position: relative;
                 display: inline-block;
                 /* Tunables */
-                --tr-dim:    hsl(0, 0%, 35%);  /* dim gray */
-                --tr-bright: hsl(0, 0%, 80%);  /* bright gray */
-            }
+                --tr-dim:    hsl(0, 0%, 20%);  /* dim gray */
+                --tr-bright: hsl(0, 0%, 80%);  /* bright gray */}
             .checkbox-tracer::after {
                 content: "\2710"; /* ✐ */
                 position: absolute;
@@ -799,9 +859,78 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 color: var(--tr-dim);
                 pointer-events: none;
                 text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;}
+            .checkbox-tracer:checked::after { color: var(--tr-bright); }
+
+            /* Cycle puck toggle: ✢ (U+2742), dim when off, bright when on */
+            .checkbox-cycle:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-cycle { -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                vertical-align: middle;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                background: transparent;
+                position: relative;
+                display: inline-block;
+                /* Tunables (teal/cyan theme) */
+                --cyc-dim:    hsl(190, 50%, 20%);
+                --cyc-bright: hsl(190, 80%, 55%);}
+            .checkbox-cycle::after {
+                content: "!!!"; /* ✢ */
+                position: absolute;
+                left: 50%;
+                top: 60%;
+                transform: translate(-50%, -56%);
+                font-size: 32px;
+                line-height: 1;
+                color: var(--cyc-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;}
+            .checkbox-cycle:checked::after { color: var(--cyc-bright); }
+
+            /* Normal pucks toggle: ☉ (U+2609), dim when off, bright when on */
+            .checkbox-puck:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-puck { -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                vertical-align: middle;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                background: transparent;
+                position: relative;
+                display: inline-block;
+                /* Tunables (cyan theme to match pucks) */
+                --puck-dim:    hsl(190, 45%, 20%);
+                --puck-bright: hsl(190, 85%, 55%);
+            }
+            .checkbox-puck::after {
+                content: "\2609"; /* ☉ sun */
+                position: absolute;
+                left: 50%;
+                top: 72%;
+                transform: translate(-50%, -56%);
+                font-size: 50px;
+                line-height: 1;
+                color: var(--puck-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
                 transition: color 120ms ease, filter 120ms ease;
             }
-            .checkbox-tracer:checked::after { color: var(--tr-bright); }
+            .checkbox-puck:checked::after { color: var(--puck-bright); }
 
             /* Worm toggle: ⚕ (U+2695) rotated 90° clockwise, dim/bright orange */
             .checkbox-worm:hover { opacity: 1; filter: brightness(1.05); }
@@ -821,7 +950,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 position: relative;
                 display: inline-block;
                 /* Tunables (match original orange theme) */
-                --worm-dim:    hsl(23, 40%, 35%);
+                --worm-dim:    hsl(23, 40%, 20%);
                 --worm-bright: hsl(23, 70%, 60%);
             }
             .checkbox-worm::after {
@@ -838,6 +967,94 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 transition: color 120ms ease, filter 120ms ease;
             }
             .checkbox-worm:checked::after { color: var(--worm-bright); }
+
+            /* Worm UI theming: simple CSS linkage between the Worm button and worm sliders */
+            body {
+                /* Palette mirrors .checkbox-worm */
+                --worm-ui-dim:    hsl(23, 40%, 20%);
+                --worm-ui-bright: hsl(23, 70%, 60%);
+                /* Sliders default to dim when the Worm button is off */
+                --worm-ui-color: var(--worm-ui-dim);
+            }
+            /* When the Worm button is checked, brighten the slider knobs */
+            body:has(#wormButton:checked) {
+                --worm-ui-color: var(--worm-ui-bright);
+            }
+
+            /* Plinko/Bumper UI theming: link the Plinko toggle to the yellow slider knobs */
+            /* Mirrors .checkbox-bumper colors so the knob matches the button's dim/bright state */
+            body {
+                --bumper-ui-dim:    hsl(45, 45%, 20%);
+                --bumper-ui-bright: hsl(45, 80%, 50%);
+                /* Default: dim when Plinko (showBumperEntry) is off */
+                --bumper-ui-color: var(--bumper-ui-dim);
+            }
+            /* Brighten yellow slider knobs when Plinko is enabled */
+            body:has(#showBumperEntry:checked) {
+                --bumper-ui-color: var(--bumper-ui-bright);
+            }
+            /* Apply the theme color to yellow slider thumbs (WebKit and Firefox) */
+            .slider-yellow::-webkit-slider-thumb { background: var(--bumper-ui-color); }
+            .slider-yellow::-moz-range-thumb    { background: var(--bumper-ui-color); }
+
+            /* Puck Radius slider theming: dim knob when ALL puck toggles are off; brighten if ANY are on */
+            body {
+                /* Match .checkbox-puck cyan palette */
+                --puck-ui-dim:    hsl(190, 45%, 20%);
+                --puck-ui-bright: hsl(190, 85%, 55%);
+                /* Default to dim when no puck toggles are checked */
+                --puck-ui-color: var(--puck-ui-dim);
+            }
+            /* If any puck-related toggle is checked, use bright */
+            body:has(#showPuckButton:checked),
+            body:has(#showCyclePuckButton:checked),
+            body:has(#showHeartButton:checked) {
+                --puck-ui-color: var(--puck-ui-bright);
+            }
+            /* Apply to the puck radius slider knob */
+            #puckRadiusSlider::-webkit-slider-thumb { background: var(--puck-ui-color); }
+            #puckRadiusSlider::-moz-range-thumb    { background: var(--puck-ui-color); }
+
+            /* Shower sliders theming: dim dump sliders when Shower is OFF; brighten when ON */
+            body {
+                /* Match spawn red theme used by shower controls */
+                --dump-ui-dim:    hsl(350, 40%, 35%);
+                --dump-ui-bright: hsl(350, 70%, 50%);
+                --dump-ui-color: var(--dump-ui-dim);
+            }
+            body:has(#shower:checked) {
+                --dump-ui-color: var(--dump-ui-bright);
+            }
+            /* Apply to both shower sliders: width (redspawn2) and position (redspawn) */
+            .slider-redspawn2::-webkit-slider-thumb, .slider-redspawn::-webkit-slider-thumb { background: var(--dump-ui-color); }
+            .slider-redspawn2::-moz-range-thumb,    .slider-redspawn::-moz-range-thumb    { background: var(--dump-ui-color); }
+
+            /* Repulsion slider theming: dim lime slider when Repulsion is OFF; brighten when ON */
+            body {
+                /* Match repulsion toggle lime theme */
+                --rep-ui-dim:    hsl(75, 80%, 20%);
+                --rep-ui-bright: hsl(75, 80%, 50%);
+                --rep-ui-color: var(--rep-ui-dim);
+            }
+            body:has(#repulsionButton:checked) { --rep-ui-color: var(--rep-ui-bright); }
+            .slider-lime::-webkit-slider-thumb { background: var(--rep-ui-color); }
+            .slider-lime::-moz-range-thumb    { background: var(--rep-ui-color); }
+
+            /* Mr. Mister (Fountain) UI theming: dim when fountain is OFF; brighten when ON */
+            body {
+                /* Match radio-fountain magenta theme */
+                --mister-ui-dim:    hsl(300, 40%, 20%);
+                --mister-ui-bright: hsl(300, 60%, 55%);
+                --mister-ui-color: var(--mister-ui-dim);
+            }
+            body:has(#fountain:checked) {
+                --mister-ui-color: var(--mister-ui-bright);
+            }
+            /* Apply to fountain controls: purple-short + pink sliders, and the purple field */
+            .slider-purple-short::-webkit-slider-thumb, .slider-pink::-webkit-slider-thumb { background: var(--mister-ui-color); }
+            .slider-purple-short::-moz-range-thumb,    .slider-pink::-moz-range-thumb    { background: var(--mister-ui-color); }
+            /* Subtly tint the Mr. Mister mode select border to match */
+            .field-purple { border-color: var(--mister-ui-color); }
 
             /* Bumper/Pegs toggle: Die face five (U+2684), dim/bright yellow */
             .checkbox-bumper:hover { opacity: 1; filter: brightness(1.05); }
@@ -972,7 +1189,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 position: relative; /* anchor for ::after */
                 display: inline-block; /* ensure a proper positioning context */
                 /* Tunables */
-                --heart-dim:  #782d45;   /* unchecked */
+                --heart-dim:  hsl(190, 50%, 20%);  /* unchecked */
                 --heart-bright: #ff6fa3; /* checked */
             }
             .checkbox-heart::after {
@@ -991,15 +1208,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             .checkbox-heart:checked::after {
                 color: var(--heart-bright);
-                animation: heart-beat 500ms ease-in-out infinite;
+                /* Longer cycle with a pause after the double pulse */
+                animation: heart-beat 1200ms ease-in-out infinite;
             }
+            /* Two quick pulses, then a short rest (lub‑dub … pause) */
             @keyframes heart-beat {
                 0%   { transform: translate(-50%, -56%) scale(0.96); }
-                18%  { transform: translate(-50%, -56%) scale(1.12); }
-                36%  { transform: translate(-50%, -56%) scale(1.00); }
-                54%  { transform: translate(-50%, -56%) scale(1.08); }
-                72%  { transform: translate(-50%, -56%) scale(1.00); }
-                100% { transform: translate(-50%, -56%) scale(0.96); }
+                10%  { transform: translate(-50%, -56%) scale(1.12); }  /* first peak */
+                20%  { transform: translate(-50%, -56%) scale(1.00); }  /* settle */
+                28%  { transform: translate(-50%, -56%) scale(1.08); }  /* second peak */
+                38%  { transform: translate(-50%, -56%) scale(1.00); }  /* settle */
+                100% { transform: translate(-50%, -56%) scale(0.96); }  /* rest/pause */
             }
 
             .checkbox-blue-dark:hover {opacity: 1}
@@ -1036,8 +1255,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 animation: pac-chomp 420ms ease-in-out infinite;
             }
             @keyframes pac-chomp {
-                0%, 100% { --mouth: 14deg; }
-                50%      { --mouth: 46deg; }
+                0%    { --mouth: 14deg; }
+                12.5% { --mouth: 20deg; }
+                25%   { --mouth: 28deg; }
+                37.5% { --mouth: 38deg; }
+                50%   { --mouth: 46deg; }
+                62.5% { --mouth: 38deg; }
+                75%   { --mouth: 28deg; }
+                87.5% { --mouth: 20deg; }
+                100%  { --mouth: 14deg; }
             }
                 
             .checkbox-ceiling:hover {opacity: 1}
@@ -1382,7 +1608,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     walls&#8594
     <input type="range"  title="Corner Radius" id="cornerRadiusSlider" min="0" max="200" value="100" list="detents"class="slider-corner-detent">
-    
     <input type="checkbox" title="Ceiling" id="ceilingButton" class="checkbox-ceiling" checked>
     <input type="checkbox" title="Floor" value="F" id="floorButton"  class="checkbox-floor" checked>
     <input type="checkbox" title="Left Wall" id="leftWallButton" class="checkbox-leftwall" checked>
@@ -1394,6 +1619,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             <option value="1">1</option>
             <option value="25">25</option>
             <option value="100">100</option>
+            <option value="225">225</option>
             <option value="400">400</option>
             <option value="1024">1024</option>
             <option value="1600">1600</option>
@@ -1413,10 +1639,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     </select>
     <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="3" class="field-cyan-short">
 	<input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="15" class="field-cyan-short">
-    <input type="radio" title="Spheres" name="ballType" id="ballSphere" class="radio-green">
-    <input type="radio" title="Discs" name="ballType" id="ballDisc" class="radio-green" checked>
-    <input type="radio" title="Circles" name="ballType" id="ballCircle" class="radio-green">
     
+    <select title="Particle Style" id="renderType" class="field-cyan2">
+        <optgroup label="Particle Style">
+            <option value="drawSpheres">spheres</option>
+            <option value="drawDiscs" selected>discs</option>
+            <option value="drawCircles">circles</option>
+            <option value="drawGummies">gummies</option>
+        </optgroup>
+    </select>
+   
     <span style="white-space: nowrap">
     time&#8594
     <input type="range"  title="Time  ::  <--- Slower : Normal" id="timeSlider" min="40" max="100" value="100" class="slider-mint">
@@ -1434,11 +1666,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="range"  title="Repulsion Force between Particles" id="repulsionForceSlider" min="1" max="20" value="20" class="slider-lime">
     
     bounce&#8594
-    <input type="range"  title="Ball Restitution on Collision" id="ballRestSlider" min="0" max="100" value="0" class="slider-lime"></span>
+    <input type="range"  title="Ball Restitution on Collision" id="ballRestSlider" min="0" max="100" value="0" class="slider-lime2"></span>
+    
+    <span style="white-space: nowrap">
+    trace&#8594
+    <input type="checkbox" title="Particle Trace on/off" id="tracerButton" class="checkbox-tracer" checked></span>
     
     <span style="white-space: nowrap">
     pucks&#8594
-    <input type="checkbox" title="Pucks on/off" id="showPuckButton" value="true" class="checkbox-cyan" checked>
+    <input type="checkbox" title="Pucks on/off" id="showPuckButton" value="true" class="checkbox-puck" checked>
+    <input type="checkbox" title="Cycle puck on/off" id="showCyclePuckButton" class="checkbox-cycle" checked>
     <input type="checkbox" title="Heartbeat on/off" id="showHeartButton" class="checkbox-heart" checked>
     <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="300" class="slider-cyan"></span>
     
@@ -1447,8 +1684,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="checkbox" title="Eaters on/off" id="showHungryPuckButton" class="checkbox-blue-dark" unchecked></span>
     
     <span style="white-space: nowrap">
-    trace&#8594
-    <input type="checkbox" title="Particle Trace on/off" id="tracerButton" class="checkbox-tracer" checked></span>
+    worm&#8594
+    <input type="checkbox" title="Worm on/off" id="wormButton" class="checkbox-worm" checked>
+    <input type="range"  title="Worm Tail Radius" id="wormEndRadiusSlider" min="40" max="300" value="40" class="slider-orange">
+    <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="70" max="300" value="150" class="slider-orange">
+    <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz"></span>
+
+    <span style="white-space: nowrap">
+    plinko&#8594
+    <input type="checkbox" title="Pegs on/off" id="showBumperEntry" value="false" class="checkbox-bumper" unchecked>
+    <input type="range"  title="Peg Rows" id="rowsInput" min="1" max="20" value="3" class="slider-yellow">
+    <input type="range"  title="Peg Radius" id="bumperRadiusInput" min="20" max="100" value="40" class="slider-yellow"></span>
+
     
     <span style="white-space: nowrap">
     recycle&#8594
@@ -1483,19 +1730,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     &#8592&#8592|
 
     <span style="white-space: nowrap">
-    plinko&#8594
-    <input type="checkbox" title="Pegs on/off" id="showBumperEntry" value="false" class="checkbox-bumper" unchecked>
-    <input type="range"  title="Peg Rows" id="rowsInput" min="1" max="20" value="3" class="slider-yellow">
-    <input type="range"  title="Peg Radius" id="bumperRadiusInput" min="20" max="100" value="40" class="slider-yellow"></span>
-    
-    <span style="white-space: nowrap">
-    worm&#8594
-    <input type="checkbox" title="Worm on/off" id="wormButton" class="checkbox-worm" checked>
-    <input type="range"  title="Worm Tail Radius" id="wormEndRadiusSlider" min="40" max="300" value="40" class="slider-orange">
-    <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="70" max="300" value="150" class="slider-orange">
-    <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz"></span>
-
-    <span style="white-space: nowrap">
     color&#8594
     <input type="range"  title="Speed Sensitivity" id="velColorMapSlider" min="1" max="500" value="100" class="slider-red2">
     <input type="range"  title="Saturation" id="saturationSlider" min="0" max="100" value="90" class="slider-lightred">
@@ -1506,6 +1740,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <h2><br></h2><h1>:: SL0SH :: repulsive particle simulation ::</h1>
 
 <script>
+
+    // Gummi Bear image for ball rendering (scaled to ball radius)
+    var gummiImage = new Image();
+    var gummiReady = false;
+    var doGummi = false; // fourth ball rendering style
+    // Faster response = smaller tau; controls heading smoothing speed (seconds)
+    var gummiHeadingTau = 0.05;
+    // Orientation offset so the TOP of the image leads along the velocity vector
+    var gummiHeadingOffset = Math.PI / 2;
+    gummiImage.onload = function() { gummiReady = true; };
+    // Image file is in the same folder
+    gummiImage.src = 'gummibear_bw.png';
 
     //  CANVAS SETUP AND SCALING --------------------------------------------------------------
     canvas = document.getElementById("myCanvas");
@@ -1636,30 +1882,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         physProps.velColorMap = velColorMapSlider.value;}
     document.getElementById("ballsInput").onchange = function() {
         makeBalls();}
-    document.getElementById("ballSphere").oninput = function() {
-        doSpheres = true;
-        doDiscs = false;
-        doCircles = false;
-        saturationSlider.value = 80;
-        ballSaturation = 80;
-        lightnessSlider.value = 45;
-        ballLightness = 45;}
-    document.getElementById("ballDisc").oninput = function() {
-        doDiscs = true;
-        doSpheres = false;
-        doCircles = false;
-        saturationSlider.value = 90;
-        ballSaturation = 90;
-        lightnessSlider.value = 40;
-        ballLightness = 40;}
-    document.getElementById("ballCircle").oninput = function() {
-        doCircles = true;
-        doDiscs = false;
-        doSpheres = false;
-        saturationSlider.value = 100;
-        ballSaturation = 100;
-        lightnessSlider.value = 70;
-        ballLightness = lightnessSlider.value * 1;}
     document.getElementById("saturationSlider").oninput = function() {
         ballSaturation = saturationSlider.value * 1;}
      document.getElementById("lightnessSlider").oninput = function() {
@@ -1697,30 +1919,54 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             showEaters = false;}}
     document.getElementById('showPuckButton').oninput = function() {
         if (showPuckButton.checked == true) {
-            for (var p = 0; p < Puck.length - 1; p++) {
-                Puck[p].radius = 0;
-                Puck[p].puckArriving = true;
+            for (var p = 0; p < Puck.length; p++) {
+                if (Puck[p].special !== true && Puck[p].cycle !== true) {
+                    Puck[p].radius = 0;
+                    Puck[p].puckArriving = true;
+                }
             }
             showPucks = true;
         } else {
             showPucks = false;}}
     document.getElementById('showHeartButton').oninput = function() {
         if (showHeartButton.checked == true) {
-            var p = 2
-            Puck[p].radius = 0;
-            Puck[p].puckArriving = true;
-            // Reset heartbeat timing and insert a 1s delay before resuming pulses
-            if (Puck[p].special === true) {
-                const nowPerf = performance.now();
-                Puck[p].hbResumeAt = nowPerf + heartResumeDelayMs;
-                Puck[p].hbState = 'pause';
-                Puck[p].hbTimeInState = 0.0;
-                Puck[p].hbLastTime = nowPerf;
-                Puck[p].radius = Puck[p].OGradius;
+            // find heart puck by property
+            for (var p = 0; p < Puck.length; p++) {
+                if (Puck[p].special === true) {
+                    Puck[p].radius = 0;
+                    Puck[p].puckArriving = true;
+                    // Reset heartbeat timing and insert a 1s delay before resuming pulses
+                    const nowPerf = performance.now();
+                    Puck[p].hbResumeAt = nowPerf + heartResumeDelayMs;
+                    Puck[p].hbState = 'pause';
+                    Puck[p].hbTimeInState = 0.0;
+                    Puck[p].hbLastTime = nowPerf;
+                    Puck[p].radius = Puck[p].OGradius;
+                    break;
+                }
             }
             showHeart = true;
         } else {
             showHeart = false;}}
+    document.getElementById('showCyclePuckButton').oninput = function() {
+        if (showCyclePuckButton.checked == true) {
+            // trigger arrival effect on cycle puck(s)
+            for (var p = 0; p < Puck.length; p++) {
+                if (Puck[p].cycle === true) {
+                    // Hold at base for a short delay before resuming cycle (mirror post-drag behavior)
+                    const nowPerf = performance.now();
+                    Puck[p].cycResumeAt = nowPerf + 3000; // 3s pause on toggle-on
+                    Puck[p].cycState = 'grow';
+                    Puck[p].cycTimeInState = 0.0;
+                    Puck[p].cycLastTime = nowPerf;
+                    Puck[p].radius = Puck[p].OGradius; // ensure base size during pause
+                }
+            }
+            showCycle = true;
+        } else {
+            showCycle = false;
+        }
+    }
     document.getElementById('puckRadiusSlider').oninput = function() {
         for (p = 0; p < Puck.length; p++) {
             puck = Puck[p];
@@ -1728,7 +1974,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 puck.radius = 1.0 * puckRadiusSlider.value / 1000;
                 puck.OGradius = puck.radius;
             }
-            if (p == 1 || p == 2) {
+            if (p == 1 || p == 2 || p == 3) {
                 puck.radius = 0.5 * puckRadiusSlider.value / 1000;
                 puck.OGradius = puck.radius;}}}
     document.getElementById('cornerRadiusSlider').oninput = function() {
@@ -1753,7 +1999,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 } else {
                     corner.radius = 0.5 * simHeight;
                 }
-
                 // shift corners
                 // calculate distance between corners
                 var cornerSeparation = simWidth - 2 * corner.radius;
@@ -1822,8 +2067,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     document.getElementById('wormButton').oninput = function() {
         if (wormButton.checked == true) {
             doWorm = true;
+            document.body.classList.add('worm-on');
         } else {
-            doWorm = false;}}
+            doWorm = false;
+            document.body.classList.remove('worm-on');
+        }}
     document.getElementById('wormStartRadiusSlider').oninput = function() {
         WormProps.startRadius = 0.001 * wormStartRadiusSlider.value;
         makeWorm();}
@@ -1835,6 +2083,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         makeWorm();}
     document.getElementById('sprinklerSpeedSlider').oninput = function() {
         sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;};
+    // Initialize worm UI knob theme on load
+    document.body.classList.toggle('worm-on', document.getElementById('wormButton').checked);
     document.getElementById('tracerButton').oninput = function() {
         if (tracerButton.checked == true) {
             doTracer = true;
@@ -1846,7 +2096,72 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         } else {
             doTracer = false;}}
-    
+    document.getElementById("renderType").oninput = function() {
+       if (this.value === 'drawSpheres') {
+            doSpheres = true;
+            doDiscs = false;
+            doCircles = false;
+            saturationSlider.value = 80;
+            ballSaturation = 80;
+            lightnessSlider.value = 45;
+            ballLightness = 45;
+            physProps.repulsionDist = 4;
+            if (wasGummi == true) {
+                ballsInput.value = 4096;
+                bigBallInput.value = 15;
+                smallBallInput.value = 3;
+                wasGummi = false;
+                makeBalls();
+            }
+       } else if (this.value === 'drawDiscs') {
+           doDiscs = true;
+            doSpheres = false;
+            doCircles = false;
+            saturationSlider.value = 90;
+            ballSaturation = 90;
+            lightnessSlider.value = 40;
+            ballLightness = 40;
+            physProps.repulsionDist = 4;
+            if (wasGummi == true) {
+                ballsInput.value = 4096;
+                bigBallInput.value = 15;
+                smallBallInput.value = 3;
+                wasGummi = false;
+                makeBalls();
+            }
+       } else if (this.value === 'drawCircles') {
+            doCircles = true;
+            doDiscs = false;
+            doSpheres = false;
+            saturationSlider.value = 100;
+            ballSaturation = 100;
+            lightnessSlider.value = 70;
+            ballLightness = lightnessSlider.value * 1;
+            physProps.repulsionDist = 4;
+            if (wasGummi == true) {
+                ballsInput.value = 4096;
+                bigBallInput.value = 15;
+                smallBallInput.value = 3;
+                wasGummi = false;
+                makeBalls();
+            }
+       } else if (this.value === 'drawGummies') {
+            doGummi = true;
+            wasGummi = true;
+            doDiscs = false;
+            doSpheres = false;
+            doCircles = false;
+            saturationSlider.value = 100;
+            ballSaturation = 100;
+            lightnessSlider.value = 70;
+            ballLightness = lightnessSlider.value * 1;
+            physProps.repulsionDist = 1.5;
+            ballsInput.value = 225;
+            bigBallInput.value = 80;
+            smallBallInput.value = 20;
+            makeBalls();
+        }};
+
     //  end get world properties from sliders ----------
 
     //  MOUSE STUFF AND TOUCH STUFF  -------------------------------------------------------------------
@@ -1863,9 +2178,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     function mouseDownHandler(ev) {
         const e = ev || window.event;
-        puck1 = Puck[0];
-        puck2 = Puck[1];
-        puck3 = Puck[2];
+    puck1 = Puck[0];
+    puck2 = Puck[1];
+    puck3 = Puck[2]; // heart (special)
+    puck4 = Puck[3]; // cycle
         hungryPuck = Hungrypuck[0];
         hungryPuck2 = Hungrypuck[1];
         misterMister = MisterMister[0];
@@ -1905,9 +2221,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		dirPuck2.subtractVectors(mousePos, puck2.pos);
 		dPuck2 = dirPuck2.length();
 
-        dirPuck3 = new Vector2();
-		dirPuck3.subtractVectors(mousePos, puck3.pos);
-		dPuck3 = dirPuck3.length();
+    dirPuck3 = new Vector2();
+    dirPuck3.subtractVectors(mousePos, puck3.pos);
+    dPuck3 = dirPuck3.length();
+
+    dirPuck4 = new Vector2();
+    dirPuck4.subtractVectors(mousePos, puck4.pos);
+    dPuck4 = dirPuck4.length();
 
         if (showBumpers == true) {
             // Calculate bumper array bounds if bumpers exist
@@ -1947,6 +2267,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             document.addEventListener('mousemove', mousePuck2Move);
             document.addEventListener('touchmove', touchPuck2Move, {passive: false});
         } else {
+        if (dPuck4 < puck4.radius) {
+            dX = startX / cScale - puck4.pos.x;
+            dY = startY / cScale - puck4.pos.y;
+            mouseDown = true;
+            document.addEventListener('mousemove', mousePuck3Move);
+            document.addEventListener('touchmove', touchPuck3Move, {passive: false});
+        } else {
         if (dPuck2 < puck2.radius) {
             dX = startX / cScale - puck2.pos.x;
             dY = startY / cScale - puck2.pos.y;
@@ -1976,7 +2303,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             mouseDown = true;
             document.addEventListener('mousemove', setNewDir, false);
             document.addEventListener('touchmove', setNewDir, {passive: false});
-        }}}}}}}
+    }}}}}}}}
     }
 
     function setNewDir(e) {
@@ -2071,6 +2398,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     var mousePuck0Move = mousePuckMove(0);
     var mousePuck1Move = mousePuckMove(1);
     var mousePuck2Move = mousePuckMove(2);
+    var mousePuck3Move = mousePuckMove(3);
     
     function mouseUp() {
         document.removeEventListener('mousemove', mouseHungryPuckMove);
@@ -2078,6 +2406,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         document.removeEventListener('mousemove', mousePuck0Move);
         document.removeEventListener('mousemove', mousePuck1Move);
         document.removeEventListener('mousemove', mousePuck2Move);
+    document.removeEventListener('mousemove', mousePuck3Move);
         document.removeEventListener('mousemove', mouseMisterMisterMove);
         document.removeEventListener('mousemove', mouseBumperMove);
         document.removeEventListener('mousemove', setNewDir);
@@ -2088,6 +2417,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         document.removeEventListener('touchmove', touchPuck0Move);
         document.removeEventListener('touchmove', touchPuck1Move);
         document.removeEventListener('touchmove', touchPuck2Move);
+    document.removeEventListener('touchmove', touchPuck3Move);
         document.removeEventListener('touchmove', touchMisterMisterMove);
         document.removeEventListener('touchmove', touchBumperMove);
         
@@ -2105,6 +2435,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     Puck[p].hbTimeInState = 0.0;
                     Puck[p].hbLastTime = nowPerf; // avoid dt spike
                     Puck[p].radius = Puck[p].OGradius; // ensure base size during pause
+                }
+                // If this is the cycle puck, pause cycling for 3s after release and restart at cycle beginning
+                if (Puck[p].cycle === true) {
+                    Puck[p].cycResumeAt = nowPerf + 3000; // 3 second delay
+                    Puck[p].cycState = 'grow';
+                    Puck[p].cycTimeInState = 0.0;
+                    Puck[p].cycLastTime = nowPerf; // avoid dt spike
+                    Puck[p].radius = Puck[p].OGradius; // hold at base size during pause
                 }
             }
             Puck[p].moving = false;
@@ -2241,6 +2579,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     var touchPuck0Move = touchPuckMove(0);
     var touchPuck1Move = touchPuckMove(1);
     var touchPuck2Move = touchPuckMove(2);
+    var touchPuck3Move = touchPuckMove(3);
     
 
     //  end mouse and touch stuff
@@ -2835,6 +3174,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         showBumpers = showBumperEntry.checked;
         showPucks = showPuckButton.checked;
         showHeart = showHeartButton.checked;
+        showCycle = (typeof showCyclePuckButton !== 'undefined') ? showCyclePuckButton.checked : true;
         doShower = shower.checked;
         doFountain = fountain.checked;
         doTracer = tracerButton.checked;
@@ -2847,9 +3187,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         ballLightness = 1 *  lightnessSlider.value;
         persistence = 1.0 * persistenceSlider.value;
         cornerRad = 1.0 * cornerRadiusSlider.value;
-        doSpheres = ballSphere.checked;
-        doDiscs = ballDisc.checked;
-        doCircles = ballCircle.checked;
+
+        doSpheres = false;
+        doDiscs = true;
+        doCircles = false;
+        doGummi = false;
+        wasGummi = false;
+
         doOneShot = oneShotButton.checked;
         yeet = 1.0 * yeetSlider.value;
         doGravityDown = gravityDown.checked;
@@ -2903,6 +3247,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.immuneToWorm = false;
             this.immunityFramesLeft = 0; 
             this.tracerBall = tracerBall;
+            // Smoothed heading for image-based rendering (gummi)
+            this.headingAngle = 0;          // radians, screen-space orientation
+            this.headingInitialized = false; // initialize on first valid velocity
             this.artificialMovement = false; // Flag to track when ball is being repositioned artificially
             if (tracerBall == true) {
                 this.radius = 0.5 * (smallBallRadius + bigBallRadius);
@@ -2954,7 +3301,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 		simulate() {
 			this.vel.add(physProps.gravity, physProps.dt);
-            const maxSpeed = 3.0;
+            const maxSpeed = 1;
             if (this.vel.length() > maxSpeed) {
                 this.vel.x *= maxSpeed / this.vel.length();
                 this.vel.y *= maxSpeed / this.vel.length();
@@ -3050,6 +3397,62 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.strokeStyle = this.color;
                 c.lineWidth = 0.2 * this.radius * cScale;
                 c.stroke();
+            } else if (doGummi == true) {
+                const x = cX(this.pos);
+                const y = cY(this.pos);
+                const rpx = this.radius * cScale;
+                if (gummiReady && gummiImage && gummiImage.complete && gummiImage.width > 0 && gummiImage.height > 0) {
+                    // Compute and smooth screen-space rotation angle from velocity (y down)
+                    const speed = this.vel.length();
+                    if (speed > 1e-6) {
+                        const target = Math.atan2(-this.vel.y, this.vel.x);
+                        if (!this.headingInitialized) {
+                            this.headingAngle = target;
+                            this.headingInitialized = true;
+                        } else {
+                            // Smooth with exponential filter using dt-based alpha
+                            const TWO_PI = Math.PI * 2;
+                            let diff = target - this.headingAngle;
+                            // Wrap to [-PI, PI]
+                            diff = ((diff + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
+                            const tau = gummiHeadingTau; // seconds time constant (tunable)
+                            const alpha = 1 - Math.exp(-physProps.dt / Math.max(1e-6, tau));
+                            this.headingAngle += alpha * diff;
+                        }
+                    }
+                    const angle = (this.headingAngle || 0) + gummiHeadingOffset;
+                    // Preserve aspect ratio: scale so the largest image dimension fits the diameter
+                    const iw = gummiImage.width;
+                    const ih = gummiImage.height;
+                    const s = (2 * rpx) / Math.max(iw, ih);
+                    const dw = iw * s;
+                    const dh = ih * s;
+                    // Slightly inset the clipping radius to avoid visual edge cropping
+                    const clipR = Math.max(0, rpx - 0.5);
+                    c.save();
+                    c.translate(x, y);
+                    c.rotate(angle);
+                    // Circular clip centered at the ball
+                    c.beginPath();
+                    c.arc(0, 0, clipR, 0, 2 * Math.PI);
+                    c.closePath();
+                    c.clip();
+                    // Center the image on the ball after rotation
+                    c.drawImage(gummiImage, -dw / 2, -dh / 2, dw, dh);
+                    // Tint the grayscale image to match ball color behavior
+                    const prevOp = c.globalCompositeOperation;
+                    c.globalCompositeOperation = 'multiply';
+                    c.fillStyle = this.color;
+                    // Cover the clipped circle area for consistent tinting
+                    c.fillRect(-clipR, -clipR, 2 * clipR, 2 * clipR);
+                    c.globalCompositeOperation = prevOp;
+                    c.restore();
+                } else {
+                    // Fallback: draw a simple disc until the image is loaded
+                    drawCircle(x, y, rpx);
+                    c.fillStyle = this.color;
+                    c.fill();
+                }
             }
         }
 	}
@@ -3071,15 +3474,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         var velY = 0;
         // On program start or any reset that calls makeBalls(), delay the heart puck 4x
         // the standard resume delay so the first visible beat begins cleanly after a brief intro pause.
-        if (typeof Puck !== 'undefined' && Array.isArray(Puck) && Puck.length > 2) {
-            var heartPuck = Puck[2];
-            if (heartPuck && heartPuck.special === true) {
-                const nowPerf = performance.now();
-                heartPuck.hbResumeAt = nowPerf + 4 * heartResumeDelayMs;
-                heartPuck.hbState = 'pause';
-                heartPuck.hbTimeInState = 0.0;
-                heartPuck.hbLastTime = nowPerf;
-                heartPuck.radius = heartPuck.OGradius;
+        if (typeof Puck !== 'undefined' && Array.isArray(Puck) && Puck.length > 0) {
+            const nowPerf = performance.now();
+            for (var i = 0; i < Puck.length; i++) {
+                var heartPuck = Puck[i];
+                if (heartPuck && heartPuck.special === true) {
+                    heartPuck.hbResumeAt = nowPerf + 4 * heartResumeDelayMs;
+                    heartPuck.hbState = 'pause';
+                    heartPuck.hbTimeInState = 0.0;
+                    heartPuck.hbLastTime = nowPerf;
+                    heartPuck.radius = heartPuck.OGradius;
+                    break;
+                }
             }
         }
         if (array.checked == true) {  
@@ -3831,6 +4237,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.prevPos = pos.clone();
             this.color = color;
             this.special = special;
+            this.cycle = false; // custom cyclic radius behavior (Puck[3])
             this.mass = 0.001 * radius;
             this.puckFadingIn = false;
             this.moving = false;
@@ -3864,21 +4271,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 this.hbBetweenFrac = 0.85; // barely shrink between pulses
             }
 		}
-        simulate() {
-            // Non-special arrival growth behavior preserved
-            if (!this.special) {
-                for (var r = 0; r < this.OGradius; r++) {
-                    if (this.radius >= this.OGradius) {
-                        this.radius = this.OGradius;
-                        this.puckArriving = false;
-                    } else {
-                        this.radius += this.OGradius * 0.0001;
-                    }
-                }
-                return;
-            }
+        // Initialize the cycle puck state machine (called after setting this.cycle=true)
+        initCycle() {
+            this.cycPeriod = 5.0; // total seconds
+            this.cycDur = { grow: 0.3, shrink: 2.0, recover: 2.0 };
+            this.cycState = 'grow';
+            this.cycTimeInState = 0.0;
+            this.cycLastTime = performance.now();
+            this.cycMax = 5.0;   // 4x base
+            this.cycMin = 1.0;   // 0.5x base
+            // Delay cycling at startup for 6 seconds
+            this.cycResumeAt = this.cycLastTime + 6000; // ms timestamp
+        }
 
-            // Special puck heartbeat animation (time-based, independent of framerate)
+        simulate() {
+            // HEART SPECIAL -------------------------------------------------
+            if (this.special) {
+                // Special puck heartbeat animation (time-based, independent of framerate)
             const now = performance.now();
 
             // If the puck is being dragged/moved, reset to base size and hold state timing (no pulses while moving)
@@ -3976,6 +4385,93 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const safeDt = Math.max(1e-6, dt);
             this.radiusRate = (newRadius - this.radius) / safeDt;
             this.radius = newRadius;
+                return;
+            }
+
+            // CYCLE SPECIAL (Puck[3]) -------------------------------------
+            if (this.cycle) {
+                const now = performance.now();
+                if (this.moving) {
+                    this.radiusRate = 0.0;
+                    this.radius = this.OGradius;
+                    this.cycLastTime = now;
+                    return;
+                }
+
+                // Hold at base until resume time (startup or post-drag)
+                if (this.cycResumeAt && now < this.cycResumeAt) {
+                    this.radiusRate = 0.0;
+                    this.radius = this.OGradius;
+                    this.cycLastTime = now; // prevent dt accumulation
+                    return;
+                }
+                if (this.cycResumeAt && now >= this.cycResumeAt) {
+                    // Resume cycling from beginning after delay
+                    this.cycResumeAt = 0;
+                    this.cycState = 'grow';
+                    this.cycTimeInState = 0.0;
+                    this.cycLastTime = now;
+                }
+
+                const dt = Math.max(0, (now - this.cycLastTime) / 1000.0);
+                this.cycLastTime = now;
+
+                // Easing helpers
+                const easeInQuad = (t)=> t*t;      // accelerating
+                const easeOutQuad = (t)=> 1-(1-t)*(1-t); // decelerating
+
+                // Advance within state
+                const adv = (dur)=>{
+                    this.cycTimeInState += dt;
+                    if (this.cycTimeInState >= dur) {
+                        this.cycTimeInState -= dur;
+                        return true;
+                    }
+                    return false;
+                };
+
+                let scale = 1.0;
+                switch (this.cycState) {
+                    case 'grow': {
+                        if (adv(this.cycDur.grow)) { this.cycState = 'shrink'; }
+                        const t = Math.min(1, this.cycTimeInState / this.cycDur.grow);
+                        // ease-in from 1.0 -> 4.0
+                        scale = 1.0 + (this.cycMax - 1.0) * easeInQuad(t);
+                        break;
+                    }
+                    case 'shrink': {
+                        if (adv(this.cycDur.shrink)) { this.cycState = 'recover'; }
+                        const t = Math.min(1, this.cycTimeInState / this.cycDur.shrink);
+                        // linear from 4.0 -> 0.5
+                        scale = this.cycMax + (this.cycMin - this.cycMax) * t;
+                        break;
+                    }
+                    case 'recover': default: {
+                        if (adv(this.cycDur.recover)) { this.cycState = 'grow'; }
+                        const t = Math.min(1, this.cycTimeInState / this.cycDur.recover);
+                        // ease-out from 0.5 -> 1.0
+                        scale = this.cycMin + (1.0 - this.cycMin) * easeOutQuad(t);
+                        break;
+                    }
+                }
+
+                const newRadius = this.OGradius * scale;
+                const safeDt = Math.max(1e-6, dt);
+                this.radiusRate = (newRadius - this.radius) / safeDt;
+                this.radius = newRadius;
+                return;
+            }
+
+            // DEFAULT: Non-special arrival growth behavior -----------------
+            for (var r = 0; r < this.OGradius; r++) {
+                if (this.radius >= this.OGradius) {
+                    this.radius = this.OGradius;
+                    this.puckArriving = false;
+                } else {
+                    this.radius += this.OGradius * 0.0001;
+                }
+            }
+            return;
         }
         draw() {
             if (this.puckFadingIn == true) {
@@ -4010,7 +4506,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.fillStyle = `hsla(320, 80%, 50%, ${alphaPercent})`;
                     c.textBaseline = 'middle';
                     c.textAlign = "center";
-                    c.font = `${(1 * this.OGradius + 0.5 * this.radius) * cScale}px monospace`;
+                    c.font = `${(0.60 * this.OGradius + 0.5 * this.radius) * cScale}px monospace`;
                     c.fillText("♥", this.pos.x * cScale, (simHeight - this.pos.y + 0.20 * this.OGradius) * cScale);
                 } else {  // moving heartbeat rendering  ----------
                     drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
@@ -4029,7 +4525,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.fillStyle = `hsla(320, 80%, 50%, ${alphaPercent - 0.9})`;
                     c.textBaseline = 'middle';
                     c.textAlign = "center";
-                    c.font = `${(1 * this.OGradius + 0.5 * this.radius) * cScale}px monospace`;
+                    c.font = `${(0.60 * this.OGradius + 0.5 * this.radius) * cScale}px monospace`;
                     c.fillText("♥", this.pos.x * cScale, (simHeight - this.pos.y + 0.20 * this.OGradius) * cScale);
                 }
             } else { 
@@ -4051,6 +4547,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.strokeStyle = `hsla(0, 0%, 60%, ${alphaPercent})`;
                 c.lineWidth = 0.01 * cScale;
                 c.stroke();
+
+                // Cycle puck center icon (✢) when this is the cycle puck
+                if (this.cycle === true) {
+                    const baseFontPx = (0.5 * this.OGradius) * cScale; // constant base size
+                    // Slow growth like heart: effective size ~ OGradius + 0.5 * radius
+                    const scaleFactor = Math.max(0.0001, (this.OGradius + 0.5 * this.radius) / (1.5 * this.OGradius));
+                    const cx = this.pos.x * cScale;
+                    const cy = (simHeight - this.pos.y) * cScale; // keep baseline anchored
+                    c.save();
+                    c.translate(Math.round(cx) + 0.5, Math.round(cy) + 0.5);
+                    c.scale(scaleFactor, scaleFactor);
+                    c.fillStyle = `hsla(190, 80%, 55%, ${alphaPercent})`;
+                    c.textBaseline = 'middle';
+                    c.textAlign = 'center';
+                    c.font = `${baseFontPx}px verdana`;
+                    c.fillText("!!!", 0, 0);
+                    c.restore();
+                }
                 } else { // moving normal puck ----------
                     drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
                     const grd = c.createRadialGradient(
@@ -4064,6 +4578,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     grd.addColorStop(1.0, `hsla(220, 70%, 8%, ${alphaPercent * 0.2})`);
                     c.fillStyle = grd;
                     c.fill();
+
+                    // Cycle puck center icon (✢) when moving, more subtle alpha
+                    if (this.cycle === true) {
+                        const baseFontPx = (0.5 * this.OGradius) * cScale;
+                        // Slow growth like heart: effective size ~ OGradius + 0.5 * radius
+                        const scaleFactor = Math.max(0.0001, (this.OGradius + 0.5 * this.radius) / (1.5 * this.OGradius));
+                        const cx = this.pos.x * cScale;
+                        const cy = (simHeight - this.pos.y) * cScale; // keep offset constant, not scaling with radius
+                        c.save();
+                        c.translate(Math.round(cx) + 0.5, Math.round(cy) + 0.5);
+                        c.scale(scaleFactor, scaleFactor);
+                        c.fillStyle = `hsla(190, 80%, 55%, ${Math.max(0, alphaPercent - 0.9)})`;
+                        c.textBaseline = 'middle';
+                        c.textAlign = 'center';
+                        c.font = `${baseFontPx}px verdana`;
+                        c.fillText("!!!", 0, 0);
+                        c.restore();
+                    }
                 }
             }
         }
@@ -4321,15 +4853,34 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // NORMAL PUCKS  ----------------------------------------------------------
         Puck.push (new PUCK(
             1.0 * puckRadiusSlider.value / 1000, 
-            new Vector2(0.7 * simWidth, 
-            0.8 * simHeight), puck1color, false));
-        Puck.push (new PUCK(0.5 * puckRadiusSlider.value / 1000, 
             new Vector2(0.3 * simWidth, 
-            0.25 * simHeight), puck2color, false));
+                0.25 * simHeight), 
+                puck2color, 
+                false));
+        Puck.push (new PUCK(0.5 * puckRadiusSlider.value / 1000, 
+            new Vector2(0.7 * simWidth, 
+                0.8 * simHeight), 
+                puck1color, 
+                false));
         //  HEARTBEAT PUCK  ----------------------------------------------------------
         Puck.push (new PUCK(1.0 * puckRadiusSlider.value / 1000, 
             new Vector2(0.55 * canvas.width / cScale, 
-            0.1 * canvas.height / cScale), puck2color, true));
+                0.1 * canvas.height / cScale), 
+                puck2color, 
+                true));
+        //  CYCLE PUCK (Puck[3])  ---------------------------------------------------
+        Puck.push (new PUCK(0.5 * puckRadiusSlider.value / 1000,
+            new Vector2(0.5 * simWidth, 
+                0.9 * simHeight), 
+                puck1color, 
+                false));
+            // mark last puck as cycle-type and init its state machine
+            if (Puck.length > 3) {
+                Puck[3].cycle = true;
+                if (typeof Puck[3].initCycle === 'function') {
+                    Puck[3].initCycle();
+                }
+            }
         }
     
     //  DEFINE HUNGRY PUCKS ----------------------------------------------------------        
@@ -4399,7 +4950,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (ballRepulsion == true) {  
                 for (var j = i + 1; j < Balls.length; j++) {
                     var ball2 = sortedBalls[j];   
-                    if (ball2.left - physProps.repulsionDist * (ball1.radius + ball2.radius) > ball1.right + 4 * (ball1.radius + ball2.radius)) {
+                    if (ball2.left - physProps.repulsionDist * (ball1.radius + ball2.radius) > ball1.right + physProps.repulsionDist * (ball1.radius + ball2.radius)) {
                         break;
                     }     
                     if (Math.abs(ball1.pos.y - ball2.pos.y) < physProps.repulsionDist * (ball1.radius + ball2.radius)) {
@@ -4458,52 +5009,32 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
             } 
 
-            //  PUCK ARRIVING AND GROW  -----------------------------
+            //  PUCK ARRIVING AND SPECIAL SIMS  -----------------------------
             for (var p=0; p < Puck.length; p++) {
                 var puck = Puck[p];
-                // Always simulate the special (heart) puck, and simulate arrival growth for others
-                if (puck.puckArriving == true || puck.special == true) {
+                // Simulate if arriving, or if it's special (heart) and enabled, or cycle and enabled
+                const shouldSim = puck.puckArriving == true 
+                                  || (puck.special === true && showHeart === true)
+                                  || (puck.cycle === true && showCycle === true);
+                if (shouldSim) {
                     puck.simulate();
                 }
             }
             
             //  PUCK CHECKS  -----------------------------
-            if (showPucks == true && showHeart == true) {
-                for (var p=0; p < Puck.length; p++) {
-                    var puck = Puck[p];
-                    if (puck.right < ball1.left) {
-                        continue;
-                    }
-                    if (Math.abs(ball1.pos.y - puck.pos.y) <= ball1.radius + puck.radius) {
-                        handlePuckHits(ball1, puck)
-                    }
-                }     
-            } 
-            if (showPucks == true && showHeart == false) {
-                for (var p=0; p < Puck.length - 1; p++) {
-                    var puck = Puck[p];
-                    if (puck.right < ball1.left) {
-                        continue;
-                    }
-                    if (Math.abs(ball1.pos.y - puck.pos.y) <= ball1.radius + puck.radius) {
-                        handlePuckHits(ball1, puck)
-                    }
-                }     
-            } 
-            if (showPucks == false && showHeart == true) {
-                // Use a one-iteration puck loop so we can 'continue' broad-phase
-                for (var pp = 2; pp <= 2; pp++) {
-                    var puck = Puck[pp];
-                    // Broad-phase: if puck entirely left of ball, skip puck checks early
-                    if (puck.right < ball1.left) {
-                        continue; // only skips this puck iteration, not the ball loop
-                    }
-                    // Narrow-phase vertical overlap
-                    if (Math.abs(ball1.pos.y - puck.pos.y) <= ball1.radius + puck.radius) {
-                        handlePuckHits(ball1, puck)
-                    }
+            for (var p=0; p < Puck.length; p++) {
+                var puck = Puck[p];
+                // Filter by toggles
+                if (puck.special === true && showHeart !== true) continue;
+                if (puck.cycle === true && showCycle !== true) continue;
+                if (puck.special !== true && puck.cycle !== true && showPucks !== true) continue;
+                // Broad-phase skip
+                if (puck.right < ball1.left) continue;
+                // Narrow-phase
+                if (Math.abs(ball1.pos.y - puck.pos.y) <= ball1.radius + puck.radius) {
+                    handlePuckHits(ball1, puck)
                 }
-            } 
+            }
 
             //  WORM SEGMENT CHECKS  -----------------------------
             if (ball1.immuneToWorm != true) {
@@ -4683,23 +5214,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             hungryPuck.draw2();
         }
         //  DRAW PUCKS ----------------------------------------------------------------         
-        if (showPucks == true && showHeart == true) {
-            for (p=0; p < Puck.length; p++) { 
-                var puck = Puck[p];
-                puck.draw();
-            }
-        }  
-        if (showPucks == true && showHeart == false) {
-            for (p=0; p < Puck.length - 1; p++) { 
-                var puck = Puck[p];
-                puck.draw();
-            }
-        }  
-        if (showPucks == false && showHeart == true) {
-            p = 2;
+        for (p=0; p < Puck.length; p++) { 
             var puck = Puck[p];
+            // Respect toggles for each puck type
+            if (puck.special === true && !showHeart) continue;
+            if (puck.cycle === true && !showCycle) continue;
+            if (puck.special !== true && puck.cycle !== true && !showPucks) continue;
             puck.draw();
-        }       
+        }
         //  DRAW CORNERS  ---------------------------------------------------------------------
         for (var v = 0; v < Corners.length; v++) {
             corner = Corners[v];
