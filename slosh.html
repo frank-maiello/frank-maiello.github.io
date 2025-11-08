@@ -11,15 +11,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.30
+		<title>Slosh 1.33
         </title>
         <style>
 			body {font-family: monospace; 
-                font-size: 16px;
-                color: hsl(0, 0%, 60%);
+                font-size: 14px;
+                color: hsl(0, 0%, 55%);
                 text-align: center;
                 text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                padding-left: 5px;
+                padding-left: 10px;
                 padding-right: 10px;
                 /* Touch optimization */
                 -webkit-touch-callout: none;
@@ -298,6 +298,57 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 background: hsl(181, 82%, 66%);
                 box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
                 cursor: pointer}
+
+            /* Particle count slider */
+            .slider-particle-count:hover {opacity: 1} 
+            .slider-particle-count {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 100px;
+				height: 4px;
+				border-radius: 5px;
+                background: hsl(0, 0%, 0%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-particle-count::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(170, 75%, 50%);
+                box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
+                cursor: pointer}
+
+            /* Particle count display window */
+            .particle-count-display {-webkit-appearance: none;
+                appearance: none;
+                display: inline-block;
+                font-family: monospace;
+                font-size: 16px;
+                text-align: center;
+                background: hsl(0, 0%, 0%);
+                width: 80px;
+				height: 18px;
+                border-width: 10px;
+				border-radius: 10px;
+                margin-left: 5px;
+                margin-right: 5px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                vertical-align: middle;
+                line-height: 21px;
+                
+                color: hsl(170, 75%, 40%);
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+				transition: opacity .2s;
+            }
+            
+            
 
             /* Corner radius slider with detent at value 100 */
             .slider-corner-detent {-webkit-appearance: none;
@@ -607,6 +658,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 background: hsl(0, 0%, 0%);
                 margin-top: 5px;
                 margin-bottom: 10px;
+                margin-left: 5px;
                 padding-top: 2px;
                 padding-left: 6px;
 				width: 54px;
@@ -828,7 +880,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 color: var(--os-bright);
             }
 
-            /* Tracer toggle: ✐ (U+2710), dim when off, bright when on */
             .checkbox-tracer:hover { opacity: 1; filter: brightness(1.05); }
             .checkbox-tracer { -webkit-appearance: none;
                 appearance: none;
@@ -847,8 +898,74 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 display: inline-block;
                 /* Tunables */
                 --tr-dim:    hsl(0, 0%, 20%);  /* dim gray */
-                --tr-bright: hsl(0, 0%, 80%);  /* bright gray */}
+                --tr-bright: hsl(170, 20%, 60%);  /* bright gray */}
             .checkbox-tracer::after {
+                content: "\2621"; /* ✐ */
+                position: absolute;
+                left: 50%;
+                top: 60%;
+                transform: translate(-50%, -56%);
+                font-size: 30px;
+                line-height: 1;
+                color: var(--tr-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;}
+            .checkbox-tracer:checked::after { color: var(--tr-bright); }
+            
+            .checkbox-tracer-small:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-tracer-small { -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                vertical-align: middle;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                background: transparent;
+                position: relative;
+                display: inline-block;
+                /* Tunables */
+                --tr-dim:    hsl(0, 0%, 20%);  /* dim gray */
+                --tr-bright: hsl(170, 20%, 60%);  /* bright gray */}
+            .checkbox-tracer-small::after {
+                content: "\2710"; /* ✐ */
+                position: absolute;
+                left: 50%;
+                top: 60%;
+                transform: translate(-50%, -56%);
+                font-size: 24px;
+                line-height: 1;
+                color: var(--tr-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;}
+            .checkbox-tracer-small:checked::after { color: var(--tr-bright); }
+
+            .checkbox-tracer-medium:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-tracer-medium { -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                vertical-align: middle;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                background: transparent;
+                position: relative;
+                display: inline-block;
+                /* Tunables */
+                --tr-dim:    hsl(0, 0%, 20%);
+                --tr-bright: hsl(170, 20%, 60%);}
+            .checkbox-tracer-medium::after {
                 content: "\2710"; /* ✐ */
                 position: absolute;
                 left: 50%;
@@ -860,7 +977,49 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 pointer-events: none;
                 text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
                 transition: color 120ms ease, filter 120ms ease;}
-            .checkbox-tracer:checked::after { color: var(--tr-bright); }
+            .checkbox-tracer-medium:checked::after { color: var(--tr-bright); }
+
+            .checkbox-tracer-large:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-tracer-large { -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                vertical-align: middle;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                background: transparent;
+                position: relative;
+                display: inline-block;
+                /* Tunables */
+                --tr-dim:    hsl(0, 0%, 20%);  /* dim gray */
+                --tr-bright: hsl(170, 20%, 60%);  /* bright gray */}
+            .checkbox-tracer-large::after {
+                content: "\2710"; /* ✐ */
+                position: absolute;
+                left: 50%;
+                top: 60%;
+                transform: translate(-50%, -56%);
+                font-size: 32px;
+                line-height: 1;
+                color: var(--tr-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;}
+            .checkbox-tracer-large:checked::after { color: var(--tr-bright); }
+
+            /* When master tracer is OFF, force all tracer-size buttons to dim regardless of checked state */
+            body:has(#noTracerButton:not(:checked)) .checkbox-tracer-small::after,
+            body:has(#noTracerButton:not(:checked)) .checkbox-tracer-medium::after,
+            body:has(#noTracerButton:not(:checked)) .checkbox-tracer-large::after {
+                color: var(--tr-dim) !important;
+                filter: none !important;
+                opacity: 0.8;
+            }
 
             /* Cycle puck toggle: ✢ (U+2742), dim when off, bright when on */
             .checkbox-cycle:hover { opacity: 1; filter: brightness(1.05); }
@@ -1151,6 +1310,102 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             .checkbox-pause:checked { --stop-color: var(--stop-bright); }
 
+            /* White octagonal border when checked (sits behind the red fill) */
+            .checkbox-pause:checked::before {
+                content: "";
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                width: 28px;   /* slightly larger than the red fill */
+                height: 28px;
+                background: #ffffff; /* white border */
+                clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+                pointer-events: none;
+            }
+
+            /* Impulse buttons (explode/implode/unravel): dim when off, bright when 'checked' */
+            input.splodeButton:hover,
+            input.implodeButton:hover,
+            input.unravelButton:hover { opacity: 1; filter: brightness(1.5); }
+            input.splodeButton,
+            input.implodeButton,
+            input.unravelButton {
+                -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                vertical-align: middle;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                background: transparent;
+                position: relative;
+                display: inline-block;
+                
+            }
+            /* Per-button color themes */
+            input.splodeButton { --imp-dim: hsl(15, 60%, 35%);  --imp-bright: hsl(15, 78%, 54%); }
+            input.implodeButton { --imp-dim: hsl(190, 40%, 40%); --imp-bright: hsl(190, 80%, 55%); }
+            input.unravelButton { --imp-dim: hsl(300, 40%, 30%); --imp-bright: hsl(300, 60%, 55%); }
+
+            /* Icons */
+            input.splodeButton::after {
+                /* two-line: arrows pointing outwards */
+                content: "\2196 \2197\A\2199 \2198"; /* ↖ ↗ \A ↙ ↘ */
+                white-space: pre;
+                position: absolute;
+                left: 50%;
+                top: 55%;
+                transform: translate(-50%, -56%);
+                font-family: monospace, bold;
+                font-size: 22px;
+                line-height: 0.6;
+                color: var(--imp-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;
+            }
+            input.splodeButton:checked::after { color: var(--imp-bright); }
+
+            input.implodeButton::after {
+                /* two-line: arrows pointing inward (diagonals flipped) */
+                content: "\2198 \2199\A\2197 \2196"; /* ↘ ↙ \A ↗ ↖ */
+                white-space: pre;
+                position: absolute;
+                left: 50%;
+                top: 55%;
+                transform: translate(-50%, -56%);
+                font-family: monospace, bold;
+                font-size: 22px;
+                line-height: 0.7;
+                color: var(--imp-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;
+            }
+            input.implodeButton:checked::after { color: var(--imp-bright); }
+
+            input.unravelButton::after {
+                content: "\269B"; /* ➿ short spiral */
+                position: absolute;
+                left: 50%;
+                top: 60%;
+                transform: translate(-50%, -56%);
+                font-family: monospace, bold;
+                font-size: 46px;
+                line-height: 1;
+                color: var(--imp-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;
+            }
+            input.unravelButton:checked::after { color: var(--imp-bright); }
+
             .checkbox-cyan:hover {opacity: 1}    
             .checkbox-cyan {-webkit-appearance: none;
                 appearance: none;
@@ -1270,8 +1525,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .checkbox-ceiling {-webkit-appearance: none;
                 appearance: none;
                 opacity: 0.8;
-                width: 24px;
-                height: 12px;
+                width: 28px;
+                height: 14px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 background-color: hsl(80, 50%, 20%);
@@ -1289,8 +1544,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .checkbox-floor {-webkit-appearance: none;
                 appearance: none;
                 opacity: 0.8;
-                width: 24px;
-                height: 12px;
+                width: 28px;
+                height: 14px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 background-color: hsl(160, 50%, 20%);
@@ -1308,8 +1563,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .checkbox-leftwall {-webkit-appearance: none;
                 appearance: none;
                 opacity: 0.8;
-                width: 12px;
-                height: 24px;
+                width: 14px;
+                height: 28px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 background-color: hsl(230, 70%, 20%);
@@ -1327,8 +1582,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .checkbox-rightwall {-webkit-appearance: none;
                 appearance: none;
                 opacity: 0.8;
-                width: 12px;
-                height: 24px;
+                width: 14px;
+                height: 28px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 background-color: hsl(310, 50%, 20%);
@@ -1532,24 +1787,44 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             input.radio-fountain:checked::after { color: var(--fnt-bright); background: currentColor; }
 
-            .radioball:hover {opacity: 1}
-            .radioball {-webkit-appearance: none;
+            .radio-cluster:hover {opacity: 1}
+            .radio-cluster {-webkit-appearance: none;
                 appearance: none;
                 padding: 0px;
                 border: 0px;
                 vertical-align: middle;
                 margin-top: 5px;
                 margin-bottom: 10px;
-                width: 20px;
-                height: 20px;
-                border-radius: 10px;
+                width: 28px;
+                height: 28px;
+                border-radius: 14px;
                 background-color: hsl(0, 0%, 20%);
                 opacity: 0.7;
-                border: 4px solid hsl(0, 0%, 60%);
+                border: 4px solid hsl(108, 60%, 55%);
 				cursor: pointer;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
-            .radioball:checked {
-                background-color: hsl(184, 60%, 85%);
+            .radio-cluster:checked {
+                background-color: hsl(108, 50%, 30%);
+            }
+
+            .radio-array:hover {opacity: 1}
+            .radio-array {-webkit-appearance: none;
+                appearance: none;
+                padding: 0px;
+                border: 0px;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 26px;
+                height: 26px;
+                border-radius: 0px;
+                background-color: hsl(0, 0%, 20%);
+                opacity: 0.7;
+                border: 3px solid hsl(108, 60%, 55%);
+				cursor: pointer;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
+            .radio-array:checked {
+                background-color: hsl(108, 50%, 30%);
             }
 
             .radio-green:hover {opacity: 1}
@@ -1601,45 +1876,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-left: 10px"></canvas>
 
     <h3><br><br></h3>
-	<input type="button" title="Restart [r]" class="buttongreenbig" value="&#8629" onclick="makeBalls()">
-    <input type="radio" title="Round Cluster Start" name="rackemType" id="cluster" class="radioball">
-    <input type="radio" title="Square Array Start" name="rackemType" id="array" class="radioball" checked>
+    /go&#8594
+    <input type="radio" title="Round Cluster Start" name="rackemType" id="cluster" class="radio-cluster" onclick="makeBalls()">
+    <input type="radio" title="Square Array Start" name="rackemType" id="array" class="radio-array" onclick="makeBalls()" checked>
+    <input type="checkbox" title="Implode (Hold)" id="implodeButton" class="implodeButton" onmousedown="startContinuousImplode()" onmouseup="stopContinuousImplode()" onmouseleave="stopContinuousImplode()" ontouchstart="startContinuousImplode()" ontouchend="stopContinuousImplode()">
+    <!--<input type="checkbox" title="Explode" id="splodeButton" class="splodeButton" onclick="fireSplode()">-->
+    <!--<input type="checkbox" title="Unravel" id="unravelButton" class="unravelButton" onclick="fireUnravel()">-->
     <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked>
     
-    walls&#8594
+    /walls&#8594
     <input type="range"  title="Corner Radius" id="cornerRadiusSlider" min="0" max="200" value="100" list="detents"class="slider-corner-detent">
-    <input type="checkbox" title="Ceiling" id="ceilingButton" class="checkbox-ceiling" checked>
-    <input type="checkbox" title="Floor" value="F" id="floorButton"  class="checkbox-floor" checked>
-    <input type="checkbox" title="Left Wall" id="leftWallButton" class="checkbox-leftwall" checked>
-    <input type="checkbox" title="Right Wall" id="rightWallButton" class="checkbox-rightwall" checked>
+    <i>u</i><input type="checkbox" title="Ceiling" id="ceilingButton" class="checkbox-ceiling" checked>
+    <i>d</i><input type="checkbox" title="Floor" value="F" id="floorButton"  class="checkbox-floor" checked>
+    <i>l</i><input type="checkbox" title="Left Wall" id="leftWallButton" class="checkbox-leftwall" checked>
+    <i>r</i><input type="checkbox" title="Right Wall" id="rightWallButton" class="checkbox-rightwall" checked>
     
-    particles&#8594
-    <select title="Particle Count" id="ballsInput" class="field-cyan">
-        <optgroup label="Number of Balls">
-            <option value="1">1</option>
-            <option value="25">25</option>
-            <option value="100">100</option>
-            <option value="225">225</option>
-            <option value="400">400</option>
-            <option value="1024">1024</option>
-            <option value="1600">1600</option>
-            <option value="2025">2025</option>
-            <option value="2500">2500</option>
-            <option value="3600">3600</option>
-            <option value="4096" selected>4096</option>
-            <option value="4900">4900</option>
-            <option value="5329">5329</option>
-            <option value="5625">5625</option>
-            <option value="6084">6084</option>
-            <option value="6400">6400</option>
-            <option value="7056">7056</option>
-            <option value="8100">8100</option>
-            <option value="9025">9025</option>
-        </optgroup>
-    </select>
-    <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="3" class="field-cyan-short">
-	<input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="15" class="field-cyan-short">
-    
+    /particles&#8594
+    <input type="range" title="Set Number of Particles (Slider ranges from 2 to 100, #=n^2)" id="ballsSlider" min="2" max="100" value="78" class="slider-particle-count">
+    <i>#</i><span id="particleCountDisplay" title="Number of Particles"class="particle-count-display">6084</span>
+    <i>sm</i><input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="3" class="field-cyan-short">
+	<i>lg</i><input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="12" class="field-cyan-short">
+    <!-- Hidden ballsInput element for compatibility with existing code -->
+    <input type="hidden" id="ballsInput" value="6084">
+
     <select title="Particle Style" id="renderType" class="field-cyan2">
         <optgroup label="Particle Style">
             <option value="drawSpheres">spheres</option>
@@ -1650,66 +1909,67 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     </select>
    
     <span style="white-space: nowrap">
-    time&#8594
-    <input type="range"  title="Time  ::  <--- Slower : Normal" id="timeSlider" min="40" max="100" value="100" class="slider-mint">
-    <input type="range"  title="Persistence" id="persistenceSlider" min="0" max="30" value="12" class="slider-mint"></span>
+    /time&#8594
+    <input type="range"  title="Time  ::  <--- Slower : Normal" id="timeSlider" min="40" max="100" value="100" class="slider-mint"></span>
     
     <span style="white-space: nowrap">
-    gravity&#8594
-    <input type="radio" title="Down" name="gravityType" id="gravityDown" class="radio-blue radio-gravity radio-gravity-down" checked>
-    <input type="radio" title="Right" name="gravityType" id="gravityRight" class="radio-blue radio-gravity">
+    /gravity&#8594
+    <i>d</i><input type="radio" title="Down" name="gravityType" id="gravityDown" class="radio-blue radio-gravity radio-gravity-down" checked>
+    <i>r</i><input type="radio" title="Right" name="gravityType" id="gravityRight" class="radio-blue radio-gravity">
     <input type="range"  title="Gravity  ::  Zero Gravity : More Gravity --->" id="gravitySlider" min="0" max="100" value="0" class="slider-blue"></span>
     
     <span style="white-space: nowrap">
-    repulsion&#8594
+    /repulsion&#8594
     <input type="checkbox" title="Repulsion on/off" id="repulsionButton" class="checkbox-repulsion" checked>
     <input type="range"  title="Repulsion Force between Particles" id="repulsionForceSlider" min="1" max="20" value="20" class="slider-lime">
     
-    bounce&#8594
+    /bounce&#8594
     <input type="range"  title="Ball Restitution on Collision" id="ballRestSlider" min="0" max="100" value="0" class="slider-lime2"></span>
     
     <span style="white-space: nowrap">
-    trace&#8594
-    <input type="checkbox" title="Particle Trace on/off" id="tracerButton" class="checkbox-tracer" checked></span>
-    
+    /trace&#8594
+    <input type="checkbox" title="Trace on/off" id="noTracerButton" class="checkbox-tracer" checked>
+    <input type="radio" name="traceType" title="Small Particle Trace" id="smallTracerButton" class="checkbox-tracer-small">
+    <input type="radio" name="traceType" title="Medium Particle Trace" id="mediumTracerButton" class="checkbox-tracer-medium" checked>
+    <input type="radio" name="traceType" title="Big Particle Trace" id="bigTracerButton" class="checkbox-tracer-large"></span>
+
     <span style="white-space: nowrap">
-    pucks&#8594
+    /pucks&#8594
     <input type="checkbox" title="Pucks on/off" id="showPuckButton" value="true" class="checkbox-puck" checked>
-    <input type="checkbox" title="Cycle puck on/off" id="showCyclePuckButton" class="checkbox-cycle" checked>
-    <input type="checkbox" title="Heartbeat on/off" id="showHeartButton" class="checkbox-heart" checked>
+    <input type="checkbox" title="Cycle puck on/off" id="showCyclePuckButton" class="checkbox-cycle" unchecked>
+    <input type="checkbox" title="Heartbeat on/off" id="showHeartButton" class="checkbox-heart" unchecked>
     <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="300" class="slider-cyan"></span>
     
     <span style="white-space: nowrap">
-    eaters&#8594
+    /eaters&#8594
     <input type="checkbox" title="Eaters on/off" id="showHungryPuckButton" class="checkbox-blue-dark" unchecked></span>
     
     <span style="white-space: nowrap">
-    worm&#8594
+    /worm&#8594
     <input type="checkbox" title="Worm on/off" id="wormButton" class="checkbox-worm" checked>
     <input type="range"  title="Worm Tail Radius" id="wormEndRadiusSlider" min="40" max="300" value="40" class="slider-orange">
     <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="70" max="300" value="150" class="slider-orange">
     <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz"></span>
 
     <span style="white-space: nowrap">
-    plinko&#8594
+    /plinko&#8594
     <input type="checkbox" title="Pegs on/off" id="showBumperEntry" value="false" class="checkbox-bumper" unchecked>
     <input type="range"  title="Peg Rows" id="rowsInput" min="1" max="20" value="3" class="slider-yellow">
     <input type="range"  title="Peg Radius" id="bumperRadiusInput" min="20" max="100" value="40" class="slider-yellow"></span>
 
-    
     <span style="white-space: nowrap">
-    recycle&#8594
+    /recycle&#8594
     <input type="checkbox" title="One Shot (no respawn)" id="oneShotButton" value="false" class="checkbox-oneshot" unchecked></span>
-    |&#8594&#8594
+    <span style="white-space: nowrap">
+    /&#8594&#8594
     <input type="range"  title="Shower Width" id="dumpSlider" min="1" max="100" value="40" class="slider-redspawn2">
     <input type="range"  title="Shower Position" id="dumpMoveSlider" min="-50" max="50" value="0" class="slider-redspawn">
+    shower 
+    <input type="radio" title="Shower" name="spawnType" id="shower" value="shower" class="radio2 radio-umbrella" unchecked></span>
     
     <span style="white-space: nowrap">
-    shower 
-    <input type="radio" title="Shower" name="spawnType" id="shower" value="shower" class="radio2 radio-umbrella">
-    &#8592or&#8594<input type="radio" title="Mr. Mister" name="spawnType" id="fountain" value="fountain" class="radio radio-fountain" checked>
-    
-    mr.mister</span>
+    &#8592 or &#8594<input type="radio" title="Mr. Mister" name="spawnType" id="fountain" value="fountain" class="radio radio-fountain" checked>
+    mr.mister
     <input type="range"  title="Yeet" id="yeetSlider" min="0" max="600" value="250" class="slider-purple-short">
     <input type="range"  title="Sweep" id="sprinklerSpeedSlider" min="0" max="30" value="0" class="slider-pink">
     
@@ -1727,15 +1987,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         </optgroup>
     </select>
     <input type="range"  title="Mr. Mister Orbit Speed" id="misterSpeedSlider" min="10" max="200" value="100" class="slider-purple-short">
-    &#8592&#8592|
+    &#8592&#8592\
+    </span>
 
     <span style="white-space: nowrap">
-    color&#8594
-    <input type="range"  title="Speed Sensitivity" id="velColorMapSlider" min="1" max="500" value="100" class="slider-red2">
-    <input type="range"  title="Saturation" id="saturationSlider" min="0" max="100" value="90" class="slider-lightred">
-    <input type="range"  title="Lightness" id="lightnessSlider" min="5" max="100" value="50" class="slider-red"></span>
+    /color&#8594
+    <i>h</i><input type="range"  title="Base Hue" id="baseColorSlider" min="0" max="330" value="220" class="slider-red2">
+    <i>v</i><input type="range"  title="Velocity Sensitivity" id="velColorMapSlider" min="1" max="500" value="200" class="slider-red">
+    <i>s</i><input type="range"  title="Saturation" id="saturationSlider" min="0" max="100" value="90" class="slider-lightred">
+    <i>l</i><input type="range"  title="Lightness" id="lightnessSlider" min="5" max="100" value="40" class="slider-red">
+    <i>&#9996</i><input type="range"  title="Persistence of Vision" id="persistenceSlider" min="0" max="30" value="12" class="slider-red">
     
-    <input type="button" title="Restart [r]" class="buttongreenbig" value="&#8629" onclick="makeBalls()">
+    <input type="button" title="Restart [r]" class="buttongreenbig" value="&#8629" onclick="makeBalls()"></span>
     
     <h2><br></h2><h1>:: SL0SH :: repulsive particle simulation ::</h1>
 
@@ -1757,10 +2020,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     canvas = document.getElementById("myCanvas");
     c = canvas.getContext("2d");
     canvas.style.cursor = "pointer";
+    
+    // Get reference to hidden ballsInput element
+    ballsInput = document.getElementById("ballsInput");
+    
     if (window.innerWidth < window.innerHeight) {
         // vertical orientation
         screenVertical = true;
         ballsInput.value = 1600;
+        if (typeof syncParticleCountControls === 'function') syncParticleCountControls();
         canvas.width = window.innerWidth - 40;
         canvas.height = window.innerHeight - 140; 
     } else if (window.innerWidth > 1.75 * window.innerHeight) {
@@ -1781,10 +2049,74 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     topMargin = 0;
     bottomMargin = 0;
 
-    function refreshPage() {
-        location.reload();
+    // Responsive resize handling: recompute canvas size and restart simulation WITHOUT reloading page
+    // (preserves all current UI control states: sliders, checkboxes, radios, selects)
+    let _resizeDebounce = null;
+    function handleResizeRestart() {
+        // Snapshot current relative positions of pucks and related actors before dimensions change
+        const oldSimWidth = simWidth;
+        const oldSimHeight = simHeight;
+        const puckSnapshots = (typeof Puck !== 'undefined' && Array.isArray(Puck)) ? Puck.map(p => ({ p, rx: p.pos.x / oldSimWidth, ry: p.pos.y / oldSimHeight })) : [];
+        const hungrySnapshots = (typeof Hungrypuck !== 'undefined' && Array.isArray(Hungrypuck)) ? Hungrypuck.map(p => ({ p, rx: p.pos.x / oldSimWidth, ry: p.pos.y / oldSimHeight })) : [];
+        const misterSnapshots = (typeof MisterMister !== 'undefined' && Array.isArray(MisterMister)) ? MisterMister.map(p => ({ p, rx: p.pos.x / oldSimWidth, ry: p.pos.y / oldSimHeight })) : [];
+        // (If later we need worm node preservation, we can snapshot here similarly.)
+        // Determine orientation & set canvas dimensions (mirrors initial logic)
+        if (window.innerWidth < window.innerHeight) {
+            screenVertical = true;
+            canvas.width  = window.innerWidth - 40;
+            canvas.height = window.innerHeight - 140; 
+        } else if (window.innerWidth > 1.75 * window.innerHeight) {
+            screenVertical = false;
+            canvas.width  = window.innerWidth - 40;
+            canvas.height = window.innerHeight - 20;
+        } else {
+            screenVertical = false;
+            canvas.width  = window.innerWidth - 40;
+            canvas.height = window.innerHeight - 220;
+        }
+        // Recompute simulation scaling & world dimensions
+        cScale    = Math.min(canvas.width, canvas.height) / simMinWidth;
+        simWidth  = canvas.width / cScale;
+        simHeight = canvas.height / cScale;
+        if (typeof physProps === 'object' && physProps.worldSize) {
+            physProps.worldSize.x = simWidth;
+            physProps.worldSize.y = simHeight;
+        }
+        // Helper clamp to keep actors within new bounds (optional: allow slight overshoot)
+        function clampActorPos(actor) {
+            if (!actor || !actor.pos) return;
+            if (actor.pos.x < 0) actor.pos.x = 0;
+            if (actor.pos.x > simWidth) actor.pos.x = simWidth;
+            if (actor.pos.y < 0) actor.pos.y = 0;
+            if (actor.pos.y > simHeight) actor.pos.y = simHeight;
+        }
+        // Re-apply preserved relative positions to pucks & friends using NEW sim dimensions
+        puckSnapshots.forEach(s => { s.p.pos.x = s.rx * simWidth; s.p.pos.y = s.ry * simHeight; clampActorPos(s.p); });
+        hungrySnapshots.forEach(s => { s.p.pos.x = s.rx * simWidth; s.p.pos.y = s.ry * simHeight; clampActorPos(s.p); });
+        misterSnapshots.forEach(s => { s.p.pos.x = s.rx * simWidth; s.p.pos.y = s.ry * simHeight; clampActorPos(s.p); });
+        // Rebuild gradient matching background for new geometry
+        updateCornerFillGradient();
+        // Clear existing frame
+        c.fillStyle = 'hsl(0, 0%, 0%)';
+        c.fillRect(0, 0, canvas.width, canvas.height);
+        // Recreate geometry dependent on dimensions
+    if (typeof makeCorners === 'function') makeCorners();
+    if (typeof makeBumpers === 'function') makeBumpers();
+        // Restart dynamic actors & particles
+    if (typeof makeBalls === 'function') makeBalls();
+    if (typeof syncParticleCountControls === 'function') syncParticleCountControls();
+    if (typeof makeWorm === 'function' && typeof doWorm !== 'undefined' && doWorm) { makeWorm(); }
+        // Re-select tracer if tracing enabled so trail restarts cleanly
+        if (typeof selectTracerBall === 'function' && typeof doTracer !== 'undefined') {
+            if (doTracer && (doSmallTracer || doMediumTracer || doBigTracer)) {
+                selectTracerBall();
+            }
+        }
     }
-    window.addEventListener("resize", refreshPage);
+    window.addEventListener('resize', () => {
+        if (_resizeDebounce) clearTimeout(_resizeDebounce);
+        _resizeDebounce = setTimeout(handleResizeRestart, 150); // debounce to avoid rapid churn
+    });
     // Gradient used to fill canvas corners/masks to match page background
     let cornerFillGradient = null;
     // Tunables
@@ -1880,8 +2212,48 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	    physProps.repulsionForce = repulsionForceSlider.value / 10;}
     document.getElementById("velColorMapSlider").oninput = function() {
         physProps.velColorMap = velColorMapSlider.value;}
+    document.getElementById("baseColorSlider").oninput = function() {
+        physProps.baseColor = baseColorSlider.value * 1;}
     document.getElementById("ballsInput").onchange = function() {
         makeBalls();}
+    
+    // Particle count slider handlers
+    document.getElementById("ballsSlider").oninput = function() {
+        var sliderValue = this.value;
+        var particleCount = sliderValue * sliderValue;
+        document.getElementById("particleCountDisplay").textContent = particleCount;
+    };
+    
+    document.getElementById("ballsSlider").onmouseup = function() {
+        var sliderValue = this.value;
+        var particleCount = sliderValue * sliderValue;
+        // Update the hidden ballsInput value for compatibility
+        ballsInput.value = particleCount;
+        makeBalls();
+    };
+    
+    // Handle keyboard events on slider
+    document.getElementById("ballsSlider").onkeyup = function() {
+        var sliderValue = this.value;
+        var particleCount = sliderValue * sliderValue;
+        // Update the hidden ballsInput value for compatibility
+        ballsInput.value = particleCount;
+        makeBalls();
+    };
+    
+    // Helper function to sync slider and display with ballsInput value
+    function syncParticleCountControls() {
+        var particleCount = ballsInput.value * 1;
+        var sliderValue = Math.round(Math.sqrt(particleCount));
+        
+        // Clamp slider value to valid range
+        sliderValue = Math.max(2, Math.min(100, sliderValue));
+        
+        // Update slider position and display
+        document.getElementById("ballsSlider").value = sliderValue;
+        document.getElementById("particleCountDisplay").textContent = sliderValue * sliderValue;
+    }
+    
     document.getElementById("saturationSlider").oninput = function() {
         ballSaturation = saturationSlider.value * 1;}
      document.getElementById("lightnessSlider").oninput = function() {
@@ -2085,17 +2457,58 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;};
     // Initialize worm UI knob theme on load
     document.body.classList.toggle('worm-on', document.getElementById('wormButton').checked);
-    document.getElementById('tracerButton').oninput = function() {
-        if (tracerButton.checked == true) {
-            doTracer = true;
-            // Clear existing traces when tracer is turned on
+    
+    document.getElementById('smallTracerButton').oninput = function() {
+        doTracer = noTracerButton.checked;
+        doSmallTracer = true;
+        doMediumTracer = false;
+        doBigTracer = false;
+        if (doTracer) selectTracerBall();
+    }
+    document.getElementById('mediumTracerButton').oninput = function() {
+        doTracer = noTracerButton.checked;
+        doMediumTracer = true;
+        doSmallTracer = false;
+        doBigTracer = false;
+        if (doTracer) selectTracerBall();
+    }
+    document.getElementById('bigTracerButton').oninput = function() {
+        doTracer = noTracerButton.checked;
+        doBigTracer = true;
+        doMediumTracer = false;
+        doSmallTracer = false;
+        if (doTracer) selectTracerBall();
+    }
+    document.getElementById('noTracerButton').oninput = function() {
+        if (!noTracerButton.checked) {
+            // Master unchecked => cease traces
+            doTracer = false;
+            // Keep the size selection state, but stop tracing and clear traces
             for (let i = 0; i < Balls.length; i++) {
-                if (Balls[i].tracerBall == true) {
+                if (Balls[i].tracerBall === true) {
                     Balls[i].resetTrace();
                 }
+                Balls[i].tracerBall = false;
+                Balls[i].tracer = false;
             }
         } else {
-            doTracer = false;}}
+            // Master checked => enable based on chosen size mode
+            doSmallTracer = smallTracerButton.checked;
+            doMediumTracer = mediumTracerButton.checked;
+            doBigTracer = bigTracerButton.checked;
+            if (doSmallTracer || doMediumTracer || doBigTracer) {
+                doTracer = true;
+                selectTracerBall();
+            } else {
+                // If none selected, default to medium
+                doMediumTracer = true;
+                doTracer = true;
+                mediumTracerButton.checked = true;
+                selectTracerBall();
+            }
+        }
+    }
+    
     document.getElementById("renderType").oninput = function() {
        if (this.value === 'drawSpheres') {
             doSpheres = true;
@@ -2103,18 +2516,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doCircles = false;
             saturationSlider.value = 80;
             ballSaturation = 80;
-            lightnessSlider.value = 45;
+            lightnessSlider.value = 55;
             ballLightness = 45;
             physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 ballsInput.value = 4096;
+                if (typeof syncParticleCountControls === 'function') syncParticleCountControls();
                 bigBallInput.value = 15;
                 smallBallInput.value = 3;
                 wasGummi = false;
                 makeBalls();
             }
        } else if (this.value === 'drawDiscs') {
-           doDiscs = true;
+            doDiscs = true;
             doSpheres = false;
             doCircles = false;
             saturationSlider.value = 90;
@@ -2124,8 +2538,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 ballsInput.value = 4096;
+                if (typeof syncParticleCountControls === 'function') syncParticleCountControls();
                 bigBallInput.value = 15;
                 smallBallInput.value = 3;
+                repulsionForceSlider.value = 20;
                 wasGummi = false;
                 makeBalls();
             }
@@ -2140,8 +2556,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 ballsInput.value = 4096;
+                if (typeof syncParticleCountControls === 'function') syncParticleCountControls();
                 bigBallInput.value = 15;
                 smallBallInput.value = 3;
+                repulsionForceSlider.value = 20;
                 wasGummi = false;
                 makeBalls();
             }
@@ -2157,8 +2575,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             ballLightness = lightnessSlider.value * 1;
             physProps.repulsionDist = 1.5;
             ballsInput.value = 225;
+            if (typeof syncParticleCountControls === 'function') syncParticleCountControls();
             bigBallInput.value = 80;
             smallBallInput.value = 20;
+            repulsionForceSlider.value = 10;
             makeBalls();
         }};
 
@@ -2175,6 +2595,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     canvas.addEventListener('touchstart', touchStartHandler, {passive: false});
     canvas.addEventListener('touchend', touchEndHandler, {passive: false});
     canvas.addEventListener('touchcancel', touchEndHandler, {passive: false});
+    // Double-click anywhere on the canvas to restart the simulation without reloading the page
+    canvas.addEventListener('dblclick', function() {
+        // Clear and rebuild the particle set (preserves UI state)
+        if (typeof forcedWipeRestart === 'function') {
+            forcedWipeRestart();
+        } else if (typeof makeBalls === 'function') {
+            makeBalls();
+        }
+        // If tracing is enabled, reselect the tracer so the trail restarts correctly
+        if (typeof selectTracerBall === 'function' && typeof doTracer !== 'undefined') {
+            if (doTracer && (doSmallTracer || doMediumTracer || doBigTracer)) {
+                selectTracerBall();
+            }
+        }
+    });
     
     function mouseDownHandler(ev) {
         const e = ev || window.event;
@@ -2676,6 +3111,52 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
 	}
+    // Momentary handlers for impulse buttons: brighten briefly, fire effect, then auto-dim
+    function fireSplode() {
+        const el = document.getElementById('splodeButton');
+        if (el) el.checked = true;
+        try { instantSplode(); } catch(e) {}
+        // auto-uncheck to restore dim state
+        setTimeout(()=>{ if (el) el.checked = false; }, 180);
+    }
+    function fireImplode() {
+        const el = document.getElementById('implodeButton');
+        if (el) el.checked = true;
+        try { instantImplode(); } catch(e) {}
+        setTimeout(()=>{ if (el) el.checked = false; }, 180);
+    }
+    function fireUnravel() {
+        const el = document.getElementById('unravelButton');
+        if (el) el.checked = true;
+        try { delayedSplode(); } catch(e) {}
+        setTimeout(()=>{ if (el) el.checked = false; }, 220);
+    }
+    
+    // Continuous implode functionality
+    let implodeInterval = null;
+    
+    function startContinuousImplode() {
+        const el = document.getElementById('implodeButton');
+        if (el) el.checked = true;
+        
+        // Start continuous implode effect
+        if (implodeInterval) clearInterval(implodeInterval);
+        implodeInterval = setInterval(() => {
+            try { instantImplode(); } catch(e) {}
+        }, 16); // ~60fps for smooth continuous effect
+    }
+    
+    function stopContinuousImplode() {
+        const el = document.getElementById('implodeButton');
+        if (el) el.checked = false;
+        
+        // Stop continuous implode effect
+        if (implodeInterval) {
+            clearInterval(implodeInterval);
+            implodeInterval = null;
+        }
+    }
+    
 	function pauseAndStep() {
         let input = document.querySelectorAll('.checkbox-pause');
         for (i = 0; i < input.length; i++) {
@@ -3108,6 +3589,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         repulsionForce: 2,
         repulsionDist: 4,
         velColorMap: 0,
+        baseColor: 0,
 	}
 
     var WormProps = {
@@ -3177,14 +3659,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         showCycle = (typeof showCyclePuckButton !== 'undefined') ? showCyclePuckButton.checked : true;
         doShower = shower.checked;
         doFountain = fountain.checked;
-        doTracer = tracerButton.checked;
+        
+        doSmallTracer = smallTracerButton.checked;
+        doMediumTracer = mediumTracerButton.checked;
+        doBigTracer = bigTracerButton.checked;
+        if (doSmallTracer == true || doMediumTracer == true || doBigTracer == true) {
+            doTracer = true;
+        } else {
+            doTracer = false;
+        }
+
         sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;
         respawnDir = 0;
         
         ballRepulsion = repulsionButton.checked;
         misterSpeed = 0.01 * misterSpeedSlider.value;
-        ballSaturation = 1 * saturationSlider.value;
-        ballLightness = 1 *  lightnessSlider.value;
+        ballSaturation = 1.0 * saturationSlider.value;
+        ballLightness = 1.0 * lightnessSlider.value;
         persistence = 1.0 * persistenceSlider.value;
         cornerRad = 1.0 * cornerRadiusSlider.value;
 
@@ -3199,6 +3690,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         doGravityDown = gravityDown.checked;
         doGravityRight = gravityRight.checked;
         doWorm = wormButton.checked;
+
+        physProps.baseColor = 1.0 * baseColorSlider.value;
 
         physProps.velColorMap = velColorMapSlider.value;
         // Initialize ball restitution from slider using the same log mapping
@@ -3233,6 +3726,54 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
 
+    // Splode timing (ms): delay between each ball's impulse
+    const SPL0DE_DELAY_MS = 1; // tune this to control pacing
+    // Apply outward impulse to all balls with a small staggered delay per index
+    function delayedSplode() {
+        const cx = 0.5 * simWidth;
+        const cy = 0.5 * simHeight;
+        // Base impulse magnitude (scaled like before)
+        const baseSpeed = 50 * physProps.dt;
+        // Schedule each ball's impulse with an increasing timeout
+        for (let i = Balls.length - 1; i >= 0; i--) {
+            const b = Balls[i];
+            const delay = (Balls.length - 1 - i) * SPL0DE_DELAY_MS;
+            setTimeout(() => {
+                // Guard in case balls array was rebuilt
+                if (!b || !b.pos || !b.vel) return;
+                const d = new Vector2();
+                d.subtractVectors(b.pos, new Vector2(cx, cy));
+                const angle = Math.atan2(d.y, d.x);
+                b.vel.x += baseSpeed * Math.cos(angle);
+                b.vel.y += baseSpeed * Math.sin(angle);
+            }, delay);
+        }
+    }
+
+    function instantSplode() {
+        const baseSpeed = 50 * physProps.dt;
+        for (let i = Balls.length - 1; i >= 0; i--) {
+            var ball = Balls[i];
+            var d = new Vector2();
+            d.subtractVectors(ball.pos, new Vector2(0.5 * simWidth, 0.5 * simHeight));
+            const angle = Math.atan2(d.y, d.x);
+            ball.vel.x += baseSpeed * Math.cos(angle);
+            ball.vel.y += baseSpeed * Math.sin(angle);
+        }
+    }
+
+    function instantImplode() {
+        const baseSpeed = 50 * physProps.dt;
+        for (let i = Balls.length - 1; i >= 0; i--) {
+            var ball = Balls[i];
+            var d = new Vector2();
+            d.subtractVectors(ball.pos, new Vector2(0.5 * simWidth, 0.5 * simHeight));
+            const angle = Math.atan2(d.y, d.x);
+            ball.vel.x -= baseSpeed * Math.cos(angle);
+            ball.vel.y -= baseSpeed * Math.sin(angle);
+        }
+    }
+
 	//  BALL CONSTRUCTOR  -----------------------------------------------------------------------
 	class BALL {
 		constructor(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius) {
@@ -3241,7 +3782,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			this.pos = pos.clone();
 			this.vel = vel.clone();
             this.color = 0;
-            this.hiColor = 0;
             this.saturation = saturation;
             this.whiteBall = whiteBall;
             this.immuneToWorm = false;
@@ -3252,11 +3792,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.headingInitialized = false; // initialize on first valid velocity
             this.artificialMovement = false; // Flag to track when ball is being repositioned artificially
             if (tracerBall == true) {
-                this.radius = 0.5 * (smallBallRadius + bigBallRadius);
+                if (doSmallTracer == true) {
+                    this.radius = smallBallRadius;
+                } else 
+                if (doBigTracer == true) {
+                    this.radius = bigBallRadius;
+                } else 
+                if (doMediumTracer == true) {
+                    this.radius = 0.5 * (smallBallRadius + bigBallRadius);
+                }  
                 this.trail = new Float32Array(1500); // Increased size to accommodate flags
                 this.trailFirst = 0;
                 this.trailLast = 0;
                 this.tracer = true;
+                this.speedHue = 0;
+                this.speedHueRatio = 1;
             }
 		}
         get top() {
@@ -3302,26 +3852,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		simulate() {
 			this.vel.add(physProps.gravity, physProps.dt);
             const maxSpeed = 1;
-            if (this.vel.length() > maxSpeed) {
+            const speed = this.vel.length();
+            if (speed > maxSpeed) {
                 this.vel.x *= maxSpeed / this.vel.length();
                 this.vel.y *= maxSpeed / this.vel.length();
             }
 			this.pos.add(this.vel, physProps.dt)
-            if (this.whiteBall == true || this.tracerBall == true) {
-                this.color = `hsl(0, 0%, ${ballLightness + 20}%)`;
-                this.hiColor = `hsl(0, 0%, ${ballLightness + 50}%)`;
-            } else {
-                var speedHue = this.vel.length() * physProps.velColorMap;
-                if (speedHue > 330) {speedHue = 330}
-                var speedHueRatio = Math.min(0.8 + 0.2 * speedHue / 330, 1.0);
-                //speedHue = 240 - (240 * speedHueRatio);
-                this.color = `hsl(${speedHue}, ${ballSaturation * this.saturation}%, ${speedHueRatio * ballLightness}%)`;
-                this.hiColor = `hsl(${speedHue}, ${ballSaturation * this.saturation}%, ${speedHueRatio * ballLightness + 15}%)`;
+            this.speedHue = physProps.baseColor + this.vel.length() * physProps.velColorMap;
+            
+            if (this.speedHue > physProps.baseColor + 330) {
+                this.speedHue = physProps.baseColor + 330;
             }
+            
+            //if (this.speedHue > 330) {
+            //    this.speedHue = 330;
+            //}
+            this.speedHueRatio = Math.min(0.8 + 0.2 * speed);
 		}
         drawTrace() {
             c.lineCap = 'round';
-            c.lineWidth = this.radius * cScale;
+            c.lineWidth = Math.max(0.005, this.radius) * cScale;
             if (this.trailLast != this.trailFirst) {
                 var i = this.trailFirst;
                 var segmentCount = 0;
@@ -3369,17 +3919,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         draw() {
             if (doDiscs == true) {
                 drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
-                c.fillStyle = this.color;
+                if (this.whiteBall == true || this.tracerBall == true) {
+                    // reg color
+                    c.fillStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                    // hi color
+                    c.strokeStyle = `hsl(0, 0%, ${ballLightness + 50}%)`;
+                    c.lineWidth = 0.2 * this.radius * cScale;
+                } else {
+                    // reg color   
+                    c.fillStyle = `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness}%)`;
+                    // hi color
+                    c.strokeStyle = `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness + 25}%)`;
+                    c.lineWidth = 0.2 * this.radius * cScale;
+                }
                 c.fill();
-                c.strokeStyle = this.hiColor;
-                c.lineWidth = 0.2 * this.radius * cScale;
                 c.stroke();
             } else if (doSpheres == true) {
                 const shineOffsetX = cScale * this.radius * 0.3; // old masterShineShiftX;
                 const shineOffsetY = cScale * this.radius * 0.4; // old masterShineShiftY;
                 const shineVector = Math.sqrt(shineOffsetX * shineOffsetX + shineOffsetY * shineOffsetY);
                 const shineRadius = 0.5 * cScale * this.radius + shineVector;
-                
                 const shading = c.createRadialGradient(
                     cX(this.pos) - shineOffsetX, 
                     cY(this.pos) - shineOffsetY, 
@@ -3387,14 +3946,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     cX(this.pos) - shineOffsetX, 
                     cY(this.pos) - shineOffsetY, 
                     0);
-                shading.addColorStop(0, this.color);
-                shading.addColorStop(1, this.hiColor);
+                shading.addColorStop(0, `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness - 15}%)`);
+                shading.addColorStop(1, `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness + 25}%)`);
                 drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
                 c.fillStyle = shading;
                 c.fill()
             } else if (doCircles == true) {
                 drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
-                c.strokeStyle = this.color;
+                c.strokeStyle = `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness}%)`;
                 c.lineWidth = 0.2 * this.radius * cScale;
                 c.stroke();
             } else if (doGummi == true) {
@@ -3442,7 +4001,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     // Tint the grayscale image to match ball color behavior
                     const prevOp = c.globalCompositeOperation;
                     c.globalCompositeOperation = 'multiply';
-                    c.fillStyle = this.color;
+                    c.fillStyle = `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness}%)`;
                     // Cover the clipped circle area for consistent tinting
                     c.fillRect(-clipR, -clipR, 2 * clipR, 2 * clipR);
                     c.globalCompositeOperation = prevOp;
@@ -3450,7 +4009,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 } else {
                     // Fallback: draw a simple disc until the image is loaded
                     drawCircle(x, y, rpx);
-                    c.fillStyle = this.color;
+                    c.fillStyle = `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness}%)`;;
                     c.fill();
                 }
             }
@@ -3581,6 +4140,47 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius));
             }   
         }
+    }
+
+    // Dynamically reassign the tracer ball without respawning all balls
+    function selectTracerBall() {
+        if (!Array.isArray(Balls) || Balls.length === 0) return;
+
+        // Determine target radius based on mode
+        const sR = smallBallInput.value / 1000;
+        const bR = bigBallInput.value / 1000;
+        let targetR = 0.5 * (sR + bR); // default medium
+        if (doSmallTracer === true) targetR = sR;
+        else if (doBigTracer === true) targetR = bR;
+
+        // Clear any current tracer flags and remember previous tracer to stop tracing
+        let prevTracer = null;
+        for (let i = 0; i < Balls.length; i++) {
+            if (Balls[i].tracerBall === true) {
+                prevTracer = Balls[i];
+            }
+            Balls[i].tracerBall = false;
+            Balls[i].tracer = false;
+            // restore color behavior; whiteBall remains whatever it was
+        }
+
+        // Choose the ball whose radius is closest to targetR
+        let bestIdx = 0;
+        let bestDiff = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < Balls.length; i++) {
+            const diff = Math.abs(Balls[i].radius - targetR);
+            if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+        }
+
+        // Assign new tracer flags and ensure it has a trail buffer
+        const tracer = Balls[bestIdx];
+        tracer.tracerBall = true;
+        tracer.tracer = true;
+        tracer.whiteBall = true; // ensure white visual for the tracer
+        if (!tracer.trail || tracer.trail.length === 0) {
+            tracer.trail = new Float32Array(1500);
+        }
+        tracer.resetTrace();
     }
 
     //  CORNER CONSTRUCTOR  ---------------------------------------------------------------------
@@ -4853,8 +5453,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // NORMAL PUCKS  ----------------------------------------------------------
         Puck.push (new PUCK(
             1.0 * puckRadiusSlider.value / 1000, 
-            new Vector2(0.3 * simWidth, 
-                0.25 * simHeight), 
+            new Vector2(0.35 * simWidth, 
+                0.2 * simHeight), 
                 puck2color, 
                 false));
         Puck.push (new PUCK(0.5 * puckRadiusSlider.value / 1000, 
@@ -4864,7 +5464,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 false));
         //  HEARTBEAT PUCK  ----------------------------------------------------------
         Puck.push (new PUCK(1.0 * puckRadiusSlider.value / 1000, 
-            new Vector2(0.55 * canvas.width / cScale, 
+            new Vector2(0.65 * canvas.width / cScale, 
                 0.1 * canvas.height / cScale), 
                 puck2color, 
                 true));
@@ -4919,209 +5519,201 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var mrMr = MisterMister[0];
             mrMr.simulate();
         }
-        
+
         //  BALLS ----------------------------------
-        var sortedBalls = Balls.sort((a, b) => a.left - b.left);     
-        for (i = 0; i < Balls.length; i++) {
-            var ball1 = sortedBalls[i];
-            ball1.simulate();    
+        // Precompute bumper sweep structures once per frame
+        let bumperCtx = null;
+        if (showBumpers && Array.isArray(Bumpers) && Bumpers.length) {
+            const lowest = Bumpers[0];
+            const highest = Bumpers[Bumpers.length - 1];
+            const arrayBottom = lowest.pos.y - lowest.radius;
+            const arrayTop = highest.pos.y + highest.radius;
+            const sortedBumpers = Bumpers.slice().sort((a,b)=>a.left-b.left);
+            bumperCtx = { arrayBottom, arrayTop, sortedBumpers };
+        }
 
-            if (doTracer == true && ball1.tracerBall == true) {
-                ball1.updateTrace();
-            }
-            
-            // Update worm immunity frame counter
-            if (ball1.immuneToWorm) {
-                // Initialize immunityFramesLeft for existing balls that might not have it
-                if (typeof ball1.immunityFramesLeft === 'undefined') {
-                    ball1.immunityFramesLeft = 10; // Give existing immune balls some frames
+        // Phase 1: integrate & per-ball updates (no ball-ball collisions yet)
+        for (let i = 0; i < Balls.length; i++) {
+            const b = Balls[i];
+            b.simulate();
+            if (doTracer && b.tracerBall) b.updateTrace();
+            // Worm immunity countdown
+            if (b.immuneToWorm) {
+                if (typeof b.immunityFramesLeft === 'undefined') b.immunityFramesLeft = 10;
+                if (b.immunityFramesLeft > 0) {
+                    b.immunityFramesLeft--;
+                    if (b.immunityFramesLeft <= 0) b.immuneToWorm = false;
                 }
-                
-                if (ball1.immunityFramesLeft > 0) {
-                    ball1.immunityFramesLeft--;
-                    if (ball1.immunityFramesLeft <= 0) {
-                        ball1.immuneToWorm = false; // Remove immunity when frames expire
+            }
+            // Hungry puck interaction (uses current position only; order independent)
+            if (showEaters) {
+                for (let h = 0; h < Hungrypuck.length; h++) {
+                    const hp = Hungrypuck[h];
+                    if (hp.right > b.left && Math.abs(b.pos.y - hp.pos.y) <= b.radius + hp.radius) {
+                        handleHungryPuckHits(b, hp);
                     }
                 }
             }
-            
-            //  HANDLE BALL TO BALL REPULSION AND HITS -----------------------------
-            //  HANDLE BALL TO BALL REPULSION  -----------------------------
-            if (ballRepulsion == true) {  
-                for (var j = i + 1; j < Balls.length; j++) {
-                    var ball2 = sortedBalls[j];   
-                    if (ball2.left - physProps.repulsionDist * (ball1.radius + ball2.radius) > ball1.right + physProps.repulsionDist * (ball1.radius + ball2.radius)) {
-                        break;
-                    }     
-                    if (Math.abs(ball1.pos.y - ball2.pos.y) < physProps.repulsionDist * (ball1.radius + ball2.radius)) {
-                        handleBallRepulsion(ball1, ball2);
-                        if (Math.abs(ball1.pos.y - ball2.pos.y) <= ball1.radius + ball2.radius) {
-                            handleBallHits(ball1, ball2);
-                        }
-                    }
+            // Puck special arrival sims
+            for (let p = 0; p < Puck.length; p++) {
+                const puck = Puck[p];
+                const shouldSim = puck.puckArriving || (puck.special && showHeart) || (puck.cycle && showCycle);
+                if (shouldSim) puck.simulate();
+            }
+            // Puck collisions
+            for (let p = 0; p < Puck.length; p++) {
+                const puck = Puck[p];
+                if (puck.special && !showHeart) continue;
+                if (puck.cycle && !showCycle) continue;
+                if (!puck.special && !puck.cycle && !showPucks) continue;
+                if (puck.right < b.left) continue;
+                if (Math.abs(b.pos.y - puck.pos.y) <= b.radius + puck.radius) handlePuckHits(b, puck);
+            }
+            // Worm segment collisions (broad-phase bbox + narrow-phase) kept as-is
+            if (!b.immuneToWorm && doWorm && WormProps.SpaceWorm && WormProps.SpaceWorm.pos.length > 1) {
+                const worm = WormProps.SpaceWorm;
+                let wormMinX = Infinity, wormMaxX = -Infinity, wormMinY = Infinity, wormMaxY = -Infinity;
+                for (let w = 0; w < worm.pos.length; w++) {
+                    const sr = (w < worm.radii.length && typeof worm.radii[w] === 'number') ? worm.radii[w] : 0.02;
+                    wormMinX = Math.min(wormMinX, worm.pos[w].x - sr);
+                    wormMaxX = Math.max(wormMaxX, worm.pos[w].x + sr);
+                    wormMinY = Math.min(wormMinY, worm.pos[w].y - sr);
+                    wormMaxY = Math.max(wormMaxY, worm.pos[w].y + sr);
                 }
-            } else {
-                //  HANDLE BALL TO BALL HITS  -----------------------------
-                for (var j = i + 1; j < Balls.length; j++) {
-                    var ball2 = sortedBalls[j];   
-                    
-                    if (ball2.left > ball1.right) {
-                        break;
-                    }     
-                    if (Math.abs(ball1.pos.y - ball2.pos.y) <= ball1.radius + ball2.radius) {
-                        handleBallHits(ball1, ball2);
+                if (b.pos.x + b.radius >= wormMinX && b.pos.x - b.radius <= wormMaxX && b.pos.y + b.radius >= wormMinY && b.pos.y - b.radius <= wormMaxY) {
+                    for (let w = 0; w < worm.pos.length; w++) {
+                        const sr = (w < worm.radii.length && typeof worm.radii[w] === 'number') ? worm.radii[w] : 0.02;
+                        const dx = b.pos.x - worm.pos[w].x;
+                        const dy = b.pos.y - worm.pos[w].y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist <= b.radius + sr) handleWormSegmentHits(b, worm.pos[w], sr, worm.vel[w]);
                     }
                 }
             }
+            // Corner collisions
+            for (let v = 0; v < Corners.length; v++) {
+                const corner = Corners[v];
+                let skip = false;
+                if (corner.corner == 'northwest') skip = !doFloor || !doLeftWall;
+                else if (corner.corner == 'northeast') skip = !doFloor || !doRightWall;
+                else if (corner.corner == 'southwest') skip = !doCeiling || !doLeftWall;
+                else skip = !doCeiling || !doRightWall;
+                if (skip) continue;
+                let check = false;
+                if (corner.corner == 'northwest' || corner.corner == 'southwest') check = corner.right > b.left && Math.abs(b.pos.y - corner.pos.y) <= b.radius + corner.radius;
+                else check = corner.left < b.left && Math.abs(b.pos.y - corner.pos.y) <= b.radius + corner.radius;
+                if (check) handleCornerHits(b, corner);
+            }
+            // Bounds
+            if (mrMode == 'billiard') handleMrMrBounds(MisterMister[0], physProps.worldSize);
+            handleOutOfBounds(b, physProps.worldSize);
+            // Bumpers (after position update; broad-phase by vertical slice)
+            if (bumperCtx) {
+                if (b.bottom <= bumperCtx.arrayTop && b.top >= bumperCtx.arrayBottom) {
+                    for (let k = 0; k < bumperCtx.sortedBumpers.length; k++) {
+                        const bumper = bumperCtx.sortedBumpers[k];
+                        if (bumper.left > b.right) break;
+                        if (Math.abs(b.pos.y - bumper.pos.y) <= b.radius + bumper.radius) handleBumperHits(b, bumper);
+                    }
+                }
+            }
+        }
 
-            if (showBumpers == true) {
-                lowestBumper = Bumpers[0];
-                highestBumper = Bumpers[Bumpers.length - 1];
-                arrayBottom = lowestBumper.pos.y - lowestBumper.radius;
-                arrayTop = highestBumper.pos.y + highestBumper.radius;
-                if (ball1.bottom <= arrayTop && ball1.top >= arrayBottom) {
-                    var sortedBumpers = Bumpers.sort((a, b) => a.left - b.left);
-                    for (k = 0; k < Bumpers.length; k++) {
-                        var bumper = sortedBumpers[k];
-                        if (bumper.left > ball1.right) {
-                            break;
-                        }
-                        if (Math.abs(ball1.pos.y - bumper.pos.y) <= ball1.radius + bumper.radius) {
-                            handleBumperHits(ball1, bumper)
-                        }
+        // Phase 2: ball-ball collisions (broad-phase)
+        const useSpatial = Balls.length > 3600; // threshold; tweak as needed
+        if (!useSpatial) {
+            // Original sweep & prune with sort (but only once per frame, not per substep loop)
+            const sorted = Balls.slice().sort((a,b)=>a.left-b.left);
+            for (let i = 0; i < sorted.length; i++) {
+                const a = sorted[i];
+                for (let j = i+1; j < sorted.length; j++) {
+                    const b = sorted[j];
+                    if (ballRepulsion) {
+                        // Early-out when beyond repulsion span on X
+                        const span = physProps.repulsionDist * (a.radius + b.radius);
+                        if ((b.left - a.right) > span) break;
+                    } else {
+                        if (b.left > a.right) break; // no more overlapping on x
                     }
-                } 
-            }
-            
-            //  HUNGRY PUCK CHECKS  -----------------------------
-            if (showEaters == true) {
-                var hungryPuck = Hungrypuck[0];
-                if (hungryPuck.right > ball1.left) {
-                    if (Math.abs(ball1.pos.y - hungryPuck.pos.y) <= ball1.radius + hungryPuck.radius) {
-                        handleHungryPuckHits(ball1, hungryPuck)
+                    // Radial tests to avoid axis-aligned artifacts (square patterns)
+                    const dx = a.pos.x - b.pos.x;
+                    const dy = a.pos.y - b.pos.y;
+                    const dist2 = dx*dx + dy*dy;
+                    const sumR = a.radius + b.radius;
+                    const sumR2 = sumR * sumR;
+                    if (ballRepulsion) {
+                        const rep = physProps.repulsionDist * sumR;
+                        if (dist2 < rep*rep) handleBallRepulsion(a,b);
+                        if (dist2 <= sumR2) handleBallHits(a,b);
+                    } else {
+                        if (dist2 <= sumR2) handleBallHits(a,b);
                     }
-                }
-                var hungryPuck = Hungrypuck[1];
-                if (hungryPuck.right > ball1.left) {
-                    if (Math.abs(ball1.pos.y - hungryPuck.pos.y) <= ball1.radius + hungryPuck.radius) {
-                        handleHungryPuckHits(ball1, hungryPuck)
-                    }
-                }
-            } 
-
-            //  PUCK ARRIVING AND SPECIAL SIMS  -----------------------------
-            for (var p=0; p < Puck.length; p++) {
-                var puck = Puck[p];
-                // Simulate if arriving, or if it's special (heart) and enabled, or cycle and enabled
-                const shouldSim = puck.puckArriving == true 
-                                  || (puck.special === true && showHeart === true)
-                                  || (puck.cycle === true && showCycle === true);
-                if (shouldSim) {
-                    puck.simulate();
                 }
             }
-            
-            //  PUCK CHECKS  -----------------------------
-            for (var p=0; p < Puck.length; p++) {
-                var puck = Puck[p];
-                // Filter by toggles
-                if (puck.special === true && showHeart !== true) continue;
-                if (puck.cycle === true && showCycle !== true) continue;
-                if (puck.special !== true && puck.cycle !== true && showPucks !== true) continue;
-                // Broad-phase skip
-                if (puck.right < ball1.left) continue;
-                // Narrow-phase
-                if (Math.abs(ball1.pos.y - puck.pos.y) <= ball1.radius + puck.radius) {
-                    handlePuckHits(ball1, puck)
-                }
+        } else {
+            // Uniform grid spatial hash
+            let maxR = 0;
+            for (let i=0;i<Balls.length;i++) if (Balls[i].radius>maxR) maxR = Balls[i].radius;
+            const cellSize = Math.max( (ballRepulsion? physProps.repulsionDist:1) * (2*maxR), 2*maxR );
+            const cols = Math.max(1, Math.floor(simWidth / cellSize) + 1);
+            const rows = Math.max(1, Math.floor(simHeight / cellSize) + 1);
+            const grid = new Array(cols * rows);
+            for (let g=0; g<grid.length; g++) grid[g] = [];
+            for (let i=0;i<Balls.length;i++) {
+                const b = Balls[i];
+                let cx = Math.floor(b.pos.x / cellSize);
+                let cy = Math.floor(b.pos.y / cellSize);
+                if (cx<0) cx=0; if (cx>=cols) cx=cols-1;
+                if (cy<0) cy=0; if (cy>=rows) cy=rows-1;
+                grid[cy*cols+cx].push(b);
             }
-
-            //  WORM SEGMENT CHECKS  -----------------------------
-            if (ball1.immuneToWorm != true) {
-                if (doWorm == true && WormProps.SpaceWorm && WormProps.SpaceWorm.pos.length > 1) {
-                    var worm = WormProps.SpaceWorm;
-                    
-                    // Broad-phase detection: check if ball could potentially hit any part of the worm
-                    // Find worm's bounding box
-                    var wormMinX = Infinity, wormMaxX = -Infinity;
-                    var wormMinY = Infinity, wormMaxY = -Infinity;
-                    
-                    // Skip lead segment (index 1) when mrMode is 'worm'
-                    //var startIndex = (mrMode == "worm") ? 2 : 1;
-                    
-                    for (var w = 0; w < worm.pos.length; w++) { // Skip pivot at index 0, and optionally lead segment at index 1
-                        var segmentRadius = (w < worm.radii.length && typeof worm.radii[w] === 'number') ? worm.radii[w] : 0.02;
-                        wormMinX = Math.min(wormMinX, worm.pos[w].x - segmentRadius);
-                        wormMaxX = Math.max(wormMaxX, worm.pos[w].x + segmentRadius);
-                        wormMinY = Math.min(wormMinY, worm.pos[w].y - segmentRadius);
-                        wormMaxY = Math.max(wormMaxY, worm.pos[w].y + segmentRadius);
-                    }
-                    
-                    // Broad-phase: check if ball's bounding box overlaps with worm's bounding box
-                    if (ball1.pos.x + ball1.radius >= wormMinX && 
-                        ball1.pos.x - ball1.radius <= wormMaxX &&
-                        ball1.pos.y + ball1.radius >= wormMinY && 
-                        ball1.pos.y - ball1.radius <= wormMaxY) {
-                        
-                        // Narrow-phase: check each worm segment individually
-                        for (var w = 0; w < worm.pos.length; w++) { // Skip pivot at index 0, and optionally lead segment at index 1
-                            var segmentRadius = (w < worm.radii.length && typeof worm.radii[w] === 'number') ? worm.radii[w] : 0.02;
-                            
-                            // Simple distance check for collision
-                            var dx = ball1.pos.x - worm.pos[w].x;
-                            var dy = ball1.pos.y - worm.pos[w].y;
-                            var distance = Math.sqrt(dx * dx + dy * dy);
-                            
-                            if (distance <= ball1.radius + segmentRadius) {
-                                handleWormSegmentHits(ball1, worm.pos[w], segmentRadius, worm.vel[w]);
+            for (let cy=0; cy<rows; cy++) {
+                for (let cx=0; cx<cols; cx++) {
+                    const cellIndex = cy*cols+cx;
+                    const cellBalls = grid[cellIndex];
+                    if (!cellBalls.length) continue;
+                    // Same-cell pairs (unique)
+                    for (let i=0;i<cellBalls.length;i++) {
+                        for (let j=i+1;j<cellBalls.length;j++) {
+                            const a = cellBalls[i], b = cellBalls[j];
+                            const dx = a.pos.x - b.pos.x, dy = a.pos.y - b.pos.y;
+                            const dist2 = dx*dx + dy*dy;
+                            const sumR = a.radius + b.radius, sumR2 = sumR*sumR;
+                            if (ballRepulsion) {
+                                const rep = physProps.repulsionDist * sumR;
+                                if (dist2 < rep*rep) handleBallRepulsion(a,b);
+                                if (dist2 <= sumR2) handleBallHits(a,b);
+                            } else {
+                                if (dist2 <= sumR2) handleBallHits(a,b);
                             }
                         }
                     }
-                } 
-            }
-
-            //  CORNER CHECKS  -----------------------------
-            for (var v = 0; v < Corners.length; v++) {
-                var corner = Corners[v];
-                // Skip corners on open sides based on boundary settings
-                var shouldSkipCorner = false;
-                if (corner.corner == 'northwest') {
-                    shouldSkipCorner = !doFloor || !doLeftWall;
-                } else if (corner.corner == 'northeast') {
-                    shouldSkipCorner = !doFloor || !doRightWall;
-                } else if (corner.corner == 'southwest') {
-                    shouldSkipCorner = !doCeiling || !doLeftWall;
-                } else { // southeast
-                    shouldSkipCorner = !doCeiling || !doRightWall;
-                }
-
-                if (shouldSkipCorner) {
-                    continue; // Skip this corner and continue with next corner
-                }
-                // Only check collision if corner should be active
-                var shouldCheckCollision = false;
-                if (corner.corner == 'northwest' || corner.corner == 'southwest') {
-                    shouldCheckCollision = corner.right > ball1.left && 
-                        Math.abs(ball1.pos.y - corner.pos.y) <= ball1.radius + corner.radius;
-                } else if (corner.corner == 'northeast' || corner.corner == 'southeast') {
-                    shouldCheckCollision = corner.left < ball1.left && 
-                        Math.abs(ball1.pos.y - corner.pos.y) <= ball1.radius + corner.radius;
-                }
-                
-                if (shouldCheckCollision) {
-                    handleCornerHits(ball1, corner);
+                    // Neighbor cells (unique offsets to avoid double-processing)
+                    const neighborOffsets = [ [1,0], [1,1], [0,1], [-1,1] ];
+                    for (const [dxCell, dyCell] of neighborOffsets) {
+                        const nx = cx + dxCell, ny = cy + dyCell;
+                        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+                        const neighborBalls = grid[ny*cols+nx];
+                        if (!neighborBalls.length) continue;
+                        for (let i=0;i<cellBalls.length;i++) {
+                            for (let j=0;j<neighborBalls.length;j++) {
+                                const a = cellBalls[i], b = neighborBalls[j];
+                                const dx = a.pos.x - b.pos.x, dy = a.pos.y - b.pos.y;
+                                const dist2 = dx*dx + dy*dy;
+                                const sumR = a.radius + b.radius, sumR2 = sumR*sumR;
+                                if (ballRepulsion) {
+                                    const rep = physProps.repulsionDist * sumR;
+                                    if (dist2 < rep*rep) handleBallRepulsion(a,b);
+                                    if (dist2 <= sumR2) handleBallHits(a,b);
+                                } else {
+                                    if (dist2 <= sumR2) handleBallHits(a,b);
+                                }
+                            }
+                        }
+                    }
                 }
             }
-
-            //  MR. MR. OUT OF BOUNDS CHECKS  -----------------------------
-            if (mrMode == "billiard") {
-                var hungryPuck = MisterMister[0];
-                handleMrMrBounds(hungryPuck, physProps.worldSize);
-            }
-
-            //  BALL OUT OF BOUNDS CHECKS  -----------------------------
-            handleOutOfBounds(ball1, physProps.worldSize);
-		}
+        }
     }
 
     //  DRAW EVERYTHING -----------------------------------------------------------------
