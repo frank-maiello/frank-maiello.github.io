@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.35
+		<title>Slosh 1.36
         </title>
         <style>
 			body {font-family: monospace; 
@@ -129,6 +129,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 text-align: center;
                 text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
                 color: hsl(220, 60%, 55%);}    
+            b15 { 
+                font-family: monospace; 
+                font-size: 14px;
+                text-align: center;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                color: hsl(338, 100%, 72%);}  
 
             c1 {
                 font-family: monospace; 
@@ -329,8 +335,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
                 cursor: pointer} 
 
-            .slider-purple-short:hover {opacity: 1}
-            .slider-purple-short {-webkit-appearance: none;
+            .slider-mrmr:hover {opacity: 1}
+            .slider-mrmr {-webkit-appearance: none;
 				appearance: none;
                 vertical-align: middle;
                 margin-top: 5px;
@@ -344,7 +350,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
 				-webkit-transition: .2s;
 			    transition: opacity .2s}
-            .slider-purple-short::-webkit-slider-thumb {-webkit-appearance: none;
+            .slider-mrmr::-webkit-slider-thumb {-webkit-appearance: none;
                 width: 10px;
                 height: 22px;
                 border-radius: 30%;
@@ -478,7 +484,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 vertical-align: middle;
                 margin-top: 5px;
                 margin-bottom: 10px;
-                width: 75px;
+                width: 100px;
 				height: 4px;
 				border-radius: 5px;
                 background: linear-gradient(to right, 
@@ -662,7 +668,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 10px;
                 height: 22px;
                 border-radius: 30%;
-                background: hsl(50, 90%, 50%);
+                background: hsl(338, 100%, 72%);
                 box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
                 cursor: pointer}
 
@@ -877,7 +883,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				-webkit-transition: .2s;
 				transition: opacity .2s}
 
-            .field-purple {-webkit-appearance: none;
+            .field-mrmr {-webkit-appearance: none;
                 appearance: none;
                 font-family: monospace;
                 font-size: 16px;
@@ -890,7 +896,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				height: 18px;
                 border-width: 0;
 				border-radius: 10px;
-                color: hsl(350, 70%, 60%);
 				outline: none;
 				opacity: 0.7;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
@@ -1008,8 +1013,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 background-color: hsl(0, 0%, 60%)}
 
             /* One-shot toggle: recycling symbol, dim when off, bright when on (no animation) */
-            .checkbox-oneshot:hover { opacity: 1; filter: brightness(1.05); }
-            .checkbox-oneshot { -webkit-appearance: none;
+            .checkbox-recycle:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-recycle { -webkit-appearance: none;
                 appearance: none;
                 opacity: 0.95;
                 width: 24px;
@@ -1025,10 +1030,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 position: relative;
                 display: inline-block;
                 /* Tunables */
-                --os-bright: hsl(136, 70%, 21%);  
+                --os-bright: hsl(136, 30%, 20%);  
                 --os-dim: hsl(137, 70%, 50%);  
             }
-            .checkbox-oneshot::after {
+            .checkbox-recycle::after {
                 content: "\267B"; /* ♻ */
                 position: absolute;
                 left: 50%;
@@ -1041,7 +1046,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 text-shadow: 3px 4px 10px rgba(0,0,0,0.35);
                 transition: color 120ms ease, filter 120ms ease;
             }
-            .checkbox-oneshot:checked::after {
+            .checkbox-recycle:checked::after {
                 color: var(--os-bright);
             }
 
@@ -1387,10 +1392,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 --mister-ui-color: var(--mister-ui-bright);
             }
             /* Apply to fountain controls: purple-short + pink sliders, and the purple field */
-            .slider-purple-short::-webkit-slider-thumb, .slider-pink::-webkit-slider-thumb { background: var(--mister-ui-color); }
-            .slider-purple-short::-moz-range-thumb,    .slider-pink::-moz-range-thumb    { background: var(--mister-ui-color); }
-            /* Subtly tint the Mr. Mister mode select border to match */
-            .field-purple { border-color: var(--mister-ui-color); }
+            .slider-mrmr::-webkit-slider-thumb, .slider-pink::-webkit-slider-thumb { background: var(--mister-ui-color); }
+            .slider-mrmr::-moz-range-thumb,    .slider-pink::-moz-range-thumb    { background: var(--mister-ui-color); }
+            /* Theme the Mr. Mister mode select to dim/brighten like sliders */
+            .field-mrmr { 
+                border-color: var(--mister-ui-color);
+                color: var(--mister-ui-color);
+            }
 
             /* Bumper/Pegs toggle: Die face five (U+2684), dim/bright yellow */
             .checkbox-bumper:hover { opacity: 1; filter: brightness(1.05); }
@@ -1527,7 +1535,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             /* Per-button color themes */
             input.splodeButton { --imp-dim: hsl(15, 60%, 35%);  --imp-bright: hsl(15, 78%, 54%); }
-            input.implodeButton { --imp-dim: hsl(108, 40%, 40%); --imp-bright: hsl(108, 60%, 55%); }
+            input.implodeButton { --imp-dim: hsl(108, 50%, 50%); --imp-bright: hsl(108, 60%, 55%); }
             input.unravelButton { --imp-dim: hsl(300, 40%, 30%); --imp-bright: hsl(300, 60%, 55%); }
 
             /* Icons */
@@ -1537,7 +1545,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 white-space: pre;
                 position: absolute;
                 left: 50%;
-                top: 55%;
+                top: 50%;
                 transform: translate(-50%, -56%);
                 font-family: monospace, bold;
                 font-size: 22px;
@@ -1555,7 +1563,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 white-space: pre;
                 position: absolute;
                 left: 50%;
-                top: 55%;
+                top: 50%;
                 transform: translate(-50%, -56%);
                 font-family: monospace, bold;
                 font-size: 22px;
@@ -1653,8 +1661,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 100% { transform: translate(-50%, -56%) scale(0.96); }  /* rest/pause */
             }
 
-            .checkbox-blue-dark:hover {opacity: 1}
-            .checkbox-blue-dark {
+            .checkbox-pacman:hover {opacity: 1}
+            .checkbox-pacman {
                 -webkit-appearance: none;
                 appearance: none;
                 opacity: 0.9;
@@ -1669,7 +1677,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 cursor: pointer;
                 box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
                 /* Tunables */
-                --pac: #645202; /* dimmer yellow (unchecked) */
+                --pac: hsl(49, 30%, 15%); /* dimmer yellow (unchecked) */
                 --mouth: 36deg; /* half-angle of the mouth opening */
                 /* Pac-Man: body with mouth wedge; facing 3 o'clock */
                 background:
@@ -1680,10 +1688,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 background-color: transparent; /* show panel through the mouth */
                 transition: filter 120ms ease;
             }
-            .checkbox-blue-dark:hover { filter: brightness(1.05); }
+            .checkbox-pacman:hover { filter: brightness(1.05); }
             /* Checked: brighten and chomp continuously (no direction flip) */
-            .checkbox-blue-dark:checked {
-                --pac: #FFD54A; /* bright yellow */
+            .checkbox-pacman:checked {
+                --pac: hsl(46, 100%, 65%); /* bright yellow */
                 animation: pac-chomp 420ms ease-in-out infinite;
             }
             @keyframes pac-chomp {
@@ -1705,7 +1713,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 28px;
                 height: 14px;
                 margin-top: 5px;
-                margin-bottom: 10px;
+                margin-bottom: 20px;
                 background-color: hsl(80, 50%, 20%);
                 border-radius: 24px 24px 0 0;
                 vertical-align: middle;
@@ -1724,7 +1732,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 28px;
                 height: 14px;
                 margin-top: 5px;
-                margin-bottom: 10px;
+                margin-bottom: 0px;
                 background-color: hsl(160, 50%, 20%);
                 border-radius: 0 0 24px 24px;
                 vertical-align: middle;
@@ -1992,8 +2000,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 vertical-align: middle;
                 margin-top: 5px;
                 margin-bottom: 10px;
-                width: 24px;
-                height: 24px;
+                width: 22px;
+                height: 22px;
                 border-radius: 0px;
                 background-color: hsl(0, 0%, 20%);
                 opacity: 0.7;
@@ -2053,23 +2061,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-left: 10px"></canvas>
 
     <h3><br><br></h3>
-    <b1>&#8594 Go
+    <b1>[ Go!
     <input type="radio" title="Round Cluster Start" name="rackemType" id="cluster" class="radio-cluster" onclick="makeBalls()" checked>
     <input type="radio" title="Square Array Start" name="rackemType" id="array" class="radio-array" onclick="makeBalls()" unchecked>
     <input type="checkbox" title="Implode (Hold)" id="implodeButton" class="implodeButton" onmousedown="startContinuousImplode()" onmouseup="stopContinuousImplode()" onmouseleave="stopContinuousImplode()" ontouchstart="startContinuousImplode()" ontouchend="stopContinuousImplode()">
     <!--<input type="checkbox" title="Explode" id="splodeButton" class="splodeButton" onclick="fireSplode()">-->
     <!--<input type="checkbox" title="Unravel" id="unravelButton" class="unravelButton" onclick="fireUnravel()">-->
-    |</b1>
+    ]</b1>
 
-    <b2>&#8594 Walls</b2>
+    <b2>[ Walls</b2>
     <input type="range"  title="Corner Radius" id="cornerRadiusSlider" min="0" max="200" value="100" list="detents"class="slider-corner-detent">
-    <i>u<input type="checkbox" title="Ceiling" id="ceilingButton" class="checkbox-ceiling" checked>
-    d<input type="checkbox" title="Floor" value="F" id="floorButton"  class="checkbox-floor" checked>
+    <i>
     l<input type="checkbox" title="Left Wall" id="leftWallButton" class="checkbox-leftwall" checked>
     r</i><input type="checkbox" title="Right Wall" id="rightWallButton" class="checkbox-rightwall" checked>
-    <b2>|</b2></span>
+    u<input type="checkbox" title="Ceiling" id="ceilingButton" class="checkbox-ceiling" checked>
+    d<input type="checkbox" title="Floor" value="F" id="floorButton"  class="checkbox-floor" checked>
+    
+    <b2>]</b2></span>
 
-    <b3>&#8594 Particles
+    <b3>[ Particles</b3>
     <input type="range" title="Number of Particles (n=x^2)" id="ballsSlider" min="1" max="100" value="71" class="slider-particle-count">
     <i>#</i><span id="particleCountDisplay" title="Number of Particles"class="particle-count-display">5041</span>
     <i>sm</i><input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="8" class="field-cyan-short">
@@ -2084,15 +2094,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             <option value="drawGummies">gummies</option>
         </optgroup>
     </select>
-    |</b3></span>
+    <b3>]</b3></span>
    
     <span style="white-space: nowrap">
-    <b4>&#8594 Time
+    <b4>[ Time
     <input type="range"  title="Time  ::  <--- Slower : Normal" id="timeSlider" min="40" max="100" value="100" class="slider-mint">
-    |</b4></span>
+    ]</b4></span>
     
     <span style="white-space: nowrap">
-    <b5>&#8594 Gravity
+    <b5>[ Gravity
     <select title="Gravity" id="gravityType" class="field-blue">
         <optgroup label="Direction">
             <option value="none" selected>None</option>
@@ -2103,67 +2113,59 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         </optgroup>
     </select>
     <input type="range"  title="Gravity Strength" id="gravitySlider" min="5" max="100" value="50" class="slider-blue">
-    |</b5></span>
+    ]</b5></span>
     
     <span style="white-space: nowrap">
-    <b6>&#8594 Repulsion</b6>
+    <b6>[ Repulsion</b6>
     <input type="checkbox" title="Repulsion on/off" id="repulsionButton" class="checkbox-repulsion" checked>
     <input type="range"  title="Repulsion Force between Particles" id="repulsionForceSlider" min="1" max="20" value="20" class="slider-lime">
     
-    <b6>&#8594 Bounce
+    <b6>Bounce
     <input type="range"  title="Ball Restitution on Collision" id="ballRestSlider" min="0" max="100" value="0" class="slider-lime2">
-    |</b6></span>
+    ]</b6></span>
 
     <span style="white-space: nowrap">
-    <b7>&#8594 Trace
-    <input type="checkbox" title="Trace on/off" id="noTracerButton" class="checkbox-tracer" checked>
-    <input type="radio" name="traceType" title="Small Particle Trace" id="smallTracerButton" class="checkbox-tracer-small">
-    <input type="radio" name="traceType" title="Medium Particle Trace" id="mediumTracerButton" class="checkbox-tracer-medium" checked>
-    <input type="radio" name="traceType" title="Big Particle Trace" id="bigTracerButton" class="checkbox-tracer-large">
-    |</b7></span>
-
-    <span style="white-space: nowrap">
-    <b8>&#8594 Pucks
+    <b8>[ Pucks
     <input type="checkbox" title="Pucks on/off" id="showPuckButton" value="true" class="checkbox-puck" checked>
     <input type="checkbox" title="Cycle puck on/off" id="showCyclePuckButton" class="checkbox-cycle" unchecked>
     <input type="checkbox" title="Heartbeat on/off" id="showHeartButton" class="checkbox-heart" unchecked>
     <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="300" class="slider-cyan">
-    |</b8></span>
+    ]</b8></span>
 
     <span style="white-space: nowrap">
-    <b9>&#8594 Worm
+    <b9>[ Worm
     <input type="checkbox" title="Worm on/off" id="wormButton" class="checkbox-worm" checked>
     <input type="range"  title="Worm Tail Radius" id="wormEndRadiusSlider" min="40" max="300" value="40" class="slider-orange">
     <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="70" max="300" value="150" class="slider-orange">
     <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz">
-    |</b9></span>
+    ]</b9></span>
 
     <span style="white-space: nowrap">
-    <b10>&#8594 Plinko
+    <b10>[ Plinko
     <input type="checkbox" title="Pegs on/off" id="showBumperEntry" value="false" class="checkbox-bumper" unchecked>
     <input type="range"  title="Peg Rows" id="rowsInput" min="1" max="20" value="3" class="slider-yellow">
     <input type="range"  title="Peg Radius" id="bumperRadiusInput" min="20" max="100" value="40" class="slider-yellow">
-    |</b10></span>
+    ]</b10></span>
 
     <span style="white-space: nowrap">
-    <b11>&#8594 Recycle
-    <input type="checkbox" title="One Shot (no respawn)" id="oneShotButton" value="false" class="checkbox-oneshot" unchecked>
-    |</b11></span>
+    <b11>[ Recycle
+    <input type="checkbox" title="One Shot (no respawn)" id="oneShotButton" value="false" class="checkbox-recycle" unchecked>
+    ]</b11></span>
 
     <span style="white-space: nowrap">
-    <b12>&#8594 Eaters
-    <input type="checkbox" title="Eaters on/off" id="showHungryPuckButton" class="checkbox-blue-dark" unchecked>
-    |</b12></span>
+    <b12>[ Eaters
+    <input type="checkbox" title="Eaters on/off" id="showHungryPuckButton" class="checkbox-pacman" unchecked>
+    ]</b12></span>
 
     <span style="white-space: nowrap">
-    <b13>Shower&#8594</b13>
+    <b13>[ Shower&#8594</b13>
     <input type="radio" title="Shower (click -> Position; click & drag -> Width)" name="spawnType" id="shower" value="shower" class="radio2 radio-umbrella" unchecked>
-    &#8592or&#8594 
+    <i>&#8592or&#8594</i>
     <input type="radio" title="Mr. Mister (click -> Spew Direction)" name="spawnType" id="fountain" value="fountain" class="radio radio-fountain" checked>
     <b13>Mr.Mister&#8594
-    <input type="range"  title="Yeet" id="yeetSlider" min="0" max="100" value="25" class="slider-purple-short">
-    <input type="range"  title="Sweep" id="sprinklerSpeedSlider" min="0" max="30" value="0" class="slider-purple-short">
-    <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field-purple">
+    <input type="range"  title="Yeet" id="yeetSlider" min="0" max="100" value="25" class="slider-mrmr">
+    <input type="range"  title="Sweep" id="sprinklerSpeedSlider" min="0" max="30" value="0" class="slider-mrmr">
+    <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field-mrmr">
         <optgroup label="Mr. Mister Motion">
             <option value="idle" selected>mouse</option>
             <option value="worm">worm</option>
@@ -2176,18 +2178,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             <option value="billiard">pong</option>
         </optgroup>
     </select>
-    <input type="range"  title="Mr. Mister Orbit Speed" id="misterSpeedSlider" min="10" max="200" value="100" class="slider-purple-short">
-    |</b13>
+    <input type="range"  title="Mr. Mister Orbit Speed" id="misterSpeedSlider" min="10" max="200" value="100" class="slider-mrmr">
+    ]</b13></span>
 
     <span style="white-space: nowrap">
-    <c1>&#8594 C</c1><c2>o</c2><c3>l</c3><c4>o</c4><c5>r</c5>
+    <b7>[ Trace
+    <input type="checkbox" title="Trace on/off" id="noTracerButton" class="checkbox-tracer" checked>
+    <input type="radio" name="traceType" title="Small Particle Trace" id="smallTracerButton" class="checkbox-tracer-small">
+    <input type="radio" name="traceType" title="Medium Particle Trace" id="mediumTracerButton" class="checkbox-tracer-medium" checked>
+    <input type="radio" name="traceType" title="Big Particle Trace" id="bigTracerButton" class="checkbox-tracer-large">
+    ]</b7></span>
+
+    <span style="white-space: nowrap">
+    <c1>[ C</c1><c2>o</c2><c3>l</c3><c4>o</c4><c5>r</c5>
     <i>
     h<input type="range"  title="Base Hue" id="baseColorSlider" min="0" max="330" value="190" class="slider-rainbow">
     s<input type="range"  title="Saturation" id="saturationSlider" min="0" max="100" value="90" class="slider-lightred">
     l<input type="range"  title="Lightness" id="lightnessSlider" min="5" max="100" value="40" class="slider-gray">
-    v<input type="range"  title="Velocity Sensitivity" id="velColorMapSlider" min="1" max="500" value="200" class="slider-gray">
-    &#9996<input type="range"  title="Persistence of Vision (Particle Trails)" id="persistenceSlider" min="0" max="30" value="12" class="slider-pov">
-    </i>
+    v<input type="range"  title="Velocity Sensitivity" id="velColorMapSlider" min="1" max="500" value="200" class="slider-gray"></span>
+    </i><c1>]</c1>
+    <span style="white-space: nowrap">
+    <b15>[ <i>&#9996</i><input type="range"  title="Persistence of Vision (Particle Trails)" id="persistenceSlider" min="0" max="30" value="12" class="slider-pov">
+    ]</b15>
 
     <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked></span>
     
