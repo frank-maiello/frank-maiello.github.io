@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.33
+		<title>Slosh 1.34
         </title>
         <style>
 			body {font-family: monospace; 
@@ -134,7 +134,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 width: 10px;
                 height: 22px;
                 border-radius: 30%;
-                background: hsl(220, 80%, 60%);
+                background: hsl(230, 80%, 70%);
                 box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
                 cursor: pointer}
 
@@ -521,6 +521,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
                 cursor: pointer}
 
+            .slider-pov:hover {opacity: 1} 
+            .slider-pov {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 75px;
+				height: 4px;
+				border-radius: 5px;
+                background: linear-gradient(to right, 
+                    hsl(0, 0%, 10%) 0%, 
+                    hsl(0, 0%, 80%) 100%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-pov::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 10px;
+                height: 22px;
+                border-radius: 30%;
+                background: hsl(0, 60%, 70%);
+                box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
+                cursor: pointer}
+
             .slider-red:hover {opacity: 1} 
             .slider-red {-webkit-appearance: none;
 				appearance: none;
@@ -552,7 +577,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 vertical-align: middle;
                 margin-top: 5px;
                 margin-bottom: 10px;
-                width: 130px;
+                width: 75px;
 				height: 4px;
 				border-radius: 5px;
                 background: linear-gradient(to right, 
@@ -712,6 +737,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				-webkit-transition: .2s;
 				transition: opacity .2s}
 
+            .field-blue:hover {opacity: 1}
+            .field-blue {-webkit-appearance: none;
+                appearance: none;
+                font-family: monospace;
+                font-size: 16px;
+                text-align: center;
+                background: hsl(0, 0%, 0%);
+                margin-bottom: 10px;
+                padding-left: 6px;
+				width: 100px;
+				height: 22px;
+                border-width: 0;
+				border-radius: 10px;
+                color: hsl(230, 80%, 70%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+				transition: opacity .2s}
+
             .field-purple {-webkit-appearance: none;
                 appearance: none;
                 font-family: monospace;
@@ -861,7 +906,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 display: inline-block;
                 /* Tunables */
                 --os-bright:    #214a2c;  /* muted green */
-                --os-dim: #73ff9a;  /* bright mint */
+                --os-dim: #50ca72;  /* bright mint */
             }
             .checkbox-oneshot::after {
                 content: "\267B"; /* ♻ */
@@ -1173,6 +1218,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             /* Apply to the puck radius slider knob */
             #puckRadiusSlider::-webkit-slider-thumb { background: var(--puck-ui-color); }
             #puckRadiusSlider::-moz-range-thumb    { background: var(--puck-ui-color); }
+
+            /* Gravity slider theming: dim blue slider when gravity type is "none"; brighten when any gravity is selected */
+            body {
+                /* Match gravity radio blue theme */
+                --gravity-ui-dim:    hsl(220, 35%, 20%);
+                --gravity-ui-bright: hsl(220, 80%, 50%);
+                /* Default to dim when gravity type is "none" */
+                --gravity-ui-color: var(--gravity-ui-dim);
+            }
+            /* Apply to the gravity slider knob */
+            #gravitySlider::-webkit-slider-thumb { background: var(--gravity-ui-color); }
+            #gravitySlider::-moz-range-thumb    { background: var(--gravity-ui-color); }
 
             /* Shower sliders theming: dim dump sliders when Shower is OFF; brighten when ON */
             body {
@@ -1721,8 +1778,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 display: inline-block;
                 /* Tunables */
                 /* Match spawn slider red theme */
-                --umb-dim:   hsl(350, 40%, 35%);  /* dim red (unchecked) */
-                --umb-bright: hsl(350, 70%, 50%);  /* bright red (checked) */
+                --umb-dim:   hsl(350, 40%, 20%);  /* dim red (unchecked) */
+                --umb-bright: hsl(350, 70%, 55%);  /* bright red (checked) */
             }
 
             /* Fountain-styled radio for Mr. Mister: face with two eyes and an elliptical mouth */
@@ -1876,7 +1933,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-left: 10px"></canvas>
 
     <h3><br><br></h3>
-    /go&#8594
+    Go&#8594
     <input type="radio" title="Round Cluster Start" name="rackemType" id="cluster" class="radio-cluster" onclick="makeBalls()" checked>
     <input type="radio" title="Square Array Start" name="rackemType" id="array" class="radio-array" onclick="makeBalls()" unchecked>
     <input type="checkbox" title="Implode (Hold)" id="implodeButton" class="implodeButton" onmousedown="startContinuousImplode()" onmouseup="stopContinuousImplode()" onmouseleave="stopContinuousImplode()" ontouchstart="startContinuousImplode()" ontouchend="stopContinuousImplode()">
@@ -1884,14 +1941,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <!--<input type="checkbox" title="Unravel" id="unravelButton" class="unravelButton" onclick="fireUnravel()">-->
     <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked>
     
-    /walls&#8594
+    Walls&#8594
     <input type="range"  title="Corner Radius" id="cornerRadiusSlider" min="0" max="200" value="100" list="detents"class="slider-corner-detent">
     <i>u</i><input type="checkbox" title="Ceiling" id="ceilingButton" class="checkbox-ceiling" checked>
     <i>d</i><input type="checkbox" title="Floor" value="F" id="floorButton"  class="checkbox-floor" checked>
     <i>l</i><input type="checkbox" title="Left Wall" id="leftWallButton" class="checkbox-leftwall" checked>
     <i>r</i><input type="checkbox" title="Right Wall" id="rightWallButton" class="checkbox-rightwall" checked>
     
-    /particles&#8594
+    Particles&#8594
     <input type="range" title="Set Number of Particles (Slider ranges from 2 to 100, #=n^2)" id="ballsSlider" min="2" max="100" value="70" class="slider-particle-count">
     <i>#</i><span id="particleCountDisplay" title="Number of Particles"class="particle-count-display">4900</span>
     <i>sm</i><input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="3" class="field-cyan-short">
@@ -1909,68 +1966,73 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     </select>
    
     <span style="white-space: nowrap">
-    /time&#8594
+    Time&#8594
     <input type="range"  title="Time  ::  <--- Slower : Normal" id="timeSlider" min="40" max="100" value="100" class="slider-mint"></span>
     
     <span style="white-space: nowrap">
-    /gravity&#8594
-    <i>d</i><input type="radio" title="Down" name="gravityType" id="gravityDown" class="radio-blue radio-gravity radio-gravity-down" checked>
-    <i>r</i><input type="radio" title="Right" name="gravityType" id="gravityRight" class="radio-blue radio-gravity">
-    <input type="range"  title="Gravity  ::  Zero Gravity : More Gravity --->" id="gravitySlider" min="0" max="100" value="0" class="slider-blue"></span>
+    Gravity&#8594
+    <select title="Gravity" id="gravityType" class="field-blue">
+        <optgroup label="Direction">
+            <option value="none" selected>None</option>
+            <option value="down">Down</option>
+            <option value="up">Up</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+        </optgroup>
+    </select>
+    <input type="range"  title="Gravity Strength" id="gravitySlider" min="5" max="100" value="50" class="slider-blue"></span>
     
     <span style="white-space: nowrap">
-    /repulsion&#8594
+    Repulsion&#8594
     <input type="checkbox" title="Repulsion on/off" id="repulsionButton" class="checkbox-repulsion" checked>
     <input type="range"  title="Repulsion Force between Particles" id="repulsionForceSlider" min="1" max="20" value="20" class="slider-lime">
     
-    /bounce&#8594
+    Bounce&#8594
     <input type="range"  title="Ball Restitution on Collision" id="ballRestSlider" min="0" max="100" value="0" class="slider-lime2"></span>
     
     <span style="white-space: nowrap">
-    /trace&#8594
+    Trace&#8594
     <input type="checkbox" title="Trace on/off" id="noTracerButton" class="checkbox-tracer" checked>
     <input type="radio" name="traceType" title="Small Particle Trace" id="smallTracerButton" class="checkbox-tracer-small">
     <input type="radio" name="traceType" title="Medium Particle Trace" id="mediumTracerButton" class="checkbox-tracer-medium" checked>
     <input type="radio" name="traceType" title="Big Particle Trace" id="bigTracerButton" class="checkbox-tracer-large"></span>
 
     <span style="white-space: nowrap">
-    /pucks&#8594
+    Pucks&#8594
     <input type="checkbox" title="Pucks on/off" id="showPuckButton" value="true" class="checkbox-puck" checked>
     <input type="checkbox" title="Cycle puck on/off" id="showCyclePuckButton" class="checkbox-cycle" unchecked>
     <input type="checkbox" title="Heartbeat on/off" id="showHeartButton" class="checkbox-heart" unchecked>
     <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="300" class="slider-cyan"></span>
     
     <span style="white-space: nowrap">
-    /eaters&#8594
+    Eaters&#8594
     <input type="checkbox" title="Eaters on/off" id="showHungryPuckButton" class="checkbox-blue-dark" unchecked></span>
     
     <span style="white-space: nowrap">
-    /worm&#8594
+    Worm&#8594
     <input type="checkbox" title="Worm on/off" id="wormButton" class="checkbox-worm" checked>
     <input type="range"  title="Worm Tail Radius" id="wormEndRadiusSlider" min="40" max="300" value="40" class="slider-orange">
     <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="70" max="300" value="150" class="slider-orange">
     <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz"></span>
 
     <span style="white-space: nowrap">
-    /plinko&#8594
+    Plinko&#8594
     <input type="checkbox" title="Pegs on/off" id="showBumperEntry" value="false" class="checkbox-bumper" unchecked>
     <input type="range"  title="Peg Rows" id="rowsInput" min="1" max="20" value="3" class="slider-yellow">
     <input type="range"  title="Peg Radius" id="bumperRadiusInput" min="20" max="100" value="40" class="slider-yellow"></span>
 
     <span style="white-space: nowrap">
-    /recycle&#8594
+    Recycle&#8594
     <input type="checkbox" title="One Shot (no respawn)" id="oneShotButton" value="false" class="checkbox-oneshot" unchecked></span>
     <span style="white-space: nowrap">
-    /&#8594&#8594
-    <input type="range"  title="Shower Width" id="dumpSlider" min="1" max="100" value="40" class="slider-redspawn2">
-    <input type="range"  title="Shower Position" id="dumpMoveSlider" min="-50" max="50" value="0" class="slider-redspawn">
-    shower 
-    <input type="radio" title="Shower" name="spawnType" id="shower" value="shower" class="radio2 radio-umbrella" unchecked></span>
-    
+
+
     <span style="white-space: nowrap">
-    &#8592 or &#8594<input type="radio" title="Mr. Mister" name="spawnType" id="fountain" value="fountain" class="radio radio-fountain" checked>
-    mr.mister
-    <input type="range"  title="Yeet" id="yeetSlider" min="0" max="600" value="250" class="slider-purple-short">
+    Shower &#8594 
+    <input type="radio" title="Shower (click -> Position; click & drag -> Width)" name="spawnType" id="shower" value="shower" class="radio2 radio-umbrella" unchecked>
+    <input type="radio" title="Mr. Mister (click -> Spew Direction)" name="spawnType" id="fountain" value="fountain" class="radio radio-fountain" checked>
+    &#8592 Mr.mister
+    <input type="range"  title="Yeet" id="yeetSlider" min="0" max="100" value="25" class="slider-purple-short">
     <input type="range"  title="Sweep" id="sprinklerSpeedSlider" min="0" max="30" value="0" class="slider-pink">
     
     <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field-purple">
@@ -1991,12 +2053,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     </span>
 
     <span style="white-space: nowrap">
-    /color&#8594
+    Color&#8594
     <i>h</i><input type="range"  title="Base Hue" id="baseColorSlider" min="0" max="330" value="220" class="slider-red2">
-    <i>v</i><input type="range"  title="Velocity Sensitivity" id="velColorMapSlider" min="1" max="500" value="200" class="slider-red">
     <i>s</i><input type="range"  title="Saturation" id="saturationSlider" min="0" max="100" value="90" class="slider-lightred">
     <i>l</i><input type="range"  title="Lightness" id="lightnessSlider" min="5" max="100" value="40" class="slider-red">
-    <i>&#9996</i><input type="range"  title="Persistence of Vision" id="persistenceSlider" min="0" max="30" value="12" class="slider-red">
+    <i>v</i><input type="range"  title="Velocity Sensitivity" id="velColorMapSlider" min="1" max="500" value="200" class="slider-red">
+    <i>&#9732</i><input type="range"  title="Persistence of Vision (Particle Trails)" id="persistenceSlider" min="0" max="30" value="12" class="slider-pov">
     
     <input type="button" title="Restart [r]" class="buttongreenbig" value="&#8629" onclick="makeBalls()"></span>
     
@@ -2159,36 +2221,61 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);}
     document.getElementById('persistenceSlider').oninput = function() {
         persistence = persistenceSlider.value;}
+    // gravity ----------
     document.getElementById("gravitySlider").oninput = function() {
-        if (gravityDown.checked == true) {
-            physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)));
-        } else if (gravityRight.checked == true) {
-            physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);}}
-    document.getElementById("gravityDown").oninput = function() {
-        doGravityDown = true;
-        doGravityRight = false;
-        physProps.gravity = new Vector2(0, 1 + -1 * (2 ** (gravitySlider.value/100)))}  
-    document.getElementById("gravityRight").oninput = function() {
-        doGravityDown = false;
-        doGravityRight = true;
-        physProps.gravity = new Vector2(1 * (2 ** (gravitySlider.value/100)), 0);}
+        if (doGravityDown == true) {
+            physProps.gravity = new Vector2(0, 1.0 - (2 ** (0.01 * gravitySlider.value)));
+        } else if (doGravityUp == true) {
+            physProps.gravity = new Vector2(0, -1.0 + (2 ** (0.01 * gravitySlider.value)));
+        } else if (doGravityLeft == true) {
+            physProps.gravity = new Vector2(1.0 - (2 ** (0.01 * gravitySlider.value)), 0);
+        } else if (doGravityRight == true) {
+            physProps.gravity = new Vector2(-1.0 + (2 ** (0.01 * gravitySlider.value)), 0);}}
+    document.getElementById("gravityType").oninput = function() {
+        const selection = gravityType.value;
+        // Update CSS custom property for gravity slider theming
+        const isGravityActive = selection !== "none";
+        document.body.style.setProperty('--gravity-ui-color', 
+            isGravityActive ? 'var(--gravity-ui-bright)' : 'var(--gravity-ui-dim)');
+            if (selection === "none") {
+                physProps.gravity = new Vector2(0, 0);
+                doGravityDown = false;
+                doGravityUp = false;
+                doGravityLeft = false;
+                doGravityRight = false;
+            } else if (selection === "down") {
+                physProps.gravity = new Vector2(0, 1.0 - (2 ** (0.01 * gravitySlider.value)));
+                doGravityDown = true;
+                doGravityUp = false;
+                doGravityLeft = false;
+                doGravityRight = false;
+            } else if (selection === "up") {
+                physProps.gravity = new Vector2(0, -1.0 + (2 ** (0.01 * gravitySlider.value)));
+                doGravityDown = false;
+                doGravityUp = true;
+                doGravityLeft = false;
+                doGravityRight = false;
+            } else if (selection === "left") {
+                physProps.gravity = new Vector2(1.0 - (2 ** (0.01 * gravitySlider.value)), 0);
+                doGravityDown = false;
+                doGravityUp = false;
+                doGravityLeft = true;
+                doGravityRight = false;
+            } else if (selection === "right") {
+                physProps.gravity = new Vector2(-1.0 + (2 ** (0.01 * gravitySlider.value)), 0);
+                doGravityDown = false;
+                doGravityUp = false;
+                doGravityLeft = false;
+                doGravityRight = true;}};
+
     document.getElementById("shower").oninput = function() {
-        if (gravityDown.checked == true) {
-            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
-        } else if (gravityRight.checked == true) {
-            physProps.gravity = new Vector2(1 + 1 * (10 ** (gravitySlider.value/100)), 0);}
-            var puck1 = Hungrypuck[0];
-            var puck2 = Hungrypuck[1];
-            puck1.pos.y = -0.1 * puck1.radius;
-            puck2.pos.y = -0.1 * puck2.radius;
-            doShower = true;
-            doFountain = false;}
+        var puck1 = Hungrypuck[0];
+        var puck2 = Hungrypuck[1];
+        puck1.pos.y = -0.1 * puck1.radius;
+        puck2.pos.y = -0.1 * puck2.radius;
+        doShower = true;
+        doFountain = false;}
     document.getElementById("fountain").oninput = function() {
-        if (gravityDown.checked == true) {
-            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
-        } else if (gravityRight.checked == true) {
-            physProps.gravity = new Vector2(1 + 1 * (10 ** (gravitySlider.value/100)), 0);
-        }
         var puck1 = Hungrypuck[0];
         var puck2 = Hungrypuck[1];
         puck1.pos.y = -0.1 * puck1.radius;
@@ -2260,10 +2347,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         ballLightness = lightnessSlider.value * 1;}
     document.getElementById("misterSpeedSlider").oninput = function() {
         misterSpeed = misterSpeedSlider.value / 100;}
-    document.getElementById("dumpSlider").oninput = function() {
-        dumpSqueeze = dumpSlider.value / 100;}
-    document.getElementById("dumpMoveSlider").oninput = function() {
-        dumpShift = dumpMoveSlider.value / 100 * simWidth;}
     document.getElementById("rowsInput").oninput = function() {
         makeBumpers();}
     document.getElementById("bumperRadiusInput").oninput = function() {
@@ -2458,6 +2541,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     // Initialize worm UI knob theme on load
     document.body.classList.toggle('worm-on', document.getElementById('wormButton').checked);
     
+    // Initialize gravity UI knob theme on load
+    const initialGravityType = document.getElementById('gravityType').value;
+    const isInitialGravityActive = initialGravityType !== "none";
+    document.body.style.setProperty('--gravity-ui-color', 
+        isInitialGravityActive ? 'var(--gravity-ui-bright)' : 'var(--gravity-ui-dim)');
+    
     document.getElementById('smallTracerButton').oninput = function() {
         doTracer = noTracerButton.checked;
         doSmallTracer = true;
@@ -2596,7 +2685,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     canvas.addEventListener('touchend', touchEndHandler, {passive: false});
     canvas.addEventListener('touchcancel', touchEndHandler, {passive: false});
     // Double-click anywhere on the canvas to restart the simulation without reloading the page
-    canvas.addEventListener('dblclick', function() {
+    canvas.addEventListener('dblclick', function(e) {
+        // Only prevent restart if user is actively dragging for shower width adjustment
+        if (isDoubleTapDrag) return;
+        
         // Clear and rebuild the particle set (preserves UI state)
         if (typeof forcedWipeRestart === 'function') {
             forcedWipeRestart();
@@ -2733,13 +2825,37 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             document.addEventListener('mousemove', mouseBumperMove);
             document.addEventListener('touchmove', touchBumperMove, {passive: false});
         } else {
-            // Nothing else selected: update spray direction immediately and start tracking drag
-            setNewDir(e);
-            mouseDown = true;
-            document.addEventListener('mousemove', setNewDir, false);
-            document.addEventListener('touchmove', setNewDir, {passive: false});
-    }}}}}}}}
-    }
+            // Nothing else selected: handle shower or spray direction
+            if (doShower) {
+                // Single click in shower mode: set shower position and start drag for width control
+                if (doGravityDown || doGravityUp || (!doGravityDown && !doGravityUp && !doGravityLeft && !doGravityRight)) {
+                    // Gravity is up/down or none (default down): set X position
+                    customShowerPos = cursorX;
+                } else if (doGravityLeft || doGravityRight) {
+                    // Gravity is left/right: set Y position  
+                    customShowerPos = cursorY;
+                }
+                
+                // Start drag mode for shower width control
+                isDoubleTapDrag = true;
+                dragStartX = cursorX;
+                dragStartY = cursorY;
+                initialDumpSqueeze = dumpSqueeze;
+                document.addEventListener('mousemove', doubleTapDragMove);
+                document.addEventListener('touchmove', doubleTapDragMoveTouch, {passive: false});
+            } else {
+                // Not in shower mode: update spray direction immediately and start tracking drag
+                setNewDir(e);
+                mouseDown = true;
+                document.addEventListener('mousemove', setNewDir, false);
+                document.addEventListener('touchmove', setNewDir, {passive: false});
+            }
+                lastTapTime = now;
+                lastTapX = cursorX;
+                lastTapY = cursorY;
+            }
+        }
+    }}}}}}}
 
     function setNewDir(e) {
         const ev = e || window.event;
@@ -2764,6 +2880,56 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     const originY = misterMister.pos.y - originYOffset * misterMister.radius;
     // Angle from spawn-region center to cursor
     misterMister.respawnDir = Math.atan2(my - originY, mx - originX);
+    }
+
+    function doubleTapDragMove(event) {
+        if (!isDoubleTapDrag) return;
+        
+        const bounds = canvas.getBoundingClientRect();
+        const mX = event.clientX - bounds.left - canvas.clientLeft;
+        const mY = event.clientY - bounds.top - canvas.clientTop;
+        const cursorX = mX / cScale;
+        const cursorY = (canvas.height - mY) / cScale;
+        
+        // Calculate drag delta based on gravity direction (2x sensitivity)
+        let dragDistance;
+        if (doGravityDown || doGravityUp || (!doGravityDown && !doGravityUp && !doGravityLeft && !doGravityRight)) {
+            // Horizontal drag for vertical gravity
+            dragDistance = (cursorX - dragStartX) / (simWidth * 0.5);
+        } else {
+            // Vertical drag for horizontal gravity  
+            dragDistance = (cursorY - dragStartY) / (simHeight * 0.5);
+        }
+        
+        // Update dumpSqueeze based on drag (right/up = increase, left/down = decrease)
+        dumpSqueeze = initialDumpSqueeze + dragDistance;
+        dumpSqueeze = Math.max(0.1, Math.min(1.0, dumpSqueeze)); // Clamp to 0.1-1.0 range
+    }
+
+    function doubleTapDragMoveTouch(event) {
+        if (!isDoubleTapDrag || event.touches.length === 0) return;
+        event.preventDefault();
+        
+        const touch = event.touches[0];
+        const bounds = canvas.getBoundingClientRect();
+        const mX = touch.clientX - bounds.left - canvas.clientLeft;
+        const mY = touch.clientY - bounds.top - canvas.clientTop;
+        const cursorX = mX / cScale;
+        const cursorY = (canvas.height - mY) / cScale;
+        
+        // Calculate drag delta based on gravity direction (2x sensitivity)
+        let dragDistance;
+        if (doGravityDown || doGravityUp || (!doGravityDown && !doGravityUp && !doGravityLeft && !doGravityRight)) {
+            // Horizontal drag for vertical gravity
+            dragDistance = (cursorX - dragStartX) / (simWidth * 0.5);
+        } else {
+            // Vertical drag for horizontal gravity
+            dragDistance = (cursorY - dragStartY) / (simHeight * 0.5);
+        }
+        
+        // Update dumpSqueeze based on drag (right/up = increase, left/down = decrease)
+        dumpSqueeze = initialDumpSqueeze + dragDistance;
+        dumpSqueeze = Math.max(0.1, Math.min(1.0, dumpSqueeze)); // Clamp to 0.1-1.0 range
     }
 
     function mouseBumperMove() {
@@ -2845,6 +3011,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         document.removeEventListener('mousemove', mouseMisterMisterMove);
         document.removeEventListener('mousemove', mouseBumperMove);
         document.removeEventListener('mousemove', setNewDir);
+        document.removeEventListener('mousemove', doubleTapDragMove);
         
         // Also remove touch move listeners
         document.removeEventListener('touchmove', touchHungryPuckMove);
@@ -2855,6 +3022,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     document.removeEventListener('touchmove', touchPuck3Move);
         document.removeEventListener('touchmove', touchMisterMisterMove);
         document.removeEventListener('touchmove', touchBumperMove);
+        document.removeEventListener('touchmove', doubleTapDragMoveTouch);
+        
+        // Stop shower width drag mode
+        isDoubleTapDrag = false;
+        
+        mouseDown = false;
         
         mouseDown = false;
         mouseUpTime = Date.now();
@@ -3087,7 +3260,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         return canvas.height - pos.y * cScale;
     }
     
-    
     function wipeRestart() {
         c.fillStyle = 'hsl(0, 0%, 0%)';
         c.fillRect(0, 0, canvas.width, canvas.height);
@@ -3137,15 +3309,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     function startContinuousImplode() {
         const el = document.getElementById('implodeButton');
-        if (el) el.checked = true;
-        
+        if (el) el.checked = true; 
         // Start continuous implode effect
         if (implodeInterval) clearInterval(implodeInterval);
         implodeInterval = setInterval(() => {
             try { instantImplode(); } catch(e) {}
         }, 16); // ~60fps for smooth continuous effect
     }
-    
+
     function stopContinuousImplode() {
         const el = document.getElementById('implodeButton');
         if (el) el.checked = false;
@@ -3156,7 +3327,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             implodeInterval = null;
         }
     }
-    
+
 	function pauseAndStep() {
         let input = document.querySelectorAll('.checkbox-pause');
         for (i = 0; i < input.length; i++) {
@@ -3166,16 +3337,75 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		simulate();
 		physProps.paused = true
 	}
+
     function drawCircle(x, y, radius) {
         c.beginPath();			
 		c.arc(x, y, radius, 0.0, 2.0 * Math.PI) 
 		c.closePath();
 	}
+
     function drawEllipse(x, y, radiusX, radiusY) {
         c.beginPath();			
 		c.ellipse(x * cScale, y * cScale, radiusX * cScale, radiusY * cScale, 0, 0, 2 * Math.PI) 
 		c.closePath();
 	}
+
+    function drawArrow(posX, posY, angle, radius) {
+        var arrow = {
+            radius: radius,
+            // 1 bottom right
+            a1cos: Math.cos(rads(281.86) + angle),
+            a1sin: Math.sin(rads(281.86) + angle),
+            r1: 0.5109,
+            // 2 right inside corner
+            a2cos: Math.cos(rads(43.6) + angle),
+            a2sin: Math.sin(rads(43.6) + angle),
+            r2: 0.1450,
+            // 3 right tip
+            a3cos: Math.cos(rads(16.86) + angle),
+            a3sin: Math.sin(rads(16.86) + angle),
+            r3: 0.3448,
+            // 4 top
+            a4cos: Math.cos(rads(90) + angle),
+            a4sin: Math.sin(rads(90) + angle),
+            r4: 0.5,
+            // 5 left tip
+            a5cos: Math.cos(rads(163.14) + angle),
+            a5sin: Math.sin(rads(163.14) + angle),
+            r5: 0.3448,
+            // 6 left inside corner
+            a6cos: Math.cos(rads(136.4) + angle),
+            a6sin: Math.sin(rads(136.4) + angle),
+            r6: 0.1450,
+            // 7 bottom left
+            a7cos: Math.cos(rads(258.14) + angle),
+            a7sin: Math.sin(rads(258.14) + angle),
+            r7: 0.5109,
+            // 8 bottom center
+            a8cos: Math.cos(rads(270) + angle),
+            a8sin: Math.sin(rads(270) + angle),
+            r8: 0.5
+        }
+
+        c.beginPath();
+        c.moveTo((posX + arrow.radius * arrow.r1 * arrow.a1cos) * cScale,
+            (posY - arrow.radius * arrow.r1 * arrow.a1sin) * cScale);
+        c.lineTo((posX + arrow.radius * arrow.r2 * arrow.a2cos) * cScale,
+            (posY - arrow.radius * arrow.r2 * arrow.a2sin) * cScale);
+        c.lineTo((posX + arrow.radius * arrow.r3 * arrow.a3cos) * cScale,
+            (posY - arrow.radius * arrow.r3 * arrow.a3sin) * cScale);
+        c.lineTo((posX + arrow.radius * arrow.r4 * arrow.a4cos) * cScale,
+            (posY - arrow.radius * arrow.r4 * arrow.a4sin) * cScale);
+        c.lineTo((posX + arrow.radius * arrow.r5 * arrow.a5cos) * cScale,
+            (posY - arrow.radius * arrow.r5 * arrow.a5sin) * cScale);
+        c.lineTo((posX + arrow.radius * arrow.r6 * arrow.a6cos) * cScale,
+            (posY - arrow.radius * arrow.r6 * arrow.a6sin) * cScale);
+        c.lineTo((posX + arrow.radius * arrow.r7 * arrow.a7cos) * cScale,
+            (posY - arrow.radius * arrow.r7 * arrow.a7sin) * cScale);
+        c.lineTo((posX + arrow.radius * arrow.r8 * arrow.a8cos) * cScale,
+            (posY - arrow.radius * arrow.r8 * arrow.a8sin) * cScale);
+        c.closePath();
+    }
 
     // COLLISIONS AND BOUNDARIES =============================================================
 
@@ -3357,12 +3587,57 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     function goShower(ball) {
         if (doGravityDown == true) {
             ball.pos.y = simHeight + ball.radius + 30 * Math.random() * ball.radius;
-            ball.pos.x = dumpShift + ((Math.random() * simWidth * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simWidth * dumpSqueeze);
+            if (customShowerPos !== null) {
+                // Use custom position directly - center the spawn distribution at the cursor click
+                ball.pos.x = customShowerPos + ((Math.random() - 0.5) * simWidth * dumpSqueeze);
+            } else {
+                // Use original formula with dumpShift
+                ball.pos.x = dumpShift + ((Math.random() * simWidth * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simWidth * dumpSqueeze);
+            }
             ball.vel.x = 0;
             ball.vel.y = 0;
         } else if (doGravityRight == true) {
             ball.pos.x = -ball.radius - 30 * Math.random() * ball.radius;
-            ball.pos.y = dumpShift + ((Math.random() * simHeight * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simHeight * dumpSqueeze);
+            if (customShowerPos !== null) {
+                // Use custom position directly - center the spawn distribution at the cursor click
+                ball.pos.y = customShowerPos + ((Math.random() - 0.5) * simHeight * dumpSqueeze);
+            } else {
+                // Use centered formula similar to up/down gravity but for Y axis
+                ball.pos.y = (simHeight / 2) + ((Math.random() * simHeight * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simHeight * dumpSqueeze);
+            }
+            ball.vel.x = 0;
+            ball.vel.y = 0;
+        } else if (doGravityLeft == true) {
+            ball.pos.x = simWidth + ball.radius + 30 * Math.random() * ball.radius;
+            if (customShowerPos !== null) {
+                // Use custom position directly - center the spawn distribution at the cursor click
+                ball.pos.y = customShowerPos + ((Math.random() - 0.5) * simHeight * dumpSqueeze);
+            } else {
+                // Use centered formula similar to up/down gravity but for Y axis
+                ball.pos.y = (simHeight / 2) + ((Math.random() * simHeight * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simHeight * dumpSqueeze);
+            }
+            ball.vel.x = 0;
+            ball.vel.y = 0;
+        } else if (doGravityUp == true) {
+            ball.pos.y = -ball.radius - 30 * Math.random() * ball.radius;
+            if (customShowerPos !== null) {
+                // Use custom position directly - center the spawn distribution at the cursor click
+                ball.pos.x = customShowerPos + ((Math.random() - 0.5) * simWidth * dumpSqueeze);
+            } else {
+                // Use original formula with dumpShift
+                ball.pos.x = dumpShift + ((Math.random() * simWidth * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simWidth * dumpSqueeze);
+            }
+            ball.vel.x = 0;
+            ball.vel.y = 0;
+        } else {
+            ball.pos.y = simHeight + ball.radius + 30 * Math.random() * ball.radius;
+            if (customShowerPos !== null) {
+                // Use custom position directly - center the spawn distribution at the cursor click
+                ball.pos.x = customShowerPos + ((Math.random() - 0.5) * simWidth * dumpSqueeze);
+            } else {
+                // Use original formula with dumpShift
+                ball.pos.x = dumpShift + ((Math.random() * simWidth * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simWidth * dumpSqueeze);
+            }
             ball.vel.x = 0;
             ball.vel.y = 0;
         }
@@ -3385,19 +3660,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var spawnY = mrMr.pos.y - 0.3 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.7 * mrMr.radius - 4 * ball.radius));
             ball.pos.x = Math.max(0, Math.min(simWidth, spawnX));
             ball.pos.y = Math.max(0, Math.min(simHeight, spawnY));
-            var velX = 0.01 * yeet * Math.cos(mrMr.respawnDir + alpha);
-            var velY = 0.01 * yeet * Math.sin(mrMr.respawnDir + alpha);
+            var velX = 0.1 * yeet * Math.cos(mrMr.respawnDir + alpha);
+            var velY = 0.1 * yeet * Math.sin(mrMr.respawnDir + alpha);
         } else {
             var spawnX = mrMr.pos.x - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.9 * mrMr.radius - 6 * ball.radius));
             var spawnY = mrMr.pos.y - 0.65 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.6 * mrMr.radius - 4 * ball.radius));
             ball.pos.x = Math.max(0, Math.min(simWidth, spawnX));
             ball.pos.y = Math.max(0, Math.min(simHeight, spawnY));
             if (sprinklerSpeed > 0 && fountainSpinMode == "sweep") {
-                var velX = 0.01 * yeet * Math.cos(mrMr.respawnDir + alpha);
-                var velY = 0.01 * yeet * Math.sin(mrMr.respawnDir + alpha);
+                var velX = 0.1 * yeet * Math.cos(mrMr.respawnDir + alpha);
+                var velY = 0.1 * yeet * Math.sin(mrMr.respawnDir + alpha);
             } else {
-                var velX = 0.01 * yeet * Math.cos(mrMr.respawnDir);
-                var velY = 0.01 * yeet * Math.sin(mrMr.respawnDir);
+                var velX = 0.1 * yeet * Math.cos(mrMr.respawnDir);
+                var velY = 0.1 * yeet * Math.sin(mrMr.respawnDir);
             }
         }
         
@@ -3525,8 +3800,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             } 
             var hP = MisterMister[0];
             var dir = hP.respawnDir;
-            var velX = yeet / 100 * Math.cos(dir + alpha);
-            velY = yeet / 100 * Math.sin(dir + alpha);
+            var velX = 0.1 *yeet * Math.cos(dir + alpha);
+            var velY = 0.1 * yeet * Math.sin(dir + alpha);
             if (doFountain == true) {
                 if (ball.pos.y < -2.0 * ball.radius || 
                     ball.pos.y > simHeight + 2.0 * ball.radius ||
@@ -3651,8 +3926,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         doFloor = floorButton.checked;
         doLeftWall = leftWallButton.checked;
         doRightWall = rightWallButton.checked;
-        dumpShift = 0.01 * dumpMoveSlider.value * simWidth;
-        dumpSqueeze = 0.01 * dumpSlider.value;
+        dumpShift = 0; // Default to center of screen (spawn formula will add 0.5*simWidth offset)
+        customShowerPos = null; // Custom shower position set by mouse clicks
+        dumpSqueeze = 0.4; // Default shower width (40%)
         showBumpers = showBumperEntry.checked;
         showPucks = showPuckButton.checked;
         showHeart = showHeartButton.checked;
@@ -3672,6 +3948,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;
         respawnDir = 0;
         
+        // Shower width control state tracking
+        isDoubleTapDrag = false;
+        dragStartX = 0;
+        dragStartY = 0;
+        initialDumpSqueeze = 0.4;
+        
         ballRepulsion = repulsionButton.checked;
         misterSpeed = 0.01 * misterSpeedSlider.value;
         ballSaturation = 1.0 * saturationSlider.value;
@@ -3687,8 +3969,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         doOneShot = oneShotButton.checked;
         yeet = 1.0 * yeetSlider.value;
-        doGravityDown = gravityDown.checked;
-        doGravityRight = gravityRight.checked;
+        doGravityDown = false;
+        doGravityUp = false;
+        doGravityLeft = false;
+        doGravityRight = false;
         doWorm = wormButton.checked;
 
         physProps.baseColor = 1.0 * baseColorSlider.value;
@@ -3918,7 +4202,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         draw() {
             if (doDiscs == true) {
-                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
+                drawCircle(cX(this.pos), cY(this.pos), 0.95 * this.radius * cScale);    
                 if (this.whiteBall == true || this.tracerBall == true) {
                     // reg color
                     c.fillStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
@@ -3948,11 +4232,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     0);
                 shading.addColorStop(0, `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness - 15}%)`);
                 shading.addColorStop(1, `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness + 25}%)`);
-                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+                drawCircle(cX(this.pos), cY(this.pos), 0.95 *this.radius * cScale);
                 c.fillStyle = shading;
                 c.fill()
             } else if (doCircles == true) {
-                drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
+                drawCircle(cX(this.pos), cY(this.pos), 0.95 *this.radius * cScale);    
                 c.strokeStyle = `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness}%)`;
                 c.lineWidth = 0.2 * this.radius * cScale;
                 c.stroke();
@@ -4026,9 +4310,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         var getNumBalls = ballsInput.value * 1;
         var ballJitter = 0.20;
         var brakes = 0;
-        var dumpSqueeze = dumpSlider.value / 100;
+        // Use global dumpSqueeze value (set by double-tap-and-drag or default)
+        // var dumpSqueeze is now handled globally
         var dumpSqueeze2 = 0.2;
-        var dumpShift = dumpMoveSlider.value / 100 * simWidth;
+        // Use global dumpShift value (set by mouse clicks or default center)
+        // var dumpShift is now handled globally
         var velX = 0;
         var velY = 0;
         // On program start or any reset that calls makeBalls(), delay the heart puck 4x
@@ -4244,10 +4530,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Draw the arc outlines
-            c.strokeStyle = 'hsl(0, 0%, 60%)';
-            c.lineWidth = 0.007 * cScale;
+            c.strokeStyle = 'hsl(0, 0%, 25%)';
+            c.lineWidth = 0.008 * cScale;
             c.lineCap = 'butt';
-            var budge = 0.0035;
+            var budge = 0.003;
             if (this.corner == 'northwest') {
                 c.beginPath();
                 c.arc((this.pos.x + this.radius + budge) * cScale, (this.pos.y + this.radius + budge) * cScale, this.radius * cScale, Math.PI, 1.5 * Math.PI, false);
@@ -4265,7 +4551,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.arc((this.pos.x - this.radius - budge) * cScale, (this.pos.y + this.radius + budge) * cScale, this.radius * cScale, 1.5 * Math.PI, 2 * Math.PI, false);
             }
             c.stroke();
-            c.lineWidth = 0.009 * cScale;
+            //c.lineWidth = 0.009 * cScale;
             // top edge (ceiling)
             if (doCeiling == true) {
                 c.beginPath();
