@@ -2051,7 +2051,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     <span style="white-space: nowrap">
     Color&#8594
-    <i>h</i><input type="range"  title="Base Hue" id="baseColorSlider" min="0" max="330" value="180" class="slider-red2">
+    <i>h</i><input type="range"  title="Base Hue" id="baseColorSlider" min="0" max="330" value="190" class="slider-red2">
     <i>s</i><input type="range"  title="Saturation" id="saturationSlider" min="0" max="100" value="90" class="slider-lightred">
     <i>l</i><input type="range"  title="Lightness" id="lightnessSlider" min="5" max="100" value="40" class="slider-red">
     <i>v</i><input type="range"  title="Velocity Sensitivity" id="velColorMapSlider" min="1" max="500" value="200" class="slider-red">
@@ -2866,17 +2866,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const mx = (clientX - rect.left - canvas.clientLeft) / cScale;
         const my = (canvas.height - (clientY - rect.top - canvas.clientTop)) / cScale;
 
-    const misterMister = MisterMister[0];
-    // Center of particle spawn region (use center, not random). Ignore ball.radius for direction.
-    // spawnX center: mr.pos.x - 0.35R + 0.5*(0.9R) = mr.pos.x + 0.10R
-    const originX = misterMister.pos.x + 0.10 * misterMister.radius;
-    // spawnY center differs by mode:
-    //  worm:    mr.pos.y - 0.30R  (from -0.3R - 0.35R + 0.5*0.7R)
-    //  default: mr.pos.y - 0.70R  (from -0.65R - 0.35R + 0.5*0.6R)
-    const originYOffset = (typeof mrMode === 'string' && mrMode === 'worm') ? 0.30 : 0.70;
-    const originY = misterMister.pos.y - originYOffset * misterMister.radius;
-    // Angle from spawn-region center to cursor
-    misterMister.respawnDir = Math.atan2(my - originY, mx - originX);
+        const misterMister = MisterMister[0];
+        // Center of particle spawn region (use center, not random). Ignore ball.radius for direction.
+        // spawnX center: mr.pos.x - 0.35R + 0.5*(0.9R) = mr.pos.x + 0.10R
+        const originX = misterMister.pos.x + 0.10 * misterMister.radius;
+        // spawnY center differs by mode:
+        //  worm:    mr.pos.y - 0.30R  (from -0.3R - 0.35R + 0.5*0.7R)
+        //  default: mr.pos.y - 0.70R  (from -0.65R - 0.35R + 0.5*0.6R)
+        const originYOffset = (typeof mrMode === 'string' && mrMode === 'worm') ? 0.30 : 0.70;
+        const originY = misterMister.pos.y - originYOffset * misterMister.radius;
+        // Angle from spawn-region center to cursor
+        misterMister.respawnDir = Math.atan2(my - originY, mx - originX);
     }
 
     function doubleTapDragMove(event) {
@@ -3804,10 +3804,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     ball.pos.y > simHeight + 2.0 * ball.radius ||
                     ball.pos.x < -2.0 * ball.radius || 
                     ball.pos.x > simWidth + 2.0 * ball.radius) {
-                    
                     // Additional check for worm mode: only respawn if Mr. Mister is within bounds
                     if (mrMode == "worm") {
-                        
                         if (hP.pos.x >= 0 && hP.pos.x <= simWidth && 
                             hP.pos.y >= 0 && hP.pos.y <= simHeight) {
                             goFountain(ball);
@@ -5000,9 +4998,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         WormProps.SpaceWorm = new WORM(masses, lengths, angles, radii);
         
-        // Initialize worm delay state
-        WormProps.isHiding = false;
-        WormProps.hideStartTime = 0;
+        // Initialize worm delay state - start hidden with delay at startup
+        WormProps.isHiding = true;
+        WormProps.hideStartTime = Date.now();
         
         // spawn the  chain
         (function(){
