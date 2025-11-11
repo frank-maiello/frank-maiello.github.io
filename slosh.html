@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.38
+		<title>Slosh 1.39
         </title>
         <style>
 			body {font-family: monospace; 
@@ -19,6 +19,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 color: hsl(0, 0%, 60%);
                 text-align: center;
                 text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                margin: 0;
                 padding-left: 10px;
                 padding-right: 10px;
                 /* Touch optimization */
@@ -641,6 +642,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .slider-orange-horiz {-webkit-appearance: none;
 				appearance: none;
                 vertical-align: middle;
+                margin-left: 5px;
+                margin-right: 0px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 width: 75px;
@@ -673,6 +676,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .slider-lime {-webkit-appearance: none;
 				appearance: none;
                 vertical-align: middle;
+                margin-left: 0px;
+                margin-right: 20px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 width: 75px;
@@ -696,6 +701,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .slider-lime2 {-webkit-appearance: none;
 				appearance: none;
                 vertical-align: middle;
+                margin-left: 0px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 width: 75px;
@@ -719,6 +725,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .slider-pov {-webkit-appearance: none;
 				appearance: none;
                 vertical-align: middle;
+                margin-left: 10px;
+                margin-right: 0px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 width: 75px;
@@ -742,6 +750,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .slider-gray {-webkit-appearance: none;
 				appearance: none;
                 vertical-align: middle;
+                margin-left: 5px;
+                margin-right: 5px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 width: 100px;
@@ -763,10 +773,39 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
                 cursor: pointer}
 
+            .slider-gray2:hover {opacity: 1} 
+            .slider-gray2 {-webkit-appearance: none;
+				appearance: none;
+                vertical-align: middle;
+                margin-left: 5px;
+                margin-right: 5px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                width: 100px;
+				height: 4px;
+				border-radius: 5px;
+                background: linear-gradient(to right, 
+                    hsl(60, 40%, 10%) 0%, 
+                    hsl(60, 40%, 50%) 100%);
+				outline: none;
+				opacity: 0.7;
+                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+				-webkit-transition: .2s;
+			    transition: opacity .2s}
+            .slider-gray2::-webkit-slider-thumb {-webkit-appearance: none;
+                width: 24px;
+                height: 12px;
+                border-radius: 30%;
+                background: hsl(0, 0%, 70%);
+                box-shadow: 3px 4px 15px hsl(0, 0%, 0%);
+                cursor: pointer}
+
             .slider-rainbow:hover {opacity: 1} 
             .slider-rainbow {-webkit-appearance: none;
 				appearance: none;
                 vertical-align: middle;
+                margin-left: 5px;
+                margin-right: 5px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 width: 75px;
@@ -797,6 +836,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .slider-lightred {-webkit-appearance: none;
 				appearance: none;
                 vertical-align: middle;
+                margin-left: 5px;
+                margin-right: 5px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 position: 10px;
@@ -1027,7 +1068,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 --rep-bright: hsl(75, 80%, 40%);
             }
             .checkbox-bounce::after {
-                content: "\219A"; 
+                content: "\21AE"; 
                 position: absolute;
                 left: 50%;
                 top: 60%;
@@ -1047,6 +1088,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 opacity: 0.95;
                 width: 24px;
                 height: 24px;
+                margin-left: 0px;
+                margin-right: 0px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 border-radius: 50%;
@@ -1138,6 +1181,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 opacity: 0.95;
                 width: 24px;
                 height: 24px;
+                margin-left: 0px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 border-radius: 50%;
@@ -1237,6 +1281,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 opacity: 0.95;
                 width: 24px;
                 height: 24px;
+                margin-left: 5px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 border-radius: 50%;
@@ -1280,8 +1325,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 opacity: 0.95;
                 width: 24px;
                 height: 24px;
-                margin-left: 0px;
-                margin-right: 5px;
+                margin-left: 10px;
+                margin-right: 0px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 border-radius: 50%;
@@ -1296,18 +1341,54 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 --cyc-dim:    hsl(190, 50%, 20%);
                 --cyc-bright: hsl(190, 80%, 55%);}
             .checkbox-cycle::after {
-                content: "\2726"; /* ✢ */
+                content: "\26A0"; /* ⚠ */
                 position: absolute;
                 left: 50%;
-                top: 60%;
+                top: 70%;
                 transform: translate(-50%, -56%);
-                font-size: 34px;
+                font-size: 32px;
                 line-height: 1;
                 color: var(--cyc-dim);
                 pointer-events: none;
                 text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
                 transition: color 120ms ease, filter 120ms ease;}
             .checkbox-cycle:checked::after { color: var(--cyc-bright); }
+
+            /* Cycle puck toggle: ✢ (U+2742), dim when off, bright when on */
+            .checkbox-orbit:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-orbit { -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-left: 5px;
+                margin-right: 5px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                vertical-align: middle;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                background: transparent;
+                position: relative;
+                display: inline-block;
+                /* Tunables (teal/cyan theme) */
+                --cyc-dim:    hsl(190, 50%, 20%);
+                --cyc-bright: hsl(190, 80%, 55%);}
+            .checkbox-orbit::after {
+                content: "\21BB"; /* ↻ */
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -56%);
+                font-size: 46px;
+                line-height: 1;
+                color: var(--cyc-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;}
+            .checkbox-orbit:checked::after { color: var(--cyc-bright); }
 
             /* Normal pucks toggle: ☉ (U+2609), dim when off, bright when on */
             .checkbox-puck:hover { opacity: 1; filter: brightness(1.05); }
@@ -1345,6 +1426,42 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             .checkbox-puck:checked::after { color: var(--puck-bright); }
 
+            .checkbox-oscpuck:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-osc-puck { -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-left: 5px;
+                margin-right: 0px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                vertical-align: middle;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                background: transparent;
+                position: relative;
+                display: inline-block;
+                /* Tunables (cyan theme to match pucks) */
+                --puck-dim:    hsl(190, 45%, 20%);
+                --puck-bright: hsl(190, 85%, 55%);
+            }
+            .checkbox-osc-puck::after {
+                content: "\21CC"; /* ⇌ */
+                position: absolute;
+                left: 50%;
+                top: 72%;
+                transform: translate(-50%, -56%);
+                font-size: 30px;
+                line-height: 1;
+                color: var(--puck-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;
+            }
+            .checkbox-osc-puck:checked::after { color: var(--puck-bright); }
 
             .checkbox-flyingPuck:hover { opacity: 1; filter: brightness(1.05); }
             .checkbox-flyingPuck { -webkit-appearance: none;
@@ -1369,12 +1486,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 --puck-bright: hsl(190, 85%, 55%);
             }
             .checkbox-flyingPuck::after {
-                content: "\2708"; /* ✈ */
+                content: "\2604"; /* ✈ */
                 position: absolute;
                 left: 50%;
-                top: 50%;
-                transform: translate(-50%, -56%);
-                font-size: 48px;
+                top: 60%;
+                transform: translate(-50%, -56%) rotate(270deg);
+                font-size: 34px;
                 line-height: 1;
                 color: var(--puck-dim);
                 pointer-events: none;
@@ -1382,6 +1499,112 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 transition: color 120ms ease, filter 120ms ease;
             }
             .checkbox-flyingPuck:checked::after { color: var(--puck-bright); }
+
+            .checkbox-flyingPuck2:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-flyingPuck2 { -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-left: 2px;
+                margin-right: 5px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                vertical-align: middle;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                background: transparent;
+                position: relative;
+                display: inline-block;
+                /* Tunables (cyan theme to match pucks) */
+                --puck-dim:    hsl(190, 45%, 20%);
+                --puck-bright: hsl(190, 85%, 55%);
+            }
+            .checkbox-flyingPuck2::after {
+                content: "\2604"; /* ✈ */
+                position: absolute;
+                left: 50%;
+                top: 40%;
+                transform: translate(-50%, -56%) rotate(235deg);
+                font-size: 36px;
+                line-height: 1;
+                color: var(--puck-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;
+            }
+            .checkbox-flyingPuck2::before {
+                content: "\27F7"; /* Forward slash overlay */
+                position: absolute;
+                left: 50%;
+                top: 75%;
+                transform: translate(-50%, -50%);
+                font-size: 24px;
+                line-height: 1;
+                color: var(--puck-dim); /* Use puck theme when unchecked */
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;
+                font-weight: bold;
+                z-index: 1;
+            }
+            .checkbox-flyingPuck2:checked::before { color: var(--puck-bright); }
+            .checkbox-flyingPuck2:checked::after { color: var(--puck-bright); }
+
+            .checkbox-noFlyingPuck:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-noFlyingPuck { -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-left: 2px;
+                margin-right: 5px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                vertical-align: middle;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                background: transparent;
+                position: relative;
+                display: inline-block;
+                /* Tunables (cyan theme to match pucks) */
+                --puck-dim:    hsl(190, 45%, 20%);
+                --puck-bright: hsl(190, 85%, 55%);
+            }
+            .checkbox-noFlyingPuck::after {
+                content: "\2604"; 
+                position: absolute;
+                left: 50%;
+                top: 60%;
+                transform: translate(-50%, -56%) rotate(270deg);
+                font-size: 34px;
+                line-height: 1;
+                color: var(--puck-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;
+            }
+            .checkbox-noFlyingPuck::before {
+                content: "/"; /* Forward slash overlay */
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%) rotate(45deg);
+                font-size: 32px;
+                line-height: 1;
+                color: var(--puck-dim); /* Use puck theme when unchecked */
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;
+                font-weight: bold;
+                z-index: 1;
+            }
+            .checkbox-noFlyingPuck:checked::after { color: var(--puck-dim); }
+            .checkbox-noFlyingPuck:checked::before { color: hsl(0, 85%, 35%); } /* Bright red when checked */
 
             /* Worm toggle: ⚕ (U+2695) rotated 90° clockwise, dim/bright orange */
             .checkbox-worm:hover { opacity: 1; filter: brightness(1.05); }
@@ -1614,7 +1837,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             body:has(#showPuckButton:checked),
             body:has(#showCyclePuckButton:checked),
             body:has(#showHeartButton:checked),
-            body:has(#flyingPuckButton:checked) {
+            body:has(#flyingPuckButton:checked),
+            body:has(#flyingPuckButton2:checked) {
                 --puck-label-opacity: 1.0;
             }
             bb8 { opacity: var(--puck-label-opacity); transition: opacity 200ms ease; }
@@ -1864,10 +2088,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 content: "\2665"; /* ♥ */
                 position: absolute;
                 left: 50%;
-                top: 60%;
+                top: 65%;
                 transform: translate(-50%, -56%) scale(1);
                 font-family: monospace;
-                font-size: 35px;
+                font-size: 40px;
                 line-height: 1;
                 color: var(--heart-dim);
                 pointer-events: none;
@@ -2102,7 +2326,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             position: absolute;
             left: 50%;
             top: 60%;
-            transform: translate(-50%, -56%);
+            transform: translate(-50%, -56%) rotate(20deg);
             font-size: 26px;
             line-height: 1;
             color: var(--umb-dim);
@@ -2121,6 +2345,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 opacity: 0.95;
                 width: 24px;
                 height: 24px;
+                margin-left: 0px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 border-radius: 50%;
@@ -2146,6 +2371,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 opacity: 0.95;
                 width: 36px;   /* 1.5x overall size */
                 height: 36px;  /* 1.5x overall size */
+                margin-left: 0px;
+                margin-right: 0px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 border-radius: 50%;
@@ -2299,7 +2526,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     <b2>[ Walls</b2>
     <input type="range"  title="Corner Radius" id="cornerRadiusSlider" min="0" max="200" value="100" list="detents"class="slider-corner-detent">
-  
     <input type="checkbox" title="Left Wall" id="leftWallButton" class="checkbox-leftwall" checked>
     <input type="checkbox" title="Right Wall" id="rightWallButton" class="checkbox-rightwall" checked>
     <input type="checkbox" title="Ceiling" id="ceilingButton" class="checkbox-ceiling" checked>
@@ -2308,9 +2534,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     <b3>[ Particles</b3>
     <input type="range" title="Number of Particles (n=x^2)" id="ballsSlider" min="1" max="100" value="71" class="slider-particle-count">
-    <i>#</i><span id="particleCountDisplay" title="Number of Particles"class="particle-count-display">5041</span>
-    <i>-</i><input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="8" class="field-cyan-short">
-	<i>+</i><input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="12" class="field-cyan-short">
+    <b3><i>#</i></b3><span id="particleCountDisplay" title="Number of Particles"class="particle-count-display">5041</span>
+    <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="8" class="field-cyan-short">
+	<b3>< &empty; <</b3><input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="12" class="field-cyan-short">
     <!-- Hidden ballsInput element for compatibility with existing code -->
     <input type="hidden" id="ballsInput" value="5041">
     <select title="Particle Style" id="renderType" class="field-cyan2">
@@ -2322,17 +2548,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         </optgroup>
     </select>
     <b3>]</b3></span>
-   
+
     <span style="white-space: nowrap">
     <b4>[ Time
-    <input type="range" title="Time  ::  <--- Slower : Normal" id="timeSlider" min="40" max="100" value="100" class="slider-mint">
+    <input type="range" title="Time  ::  <--- Slower : Normal" id="timeSlider" min="800" max="1000" value="1000" class="slider-mint">
     ]</b4></span>
     
     <span style="white-space: nowrap">
     <b5>[</b5> <bb5>Gravity</bb5>
     <select title="Gravity" id="gravityType" class="field-blue">
         <optgroup label="Direction">
-            <option value="none" selected>None</option>
+            <option value="none" selected>Zero</option>
             <option value="down">Down</option>
             <option value="up">Up</option>
             <option value="left">Left</option>
@@ -2347,24 +2573,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="checkbox" title="Repulsion on/off" id="repulsionButton" class="checkbox-repulsion" checked>
     <input type="range"  title="Repulsion Force between Particles" id="repulsionForceSlider" min="1" max="20" value="20" class="slider-lime">
     
-    <bbb6>Bounce</bbb6>
+    <bbb6>Restitution</bbb6>
     <input type="checkbox" title="Bounce on/off" id="bounceButton" class="checkbox-bounce" unchecked>
-    <input type="range"  title="Restitution %" id="ballRestSlider" min="0" max="100" value="0" class="slider-lime2">
+    <input type="range"  title="Restitution %" id="ballRestSlider" min="0" max="100" value="85" class="slider-lime2">
     <b6>]</b6></span>
 
     <span style="white-space: nowrap">
-    <b8>[</b8> <bb8>Pucks</bb8>
-    <input type="checkbox" title="Pucks on/off" id="showPuckButton" class="checkbox-puck" checked>
-    <input type="checkbox" title="Flying Puck on/off" id="flyingPuckButton" class="checkbox-flyingPuck" checked>
-    <input type="checkbox" title="Cycle puck on/off" id="showCyclePuckButton" class="checkbox-cycle" unchecked>
+    <b8>[ <bb8>Pucks</bb8>
+    (<input type="checkbox" title="Mouse Pucks on/off" id="showPuckButton" class="checkbox-puck" checked>
+    <input type="checkbox" title="Oscillate Pucks" id="oscPuckButton" class="checkbox-osc-puck" unchecked>
+    ) (<input type="radio" name="flyers" title="Comet" id="flyingPuckButton" class="checkbox-flyingPuck" checked>
+    <input type="radio" name="flyers" title="Comet - Horizontal" id="flyingPuckButton2" class="checkbox-flyingPuck2" unchecked>
+    <input type="radio" name="flyers" title="Comet Off" id="noFlyingPuckButton" class="checkbox-noFlyingPuck" unchecked>
+    )<input type="checkbox" title="Cycle puck on/off" id="showCyclePuckButton" class="checkbox-cycle" unchecked>
+    <input type="checkbox" title="Orbit puck on/off" id="showEllipticalOrbitPuckButton" class="checkbox-orbit" unchecked>
     <input type="checkbox" title="Heartbeat on/off" id="showHeartButton" class="checkbox-heart" unchecked>
     <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="300" class="slider-cyan">
-    <b8>]</b8></span>
+    ]</b8></span>
 
     <span style="white-space: nowrap">
     <b9>[</b9> <bb9>Worm</bb9>
     <input type="checkbox" title="Worm on/off" id="wormButton" class="checkbox-worm" checked>
-    <input type="range"  title="Worm Tail Radius" id="wormEndRadiusSlider" min="40" max="300" value="40" class="slider-orange">
     <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="70" max="300" value="150" class="slider-orange">
     <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz">
     <b9>]</b9></span>
@@ -2372,7 +2601,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <span style="white-space: nowrap">
     <b10>[</b10> <bb10>Plinko</bb10>
     <input type="checkbox" title="Pegs on/off" id="showBumperEntry" value="false" class="checkbox-bumper" unchecked>
-    <input type="range"  title="Peg Rows" id="rowsInput" min="1" max="20" value="3" class="slider-yellow">
+    <input type="range"  title="Peg Rows" id="rowsInput" min="1" max="10" value="3" class="slider-yellow">
     <input type="range"  title="Peg Radius" id="bumperRadiusInput" min="20" max="100" value="40" class="slider-yellow">
     <b10>]</b10></span>
 
@@ -2387,11 +2616,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <b12>]</b12></span>
 
     <span style="white-space: nowrap">
-    <bbb13>[</bbb13> <b13>Shower&#8594</b13>
+    <bbb13>[</bbb13> <b13>Shower</b13>
     <input type="radio" title="Shower (click -> Position; click & drag -> Width)" name="spawnType" id="shower" value="shower" class="radio2 radio-umbrella" checked>
     <i>&#8592or&#8594</i>
     <input type="radio" title="Mr. Mister (click -> Spew Direction)" name="spawnType" id="fountain" value="fountain" class="radio radio-fountain" unchecked>
-    <bb13>Mr.Mister&#8594</bb13>
+    <bb13>Mr.Mister</bb13>
     <input type="range"  title="Yeet" id="yeetSlider" min="0" max="100" value="25" class="slider-mrmr">
     <input type="range"  title="Sweep" id="sprinklerSpeedSlider" min="0" max="30" value="0" class="slider-mrmr">
     <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field-mrmr">
@@ -2424,7 +2653,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     h<input type="range"  title="Base Hue" id="baseColorSlider" min="0" max="330" value="190" class="slider-rainbow">
     s<input type="range"  title="Saturation" id="saturationSlider" min="0" max="100" value="90" class="slider-lightred">
     l<input type="range"  title="Lightness" id="lightnessSlider" min="5" max="100" value="40" class="slider-gray">
-    v<input type="range"  title="Velocity Sensitivity" id="velColorMapSlider" min="1" max="500" value="200" class="slider-gray"></span>
+    v<input type="range"  title="Velocity Sensitivity" id="velColorMapSlider" min="1" max="500" value="200" class="slider-gray2"></span>
     </i><c1>]</c1>
     <span style="white-space: nowrap">
     <b15>[ <i>&#9996</i><input type="range"  title="Persistence of Vision (Particle Trails)" id="persistenceSlider" min="0" max="30" value="12" class="slider-pov">
@@ -2588,7 +2817,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     //  GET WORLD PROPERTIES FROM SLIDERS ---------------------------------------------
     
     document.getElementById("timeSlider").oninput = function() {
-        physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);}
+        physProps.dt = 1 / (Math.floor(Math.exp(((140 - 0.1 *timeSlider.value) / 10))) + 6);}
     document.getElementById('persistenceSlider').oninput = function() {
         persistence = persistenceSlider.value;}
     // gravity ----------
@@ -2760,7 +2989,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     document.getElementById('showPuckButton').oninput = function() {
         if (showPuckButton.checked == true) {
             for (var p = 0; p < Puck.length; p++) {
-                if (Puck[p].special !== true && Puck[p].cycle !== true && Puck[p].flying !== true) {
+                if (Puck[p].special !== true && Puck[p].cycle !== true && Puck[p].flying !== true && Puck[p].orbit !== true) {
                     Puck[p].radius = 0;
                     Puck[p].puckArriving = true;
                 }
@@ -2769,14 +2998,58 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         } else {
             // Hide normal pucks when turned off
             for (var p = 0; p < Puck.length; p++) {
-                if (Puck[p].special !== true && Puck[p].cycle !== true && Puck[p].flying !== true) {
+                if (Puck[p].special !== true && Puck[p].cycle !== true && Puck[p].flying !== true && Puck[p].orbit !== true) {
                     Puck[p].radius = 0;
                     Puck[p].puckArriving = false;
                 }
             }
-            showPucks = false;}}
+            showPucks = false;
+            doOscillatePucks = false;
+            oscPuckButton.checked = false;
+        }}
+    document.getElementById('oscPuckButton').oninput = function() {
+        doOscillatePucks = oscPuckButton.checked;
+        
+        // If oscillation is being turned ON and pucks are currently hidden, show them
+        if (doOscillatePucks && !showPuckButton.checked) {
+            showPuckButton.checked = true;
+            
+            // Manually execute the same logic as showPuckButton handler
+            for (var p = 0; p < Puck.length; p++) {
+                if (Puck[p].special !== true && Puck[p].cycle !== true && Puck[p].flying !== true) {
+                    // Ensure OGradius is set properly (in case it was lost)
+                    if (!Puck[p].OGradius || Puck[p].OGradius <= 0) {
+                        Puck[p].OGradius = 1.0 * puckRadiusSlider.value / 1000;
+                    }
+                    Puck[p].radius = 0;
+                    Puck[p].puckArriving = true;
+                }
+            }
+            showPucks = true;
+        }
+        // Reset oscillation state when turning off
+        if (!doOscillatePucks) {
+            if (Puck[0]) {
+                Puck[0].oscInit = false;
+                Puck[0].oscOriginX = undefined;
+                Puck[0].oscAmplitude = undefined;
+                Puck[0].oscCenterX = undefined;
+                Puck[0].oscStartTime = undefined;
+                Puck[0].oscPhaseOffset = undefined;
+            }
+            if (Puck[1]) {
+                Puck[1].oscInit = false;
+                Puck[1].oscOriginX = undefined;
+                Puck[1].oscAmplitude = undefined;
+                Puck[1].oscCenterX = undefined;
+                Puck[1].oscStartTime = undefined;
+                Puck[1].oscPhaseOffset = undefined;
+            }
+        }
+    }
     document.getElementById('flyingPuckButton').oninput = function() {
         doFlyingPuck = flyingPuckButton.checked;
+        doFlyingPuck2 = !flyingPuckButton.checked; // Since they're radio buttons, one unchecks the other
         if (doFlyingPuck) {
             // Reset flying puck position and enable it
             Puck[4].pos.x = -1.0 * Puck[4].OGradius;
@@ -2792,6 +3065,39 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             Puck[4].flyingIsHiding = false;
             Puck[4].flyingHideStartTime = 0;
         }}
+    document.getElementById('flyingPuckButton2').oninput = function() {
+        doFlyingPuck2 = flyingPuckButton2.checked;
+        doFlyingPuck = !flyingPuckButton2.checked; // Since they're radio buttons, one unchecks the other
+        if (doFlyingPuck2) {
+            // Reset flying puck position and enable it (same puck, different behavior)
+            Puck[4].pos.x = -1.0 * Puck[4].OGradius;
+            Puck[4].vel.x = 3.0;
+            Puck[4].vel.y = 0; // Start horizontal for flat trajectory
+            Puck[4].radius = Puck[4].OGradius;
+            // Reset delay state
+            Puck[4].flyingIsHiding = false;
+            Puck[4].flyingHideStartTime = 0;
+        } else {
+            // Hide flying puck when disabled
+            Puck[4].radius = 0;
+            // Reset delay state
+            Puck[4].flyingIsHiding = false;
+            Puck[4].flyingHideStartTime = 0;
+        }}
+    document.getElementById('noFlyingPuckButton').oninput = function() {
+        var doNoFlyingPuck = noFlyingPuckButton.checked;
+        if (doNoFlyingPuck) {
+            // Turn off both flying puck modes
+            doFlyingPuck = false;
+            doFlyingPuck2 = false;
+            // Hide flying puck
+            Puck[4].radius = 0;
+            // Reset delay state
+            Puck[4].flyingIsHiding = false;
+            Puck[4].flyingHideStartTime = 0;
+        }
+        // Note: When this button is unchecked, the other radio buttons will handle re-enabling
+    }
     document.getElementById('showHeartButton').oninput = function() {
         if (showHeartButton.checked == true) {
             // find heart puck by property
@@ -2831,6 +3137,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             showCycle = true;
         } else {
             showCycle = false;
+        }
+    }
+    document.getElementById('showEllipticalOrbitPuckButton').oninput = function() {
+        if (showEllipticalOrbitPuckButton.checked == true) {
+            // Initialize orbit puck
+            for (var p = 0; p < Puck.length; p++) {
+                if (Puck[p].orbit === true) {
+                    Puck[p].puckArriving = false;
+                    Puck[p].radius = Puck[p].OGradius;
+                    Puck[p].orbitAngle = 0; // Start at right side of ellipse
+                    Puck[p].orbitLastTime = performance.now();
+                }
+            }
+            showOrbit = true;
+        } else {
+            showOrbit = false;
         }
     }
     document.getElementById('puckRadiusSlider').oninput = function() {
@@ -2940,9 +3262,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }}
     document.getElementById('wormStartRadiusSlider').oninput = function() {
         WormProps.startRadius = 0.001 * wormStartRadiusSlider.value;
-        makeWorm();}
-    document.getElementById('wormEndRadiusSlider').oninput = function() {
-        WormProps.endRadius = 0.001 * wormEndRadiusSlider.value;
         makeWorm();}
     document.getElementById('wormNumNodesSlider').oninput = function() {
         WormProps.numNodes = 1 * wormNumNodesSlider.value;
@@ -3264,6 +3583,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 document.addEventListener('mousemove', setNewDir, false);
                 document.addEventListener('touchmove', setNewDir, {passive: false});
             }
+                const now = performance.now(); // Fix: define the missing 'now' variable
                 lastTapTime = now;
                 lastTapX = cursorX;
                 lastTapY = cursorY;
@@ -3433,7 +3753,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         document.removeEventListener('touchmove', touchPuck0Move);
         document.removeEventListener('touchmove', touchPuck1Move);
         document.removeEventListener('touchmove', touchPuck2Move);
-    document.removeEventListener('touchmove', touchPuck3Move);
+        document.removeEventListener('touchmove', touchPuck3Move);
         document.removeEventListener('touchmove', touchMisterMisterMove);
         document.removeEventListener('touchmove', touchBumperMove);
         document.removeEventListener('touchmove', doubleTapDragMoveTouch);
@@ -3460,7 +3780,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
                 // If this is the cycle puck, pause cycling for 3s after release and restart at cycle beginning
                 if (Puck[p].cycle === true) {
-                    Puck[p].cycResumeAt = nowPerf + 3000; // 3 second delay
+                    Puck[p].cycResumeAt = nowPerf + 5000; // 5 second delay
                     Puck[p].cycState = 'grow';
                     Puck[p].cycTimeInState = 0.0;
                     Puck[p].cycLastTime = nowPerf; // avoid dt spike
@@ -3943,6 +4263,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         if (puck.moving == true) {
             u_n += puck.vel.dot(dir);
         }
+        // Also apply velocity for oscillating pucks
+        if (doOscillatePucks && (puck === Puck[0] || puck === Puck[1]) && puck.vel) {
+            u_n += puck.vel.dot(dir);
+        }
+        // Also apply velocity for flying puck
+        if (puck.flying === true && (doFlyingPuck || doFlyingPuck2) && puck.vel) {
+            u_n += puck.vel.dot(dir);
+        }
+        // Also apply velocity for orbit puck
+        if (puck.orbit === true && showOrbit && puck.vel) {
+            u_n += puck.vel.dot(dir);
+        }
         if (puck.special === true && Math.abs(puck.radiusRate) > 1e-6) {
             u_n += puck.radiusRate; // outward positive along dir
         }
@@ -4345,9 +4677,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         showPucks = showPuckButton.checked;
         showHeart = showHeartButton.checked;
         showCycle = (typeof showCyclePuckButton !== 'undefined') ? showCyclePuckButton.checked : true;
+        showOrbit = (typeof showEllipticalOrbitPuckButton !== 'undefined') ? showEllipticalOrbitPuckButton.checked : false;
         doShower = shower.checked;
         doFountain = fountain.checked;
         doFlyingPuck = flyingPuckButton.checked;
+        doFlyingPuck2 = flyingPuckButton2.checked;
+
+        if (bounceButton.checked == true) {
+            const t = parseFloat(0.01 * ballRestSlider.value);
+            const k = 1000000; // shape parameter; ~0.95 at midpoint when k≈1e6
+            physProps.ballRest = Math.log(1 + k * t) / Math.log(1 + k);
+        } else {
+            physProps.ballRest = 0;
+        }
+
+        // Handle noFlyingPuckButton - if checked, turn off both flying modes
+        if (noFlyingPuckButton.checked) {
+            doFlyingPuck = false;
+            doFlyingPuck2 = false;
+        }
+        
+        doOscillatePucks = oscPuckButton.checked
         
         doSmallTracer = smallTracerButton.checked;
         doMediumTracer = mediumTracerButton.checked;
@@ -4391,26 +4741,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         physProps.baseColor = 1.0 * baseColorSlider.value;
 
         physProps.velColorMap = velColorMapSlider.value;
-        // Initialize ball restitution from slider using the same log mapping
-        (function(){
-            const el = document.getElementById('ballRestSlider');
-            if (el) {
-                const t = parseFloat(el.value) / 100;
-                const k = 1000000;
-                physProps.ballRest = Math.log(1 + k * t) / Math.log(1 + k);
-                if (ballRestSlider.value < 1) {
-                    physProps.ballRest = 0;
-                }
-            }
-        })();
 
         WormProps.startRadius = 0.001 * wormStartRadiusSlider.value,
-        WormProps.endRadius = 0.001 * wormEndRadiusSlider.value,
+        WormProps.endRadius = 0.001 * 40,
         WormProps.numNodes = 1 * wormNumNodesSlider.value,
         
         fountainSpinMode = 'sweep';
 
         makePucks();
+        
+        // Initialize flying puck if enabled
+        if (doFlyingPuck && Puck[4]) {
+            Puck[4].pos.x = -1.0 * Puck[4].OGradius;
+            Puck[4].vel.x = 3.0;
+            Puck[4].radius = Puck[4].OGradius;
+            Puck[4].flyingIsHiding = false;
+            Puck[4].flyingHideStartTime = 0;
+        } else if (doFlyingPuck2 && Puck[4]) {
+            Puck[4].pos.x = -1.0 * Puck[4].OGradius;
+            Puck[4].vel.x = 3.0;
+            Puck[4].vel.y = 0;
+            Puck[4].radius = Puck[4].OGradius;
+            Puck[4].flyingIsHiding = false;
+            Puck[4].flyingHideStartTime = 0;
+        }
+        
         makeHungryPucks();
         makeMisterMister();
         
@@ -5210,9 +5565,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 sphereGradient.addColorStop(1.0, shadow);
                 c.fillStyle = sphereGradient;
                 c.fill();
-                c.lineWidth = .02 * cScale;  
-                c.strokeStyle = "blue";       
-                c.fillStyle = "darkblue";
+                //c.lineWidth = .02 * cScale;  
+                //c.strokeStyle = "blue";       
+                //c.fillStyle = "darkblue";
                 //c.fill();
                 //c.stroke();
             }
@@ -5539,6 +5894,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.special = special;
             this.cycle = false; // custom cyclic radius behavior (Puck[3])
             this.flying = false;
+            this.orbit = false; // elliptical orbit behavior (Puck[5])
             this.mass = 0.001 * radius;
             this.puckFadingIn = false;
             this.moving = false;
@@ -5548,7 +5904,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Flying puck delay properties
             this.flyingIsHiding = false;
             this.flyingHideStartTime = 0;
-            this.flyingHideDelay = 8000; // 8 seconds in milliseconds
+            this.flyingHideDelay = 4000; // 8 seconds in milliseconds
 
             // Heartbeat properties for special puck (Puck[2])
             if (special == true) {
@@ -5580,17 +5936,98 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Initialize the cycle puck state machine (called after setting this.cycle=true)
         initCycle() {
             this.cycPeriod = 5.0; // total seconds
-            this.cycDur = { grow: 0.3, shrink: 2.0, recover: 2.0 };
+            this.cycDur = { grow: 0.3, shrink: 0.5, recover: 2.0 }; // shrink: faster shrinking (was 2.0)
             this.cycState = 'grow';
             this.cycTimeInState = 0.0;
             this.cycLastTime = performance.now();
-            this.cycMax = 5.0;   // 4x base
+            this.cycMax = 3.0;   
             this.cycMin = 1.0;   // 0.5x base
             // Delay cycling at startup for 6 seconds
             this.cycResumeAt = this.cycLastTime + 6000; // ms timestamp
         }
 
         simulate() {
+            // OSCILLATION Puck[0] and Puck[1] ---------------------------------
+            if (doOscillatePucks == true && (this === Puck[0] || this === Puck[1])) {
+                // If puck is still arriving (growing from 0), let that animation complete first
+                if (this.puckArriving && this.radius < this.OGradius) {
+                    // Let the puckArriving animation run (same as default behavior)
+                    if (this.radius >= this.OGradius) {
+                        this.radius = this.OGradius;
+                        this.puckArriving = false;
+                    } else {
+                        this.radius += this.OGradius * 0.1; // Appropriate growth rate for smooth animation
+                    }
+                    return; // Don't start oscillation until puck is fully visible
+                }
+                
+                // Don't oscillate if the puck is being moved by mouse/touch
+                if (this.moving) {
+                    // Reset oscillation when user starts dragging
+                    this.oscInit = false;
+                    this.oscOriginX = undefined;
+                    this.oscAmplitude = undefined;
+                    this.oscCenterX = undefined;
+                    this.oscStartTime = undefined;
+                    this.oscPhaseOffset = undefined;
+                    return;
+                }
+                
+                // sinusoidal left-right oscillation ----------
+                // log initial positions ---------
+                if (!this.oscInit) {
+                    this.oscInit = true;
+                    this.oscOriginX = this.pos.x;
+                    // Calculate amplitude: distance from starting position to center vertical axis
+                    const centerX = simWidth / 2;
+                    this.oscAmplitude = Math.abs(this.pos.x - centerX);
+                    // Each puck oscillates around the center vertical axis
+                    this.oscCenterX = centerX;
+                    this.oscStartTime = performance.now(); // Store start time for phase calculation
+                    
+                    // Calculate initial phase so puck starts from current position (no jump)
+                    const currentOffset = this.pos.x - centerX;
+                    // If amplitude is 0, set a small default to avoid division by zero
+                    const safeAmplitude = this.oscAmplitude > 0 ? this.oscAmplitude : 1;
+                    const normalizedPosition = currentOffset / safeAmplitude; // -1 to 1
+                    // Clamp to valid sine range
+                    const clampedPosition = Math.max(-1, Math.min(1, normalizedPosition));
+                    
+                    // Each puck gets its own phase based solely on its current position
+                    this.oscPhaseOffset = Math.asin(clampedPosition);
+                }
+                // parameters --------------------
+                this.cycLastTime = this.cycLastTime || performance.now();
+                const now = performance.now();
+                const dt = (now - this.cycLastTime) / 1000.0;
+                this.cycLastTime = now;
+                const oscFreq = 0.5; // cycles per second (same for both pucks)
+                
+                // Store previous position for velocity calculation
+                const prevX = this.pos.x;
+                
+                // update position ---------------
+                // Oscillate around the center vertical axis with amplitude based on starting position
+                // Apply phase offset to desynchronize the pucks
+                const phase = 2 * Math.PI * oscFreq * ((now - this.oscStartTime) / 1000.0) + this.oscPhaseOffset;
+                const deltaX = this.oscAmplitude * Math.sin(phase);
+                const newX = this.oscCenterX + deltaX;
+                this.pos.x = newX;
+                
+                // Calculate and set velocity based on position change
+                if (dt > 0) {
+                    const velocityX = (newX - prevX) / dt;
+                    // Initialize velocity if it doesn't exist
+                    if (!this.vel) {
+                        this.vel = new Vector2(0, 0);
+                    }
+                    this.vel.x = velocityX;
+                    this.vel.y = 0; // No vertical movement in oscillation
+                }
+                
+                return;
+            }
+
             // HEART SPECIAL -------------------------------------------------
             if (this.special) {
                 // Special puck heartbeat animation (time-based, independent of framerate)
@@ -5779,16 +6216,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         // 
                         if (Math.random() < 0.5) {
                             this.pos.x = -this.radius;
-                            var velo = 3;
+                            var velo = 3.0;
                         } else {
                             this.pos.x = simWidth + this.radius;
-                            var velo = -3;
+                            var velo = -3.0;
                         }
-                        this.pos.y = 0.2 * simHeight + 0.6 *Math.random() * simHeight;
-                        const vangle = (Math.random() - 0.5) * 2 * (20 * Math.PI / 180); // start at +/- 20 degree angle from horizontal
-                        this.vel.x = velo * Math.cos(vangle);
-                        this.vel.y = velo * Math.sin(vangle);
-                        this.radius = 0.3 * this.OGradius + Math.random() * 1.0 * this.OGradius; 
+                        if (doFlyingPuck == true) {
+                            this.pos.y = 0.2 * simHeight + 0.6 *Math.random() * simHeight;
+                            const flyAngle = (Math.random() - 0.5) * 2 * (20 * Math.PI / 180); // start at +/- 20 degree angle from horizontal
+                            this.vel.x = velo * Math.cos(flyAngle);
+                            this.vel.y = velo * Math.sin(flyAngle);
+                        } else 
+                        if (doFlyingPuck2 == true) {
+                            this.pos.y = 0.5 * simHeight;
+                            this.vel.x = velo;
+                            this.vel.y = 0;
+                        }
+                        this.radius = 0.7 * this.OGradius + 0.3 * Math.random() * this.OGradius; 
+                        //this.radius = 0.7 * this.OGradius; 
                     } else {
                         // Still hiding, keep puck invisible
                         this.radius = 0;
@@ -5808,23 +6253,89 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     return;
                 }
                 
-                const friction = 0.9999998; 
+                const friction = 0.99999; 
                 this.vel.x *= friction;
                 this.vel.y *= friction;
-                this.radius -= 0.05 * physProps.dt;
+                this.radius -= 0.1 * physProps.dt;
                 if (this.radius <= 0.1 * this.OGradius) {
                     this.radius = 0.1 * this.OGradius; 
                 }
                 return;
             }
 
+            // SIMULATE ELLIPTICAL ORBIT PUCK --------------------------------
+            if (this.orbit == true) {
+                // Don't orbit while being moved by user
+                if (this.moving) {
+                    return;
+                }
+
+                const now = performance.now();
+                this.orbitLastTime = this.orbitLastTime || now;
+                const dt = (now - this.orbitLastTime) / 1000.0;
+                this.orbitLastTime = now;
+
+                // Calculate orbit bounds based on actual simulation boundaries
+                // At orbit extremes, puck center passes within one diameter of edge midpoint
+                const puckDiameter = this.radius * 2;
+                
+                // Get actual simulation boundaries
+                // Left/Right: Use corner positions (responsive to corner movement)
+                const leftEdgeX = Corners[0].pos.x;    // NW corner x position
+                const rightEdgeX = Corners[1].pos.x;   // NE corner x position
+                // Top/Bottom: Use canvas boundaries
+                const topEdgeY = simHeight;    // Top of canvas
+                const bottomEdgeY = 0;         // Bottom of canvas
+                
+                // Edge midpoints based on actual boundaries
+                const leftEdgeMidX = leftEdgeX;
+                const leftEdgeMidY = simHeight / 2;
+                const rightEdgeMidX = rightEdgeX;
+                const rightEdgeMidY = simHeight / 2;
+                const topEdgeMidX = (leftEdgeX + rightEdgeX) / 2;
+                const topEdgeMidY = topEdgeY;
+                const bottomEdgeMidX = (leftEdgeX + rightEdgeX) / 2;
+                const bottomEdgeMidY = bottomEdgeY;
+
+                // Calculate orbit bounds (puck center positions at extremes)
+                const leftBound = leftEdgeMidX + puckDiameter;
+                const rightBound = rightEdgeMidX - puckDiameter;
+                const topBound = topEdgeMidY - puckDiameter;
+                const bottomBound = bottomEdgeMidY + puckDiameter;
+
+                // Calculate ellipse parameters
+                const centerX = (leftBound + rightBound) / 2;
+                const centerY = (topBound + bottomBound) / 2;
+                const semiMajorA = (rightBound - leftBound) / 2;
+                const semiMinorB = (topBound - bottomBound) / 2;
+
+                // Update orbit angle (clockwise)
+                this.orbitAngle = (this.orbitAngle || 0) - this.orbitSpeed * dt;
+
+                // Store previous position for velocity calculation
+                const prevX = this.pos.x;
+                const prevY = this.pos.y;
+
+                // Calculate position on ellipse
+                this.pos.x = centerX + semiMajorA * Math.cos(this.orbitAngle);
+                this.pos.y = centerY + semiMinorB * Math.sin(this.orbitAngle);
+
+                // Calculate velocity based on position change
+                if (dt > 0) {
+                    this.vel.x = (this.pos.x - prevX) / dt;
+                    this.vel.y = (this.pos.y - prevY) / dt;
+                }
+
+                return;
+            }
+
             // DEFAULT: Non-special arrival growth behavior -----------------
-            if (this.puckArriving && !this.special && !this.cycle && !this.flying) {
+            if (this.puckArriving && !this.special && !this.cycle && !this.flying && !this.orbit) {
                 if (this.radius >= this.OGradius) {
                     this.radius = this.OGradius;
                     this.puckArriving = false;
                 } else {
-                    this.radius += this.OGradius * 0.01; // Appropriate growth rate for smooth animation
+                    this.radius += this.OGradius * 0.1; // Appropriate growth rate for smooth animation
                 }
             }
             return;
@@ -5887,7 +6398,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
             } else { 
                 // DRAW NORMAL PUCK  -----------
-                if (this.moving == false) {
+                if (this.moving == false && this.flying == false) {  // stationary normal puck ----------
                 drawCircle(cX(this.pos), cY(this.pos), 0.985 * this.radius * cScale);
                 const grd = c.createRadialGradient(
                     cX(this.pos), 
@@ -5919,7 +6430,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.textBaseline = 'middle';
                     c.textAlign = 'center';
                     c.font = `${baseFontPx}px verdana`;
-                    c.fillText("\u2726", 0, 0);
+                    c.fillText("\u26A0", 0, 0);
                     c.restore();
                 }
                 } else { // moving normal puck ----------
@@ -5950,9 +6461,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         c.textBaseline = 'middle';
                         c.textAlign = 'center';
                         c.font = `${baseFontPx}px verdana`;
-                        c.fillText("!!!", 0, 0);
+                        c.fillText("\u26A0", 0, 0);
                         c.restore();
                     }
+                }
+                //  DRAW FLYING PUCK  ----------
+                if (this.flying == true) {
+                    const shineOffsetX = cScale * this.radius * 0.3; 
+                    const shineOffsetY = cScale * this.radius * 0.4; 
+                    const shineVector = Math.sqrt(shineOffsetX * shineOffsetX + shineOffsetY * shineOffsetY);
+                    const shineRadius = 0.5 * cScale * this.radius + shineVector;
+                    const shading = c.createRadialGradient(
+                        cX(this.pos) - shineOffsetX, 
+                        cY(this.pos) - shineOffsetY, 
+                        0, 
+                        cX(this.pos) - shineOffsetX, 
+                        cY(this.pos) - shineOffsetY, 
+                        shineRadius);
+                    var highlight = 'hsl(0, 80%, 70%)';
+                    var midtone = 'hsl(0, 80%, 50%)';
+                    var shadow = 'hsl(0, 80%, 10%)';
+                    shading.addColorStop(0.0, highlight);
+                    shading.addColorStop(0.15, midtone);
+                    shading.addColorStop(1.0, shadow);
+                    c.fillStyle = shading;
+                    c.fill();
                 }
             }
         }
@@ -6230,7 +6763,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 puck2color, 
                 true));
         //  CYCLE PUCK (Puck[3])  ---------------------------------------------------
-        Puck.push (new PUCK(0.5 * puckRadiusSlider.value / 1000,
+        Puck.push (new PUCK(0.25,
             new Vector2(0.5 * simWidth, 
                 0.9 * simHeight), 
                 puck1color, 
@@ -6243,7 +6776,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
             }
         //  FLYING PUCK (Puck[4])  ----------------------------------------------------------
-        Puck.push (new PUCK(0.0008 * cScale, 
+        Puck.push (new PUCK(0.35, 
             new Vector2(
                 0, 
                 0.5 * simHeight), 
@@ -6253,6 +6786,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (Puck.length > 4) {
                 Puck[4].flying = true;
                 Puck[4].vel.x = 3.0;
+            }
+        //  ELLIPTICAL ORBIT PUCK (Puck[5])  ------------------------------------------
+        Puck.push (new PUCK(0.15,
+            new Vector2(0.5 * simWidth, 
+                0.5 * simHeight), 
+                puck1color, 
+                false));
+            // mark last puck as orbit-type and init its state
+            if (Puck.length > 5) {
+                Puck[5].orbit = true;
+                Puck[5].orbitAngle = 0; // Start at right side of ellipse
+                Puck[5].orbitSpeed = 2.0; // radians per second
             }
         }
     
@@ -6297,10 +6842,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         for (let p = 0; p < Puck.length; p++) {
             const puck = Puck[p];
             // Special pucks have their own simulation conditions, normal pucks use puckArriving
-            const shouldSim = (doFlyingPuck == true && puck.flying == true) || 
-                              (puck.special && showHeart) || 
-                              (puck.cycle && showCycle) ||
-                              (puck.puckArriving && !puck.special && !puck.cycle && !puck.flying);
+            const shouldSim = ((doFlyingPuck == true || doFlyingPuck2 == true) && puck.flying == true) || 
+                            (puck.special && showHeart) || 
+                            (puck.cycle && showCycle) ||
+                            (puck.orbit && showOrbit) ||
+                            (puck.puckArriving && !puck.special && !puck.cycle && !puck.flying && !puck.orbit) ||
+                            (doOscillatePucks && (puck === Puck[0] || puck === Puck[1]));
             if (shouldSim) puck.simulate();
         }
 
@@ -6344,8 +6891,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 const puck = Puck[p];
                 if (puck.special && !showHeart) continue;
                 if (puck.cycle && !showCycle) continue;
-                if (puck.flying && !doFlyingPuck) continue;
-                if (!puck.special && !puck.cycle && !puck.flying && !showPucks) continue;
+                if (puck.orbit && !showOrbit) continue;
+                if (puck.flying && !doFlyingPuck && !doFlyingPuck2) continue;
+                if (!puck.special && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
                 if (puck.right < b.left) continue;
                 if (Math.abs(b.pos.y - puck.pos.y) <= b.radius + puck.radius) handlePuckHits(b, puck);
             }
@@ -6591,8 +7139,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Respect toggles for each puck type
             if (puck.special === true && !showHeart) continue;
             if (puck.cycle === true && !showCycle) continue;
-            if (puck.flying === true && !doFlyingPuck) continue;
-            if (puck.special !== true && puck.cycle !== true && puck.flying !== true && !showPucks) continue;
+            if (puck.orbit === true && !showOrbit) continue;
+            if (puck.flying === true && !doFlyingPuck && !doFlyingPuck2) continue;
+            // Only check showPucks for normal pucks (not special, cycle, flying, or orbit)
+            if (!puck.special && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
             puck.draw();
         }
         //  DRAW CORNERS  ---------------------------------------------------------------------
