@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.39
+		<title>Slosh 1.41
         </title>
         <style>
 			body {font-family: monospace; 
@@ -22,6 +22,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 margin: 0;
                 padding-left: 10px;
                 padding-right: 10px;
+                padding-top: 10px;
                 /* Touch optimization */
                 -webkit-touch-callout: none;
                 -webkit-user-select: none;
@@ -1325,7 +1326,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 opacity: 0.95;
                 width: 24px;
                 height: 24px;
-                margin-left: 10px;
+                margin-left: 0px;
                 margin-right: 0px;
                 margin-top: 5px;
                 margin-bottom: 10px;
@@ -1390,6 +1391,42 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 transition: color 120ms ease, filter 120ms ease;}
             .checkbox-orbit:checked::after { color: var(--cyc-bright); }
 
+            /* Cycle puck toggle: ✢ (U+2742), dim when off, bright when on */
+            .checkbox-yinyang:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-yinyang { -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-left: 0px;
+                margin-right: 15px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                vertical-align: middle;
+                border: none;
+                outline: none;
+                cursor: pointer;
+                background: transparent;
+                position: relative;
+                display: inline-block;
+                /* Tunables (teal/cyan theme) */
+                --cyc-dim:    hsl(190, 50%, 20%);
+                --cyc-bright: hsl(190, 80%, 55%);}
+            .checkbox-yinyang::after {
+                content: "\262F"; /* ☯ */
+                position: absolute;
+                left: 50%;
+                top: 62%;
+                transform: translate(-50%, -56%);
+                font-size: 32px;
+                line-height: 1;
+                color: var(--cyc-dim);
+                pointer-events: none;
+                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
+                transition: color 120ms ease, filter 120ms ease;}
+            .checkbox-yinyang:checked::after { color: var(--cyc-bright); }
+            
             /* Normal pucks toggle: ☉ (U+2609), dim when off, bright when on */
             .checkbox-puck:hover { opacity: 1; filter: brightness(1.05); }
             .checkbox-puck { -webkit-appearance: none;
@@ -1412,19 +1449,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 --puck-bright: hsl(190, 85%, 55%);
             }
             .checkbox-puck::after {
-                content: "\2609"; /* ☉ sun */
+                content: "\2117"; /* ℗ */;
                 position: absolute;
                 left: 50%;
-                top: 72%;
+                top: 70%;
                 transform: translate(-50%, -56%);
-                font-size: 50px;
+                font-size: 32px;
                 line-height: 1;
                 color: var(--puck-dim);
                 pointer-events: none;
                 text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
                 transition: color 120ms ease, filter 120ms ease;
             }
-            .checkbox-puck:checked::after { color: var(--puck-bright); }
+            .checkbox-puck:checked::after { 
+                color: var(--puck-bright);
+            }
 
             .checkbox-oscpuck:hover { opacity: 1; filter: brightness(1.05); }
             .checkbox-osc-puck { -webkit-appearance: none;
@@ -1432,7 +1471,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 opacity: 0.95;
                 width: 24px;
                 height: 24px;
-                margin-left: 5px;
+                margin-left: 0px;
                 margin-right: 0px;
                 margin-top: 5px;
                 margin-bottom: 10px;
@@ -1469,7 +1508,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 opacity: 0.95;
                 width: 24px;
                 height: 24px;
-                margin-left: 5px;
+                margin-left: 10px;
                 margin-right: 5px;
                 margin-top: 5px;
                 margin-bottom: 10px;
@@ -1500,14 +1539,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             .checkbox-flyingPuck:checked::after { color: var(--puck-bright); }
 
-            .checkbox-flyingPuck2:hover { opacity: 1; filter: brightness(1.05); }
-            .checkbox-flyingPuck2 { -webkit-appearance: none;
+            .checkbox-comet-horiz:hover { opacity: 1; filter: brightness(1.05); }
+            .checkbox-comet-horiz { -webkit-appearance: none;
                 appearance: none;
                 opacity: 0.95;
                 width: 24px;
                 height: 24px;
-                margin-left: 2px;
-                margin-right: 5px;
+                margin-left: 0px;
+                margin-right: 15px;
                 margin-top: 5px;
                 margin-bottom: 10px;
                 border-radius: 50%;
@@ -1522,7 +1561,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 --puck-dim:    hsl(190, 45%, 20%);
                 --puck-bright: hsl(190, 85%, 55%);
             }
-            .checkbox-flyingPuck2::after {
+            .checkbox-comet-horiz::after {
                 content: "\2604"; /* ✈ */
                 position: absolute;
                 left: 50%;
@@ -1535,7 +1574,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
                 transition: color 120ms ease, filter 120ms ease;
             }
-            .checkbox-flyingPuck2::before {
+            .checkbox-comet-horiz::before {
                 content: "\27F7"; /* Forward slash overlay */
                 position: absolute;
                 left: 50%;
@@ -1550,61 +1589,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 font-weight: bold;
                 z-index: 1;
             }
-            .checkbox-flyingPuck2:checked::before { color: var(--puck-bright); }
-            .checkbox-flyingPuck2:checked::after { color: var(--puck-bright); }
-
-            .checkbox-noFlyingPuck:hover { opacity: 1; filter: brightness(1.05); }
-            .checkbox-noFlyingPuck { -webkit-appearance: none;
-                appearance: none;
-                opacity: 0.95;
-                width: 24px;
-                height: 24px;
-                margin-left: 2px;
-                margin-right: 5px;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                border-radius: 50%;
-                vertical-align: middle;
-                border: none;
-                outline: none;
-                cursor: pointer;
-                background: transparent;
-                position: relative;
-                display: inline-block;
-                /* Tunables (cyan theme to match pucks) */
-                --puck-dim:    hsl(190, 45%, 20%);
-                --puck-bright: hsl(190, 85%, 55%);
-            }
-            .checkbox-noFlyingPuck::after {
-                content: "\2604"; 
-                position: absolute;
-                left: 50%;
-                top: 60%;
-                transform: translate(-50%, -56%) rotate(270deg);
-                font-size: 34px;
-                line-height: 1;
-                color: var(--puck-dim);
-                pointer-events: none;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                transition: color 120ms ease, filter 120ms ease;
-            }
-            .checkbox-noFlyingPuck::before {
-                content: "/"; /* Forward slash overlay */
-                position: absolute;
-                left: 50%;
-                top: 50%;
-                transform: translate(-50%, -50%) rotate(45deg);
-                font-size: 32px;
-                line-height: 1;
-                color: var(--puck-dim); /* Use puck theme when unchecked */
-                pointer-events: none;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                transition: color 120ms ease, filter 120ms ease;
-                font-weight: bold;
-                z-index: 1;
-            }
-            .checkbox-noFlyingPuck:checked::after { color: var(--puck-dim); }
-            .checkbox-noFlyingPuck:checked::before { color: hsl(0, 85%, 35%); } /* Bright red when checked */
+            .checkbox-comet-horiz:checked::before { color: var(--puck-bright); }
+            .checkbox-comet-horiz:checked::after { color: var(--puck-bright); }
 
             /* Worm toggle: ⚕ (U+2695) rotated 90° clockwise, dim/bright orange */
             .checkbox-worm:hover { opacity: 1; filter: brightness(1.05); }
@@ -1838,7 +1824,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             body:has(#showCyclePuckButton:checked),
             body:has(#showHeartButton:checked),
             body:has(#flyingPuckButton:checked),
-            body:has(#flyingPuckButton2:checked) {
+            body:has(#flyingPuckButton2:checked),
+            body:has(#showEllipticalOrbitPuckButton:checked),
+            body:has(#showYinYangButton:checked) {
                 --puck-label-opacity: 1.0;
             }
             bb8 { opacity: var(--puck-label-opacity); transition: opacity 200ms ease; }
@@ -2507,6 +2495,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 background-color: hsl(220, 80%, 50%);
             }
             
+            /* FPS Counter */
+            .fps-counter {
+                position: absolute;
+                display: none; /* Hidden by default */
+                /* No fixed right/top/left/bottom here; set by JS for canvas-relative positioning */
+                white-space: nowrap;
+                text-align: right;
+                font-family: monospace;
+                font-size: 14px;
+                color: hsl(170, 75%, 50%);
+                background: hsla(0, 0%, 0%, 0.7);
+                padding: 4px 8px;
+                border-radius: 4px;
+                text-shadow: 1px 1px 2px hsl(0, 0%, 0%);
+                z-index: 1000;
+                pointer-events: none;
+            }
+            
+            .fps-counter.visible {
+                display: block;
+            }
+            
 		</style>
 	</head>
 <body> 
@@ -2514,6 +2524,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	<!-- <body style="background: hsl(0, 0%, 10%); background-attachment: fixed; margin-left: 0px;"> -->
     <body style="background: linear-gradient(to bottom, hsl(0, 0%, 0%) 0%, hsl(195, 64%, 8%) 100%); background-attachment: fixed; margin-left: 0px;"> 
     <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-left: 10px"></canvas>
+    <div id="fpsCounter" class="fps-counter">--</div>
 
     <h3><br><br></h3>
     <b1>[ Go!
@@ -2535,8 +2546,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <b3>[ Particles</b3>
     <input type="range" title="Number of Particles (n=x^2)" id="ballsSlider" min="1" max="100" value="71" class="slider-particle-count">
     <b3><i>#</i></b3><span id="particleCountDisplay" title="Number of Particles"class="particle-count-display">5041</span>
-    <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="8" class="field-cyan-short">
-	<b3>< &empty; <</b3><input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="12" class="field-cyan-short">
+    <input type="number" title="Minimum Ball Radius (will ignore if '0')" id="smallBallInput" min="0" value="7" class="field-cyan-short">
+	<b3>< &empty; <</b3><input type="number" title="Maximum Ball Radius" id="bigBallInput" min="1" value="13" class="field-cyan-short">
     <!-- Hidden ballsInput element for compatibility with existing code -->
     <input type="hidden" id="ballsInput" value="5041">
     <select title="Particle Style" id="renderType" class="field-cyan2">
@@ -2553,6 +2564,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <b4>[ Time
     <input type="range" title="Time  ::  <--- Slower : Normal" id="timeSlider" min="800" max="1000" value="1000" class="slider-mint">
     ]</b4></span>
+
+    <span style="white-space: nowrap">
+    <b4>[ Speed
+    <input type="range" title="Speed Limit" id="speedSlider" min="1" max="50" value="20" class="slider-mint">
+    ]</b4></span>
     
     <span style="white-space: nowrap">
     <b5>[</b5> <bb5>Gravity</bb5>
@@ -2565,7 +2581,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             <option value="right">Right</option>
         </optgroup>
     </select>
-    <input type="range"  title="Gravity Strength" id="gravitySlider" min="5" max="100" value="50" class="slider-blue">
+    <input type="range"  title="Gravity Strength" id="gravitySlider" min="5" max="200" value="50" class="slider-blue">
     <b5>]</b5></span>
     
     <span style="white-space: nowrap">
@@ -2580,13 +2596,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     <span style="white-space: nowrap">
     <b8>[ <bb8>Pucks</bb8>
-    (<input type="checkbox" title="Mouse Pucks on/off" id="showPuckButton" class="checkbox-puck" checked>
+    <input type="checkbox" title="Mouse Pucks on/off" id="showPuckButton" class="checkbox-puck" checked>
     <input type="checkbox" title="Oscillate Pucks" id="oscPuckButton" class="checkbox-osc-puck" unchecked>
-    ) (<input type="radio" name="flyers" title="Comet" id="flyingPuckButton" class="checkbox-flyingPuck" checked>
-    <input type="radio" name="flyers" title="Comet - Horizontal" id="flyingPuckButton2" class="checkbox-flyingPuck2" unchecked>
-    <input type="radio" name="flyers" title="Comet Off" id="noFlyingPuckButton" class="checkbox-noFlyingPuck" unchecked>
-    )<input type="checkbox" title="Cycle puck on/off" id="showCyclePuckButton" class="checkbox-cycle" unchecked>
+    <input type="checkbox" title="Comet" id="flyingPuckButton" class="checkbox-flyingPuck" checked>
+    <input type="checkbox" title="Comet - Horizontal" id="flyingPuckButton2" class="checkbox-comet-horiz" unchecked>
     <input type="checkbox" title="Orbit puck on/off" id="showEllipticalOrbitPuckButton" class="checkbox-orbit" unchecked>
+    <input type="checkbox" title="Orbit two pucks on/off" id="showYinYangButton" class="checkbox-yinyang" unchecked>
+    <input type="checkbox" title="Cycle puck on/off" id="showCyclePuckButton" class="checkbox-cycle" unchecked>
     <input type="checkbox" title="Heartbeat on/off" id="showHeartButton" class="checkbox-heart" unchecked>
     <input type="range"  title="Puck Radius" id="puckRadiusSlider" min="100" max="1000" value="300" class="slider-cyan">
     ]</b8></span>
@@ -2594,7 +2610,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <span style="white-space: nowrap">
     <b9>[</b9> <bb9>Worm</bb9>
     <input type="checkbox" title="Worm on/off" id="wormButton" class="checkbox-worm" checked>
-    <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="70" max="300" value="150" class="slider-orange">
+    <input type="range"  title="Worm Head Radius" id="wormStartRadiusSlider" min="90" max="300" value="150" class="slider-orange">
     <input type="range"  title="Worm Segments" id="wormNumNodesSlider" min="3" max="30" value="10" class="slider-orange-horiz">
     <b9>]</b9></span>
 
@@ -2650,7 +2666,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <span style="white-space: nowrap">
     <c1>[ C</c1><c2>o</c2><c3>l</c3><c4>o</c4><c5>r</c5>
     <i>
-    h<input type="range"  title="Base Hue" id="baseColorSlider" min="0" max="330" value="190" class="slider-rainbow">
+    h<input type="range"  title="Base Hue" id="baseColorSlider" min="0" max="330" value="180" class="slider-rainbow">
     s<input type="range"  title="Saturation" id="saturationSlider" min="0" max="100" value="90" class="slider-lightred">
     l<input type="range"  title="Lightness" id="lightnessSlider" min="5" max="100" value="40" class="slider-gray">
     v<input type="range"  title="Velocity Sensitivity" id="velColorMapSlider" min="1" max="500" value="200" class="slider-gray2"></span>
@@ -2660,10 +2676,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     ]</b15>
 
     <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked></span>
-    
+
+    <span id="fpsCounterButton" class="fps-toggle" tabindex="0" role="button" aria-pressed="false">FPS</span>
+
+        <style>
+            .fps-toggle {
+                user-select: none;
+                cursor: pointer;
+                font-weight: bold;
+                padding: 2px 8px;
+                border-radius: 4px;
+                background: rgba(255,255,255,0.08);
+                color: hsl(170,75%,30%);
+                outline: none;
+                transition: color 0.2s;
+            }
+            .fps-toggle.active {
+                color: hsl(170, 75%, 50%) !important;
+            }
+        </style>
+
     <h2><br></h2><h1>:: SL0SH :: repulsive particle simulation ::</h1>
 
 <script>
+
+    //  FPS COUNTER VARIABLES ----------------------------------------------------------------
+    let fpsCounter = {
+        lastTime: performance.now(),
+        frameCount: 0,
+        frameTimes: [],
+    maxSamples: 10, // Use 10 frames for more responsive averaging
+        displayFps: 0,
+        updateCounter: 0,
+    updateInterval: 5 // Update display every 5 frames for faster response
+    };
 
     // Gummi Bear image for ball rendering (scaled to ball radius)
     var gummiImage = new Image();
@@ -2776,7 +2822,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
     window.addEventListener('resize', () => {
         if (_resizeDebounce) clearTimeout(_resizeDebounce);
-        _resizeDebounce = setTimeout(handleResizeRestart, 150); // debounce to avoid rapid churn
+        _resizeDebounce = setTimeout(() => {
+            handleResizeRestart();
+            positionFpsCounter(); // Reposition FPS counter after resize
+        }, 150); // debounce to avoid rapid churn
     });
     // Gradient used to fill canvas corners/masks to match page background
     let cornerFillGradient = null;
@@ -2973,9 +3022,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         makeBalls();}
     document.getElementById("array").oninput = function() {
         makeBalls();}
-    document.getElementById("showHungryPuckButton").oninput = function() {
-        if (showHungryPuckButton.checked == true)
-        fountain.checked = true;}
     document.getElementById('showBumperEntry').oninput = function() {
         if (showBumperEntry.checked == true) {
             showBumpers = true;
@@ -3048,9 +3094,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
     document.getElementById('flyingPuckButton').oninput = function() {
-        doFlyingPuck = flyingPuckButton.checked;
-        doFlyingPuck2 = !flyingPuckButton.checked; // Since they're radio buttons, one unchecks the other
-        if (doFlyingPuck) {
+        if (flyingPuckButton.checked == true) {
+            // If comet is being turned on, turn off comet-horizontal
+            if (flyingPuckButton2.checked) {
+                flyingPuckButton2.checked = false;
+                doFlyingPuck2 = false;
+            }
+            
+            doFlyingPuck = true;
             // Reset flying puck position and enable it
             Puck[4].pos.x = -1.0 * Puck[4].OGradius;
             Puck[4].vel.x = 3.0;
@@ -3059,16 +3110,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             Puck[4].flyingIsHiding = false;
             Puck[4].flyingHideStartTime = 0;
         } else {
+            // Comet is being turned off
+            doFlyingPuck = false;
             // Hide flying puck when disabled
             Puck[4].radius = 0;
             // Reset delay state
             Puck[4].flyingIsHiding = false;
             Puck[4].flyingHideStartTime = 0;
-        }}
+        }
+    }
     document.getElementById('flyingPuckButton2').oninput = function() {
-        doFlyingPuck2 = flyingPuckButton2.checked;
-        doFlyingPuck = !flyingPuckButton2.checked; // Since they're radio buttons, one unchecks the other
-        if (doFlyingPuck2) {
+        if (flyingPuckButton2.checked == true) {
+            // If comet-horizontal is being turned on, turn off comet
+            if (flyingPuckButton.checked) {
+                flyingPuckButton.checked = false;
+                doFlyingPuck = false;
+            }
+            
+            doFlyingPuck2 = true;
             // Reset flying puck position and enable it (same puck, different behavior)
             Puck[4].pos.x = -1.0 * Puck[4].OGradius;
             Puck[4].vel.x = 3.0;
@@ -3078,25 +3137,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             Puck[4].flyingIsHiding = false;
             Puck[4].flyingHideStartTime = 0;
         } else {
+            // Comet-horizontal is being turned off
+            doFlyingPuck2 = false;
             // Hide flying puck when disabled
             Puck[4].radius = 0;
             // Reset delay state
             Puck[4].flyingIsHiding = false;
             Puck[4].flyingHideStartTime = 0;
-        }}
-    document.getElementById('noFlyingPuckButton').oninput = function() {
-        var doNoFlyingPuck = noFlyingPuckButton.checked;
-        if (doNoFlyingPuck) {
-            // Turn off both flying puck modes
-            doFlyingPuck = false;
-            doFlyingPuck2 = false;
-            // Hide flying puck
-            Puck[4].radius = 0;
-            // Reset delay state
-            Puck[4].flyingIsHiding = false;
-            Puck[4].flyingHideStartTime = 0;
         }
-        // Note: When this button is unchecked, the other radio buttons will handle re-enabling
     }
     document.getElementById('showHeartButton').oninput = function() {
         if (showHeartButton.checked == true) {
@@ -3141,6 +3189,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
     document.getElementById('showEllipticalOrbitPuckButton').oninput = function() {
         if (showEllipticalOrbitPuckButton.checked == true) {
+            // If elliptical orbit is being turned on, turn off yin-yang
+            if (showYinYangButton.checked) {
+                showYinYangButton.checked = false;
+                showYinYang = false;
+            }
+            
             // Initialize orbit puck
             for (var p = 0; p < Puck.length; p++) {
                 if (Puck[p].orbit === true) {
@@ -3152,7 +3206,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             showOrbit = true;
         } else {
+            // Elliptical orbit is being turned off
             showOrbit = false;
+            showYinYang = false; // Also ensure yin-yang state is off
+        }
+    }
+    document.getElementById('showYinYangButton').oninput = function() {
+        if (showYinYangButton.checked == true) {
+            // If yin-yang is being turned on, turn off elliptical orbit
+            if (showEllipticalOrbitPuckButton.checked) {
+                showEllipticalOrbitPuckButton.checked = false;
+            }
+            
+            // Initialize yin-yang orbit pucks
+            for (var p = 0; p < Puck.length; p++) {
+                if (Puck[p].orbit === true || Puck[p].yinyang === true) {
+                    Puck[p].puckArriving = false;
+                    Puck[p].radius = Puck[p].OGradius;
+                    Puck[p].orbitAngle = 0; // Start at right side of ellipse
+                    Puck[p].orbitLastTime = performance.now();
+                }
+            }
+            // Set the second yin-yang puck to start 180 degrees out of phase
+            for (var p = 0; p < Puck.length; p++) {
+                if (Puck[p].yinyang === true) {
+                    Puck[p].orbitAngle = Math.PI; // 180 degrees out of phase
+                    break; // Only affect the first yinyang puck found
+                }
+            }
+            showOrbit = true;
+            showYinYang = true;
+        } else {
+            // Yin-yang is being turned off
+            showOrbit = false;
+            showYinYang = false;
         }
     }
     document.getElementById('puckRadiusSlider').oninput = function() {
@@ -3256,16 +3343,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         if (wormButton.checked == true) {
             doWorm = true;
             document.body.classList.add('worm-on');
+            // Reset stored advance speed for new random value
+            WormProps.advanceSpeed = null;
+            // Reset worm to starting position when turned on
+            makeWorm();
+            // Override the startup delay - immediately begin traversing when manually turned on
+            WormProps.isHiding = false;
+            WormProps.hideStartTime = 0;
         } else {
             doWorm = false;
             document.body.classList.remove('worm-on');
         }}
     document.getElementById('wormStartRadiusSlider').oninput = function() {
         WormProps.startRadius = 0.001 * wormStartRadiusSlider.value;
-        makeWorm();}
+        makeWorm();
+        // Override the startup delay - immediately begin traversing when slider is adjusted
+        WormProps.isHiding = false;
+        WormProps.hideStartTime = 0;
+    }
     document.getElementById('wormNumNodesSlider').oninput = function() {
         WormProps.numNodes = 1 * wormNumNodesSlider.value;
-        makeWorm();}
+        makeWorm();
+        // Override the startup delay - immediately begin traversing when slider is adjusted
+        WormProps.isHiding = false;
+        WormProps.hideStartTime = 0;
+    }
     document.getElementById('sprinklerSpeedSlider').oninput = function() {
         sprinklerSpeed = 0.0001 * sprinklerSpeedSlider.value;};
     // Initialize worm UI knob theme on load
@@ -3403,6 +3505,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             repulsionForceSlider.value = 10;
             makeBalls();
         }};
+
+        document.getElementById('speedSlider').oninput = function() {
+            physProps.maxSpeed = 0.1 * speedSlider.value;
+        } 
+        
+
+// FPS toggle logic for new text button (moved to end of script for safety)
+window.addEventListener('DOMContentLoaded', function() {
+    const fpsBtn = document.getElementById('fpsCounterButton');
+    const fpsElement = document.getElementById('fpsCounter');
+    let fpsVisible = false;
+    function toggleFPS() {
+        fpsVisible = !fpsVisible;
+        fpsBtn.setAttribute('aria-pressed', fpsVisible);
+        if (fpsVisible) {
+            fpsBtn.classList.add('active');
+            if (typeof fpsCounter.displayFps === 'number') {
+                fpsElement.textContent = `${fpsCounter.displayFps} fps`;
+            }
+            fpsElement.classList.add('visible');
+            void fpsElement.offsetWidth;
+            positionFpsCounter();
+        } else {
+            fpsBtn.classList.remove('active');
+            fpsElement.classList.remove('visible');
+        }
+    }
+    // Set initial state to dim
+    fpsBtn.classList.remove('active');
+    fpsBtn.addEventListener('click', toggleFPS);
+    fpsBtn.addEventListener('keydown', function(e) {
+        if (e.key === ' ' || e.key === 'Enter') { toggleFPS(); e.preventDefault(); }
+    });
+});
 
     //  end get world properties from sliders ----------
 
@@ -4215,8 +4351,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		if (d == 0.0 || d >= repulsionThreshold)
 			return;
 		dir.scale(1.0 / d);
-		var compression = Math.abs(repulsionThreshold - d);
-		var force = physProps.repulsionForce * compression;
+        var compression = Math.abs(repulsionThreshold - d);
+        var force = physProps.repulsionForce * compression
 		var totalMass = ball1.mass + ball2.mass;
 		var force1 = force * (ball2.mass / totalMass);
 		var force2 = force * (ball1.mass / totalMass);
@@ -4404,13 +4540,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             var spawnX = mrMr.pos.x - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.9 * mrMr.radius - 6 * ball.radius));
             var spawnY = mrMr.pos.y - 0.3 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.7 * mrMr.radius - 4 * ball.radius));
-            ball.pos.x = Math.max(0, Math.min(simWidth, spawnX));
+            ball.pos.x = Math.max(0, Math.min(sim0idth, spawnX));
             ball.pos.y = Math.max(0, Math.min(simHeight, spawnY));
             var velX = 0.1 * yeet * Math.cos(mrMr.respawnDir + alpha);
             var velY = 0.1 * yeet * Math.sin(mrMr.respawnDir + alpha);
         } else {
-            var spawnX = mrMr.pos.x - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.9 * mrMr.radius - 6 * ball.radius));
-            var spawnY = mrMr.pos.y - 0.65 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.6 * mrMr.radius - 4 * ball.radius));
+            var spawnX = mrMr.pos.x - (0.3 * mrMr.radius - ball.radius) + (Math.random() * (0.9 * mrMr.radius - 6 * ball.radius));
+            var spawnY = mrMr.pos.y - 0.60 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.6 * mrMr.radius - 4 * ball.radius));
             ball.pos.x = Math.max(0, Math.min(simWidth, spawnX));
             ball.pos.y = Math.max(0, Math.min(simHeight, spawnY));
             if (sprinklerSpeed > 0 && fountainSpinMode == "sweep") {
@@ -4597,6 +4733,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		dt : 1 / (60 * 1), // updated when substeps changes
 		worldSize : new Vector2(simWidth, simHeight),
 
+        maxSpeed: 0,
 		ballRest : 0,
         bumperRest : 0.95,
         floorRest : 1.0,
@@ -4614,7 +4751,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     var WormProps = {
         gravity : new Vector2(0, 0),
         dt : 1 / 60,
-        wormSubSteps : 10,
+        wormSubSteps : 5,
         paused : true,
         phase: 0.0,
     
@@ -4630,11 +4767,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         startRadius: 0,
         endRadius: 0,
         numNodes: 0,
+        advanceSpeed: null, // Will be set randomly on first makeWorm() call
+        
+        // Worm motion constants
+        waveAmplitudeRatio: 0.07,         // body wave amplitude as fraction of canvas height
+        wavePhaseIncrement: 0.1,          // how fast the wave travels along the body (temporal frequency)
+        waveNodeLag: 0.7,                 // phase lag per node (spatial wave number)
+        waveNudge: 0.65,                  // how strongly nodes are nudged toward the target wave each frame (0..1)
+        thrustCoeff: 0.0018,              // how much lateral motion converts to forward thrust (tweakable)
+        minJointAngle: Math.PI * 0.6,     // minimum allowed interior joint angle (radians). Lower -> more flexible.
+        spawnGapMinSim: 0.1,              // min spawn gap in sim units used at setup
+        spawnGapMinPixels: 50,            // min spawn gap in pixels used at wrap-time
+        spawnGapWidthFactor: 0.1,         // alternative spawn gap as fraction of canvas width (in sim units)
+        wiggleFrames: 6,                  // frames over which the wiggle is applied
+        wiggleDistancePixels: 24,         // total vertical travel during wiggle (pixels)
+        wiggleXPixels: 0,                 // total horizontal propulsion applied during wiggle (pixels)
+        wiggleVyZeroThreshold: 0.005,     // threshold to treat vy as zero
+        spawnInitialXSim: 0,              // e.g. -2.0 puts pivot 2 sim units left of x=0
+        spawnInitialYSim: 0,              // will be set to 0.5 * simHeight in makeWorm()
         
         // Worm delay properties
         isHiding: false,
         hideStartTime: 0,
-        hideDelay: 10000, // 10 seconds in milliseconds
+        hideDelay: 10000, 
     }
     
     // Function to update dt when substeps change
@@ -4678,6 +4833,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         showHeart = showHeartButton.checked;
         showCycle = (typeof showCyclePuckButton !== 'undefined') ? showCyclePuckButton.checked : true;
         showOrbit = (typeof showEllipticalOrbitPuckButton !== 'undefined') ? showEllipticalOrbitPuckButton.checked : false;
+        showYinYang = (typeof showYinYangButton !== 'undefined') ? showYinYangButton.checked : false;
         doShower = shower.checked;
         doFountain = fountain.checked;
         doFlyingPuck = flyingPuckButton.checked;
@@ -4691,12 +4847,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             physProps.ballRest = 0;
         }
 
-        // Handle noFlyingPuckButton - if checked, turn off both flying modes
-        if (noFlyingPuckButton.checked) {
-            doFlyingPuck = false;
-            doFlyingPuck2 = false;
-        }
-        
         doOscillatePucks = oscPuckButton.checked
         
         doSmallTracer = smallTracerButton.checked;
@@ -4739,13 +4889,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         doWorm = wormButton.checked;
 
         physProps.baseColor = 1.0 * baseColorSlider.value;
-
         physProps.velColorMap = velColorMapSlider.value;
+        physProps.maxSpeed = 0.1 * speedSlider.value;
 
         WormProps.startRadius = 0.001 * wormStartRadiusSlider.value,
         WormProps.endRadius = 0.001 * 40,
         WormProps.numNodes = 1 * wormNumNodesSlider.value,
-        
+
         fountainSpinMode = 'sweep';
 
         makePucks();
@@ -4901,16 +5051,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.trailFirst = 0;
             this.trailLast = 0;
         }
-		simulate() {
-			this.vel.add(physProps.gravity, physProps.dt);
-            const maxSpeed = 1;
+        simulate() {
+            this.vel.add(physProps.gravity, physProps.dt);
+            //const maxSpeed = 1.0;
             const speed = this.vel.length();
-            if (speed > maxSpeed) {
-                this.vel.x *= maxSpeed / this.vel.length();
-                this.vel.y *= maxSpeed / this.vel.length();
+            if (speed > physProps.maxSpeed) {
+                this.vel.x *= physProps.maxSpeed / speed;
+                this.vel.y *= physProps.maxSpeed / speed;
             }
-			this.pos.add(this.vel, physProps.dt)
-            this.speedHue = physProps.baseColor + this.vel.length() * physProps.velColorMap;
+            this.pos.add(this.vel, physProps.dt)
+            this.speedHue = physProps.baseColor + speed * physProps.velColorMap;
             
             if (this.speedHue > physProps.baseColor + 330) {
                 this.speedHue = physProps.baseColor + 330;
@@ -4920,7 +5070,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             //    this.speedHue = 330;
             //}
             this.speedHueRatio = Math.min(0.8 + 0.2 * speed);
-		}
+        }
         drawTrace() {
             c.lineCap = 'round';
             c.lineWidth = Math.max(0.005, this.radius) * cScale;
@@ -5496,9 +5646,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     var dot = (vBAx * vBCx + vBAy * vBCy) / (lenBA * lenBC);
                     dot = Math.max(-1, Math.min(1, dot));
                     var angle = Math.acos(dot);
-                    if (angle < MIN_JOINT_ANGLE) {
-                        // need to increase angle to MIN_JOINT_ANGLE by rotating vBC around B
-                        var targetAngle = MIN_JOINT_ANGLE;
+                    if (angle < WormProps.minJointAngle) {
+                        // need to increase angle to minJointAngle by rotating vBC around B
+                        var targetAngle = WormProps.minJointAngle;
                         var delta = targetAngle - angle; // positive
                         // determine rotation direction using cross product (z-component)
                         var cross = vBAx * vBCy - vBAy * vBCx;
@@ -5588,20 +5738,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         if (!WormProps.wiggleActive && p && p.vel && p.vel.length > 1) {
             var headVY = p.vel[1].y;
             // detect zero crossing (sign change) with a small threshold to avoid noise
-            if (Math.abs(headVY) < WIGGLE_VY_ZERO_THRESHOLD && Math.abs(WormProps.prevHeadVY) >= WIGGLE_VY_ZERO_THRESHOLD) {
+            if (Math.abs(headVY) < WormProps.wiggleVyZeroThreshold && Math.abs(WormProps.prevHeadVY) >= WormProps.wiggleVyZeroThreshold) {
                 // alternate wiggle direction each cycle for visual variation
                 WormProps.wiggleToggle *= -1;
                 var dir = WormProps.wiggleToggle; // -1 or +1
                 WormProps.wiggleDir = dir;
                 // vertical per-frame impulse in sim units
-                var totalSimY = (WIGGLE_DISTANCE_PIXELS / cScale) * dir;
-                WormProps.wigglePerFrameVel = (totalSimY / (WIGGLE_FRAMES * WormProps.dt));
+                var totalSimY = (WormProps.wiggleDistancePixels / cScale) * dir;
+                WormProps.wigglePerFrameVel = (totalSimY / (WormProps.wiggleFrames * WormProps.dt));
                 // horizontal propulsion per-frame (sim units)
-                var totalSimX = (WIGGLE_X_PIXELS / cScale) * dir;
-                WormProps.wigglePerFrameVelX = (totalSimX / (WIGGLE_FRAMES * WormProps.dt));
+                var totalSimX = (WormProps.wiggleXPixels / cScale) * dir;
+                WormProps.wigglePerFrameVelX = (totalSimX / (WormProps.wiggleFrames * WormProps.dt));
                 // small pivot advance per frame to push the worm forward during wiggle
-                var totalAdvanceSim = (WIGGLE_X_PIXELS * 0.5 / cScale) * dir; // proportional to X pixels
-                WormProps.wiggleAdvancePerFrame = totalAdvanceSim / WIGGLE_FRAMES;
+                var totalAdvanceSim = (WormProps.wiggleXPixels * 0.5 / cScale) * dir; // proportional to X pixels
+                WormProps.wiggleAdvancePerFrame = totalAdvanceSim / WormProps.wiggleFrames;
                 WormProps.wiggleActive = true;
                 WormProps.wiggleFrame = 0;
             }
@@ -5622,7 +5772,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 p.prevPos[0].x += WormProps.wiggleAdvancePerFrame * 0.5;
             }
             WormProps.wiggleFrame++;
-            if (WormProps.wiggleFrame >= WIGGLE_FRAMES) {
+            if (WormProps.wiggleFrame >= WormProps.wiggleFrames) {
                 WormProps.wiggleActive = false;
                 WormProps.wiggleAdvancePerFrame = 0.0;
             }
@@ -5633,20 +5783,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var p = WormProps.SpaceWorm;
             // regular horizontal advance of the pivot (scaled to dT)
             // apply once per full time-step
-            p.pos[0].x += ADVANCE_SPEED;
+            p.pos[0].x += WormProps.advanceSpeed;
             // traveling-wave body undulation (fish-like propulsion)
             // advance the global wave phase
-            WormProps.phase += WAVE_PHASE_INCREMENT;
+            WormProps.phase += WormProps.wavePhaseIncrement;
             // compute amplitude in sim units
-            var ampPixels = canvas.height * WAVE_AMPLITUDE_RATIO;
+            var ampPixels = canvas.height * WormProps.waveAmplitudeRatio;
             var ampSim = ampPixels / cScale;
             // For each node, compute a target lateral position from a traveling sinusoid
             for (var i = 1; i < p.pos.length; i++) {
                 // spatial phase lag increases toward the tail
-                var nodePhase = WormProps.phase - (i * WAVE_NODE_LAG);
-                var targetY = SPAWN_INITIAL_Y_SIM + ampSim * Math.sin(nodePhase);
+                var nodePhase = WormProps.phase - (i * WormProps.waveNodeLag);
+                var targetY = WormProps.spawnInitialYSim + ampSim * Math.sin(nodePhase);
                 // nudge current node toward the target wave position (smooth steering)
-                var deltaY = (targetY - p.pos[i].y) * WAVE_NUDGE;
+                var deltaY = (targetY - p.pos[i].y) * WormProps.waveNudge;
                 p.pos[i].y += deltaY;
                 // update prevPos slightly so the solver sees an effective lateral velocity impulse
                 p.prevPos[i].y += deltaY * 0.5;
@@ -5655,13 +5805,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 // convert a portion of lateral motion into forward thrust
                 // larger nodes (near the head) produce slightly less per-node thrust
                 var sizeFactor = (i < p.radii.length ? p.radii[i] : 0.02);
-                var thrust = -Math.sign(lateralV) * Math.abs(lateralV) * THRUST_COEFF * (sizeFactor * 50);
+                var thrust = -Math.sign(lateralV) * Math.abs(lateralV) * WormProps.thrustCoeff * (sizeFactor * 50);
                 // apply small forward displacement to simulate reaction against fluid
                 p.pos[i].x += thrust;
                 p.prevPos[i].x += thrust * 0.5;
             }
             // keep pivot vertically anchored to the spawn baseline so the whole body follows
-            p.pos[0].y = SPAWN_INITIAL_Y_SIM + ampSim * Math.sin(WormProps.phase - (0 * WAVE_NODE_LAG));
+            p.pos[0].y = WormProps.spawnInitialYSim + ampSim * Math.sin(WormProps.phase - (0 * WormProps.waveNodeLag));
         }
         
         // Handle worm wrap-around and delay logic
@@ -5692,8 +5842,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (currentTime - WormProps.hideStartTime >= WormProps.hideDelay) {
                     // Delay has elapsed - use original repositioning logic
                     WormProps.isHiding = false;
+                    // Generate new random advance speed for this traversal
+                    WormProps.advanceSpeed = 0.01 + 0.04 * Math.random();
                     // spawnGap in sim units: pick either a pixel-based min or a fraction of canvas width
-                    var spawnGapSim = Math.max(SPAWN_GAP_MIN_PIXELS / cScale, SPAWN_GAP_WIDTH_FACTOR * canvas.width / cScale, SPAWN_GAP_MIN_SIM);
+                    var spawnGapSim = Math.max(WormProps.spawnGapMinPixels / cScale, WormProps.spawnGapWidthFactor * canvas.width / cScale, WormProps.spawnGapMinSim);
                     var shiftSim = - (maxX + spawnGapSim);
                     for (var i = 0; i < p.pos.length; i++) {
                         p.pos[i].x += shiftSim;
@@ -5709,31 +5861,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     function makeWorm() {
         //  WORM CONSTANTS -----------
         steps = 100;
+        // Set initial Y position based on current simHeight
+        WormProps.spawnInitialYSim = 0.5 * simHeight;
+        
         // Tunable constants (edit these to change motion/spawn behavior)
-        ADVANCE_SPEED = 0.01;                 // sim units per frame (horizontal advance)
+        // Set random advance speed and store it in WormProps for consistency
+        if (!WormProps.advanceSpeed) {
+            WormProps.advanceSpeed = 0.01 + 0.04 * Math.random();
+        }
+        // All motion constants are now stored in WormProps with camelCase naming
         // Fish-style traveling wave (body undulation) parameters
-        WAVE_AMPLITUDE_RATIO = 0.07;         // body wave amplitude as fraction of canvas height
-        WAVE_PHASE_INCREMENT = 0.1;          // how fast the wave travels along the body (temporal frequency)
-        WAVE_NODE_LAG = 0.7;                  // phase lag per node (spatial wave number)
-        WAVE_NUDGE = 0.65;                    // how strongly nodes are nudged toward the target wave each frame (0..1)
-        THRUST_COEFF = 0.0018;                // how much lateral motion converts to forward thrust (tweakable)
-        // Joint angle limiting prevents the chain folding inward on itself.
-        // Joint angle is measured between vectors (pos[i-1]-pos[i]) and (pos[i+1]-pos[i]).
-        // A straight chain has angle ~= PI; we require angle >= MIN_JOINT_ANGLE.
-        MIN_JOINT_ANGLE = Math.PI * 0.6;      // minimum allowed interior joint angle (radians). Lower -> more flexible.
-        SPAWN_GAP_MIN_SIM = 0.1;               // min spawn gap in sim units used at setup
-        SPAWN_GAP_MIN_PIXELS = 50;             // min spawn gap in pixels used at wrap-time
-        SPAWN_GAP_WIDTH_FACTOR = 0.1;          // alternative spawn gap as fraction of canvas width (in sim units)
-        // Wiggle tuning: quick impulse parameters. Wiggle will be triggered
-        // when the head vertical velocity crosses zero (top/bottom of stroke).
-        WIGGLE_FRAMES = 6;                     // frames over which the wiggle is applied
-        WIGGLE_DISTANCE_PIXELS = 24;           // total vertical travel during wiggle (pixels)
-        WIGGLE_X_PIXELS = 0;                   // total horizontal propulsion applied during wiggle (pixels)
-        WIGGLE_VY_ZERO_THRESHOLD = 0.005;     // threshold to treat vy as zero
-        // Initial spawn position in simulation units. These must be numeric values
-        // (no fallback to computed defaults). Edit these to choose the pivot start.
-        SPAWN_INITIAL_X_SIM = 0; // e.g. -2.0 puts pivot 2 sim units left of x=0
-        SPAWN_INITIAL_Y_SIM = 0.5 * simHeight; // explicit vertical spawn position
         //leadRradius = 0.15;
         //minRradius = 0.05;
         //numNodes = 20;
@@ -5786,21 +5923,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             // spawnGapSim: how far left of x=0 the rightmost node should be
             var spawnGapSim = Math.max(
-                SPAWN_GAP_MIN_SIM, 
-                SPAWN_GAP_WIDTH_FACTOR * canvas.width / cScale, 
-                SPAWN_GAP_MIN_PIXELS / cScale
+                WormProps.spawnGapMinSim, 
+                WormProps.spawnGapWidthFactor * canvas.width / cScale, 
+                WormProps.spawnGapMinPixels / cScale
             );
             // startX is where the pivot (pos[0]) will be placed — use the
-            // explicit SPAWN_INITIAL_X_SIM constant (no fallback).
-            p.pos[0].x = SPAWN_INITIAL_X_SIM;
-            // use explicit SPAWN_INITIAL_Y_SIM for vertical placement
-            p.pos[0].y = SPAWN_INITIAL_Y_SIM;
+            // explicit spawnInitialXSim constant (no fallback).
+            p.pos[0].x = WormProps.spawnInitialXSim;
+            // use explicit spawnInitialYSim for vertical placement
+            p.pos[0].y = WormProps.spawnInitialYSim;
             p.prevPos[0].x = p.pos[0].x;
             p.prevPos[0].y = p.pos[0].y;
             for (var i = 1; i < p.pos.length; i++) {
                 // place each subsequent node to the LEFT of the previous one
                 p.pos[i].x = p.pos[i-1].x - p.lengths[i];
-                p.pos[i].y = SPAWN_INITIAL_Y_SIM;
+                p.pos[i].y = WormProps.spawnInitialYSim;
                 p.prevPos[i].x = p.pos[i].x;
                 p.prevPos[i].y = p.pos[i].y;
             }
@@ -5895,6 +6032,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.cycle = false; // custom cyclic radius behavior (Puck[3])
             this.flying = false;
             this.orbit = false; // elliptical orbit behavior (Puck[5])
+            this.yinyang = false; // yin-yang orbit behavior (Puck[6])
             this.mass = 0.001 * radius;
             this.puckFadingIn = false;
             this.moving = false;
@@ -6489,6 +6627,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
             }
         }
+        draw2() {
+            if (this.moving == false) {
+                drawCircle(cX(this.pos), cY(this.pos), 0.985 * this.radius * cScale);
+                c.strokeStyle = `hsla(0, 0%, 100%, 20%)`;
+                c.lineWidth = 0.005 * cScale;
+                c.setLineDash([5, 12]);
+                c.stroke();
+                c.setLineDash([]);
+            }
+        }
         get left() {
             return this.pos.x - this.radius;
         }
@@ -6799,6 +6947,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 Puck[5].orbitAngle = 0; // Start at right side of ellipse
                 Puck[5].orbitSpeed = 2.0; // radians per second
             }
+        //  YIN-YANG ORBIT PUCK (Puck[6]) - Twin to elliptical orbit puck  ----------
+        Puck.push (new PUCK(0.15,
+            new Vector2(0.5 * simWidth, 
+                0.5 * simHeight), 
+                puck2color, 
+                false));
+            // mark last puck as yin-yang orbit type and init its state
+            if (Puck.length > 6) {
+                Puck[6].orbit = true;
+                Puck[6].yinyang = true; // Mark as the yin-yang twin
+                Puck[6].orbitAngle = Math.PI; // Start 180 degrees out of phase
+                Puck[6].orbitSpeed = 2.0; // radians per second
+            }
         }
     
     //  DEFINE HUNGRY PUCKS ----------------------------------------------------------        
@@ -6865,23 +7026,45 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         // Phase 1: integrate & per-ball updates (no ball-ball collisions yet)
         for (let i = 0; i < Balls.length; i++) {
-            const b = Balls[i];
-            b.simulate();
-            if (doTracer && b.tracerBall) b.updateTrace();
+            const ball = Balls[i];
+            ball.simulate();
+            if (doTracer && ball.tracerBall) ball.updateTrace();
             // Worm immunity countdown
-            if (b.immuneToWorm) {
-                if (typeof b.immunityFramesLeft === 'undefined') b.immunityFramesLeft = 10;
-                if (b.immunityFramesLeft > 0) {
-                    b.immunityFramesLeft--;
-                    if (b.immunityFramesLeft <= 0) b.immuneToWorm = false;
+            if (ball.immuneToWorm) {
+                if (typeof ball.immunityFramesLeft === 'undefined') ball.immunityFramesLeft = 10;
+                if (ball.immunityFramesLeft > 0) {
+                    ball.immunityFramesLeft--;
+                    if (ball.immunityFramesLeft <= 0) ball.immuneToWorm = false;
                 }
             }
             // Hungry puck interaction (uses current position only; order independent)
             if (showEaters) {
                 for (let h = 0; h < Hungrypuck.length; h++) {
                     const hp = Hungrypuck[h];
-                    if (hp.right > b.left && Math.abs(b.pos.y - hp.pos.y) <= b.radius + hp.radius) {
-                        handleHungryPuckHits(b, hp);
+                    // Broad-phase: axis-aligned bounding box check for 3.0 radii
+                    let broadRadius = 3.0 * (ball.radius + hp.radius);
+                    if (
+                        ball.pos.x + ball.radius >= hp.pos.x - broadRadius &&
+                        ball.pos.x - ball.radius <= hp.pos.x + broadRadius &&
+                        ball.pos.y + ball.radius >= hp.pos.y - broadRadius &&
+                        ball.pos.y - ball.radius <= hp.pos.y + broadRadius
+                    ) {
+                        // Now do the expensive distance check
+                        let dx = ball.pos.x - hp.pos.x;
+                        let dy = ball.pos.y - hp.pos.y;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist > 0 && dist < broadRadius) {
+                            // Apply an inward force toward the hungry puck center
+                            let strength = 0.025; // Tune this for effect
+                            let fx = -strength * dx / dist;
+                            let fy = -strength * dy / dist;
+                            ball.vel.x += fx;
+                            ball.vel.y += fy;
+                        }
+                        // Hard collision (recycle) if within sum of radii
+                        if (dist > 0 && dist <= ball.radius + hp.radius) {
+                            handleHungryPuckHits(ball, hp);
+                        }
                     }
                 }
             }
@@ -6894,11 +7077,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (puck.orbit && !showOrbit) continue;
                 if (puck.flying && !doFlyingPuck && !doFlyingPuck2) continue;
                 if (!puck.special && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
-                if (puck.right < b.left) continue;
-                if (Math.abs(b.pos.y - puck.pos.y) <= b.radius + puck.radius) handlePuckHits(b, puck);
+                if (puck.right < ball.left) continue;
+                if (Math.abs(ball.pos.y - puck.pos.y) <= ball.radius + puck.radius) handlePuckHits(ball, puck);
             }
             // Worm segment collisions (broad-phase bbox + narrow-phase) kept as-is
-            if (!b.immuneToWorm && doWorm && WormProps.SpaceWorm && WormProps.SpaceWorm.pos.length > 1) {
+            if (!ball.immuneToWorm && doWorm && WormProps.SpaceWorm && WormProps.SpaceWorm.pos.length > 1) {
                 const worm = WormProps.SpaceWorm;
                 let wormMinX = Infinity, wormMaxX = -Infinity, wormMinY = Infinity, wormMaxY = -Infinity;
                 for (let w = 0; w < worm.pos.length; w++) {
@@ -6908,13 +7091,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     wormMinY = Math.min(wormMinY, worm.pos[w].y - sr);
                     wormMaxY = Math.max(wormMaxY, worm.pos[w].y + sr);
                 }
-                if (b.pos.x + b.radius >= wormMinX && b.pos.x - b.radius <= wormMaxX && b.pos.y + b.radius >= wormMinY && b.pos.y - b.radius <= wormMaxY) {
+                if (ball.pos.x + ball.radius >= wormMinX && ball.pos.x - ball.radius <= wormMaxX && ball.pos.y + ball.radius >= wormMinY && ball.pos.y - ball.radius <= wormMaxY) {
                     for (let w = 0; w < worm.pos.length; w++) {
                         const sr = (w < worm.radii.length && typeof worm.radii[w] === 'number') ? worm.radii[w] : 0.02;
-                        const dx = b.pos.x - worm.pos[w].x;
-                        const dy = b.pos.y - worm.pos[w].y;
+                        const dx = ball.pos.x - worm.pos[w].x;
+                        const dy = ball.pos.y - worm.pos[w].y;
                         const dist = Math.sqrt(dx*dx + dy*dy);
-                        if (dist <= b.radius + sr) handleWormSegmentHits(b, worm.pos[w], sr, worm.vel[w]);
+                        if (dist <= ball.radius + sr) handleWormSegmentHits(ball, worm.pos[w], sr, worm.vel[w]);
                     }
                 }
             }
@@ -6928,20 +7111,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 else skip = !doCeiling || !doRightWall;
                 if (skip) continue;
                 let check = false;
-                if (corner.corner == 'northwest' || corner.corner == 'southwest') check = corner.right > b.left && Math.abs(b.pos.y - corner.pos.y) <= b.radius + corner.radius;
-                else check = corner.left < b.left && Math.abs(b.pos.y - corner.pos.y) <= b.radius + corner.radius;
-                if (check) handleCornerHits(b, corner);
+                if (corner.corner == 'northwest' || corner.corner == 'southwest') check = corner.right > ball.left && Math.abs(ball.pos.y - corner.pos.y) <= ball.radius + corner.radius;
+                else check = corner.left < ball.left && Math.abs(ball.pos.y - corner.pos.y) <= ball.radius + corner.radius;
+                if (check) handleCornerHits(ball, corner);
             }
             // Bounds
             if (mrMode == 'billiard') handleMrMrBounds(MisterMister[0], physProps.worldSize);
-            handleOutOfBounds(b, physProps.worldSize);
+            handleOutOfBounds(ball, physProps.worldSize);
             // Bumpers (after position update; broad-phase by vertical slice)
             if (bumperCtx) {
-                if (b.bottom <= bumperCtx.arrayTop && b.top >= bumperCtx.arrayBottom) {
+                if (ball.bottom <= bumperCtx.arrayTop && ball.top >= bumperCtx.arrayBottom) {
                     for (let k = 0; k < bumperCtx.sortedBumpers.length; k++) {
                         const bumper = bumperCtx.sortedBumpers[k];
-                        if (bumper.left > b.right) break;
-                        if (Math.abs(b.pos.y - bumper.pos.y) <= b.radius + bumper.radius) handleBumperHits(b, bumper);
+                        if (bumper.left > ball.right) break;
+                        if (Math.abs(ball.pos.y - bumper.pos.y) <= ball.radius + bumper.radius) handleBumperHits(ball, bumper);
                     }
                 }
             }
@@ -7139,7 +7322,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Respect toggles for each puck type
             if (puck.special === true && !showHeart) continue;
             if (puck.cycle === true && !showCycle) continue;
-            if (puck.orbit === true && !showOrbit) continue;
+            if (puck.orbit === true && puck.yinyang !== true && !showOrbit && !showYinYang) continue;
+            if (puck.orbit === true && puck.yinyang === true && !showYinYang) continue;
             if (puck.flying === true && !doFlyingPuck && !doFlyingPuck2) continue;
             // Only check showPucks for normal pucks (not special, cycle, flying, or orbit)
             if (!puck.special && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
@@ -7257,13 +7441,87 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.stroke();
             }
         }
-	}
+        //  DRAW PUCK OVERLAY ----------------------------------------------------------------         
+        for (p=0; p < Puck.length; p++) { 
+            var puck = Puck[p];
+            // Respect toggles for each puck type
+            if (puck.special === true && !showHeart) continue;
+            if (puck.cycle === true && !showCycle) continue;
+            if (puck.orbit === true && puck.yinyang !== true && !showOrbit && !showYinYang) continue;
+            if (puck.orbit === true && puck.yinyang === true && !showYinYang) continue;
+            if (puck.flying === true && !doFlyingPuck && !doFlyingPuck2) continue;
+            // Only check showPucks for normal pucks (not special, cycle, flying, or orbit)
+            if (!puck.special && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
+            puck.draw2();
+        }
+    }
+
+    //  FPS CALCULATION FUNCTION -------------------------------------------------------------
+    function updateFPS() {
+        // Only calculate FPS if the counter is visible
+        const fpsElement = document.getElementById('fpsCounter');
+        if (!fpsElement || !fpsElement.classList.contains('visible')) {
+            return;
+        }
+        
+        const currentTime = performance.now();
+        const deltaTime = currentTime - fpsCounter.lastTime;
+        
+        // Add this frame time to our rolling window
+        fpsCounter.frameTimes.push(deltaTime);
+        
+        // Keep only the last maxSamples frame times
+        if (fpsCounter.frameTimes.length > fpsCounter.maxSamples) {
+            fpsCounter.frameTimes.shift();
+        }
+        
+        // Update the display only occasionally to prevent flickering
+        fpsCounter.updateCounter++;
+        if (fpsCounter.updateCounter >= fpsCounter.updateInterval) {
+            fpsCounter.updateCounter = 0;
+            
+            // Calculate average frame time over the rolling window
+            const avgFrameTime = fpsCounter.frameTimes.reduce((sum, time) => sum + time, 0) / fpsCounter.frameTimes.length;
+            
+            // Convert to FPS and round to nearest integer
+            fpsCounter.displayFps = Math.round(1000 / avgFrameTime);
+            
+            // Update the display element
+            const fpsElement = document.getElementById('fpsCounter');
+            if (fpsElement) {
+                fpsElement.textContent = `${fpsCounter.displayFps} fps`;
+            }
+        }
+        
+        fpsCounter.lastTime = currentTime;
+    }
+
+    //  POSITION FPS COUNTER FUNCTION --------------------------------------------------------
+    function positionFpsCounter() {
+        const canvas = document.getElementById('myCanvas');
+        const fpsElement = document.getElementById('fpsCounter');
+        if (canvas && fpsElement) {
+            const canvasRect = canvas.getBoundingClientRect();
+            // Ensure width is auto and no wrapping
+            fpsElement.style.width = 'auto';
+            fpsElement.style.whiteSpace = 'nowrap';
+            // Position so right edge is 10px from canvas right
+            const right = canvasRect.right + window.scrollX;
+            const bottom = canvasRect.bottom + window.scrollY;
+            fpsElement.style.left = (right - fpsElement.offsetWidth - 10) + 'px';
+            fpsElement.style.top = (bottom - fpsElement.offsetHeight - 10) + 'px';
+        }
+    }
 
     //  MAIN SEQUENCE ----------------------------------------------------------------------------
 	firstRun = true;
     setupScene();
+    positionFpsCounter(); // Position FPS counter initially
     
     function update() {
+        // Calculate FPS
+        updateFPS();
+        
         // Run multiple simulation substeps per frame
         for (let substep = 0; substep < physProps.substeps; substep++) {
             simulate();
