@@ -5147,7 +5147,7 @@ window.addEventListener('DOMContentLoaded', function() {
             { value: 'drawDiscs', label: 'Discs' },
             { value: 'drawCircles', label: 'Circles' },
             { value: 'drawRings', label: 'Rings' },
-            { value: 'drawGummies', label: 'Gummies' }
+            { value: 'drawGummies', label: 'Gummies (beta)' }
         ];
         
         // Find currently selected type
@@ -9020,7 +9020,7 @@ window.addEventListener('DOMContentLoaded', function() {
             0.2, 
             new Vector2(
                 0.7 * simWidth, 
-                0.5 * simHeight));
+                0.4 * simHeight));
         makeHungryPucks();
         makeMisterMister();
 
@@ -11525,7 +11525,7 @@ window.addEventListener('DOMContentLoaded', function() {
 		constructor(radius, pos) {
 			this.radius = radius;
 			this.pos = pos.clone();
-            this.blowerAngle = 0.5 * Math.PI;;
+            this.blowerAngle = 0.65 * Math.PI;;
             this.force = 100;
 		}
         get left() {
