@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.50
+		<title>Slosh 1.51
         </title>
         <style>
 			body {font-family: monospace; 
@@ -2846,8 +2846,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	</head>
 <body> 
 
+    
 	<!-- <body style="background: hsl(0, 0%, 10%); background-attachment: fixed; margin-left: 0px;"> -->
+    
     <body style="background: linear-gradient(to bottom, hsl(0, 0%, 0%) 0%, hsl(195, 64%, 8%) 100%); background-attachment: fixed; margin-left: 0px;"> 
+    <span style="white-space: nowrap">
+    <b9> Particles
+    <input type="checkbox" title="Particles Menu" id="particlesMenuToggle" class="checkbox-particles" checked>
+    </b9>
+    <b4> Fizzix
+    <input type="checkbox" title="Physics Menu" id="physicsMenuToggle" class="checkbox-physics">
+    </b4>
+    <b5> Gravity
+    <input type="checkbox" title="Gravity Menu" id="gravityMenuToggle" class="checkbox-gravity">
+    </b5>
+    <b6> Walls
+    <input type="checkbox" title="Walls Menu" id="wallsMenuToggle" class="checkbox-walls">
+    </b6>
+    <c1> C</c1><c2>o</c2><c3>l</c3><c4>o</c4><c5>r</c5>
+    <c1><i>
+    <input type="checkbox" title="Color Wheel Picker" id="colorWheelToggle" class="checkbox-colorwheel">
+    </i></c1>
+    </span>
     <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-left: 10px; display: block; cursor: default;"></canvas>
     <div id="fpsCounter" class="fps-counter">--</div>
     
@@ -2881,28 +2901,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     </span></span></span>
     <br>
     -->
-
     <br>
-    <span style="white-space: nowrap">
-    <b9> Particles
-    <input type="checkbox" title="Particles Menu" id="particlesMenuToggle" class="checkbox-particles" checked>
-    </b9>
-    <b4> Fizzix
-    <input type="checkbox" title="Physics Menu" id="physicsMenuToggle" class="checkbox-physics">
-    </b4>
-    <b5> Gravity
-    <input type="checkbox" title="Gravity Menu" id="gravityMenuToggle" class="checkbox-gravity">
-    </b5>
-    <b6> Walls
-    <input type="checkbox" title="Walls Menu" id="wallsMenuToggle" class="checkbox-walls">
-    </b6>
-    <c1> C</c1><c2>o</c2><c3>l</c3><c4>o</c4><c5>r</c5>
-    <c1><i>
-    <input type="checkbox" title="Color Wheel Picker" id="colorWheelToggle" class="checkbox-colorwheel">
-    </i></c1>
-    </span>
-    <br>
-    
     <b1>[ Go!
     <input type="radio" title="Round Cluster Start" name="rackemType" id="cluster" class="radioCluster" onclick="makeBalls()" checked>
     <input type="radio" title="Square Array Start" name="rackemType" id="array" class="radio-array" onclick="makeBalls()" unchecked>
@@ -2928,7 +2927,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="checkbox" title="Medium Particle Trace" id="mediumTracerButton" class="checkbox-tracer-medium">
     <input type="checkbox" title="Big Particle Trace" id="bigTracerButton" class="checkbox-tracer-large">
     <b8>]</b8></span>
-
+    <br>
     <span style="white-space: nowrap">  
     <bbb13>[</bbb13> 
     <input type="checkbox" title="One Shot (no respawn)" id="oneShotButton" value="false" class="checkbox-recycle" unchecked>
@@ -2953,6 +2952,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     </select>
     ]</bbb13>
     </span>
+
+    <h2><br></h2><h1>:: SL0SH :: repulsive particle simulation ::</h1>
+
 
 <script>
 // Global layout orientation flag for canvas/menu logic and CORNER calculations
@@ -3431,17 +3433,26 @@ window.addEventListener('DOMContentLoaded', function() {
     canvas.style.cursor = "default";
     const menuStart = document.querySelector('h3'); // menu starts after <h3><br><br></h3>
     
+    // Declare simulation scaling variables
+    var simMinWidth = 2.0, cScale = 1.0, simWidth = 100, simHeight = 100, topMargin = 0, bottomMargin = 0;
+    
+    // Declare global simulation objects
+    var Balls = [];
+    
     function layoutCanvasAndMenu() {
-            // Not fullscreen: canvas and menu fit in window, no scroll
-            canvas.style.position = 'static';
-            canvas.style.width = '';
-            canvas.style.height = '';
-            let menuHeight = document.body.scrollHeight - canvas.offsetTop - canvas.offsetHeight;
-            let available = window.innerHeight - menuHeight - 30;
-            if (available < 200) available = 200;
-            canvas.width = window.innerWidth - 40;
-            canvas.height = available;
-            if (menuStart) menuStart.style.marginTop = '0px';
+        // Not fullscreen: canvas and menu fit in window, no scroll
+        canvas.style.position = 'static';
+        canvas.style.width = '';
+        canvas.style.height = '';
+        
+        // Instead of trying to calculate menu height from scrollHeight,
+        // reserve adequate space for the menu (approximate height based on content)
+        const estimatedMenuHeight = 210; // Generous space for all menu content
+        let available = window.innerHeight - estimatedMenuHeight;
+        if (available < 210) available = 210;
+        canvas.width = window.innerWidth - 40;
+        canvas.height = available;
+        if (menuStart) menuStart.style.marginTop = '0px';
         // Do not force overflowY to hidden; allow scrolling if needed, but canvas is sized so menu is visible without scrolling
         
         // Recompute simulation scaling & world dimensions
@@ -3452,6 +3463,12 @@ window.addEventListener('DOMContentLoaded', function() {
         topMargin = 0;
         bottomMargin = 0;
         if (typeof updateCornerFillGradient === 'function') updateCornerFillGradient();
+        
+        // Initialize essential objects during layout
+        if (typeof makeCorners === 'function') makeCorners();
+        if (typeof updateCornerGeometry === 'function') updateCornerGeometry();
+        if (typeof makeBumpers === 'function') makeBumpers();
+        if (typeof makeBalls === 'function') makeBalls();
     }
     // (Moved event listeners and initial call below, after gradient logic)
 
@@ -3471,15 +3488,11 @@ window.addEventListener('DOMContentLoaded', function() {
         if (window.innerWidth < window.innerHeight) {
             screenVertical = true;
             canvas.width  = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 200; 
-        } else if (window.innerWidth > 1.75 * window.innerHeight) {
-            screenVertical = false;
-            canvas.width  = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 20;
+            canvas.height = window.innerHeight - 250; 
         } else {
             screenVertical = false;
             canvas.width  = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 200;
+            canvas.height = window.innerHeight - 210;
         }
         // Recompute simulation scaling & world dimensions
         cScale    = Math.min(canvas.width, canvas.height) / simMinWidth;
@@ -3552,7 +3565,12 @@ window.addEventListener('DOMContentLoaded', function() {
     // Now that gradient logic is initialized, set up layout event listeners and initial call
     document.addEventListener('fullscreenchange', layoutCanvasAndMenu);
     window.addEventListener('resize', layoutCanvasAndMenu);
-    layoutCanvasAndMenu();
+    
+    // Defer initial layout until after all scripts have loaded and DOM is fully ready
+    // This prevents the menu from being cut off on first load
+    function initializeLayout() {
+        layoutCanvasAndMenu();
+    }
     
     //  KEYBOARD SHORTCUTS -----------------------------------------------------
     
@@ -12665,6 +12683,9 @@ window.addEventListener('DOMContentLoaded', function() {
         drawEverything();
         requestAnimationFrame(update);
     }
+    
+    // Initialize layout after all classes and functions are defined
+    initializeLayout();
     
     update();
 
