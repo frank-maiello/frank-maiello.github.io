@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.51
+		<title>Slosh 1.52
         </title>
         <style>
 			body {font-family: monospace; 
@@ -1824,10 +1824,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             body:has(#oneShotButton:checked) {
                 --recycle-label-opacity: 0.4;
             }
-            /* When eaters is unchecked, dim eaters label */
-            body:has(#showHungryPuckButton:not(:checked)) {
-                --eaters-label-opacity: 0.4;
-            }
+            /* Eaters label opacity controlled by respawn menu */
+            /* Note: showHungryPuckButton replaced by respawnMenuHungryPuck variable */
             /* When trace is unchecked, dim trace label */
             body:has(#doTracerButton:not(:checked)) {
                 --trace-label-opacity: 0.4;
@@ -2202,6 +2200,44 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             .checkbox-walls:checked::after { border-color: var(--walls-bright); }
             .checkbox-walls:checked::before { color: var(--walls-bright); }
+
+            /* ReSpawn Menu toggle: R symbol, dim when off, bright when on */
+            :root {
+                --respawn-dim:    hsl(190, 45%, 20%);
+                --respawn-bright: hsl(190, 85%, 55%);
+            }
+            .checkbox-respawn {
+                -webkit-appearance: none;
+                appearance: none;
+                opacity: 0.95;
+                width: 24px;
+                height: 24px;
+                margin-left: 5px;
+                margin-right: 20px;
+                margin-top: 5px;
+                margin-bottom: 10px;
+                border-radius: 50%;
+                position: relative;
+                display: inline-block;
+                vertical-align: middle;
+                cursor: pointer;
+                transition: opacity 120ms ease, filter 120ms ease;
+            }
+            
+            .checkbox-respawn::before {
+                content: "\221E";
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 70px;
+                font-weight: bold;
+                color: var(--respawn-dim);
+                transition: color 120ms ease;
+                z-index: 1;
+            }
+            .checkbox-respawn:checked::after { border-color: var(--respawn-bright); }
+            .checkbox-respawn:checked::before { color: var(--respawn-bright); }
 
             /* Impulse buttons (explode/implode/unravel): dim when off, bright when 'checked' */
             input.splodeButton:hover,
@@ -2863,6 +2899,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <b6> Walls
     <input type="checkbox" title="Walls Menu" id="wallsMenuToggle" class="checkbox-walls">
     </b6>
+    <b7> ReSpawn
+    <input type="checkbox" title="ReSpawn Menu" id="respawnMenuToggle" class="checkbox-respawn">
+    </b7>
     <c1> C</c1><c2>o</c2><c3>l</c3><c4>o</c4><c5>r</c5>
     <c1><i>
     <input type="checkbox" title="Color Wheel Picker" id="colorWheelToggle" class="checkbox-colorwheel">
@@ -2928,30 +2967,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     <input type="checkbox" title="Big Particle Trace" id="bigTracerButton" class="checkbox-tracer-large">
     <b8>]</b8></span>
     <br>
-    <span style="white-space: nowrap">  
-    <bbb13>[</bbb13> 
-    <input type="checkbox" title="One Shot (no respawn)" id="oneShotButton" value="false" class="checkbox-recycle" unchecked>
-    <input type="checkbox" title="Eaters on/off" id="showHungryPuckButton" class="checkbox-pacman" unchecked>
-    <b13>Shower</b13>
-    <input type="radio" title="Shower (click -> Position; click & drag -> Width)" name="spawnType" id="shower" value="shower" class="radio2 radio-umbrella" checked>
-    <b13><i>&#8592</b13><bbb13>or</bbb13><bb13>&#8594</i>
-    <input type="radio" title="Mr. Mister (click -> Spew Direction; click & drag left/right -> Speed)" name="spawnType" id="fountain" value="fountain" class="radio radio-fountain" unchecked>
-    <bbb13>Mr.Mister
-    <select title="Mr. Mister Mode" name="misterMode" id="misterMode" class="field-mrmr">
-        <optgroup label="Mr. Mister/Fountain Mode">
-            <option value="idle" selected>mouse</option>
-            <option value="worm">worm</option>
-            <option value="scanner" >scan</option>
-            <option value="printer">printer</option>
-            <option value="typewriter">typewriter</option>
-            <option value="circle">circle</option>
-            <option value="oval">oval</option>
-            <option value="bernoulli">figure-8</option>
-            <option value="billiard">pong</option>
-        </optgroup>
-    </select>
-    ]</bbb13>
-    </span>
+
 
     <h2><br></h2><h1>:: SL0SH :: repulsive particle simulation ::</h1>
 
@@ -2995,14 +3011,10 @@ let DEFAULT_PRESETS = null;
 
 // List of all control IDs to save/restore
 const CONTROL_IDS = [
-    // Selects
-    'misterMode',
-    // Checkboxes (wall controls now handled by walls menu)
-    'showPuckButton','flyingPuckButton','orbitButton','yinYangButton','showCyclePuckButton','showHeartButton','wormButton','showBumperEntry','oneShotButton','showHungryPuckButton','showBlowerButton','doTracerButton',
+    // Checkboxes (spawn controls now handled by ReSpawn menu)
+    'showPuckButton','flyingPuckButton','orbitButton','yinYangButton','showCyclePuckButton','showHeartButton','wormButton','showBumperEntry','showBlowerButton','doTracerButton',
     // Tracer radios
     'smallTracerButton','mediumTracerButton','bigTracerButton',
-    // Shower/Fountain radios
-    'shower','fountain',
     // Pause
     'x'
 ];
@@ -3124,18 +3136,10 @@ function setControlState(state) {
         adjustParticleCount(particlesMenuQuantity * particlesMenuQuantity);
     }
     if (typeof makeBalls === 'function') makeBalls();
-    // --- Ensure shower/fountain simulation state matches UI after preset load ---
-    var showerBtn = document.getElementById('shower');
-    var fountainBtn = document.getElementById('fountain');
-    if (showerBtn && fountainBtn) {
-        if (showerBtn.checked) {
-            doShower = true;
-            doFountain = false;
-        } else if (fountainBtn.checked) {
-            doShower = false;
-            doFountain = true;
-        }
-    }
+    // --- Ensure shower/fountain simulation state matches respawn menu after preset load ---
+    // Note: shower/fountain state is now controlled by respawnMenuSpawnType in the ReSpawn menu
+    // The doShower and doFountain variables are set automatically based on respawnMenuSpawnType
+    
     // --- Restore positions of all movable pucks if present in state ---
     // Restore Puck positions
     if (state._puckPositions && typeof Puck !== 'undefined' && Array.isArray(Puck)) {
@@ -3512,7 +3516,7 @@ window.addEventListener('DOMContentLoaded', function() {
         c.fillStyle = 'hsl(0, 0%, 0%)';
         c.fillRect(0, 0, canvas.width, canvas.height);
         // Recreate geometry dependent on dimensions
-    if (typeof makeCorners === 'function') makeCorners();
+    if (typeof makeCorners === 'function' && typeof CORNER !== 'undefined') makeCorners();
     if (typeof updateCornerGeometry === 'function') updateCornerGeometry();
     if (typeof makeBumpers === 'function') makeBumpers();
         // Restart dynamic actors & particles
@@ -3571,45 +3575,18 @@ window.addEventListener('DOMContentLoaded', function() {
             case 'P': physProps.paused = !physProps.paused; break;
             case 'r': forcedWipeRestart();
             case 'R': forcedWipeRestart();
+            case 'c': 
+            case 'C': 
+                // Capture current menu positions (press 'c' key)
+                captureMenuPositions();
+                break;
         }
     });
 
     //  GET WORLD PROPERTIES FROM SLIDERS ---------------------------------------------
     
-    document.getElementById("shower").oninput = function() {
-        var puck1 = Hungrypuck[0];
-        var puck2 = Hungrypuck[1];
-        puck1.pos.y = -0.1 * puck1.radius;
-        puck2.pos.y = -0.1 * puck2.radius;
-        doShower = true;
-        doFountain = false;
-        fountainState = 0;
-    }
-    
-    document.getElementById("fountain").onclick = function(e) {
-        e.preventDefault();
-        
-        var fountainBtn = document.getElementById('fountain');
-        var showerBtn = document.getElementById('shower');
-        var puck1 = Hungrypuck[0];
-        var puck2 = Hungrypuck[1];
-        puck1.pos.y = -0.1 * puck1.radius;
-        puck2.pos.y = -0.1 * puck2.radius;
-        
-        // Turn on fountain in normal mode (state 1)
-        fountainState = 1;
-        doFountain = true;
-        doShower = false;
-        fountainSpinMode = null; // Normal mode
-        
-        // Manually set checked state since we're using preventDefault
-        setTimeout(() => {
-            fountainBtn.checked = true;
-            showerBtn.checked = false;
-        }, 0);
-        
-        return false;
-    }
+    // Note: Fountain/Shower controls are now handled by the ReSpawn menu system
+    // The respawnMenuSpawnType variable controls whether 'shower' or 'fountain' mode is active
     
     
     // Color Wheel Setup - draws on main canvas
@@ -3617,7 +3594,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var colorWheelSat = 70;
     var colorWheelLight = 30;
     var colorWheelPersistence = 12;
-    var colorWheelVelMap = 200;
+    var colorWheelVelMap = 100;
     var colorWheelVisible = false;
     var colorWheelOpacity = 0;
     var colorWheelAnimating = false;
@@ -3672,6 +3649,11 @@ window.addEventListener('DOMContentLoaded', function() {
     var gravityMenuDragOffsetY = 0;
     var gravityMenuManuallyMoved = false;
     
+    // Gravity rotation slider variables
+    var gravityRotationSlider = 0.5; // 0-1 range, 0.5 is center (no rotation)
+    var gravityRotationSpeed = 0; // Current rotation speed in radians per frame
+    var gravityRotationSliderDragging = false; // Track if user is actively dragging the slider
+    
     // Walls menu variables
     var wallsMenuVisible = false;
     var wallsMenuOpacity = 0;
@@ -3696,8 +3678,115 @@ window.addEventListener('DOMContentLoaded', function() {
     var wallsMenuCeiling = true;
     var wallsMenuFloor = true;
     
+    // ReSpawn menu variables
+    var respawnMenuVisible = false;
+    var respawnMenuOpacity = 0;
+    var respawnMenuAnimating = false;
+    var respawnMenuTargetOpacity = 0;
+    var respawnMenuDragging = false;
+    var respawnMenuPositionDragging = false;
+    var respawnMenuDragOffsetX = 0;
+    var respawnMenuDragOffsetY = 0;
+    var respawnMenuManuallyMoved = false;
+    
+    // ReSpawn menu dimensions (same width as other menus)
+    var respawnMenuWidth = 240;
+    var respawnMenuHeight = 253; // Adjusted by moving bottom up 20 pixels
+    var respawnMenuCenterX = 0;
+    var respawnMenuCenterY = 0;
+    
+    // ReSpawn menu state variables (replacing the HTML controls)
+    var respawnMenuOneShot = false;
+    var respawnMenuHungryPuck = false;
+    var respawnMenuSpawnType = 'shower'; // 'shower' or 'fountain'
+    var respawnMenuMisterMode = 'idle';
+    var respawnMenuMisterModeExpanded = false; // Track if dropdown is expanded
+    
+    // Default relative menu positions (as percentages of canvas width/height)
+    // Set these values after positioning menus where you want them
+    var defaultMenuPositions = {
+        physics: { x: 0.37963726298433637, y: 0.2553763440860215 },
+        particles: { x: 0.14962901896125308, y: 0.44623655913978494 }, 
+        gravity: { x: 0.42662819455894474, y: 0.6693548387096774 },
+        respawn: { x: 0.859439406430338, y: 0.5080645161290323 },
+        walls: { x: 0.6319043693322342, y: 0.24327956989247312 },
+        colorWheel: { x: 0.6224237427864798, y: 0.7137096774193549 }
+    };
+    
+    // Function to capture current menu positions as relative coordinates
+    function captureMenuPositions() {
+        if (canvas.width > 0 && canvas.height > 0) {
+            const positions = {
+                physics: { 
+                    x: physicsMenuCenterX / canvas.width, 
+                    y: physicsMenuCenterY / canvas.height 
+                },
+                particles: { 
+                    x: particlesMenuCenterX / canvas.width, 
+                    y: particlesMenuCenterY / canvas.height 
+                },
+                gravity: { 
+                    x: gravityMenuX / canvas.width, 
+                    y: gravityMenuY / canvas.height 
+                },
+                respawn: { 
+                    x: respawnMenuCenterX / canvas.width, 
+                    y: respawnMenuCenterY / canvas.height 
+                },
+                walls: { 
+                    x: wallsMenuCenterX / canvas.width, 
+                    y: wallsMenuCenterY / canvas.height 
+                },
+                colorWheel: { 
+                    x: colorWheelCenterX / canvas.width, 
+                    y: colorWheelCenterY / canvas.height 
+                }
+            };
+            console.log('Current menu positions (copy to defaultMenuPositions):');
+            console.log(JSON.stringify(positions, null, 4));
+            return positions;
+        }
+    }
+    
+    // Function to apply default relative positions
+    function applyDefaultMenuPositions() {
+        if (canvas.width > 0 && canvas.height > 0) {
+            // Only apply default positions if they've been set (not 0.0)
+            if (defaultMenuPositions.physics.x > 0.0 || defaultMenuPositions.physics.y > 0.0) {
+                physicsMenuCenterX = defaultMenuPositions.physics.x * canvas.width;
+                physicsMenuCenterY = defaultMenuPositions.physics.y * canvas.height;
+                physicsMenuManuallyMoved = true;
+            }
+            if (defaultMenuPositions.particles.x > 0.0 || defaultMenuPositions.particles.y > 0.0) {
+                particlesMenuCenterX = defaultMenuPositions.particles.x * canvas.width;
+                particlesMenuCenterY = defaultMenuPositions.particles.y * canvas.height;
+                particlesMenuManuallyMoved = true;
+            }
+            if (defaultMenuPositions.gravity.x > 0.0 || defaultMenuPositions.gravity.y > 0.0) {
+                gravityMenuX = defaultMenuPositions.gravity.x * canvas.width;
+                gravityMenuY = defaultMenuPositions.gravity.y * canvas.height;
+                gravityMenuManuallyMoved = true;
+            }
+            if (defaultMenuPositions.respawn.x > 0.0 || defaultMenuPositions.respawn.y > 0.0) {
+                respawnMenuCenterX = defaultMenuPositions.respawn.x * canvas.width;
+                respawnMenuCenterY = defaultMenuPositions.respawn.y * canvas.height;
+                respawnMenuManuallyMoved = true;
+            }
+            if (defaultMenuPositions.walls.x > 0.0 || defaultMenuPositions.walls.y > 0.0) {
+                wallsMenuCenterX = defaultMenuPositions.walls.x * canvas.width;
+                wallsMenuCenterY = defaultMenuPositions.walls.y * canvas.height;
+                wallsMenuManuallyMoved = true;
+            }
+            if (defaultMenuPositions.colorWheel.x > 0.0 || defaultMenuPositions.colorWheel.y > 0.0) {
+                colorWheelCenterX = defaultMenuPositions.colorWheel.x * canvas.width;
+                colorWheelCenterY = defaultMenuPositions.colorWheel.y * canvas.height;
+                colorWheelManuallyMoved = true;
+            }
+        }
+    }
+
     // Menu z-order system - menus are drawn in this order (first = bottom, last = top)
-    var menuDrawOrder = ['colorWheel', 'physicsMenu', 'wallsMenu', 'particlesMenu', 'gravityMenu'];
+    var menuDrawOrder = ['colorWheel', 'physicsMenu', 'wallsMenu', 'particlesMenu', 'gravityMenu', 'respawnMenu'];
     
     // Function to bring menu to front
     function bringMenuToFront(menuName) {
@@ -3749,7 +3838,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Calculate total width of all menus and spacing to center the group
         const spacing = 30; // Gap between menus
         const gravityMenuSize = gravityMenuRadius * 2 + 50;
-        const totalWidth = particlesMenuWidth + spacing + physicsMenuWidth + spacing + gravityMenuSize + spacing + colorWheelSize;
+        const totalWidth = particlesMenuWidth + spacing + physicsMenuWidth + spacing + gravityMenuSize + spacing + respawnMenuWidth + spacing + colorWheelSize;
         const groupStartX = (canvas.width - totalWidth) / 2;
         
         particlesMenuCenterX = groupStartX + particlesMenuWidth / 2;
@@ -3757,13 +3846,21 @@ window.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateColorWheelPosition() {
+        // Position to the right of respawn menu with spacing
+        const spacing = 30; // Gap between menus
+        const respawnMenuRight = respawnMenuCenterX + respawnMenuWidth / 2;
+        colorWheelCenterX = respawnMenuRight + spacing + colorWheelSize / 2;
+        colorWheelCenterY = canvas.height / 2;
+        colorWheelRadius = colorWheelSize / 2 - 10;
+    }
+    
+    function updateRespawnMenuPosition() {
         // Position to the right of gravity menu with spacing
         const spacing = 30; // Gap between menus
         const gravityMenuSize = gravityMenuRadius * 2 + 50;
         const gravityMenuRight = gravityMenuX + gravityMenuSize / 2;
-        colorWheelCenterX = gravityMenuRight + spacing + colorWheelSize / 2;
-        colorWheelCenterY = canvas.height / 2;
-        colorWheelRadius = colorWheelSize / 2 - 10;
+        respawnMenuCenterX = gravityMenuRight + spacing + respawnMenuWidth / 2;
+        respawnMenuCenterY = canvas.height / 2;
     }
     
     function drawColorWheel() {
@@ -4756,6 +4853,402 @@ window.addEventListener('DOMContentLoaded', function() {
         return 'drag';
     }
     
+    function animateRespawnMenuOpacity() {
+        if (!respawnMenuAnimating) return;
+        
+        const fadeInSpeed = 0.1;
+        const fadeOutSpeed = 0.2;
+        const fadeSpeed = respawnMenuTargetOpacity > respawnMenuOpacity ? fadeInSpeed : fadeOutSpeed;
+        const diff = respawnMenuTargetOpacity - respawnMenuOpacity;
+        
+        if (Math.abs(diff) < 0.01) {
+            respawnMenuOpacity = respawnMenuTargetOpacity;
+            respawnMenuAnimating = false;
+            if (respawnMenuOpacity <= 0) {
+                respawnMenuVisible = false;
+            }
+        } else {
+            respawnMenuOpacity += diff * fadeSpeed;
+        }
+    }
+    
+    function drawRespawnMenu() {
+        if (respawnMenuOpacity <= 0) return;
+        
+        const ctx = c;
+        const w = respawnMenuWidth;
+        const h = respawnMenuHeight;
+        const centerX = respawnMenuCenterX;
+        const centerY = respawnMenuCenterY;
+        const checkboxPadding = 8;
+        const checkboxSize = 16;
+        
+        // Save context state and apply global alpha
+        ctx.save();
+        ctx.globalAlpha = respawnMenuOpacity;
+        
+        // Calculate dynamic height based on dropdown state
+        let dynamicHeight = h;
+        if (respawnMenuMisterModeExpanded) {
+            const dropdownHeight = 24;
+            const misterModes = 9; // Number of modes
+            dynamicHeight = h + (misterModes - 1) * dropdownHeight; // Add extra height for expanded options
+        }
+        
+        // Draw semi-transparent background
+        const borderPadding = 8;
+        ctx.fillStyle = 'rgba(20, 20, 20, 0.7)';
+        ctx.fillRect(centerX - w/2 - borderPadding, centerY - h/2 - 8, w + 2*borderPadding, dynamicHeight + 16);
+        
+        // Draw border
+        ctx.strokeStyle = 'hsl(0, 0%, 60%)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(centerX - w/2 - borderPadding, centerY - h/2 - 8, w + 2*borderPadding, dynamicHeight + 16);
+        
+        // Draw close button
+        const closeButtonX = centerX - w/2 - borderPadding + 20;
+        const closeButtonY = centerY - h/2 - 8 + 20;
+        const closeButtonRadius = 12;
+        
+        ctx.beginPath();
+        ctx.arc(closeButtonX, closeButtonY, closeButtonRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(139, 0, 0, 0.5)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 100, 100, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const xSize = 6;
+        ctx.moveTo(closeButtonX - xSize, closeButtonY - xSize);
+        ctx.lineTo(closeButtonX + xSize, closeButtonY + xSize);
+        ctx.moveTo(closeButtonX + xSize, closeButtonY - xSize);
+        ctx.lineTo(closeButtonX - xSize, closeButtonY + xSize);
+        ctx.stroke();
+        
+        // Draw title
+        ctx.fillStyle = 'hsl(0, 0%, 70%)';
+        ctx.font = 'bold 16px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('ReSpawn', centerX, centerY - h/2 + 12);
+        
+        let currentY = centerY - h/2 + 50;
+        
+        // 1. One Shot checkbox
+        const oneShotCheckX = centerX - w/2 + checkboxPadding;
+        ctx.strokeStyle = respawnMenuOneShot ? 'hsl(30, 80%, 50%)' : 'hsl(0, 0%, 60%)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(oneShotCheckX, currentY - checkboxSize/2, checkboxSize, checkboxSize);
+        if (respawnMenuOneShot) {
+            ctx.strokeStyle = 'hsl(30, 80%, 50%)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(oneShotCheckX + 3, currentY);
+            ctx.lineTo(oneShotCheckX + 6, currentY + 4);
+            ctx.lineTo(oneShotCheckX + 11, currentY - 4);
+            ctx.stroke();
+        }
+        ctx.fillStyle = 'hsl(0, 0%, 80%)';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('One Shot (no respawn)', oneShotCheckX + checkboxSize + 10, currentY + 2);
+        
+        currentY += 35;
+        
+        // 2. Hungry Puck checkbox
+        const hungryCheckX = centerX - w/2 + checkboxPadding;
+        ctx.strokeStyle = respawnMenuHungryPuck ? 'hsl(30, 80%, 50%)' : 'hsl(0, 0%, 60%)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(hungryCheckX, currentY - checkboxSize/2, checkboxSize, checkboxSize);
+        if (respawnMenuHungryPuck) {
+            ctx.strokeStyle = 'hsl(30, 80%, 50%)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(hungryCheckX + 3, currentY);
+            ctx.lineTo(hungryCheckX + 6, currentY + 4);
+            ctx.lineTo(hungryCheckX + 11, currentY - 4);
+            ctx.stroke();
+        }
+        ctx.fillStyle = 'hsl(0, 0%, 80%)';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('Eaters on/off', hungryCheckX + checkboxSize + 10, currentY + 2);
+        
+        currentY += 40;
+        
+        // 3. Spawn Type radio buttons
+        ctx.fillStyle = 'hsl(0, 0%, 80%)';
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('Spawn Type:', centerX - w/2 + checkboxPadding, currentY);
+        
+        currentY += 25;
+        
+        // Shower radio
+        const showerRadioX = centerX - w/2 + checkboxPadding + 20;
+        ctx.strokeStyle = respawnMenuSpawnType === 'shower' ? 'hsl(30, 80%, 50%)' : 'hsl(0, 0%, 60%)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(showerRadioX + 8, currentY, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        if (respawnMenuSpawnType === 'shower') {
+            ctx.fillStyle = 'hsl(30, 80%, 50%)';
+            ctx.beginPath();
+            ctx.arc(showerRadioX + 8, currentY, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.fillStyle = 'hsl(0, 0%, 80%)';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('Shower', showerRadioX + 20, currentY + 4);
+
+        ctx.fillStyle = 'hsl(0, 0%, 80%)';
+        ctx.font = '40px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('\u2602', showerRadioX + 80, currentY);
+        
+        currentY += 25;
+        
+        // Fountain radio (Mr. Mister)
+        const fountainRadioX = centerX - w/2 + checkboxPadding + 20;
+        ctx.strokeStyle = respawnMenuSpawnType === 'fountain' ? 'hsl(30, 80%, 50%)' : 'hsl(0, 0%, 60%)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(fountainRadioX + 8, currentY, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        if (respawnMenuSpawnType === 'fountain') {
+            ctx.fillStyle = 'hsl(30, 80%, 50%)';
+            ctx.beginPath();
+            ctx.arc(fountainRadioX + 8, currentY, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.fillStyle = 'hsl(0, 0%, 80%)';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('Mr. Mister', fountainRadioX + 20, currentY + 4);
+    
+        
+        
+        currentY += 25;
+        
+        const dropdownHeight = 24;
+        const dropdownWidth = w - 40;  // Equal 20px spacing on both sides
+        const dropdownX = centerX - w/2 + 20;
+        const misterModes = [
+            { value: 'idle', label: 'mouse' },
+            { value: 'worm', label: 'worm' },
+            { value: 'scanner', label: 'scan' },
+            { value: 'printer', label: 'printer' },
+            { value: 'typewriter', label: 'typewriter' },
+            { value: 'circle', label: 'circle' },
+            { value: 'oval', label: 'oval' },
+            { value: 'bernoulli', label: 'figure-8' },
+            { value: 'billiard', label: 'pong' }
+        ];
+        
+        // Find currently selected mode
+        const selectedMode = misterModes.find(m => m.value === respawnMenuMisterMode) || misterModes[0];
+        
+        if (respawnMenuMisterModeExpanded) {
+            // Draw all options when expanded
+            misterModes.forEach((mode, index) => {
+                const optionY = currentY + index * dropdownHeight;
+                const isSelected = respawnMenuMisterMode === mode.value;
+                
+                // Draw option background
+                if (isSelected) {
+                    ctx.fillStyle = 'hsl(30, 70%, 35%)';
+                } else {
+                    ctx.fillStyle = 'hsl(0, 0%, 20%)';
+                }
+                ctx.fillRect(dropdownX, optionY, dropdownWidth, dropdownHeight - 2);
+                
+                // Draw option border
+                ctx.strokeStyle = isSelected ? 'hsl(30, 70%, 55%)' : 'hsl(0, 0%, 40%)';
+                ctx.lineWidth = isSelected ? 2 : 1;
+                ctx.strokeRect(dropdownX, optionY, dropdownWidth, dropdownHeight - 2);
+                
+                // Draw option text
+                ctx.fillStyle = isSelected ? 'hsl(0, 0%, 95%)' : 'hsl(0, 0%, 70%)';
+                ctx.font = isSelected ? 'bold 12px monospace' : '12px monospace';
+                ctx.textAlign = 'left';
+                ctx.fillText(mode.label, dropdownX + 8, optionY + dropdownHeight/2 - 1);
+            });
+        } else {
+            // Draw only selected option when collapsed
+            ctx.fillStyle = 'hsl(0, 0%, 20%)';
+            ctx.fillRect(dropdownX, currentY, dropdownWidth, dropdownHeight - 2);
+            
+            ctx.strokeStyle = 'hsl(0, 0%, 60%)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(dropdownX, currentY, dropdownWidth, dropdownHeight - 2);
+            
+            // Make text dim when Mr. Mister is not selected
+            ctx.fillStyle = respawnMenuSpawnType === 'fountain' ? 'hsl(0, 0%, 90%)' : 'hsl(0, 0%, 30%)';
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'left';
+            ctx.fillText(selectedMode.label, dropdownX + 8, currentY + dropdownHeight/2 - 1);
+            
+            // Draw dropdown arrow
+            ctx.fillStyle = respawnMenuSpawnType === 'fountain' ? 'hsl(0, 0%, 70%)' : 'hsl(0, 0%, 30%)';
+            const arrowX = dropdownX + dropdownWidth - 15;
+            const arrowY = currentY + dropdownHeight/2;
+            ctx.beginPath();
+            ctx.moveTo(arrowX - 4, arrowY - 2);
+            ctx.lineTo(arrowX, arrowY + 2);
+            ctx.lineTo(arrowX + 4, arrowY - 2);
+            ctx.fill();
+        }
+        
+        ctx.restore();
+    }
+    
+    function handleRespawnMenuInteraction(canvasX, canvasY) {
+        if (!respawnMenuVisible) return false;
+        
+        const centerX = respawnMenuCenterX;
+        const centerY = respawnMenuCenterY;
+        const w = respawnMenuWidth;
+        const h = respawnMenuHeight;
+        const checkboxPadding = 8;
+        const checkboxSize = 16;
+        
+        // Check close button
+        const closeButtonX = centerX - w/2 - 8 + 20;
+        const closeButtonY = centerY - h/2 - 8 + 20;
+        const closeButtonRadius = 12;
+        const dxClose = canvasX - closeButtonX;
+        const dyClose = canvasY - closeButtonY;
+        const distClose = Math.sqrt(dxClose * dxClose + dyClose * dyClose);
+        
+        if (distClose <= closeButtonRadius) {
+            respawnMenuTargetOpacity = 0;
+            respawnMenuAnimating = true;
+            document.getElementById('respawnMenuToggle').checked = false;
+            return true;
+        }
+        
+        // Handle expanded dropdown clicks FIRST (before bounds check)
+        // This allows clicking options that extend beyond the menu
+        let expandedCheckY = centerY - h/2 + 50;
+        expandedCheckY += 35; // After One Shot
+        expandedCheckY += 35; // After Hungry Puck 
+        expandedCheckY += 40; // After Spawn Type label
+        expandedCheckY += 25; // After radio buttons
+        expandedCheckY += 25; // At dropdown position
+        
+        const expandedDropdownHeight = 24;
+        const expandedDropdownWidth = w - 40;
+        const expandedDropdownX = centerX - w/2 + 20;
+        const expandedMisterModes = ['idle', 'worm', 'scanner', 'printer', 'typewriter', 'circle', 'oval', 'bernoulli', 'billiard'];
+        
+        if (respawnMenuMisterModeExpanded) {
+            for (let i = 0; i < expandedMisterModes.length; i++) {
+                const optionY = expandedCheckY + i * expandedDropdownHeight;
+                if (canvasX >= expandedDropdownX && canvasX <= expandedDropdownX + expandedDropdownWidth &&
+                    canvasY >= optionY && canvasY <= optionY + expandedDropdownHeight - 2) {
+                    // Select this mode and collapse dropdown
+                    respawnMenuMisterMode = expandedMisterModes[i];
+                    respawnMenuMisterModeExpanded = false;
+                    return 'dropdown';
+                }
+            }
+        }
+        
+        // Calculate dynamic bounds based on dropdown state
+        let dynamicHeight = h;
+        if (respawnMenuMisterModeExpanded) {
+            dynamicHeight = h + (expandedMisterModes.length - 1) * expandedDropdownHeight;
+        }
+        
+        // Check if within menu bounds (using dynamic height)
+        if (canvasX < centerX - w/2 - 20 || canvasX > centerX + w/2 + 20 ||
+            canvasY < centerY - h/2 - 20 || canvasY > centerY - h/2 + dynamicHeight + 20) {
+            return false;
+        }
+        
+        let currentY = centerY - h/2 + 50;
+        
+        // One Shot checkbox
+        const oneShotCheckX = centerX - w/2 + checkboxPadding;
+        if (canvasX >= oneShotCheckX && canvasX <= oneShotCheckX + checkboxSize &&
+            canvasY >= currentY - checkboxSize/2 && canvasY <= currentY + checkboxSize/2) {
+            respawnMenuOneShot = !respawnMenuOneShot;
+            doOneShot = respawnMenuOneShot; // Sync with application variable
+            return 'checkbox';
+        }
+        
+        currentY += 35;
+        
+        // Hungry Puck checkbox
+        const hungryCheckX = centerX - w/2 + checkboxPadding;
+        if (canvasX >= hungryCheckX && canvasX <= hungryCheckX + checkboxSize &&
+            canvasY >= currentY - checkboxSize/2 && canvasY <= currentY + checkboxSize/2) {
+            respawnMenuHungryPuck = !respawnMenuHungryPuck;
+            showEaters = respawnMenuHungryPuck; // Sync with application variable
+            return 'checkbox';
+        }
+        
+        currentY += 40;
+        currentY += 25;
+        
+        // Spawn type radios
+        const showerRadioX = centerX - w/2 + checkboxPadding + 20;
+        if (canvasX >= showerRadioX && canvasX <= showerRadioX + 16 &&
+            canvasY >= currentY - 8 && canvasY <= currentY + 8) {
+            respawnMenuSpawnType = 'shower';
+            doShower = true;
+            doFountain = false;
+            return 'radio';
+        }
+        
+        currentY += 25;
+        
+        const fountainRadioX = centerX - w/2 + checkboxPadding + 20;
+        if (canvasX >= fountainRadioX && canvasX <= fountainRadioX + 16 &&
+            canvasY >= currentY - 8 && canvasY <= currentY + 8) {
+            respawnMenuSpawnType = 'fountain';
+            doShower = false;
+            doFountain = true;
+            return 'radio';
+        }
+        
+        currentY += 25;
+        
+        // Mister mode dropdown handling
+        const dropdownHeight = 24;
+        const dropdownWidth = w - 40;
+        const dropdownX = centerX - w/2 + 20;
+        const misterModes = ['idle', 'worm', 'scanner', 'printer', 'typewriter', 'circle', 'oval', 'bernoulli', 'billiard'];
+        
+        // If dropdown is expanded, check expanded options first
+        if (respawnMenuMisterModeExpanded) {
+            for (let i = 0; i < misterModes.length; i++) {
+                const optionY = currentY + i * dropdownHeight;
+                if (canvasX >= dropdownX && canvasX <= dropdownX + dropdownWidth &&
+                    canvasY >= optionY && canvasY <= optionY + dropdownHeight - 2) {
+                    // Select this mode and collapse dropdown
+                    respawnMenuMisterMode = misterModes[i];
+                    respawnMenuMisterModeExpanded = false;
+                    return 'dropdown';
+                }
+            }
+        } else {
+            // Check collapsed dropdown header for toggle (only if Mr. Mister is selected)
+            if (canvasX >= dropdownX && canvasX <= dropdownX + dropdownWidth &&
+                canvasY >= currentY && canvasY <= currentY + dropdownHeight - 2) {
+                if (respawnMenuSpawnType === 'fountain') {
+                    respawnMenuMisterModeExpanded = true;
+                    return 'dropdown';
+                } else {
+                    // Don't expand dropdown if Mr. Mister is not selected
+                    return 'drag';
+                }
+            }
+        }
+        
+        return 'drag';
+    }
+    
     function drawGravityMenu() {
         if (gravityMenuOpacity <= 0) return;
         
@@ -4768,14 +5261,14 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.save();
         ctx.globalAlpha = gravityMenuOpacity;
         
-        // Draw background box
+        // Draw background box (expanded for rotation slider)
         const borderPadding = 8;
         ctx.fillStyle = 'rgba(20, 20, 20, 0.7)';
-        ctx.fillRect(centerX - size/2 - borderPadding, centerY - size/2 - 38, size + 2*borderPadding, size + 46);
+        ctx.fillRect(centerX - size/2 - borderPadding, centerY - size/2 - 38, size + 2*borderPadding, size + 100);
         
         ctx.strokeStyle = 'hsl(0, 0%, 60%)';
         ctx.lineWidth = 2;
-        ctx.strokeRect(centerX - size/2 - borderPadding, centerY - size/2 - 38, size + 2*borderPadding, size + 46);
+        ctx.strokeRect(centerX - size/2 - borderPadding, centerY - size/2 - 38, size + 2*borderPadding, size + 100);
         
         // Draw close button
         const closeButtonX = centerX - size/2 - borderPadding + 20;
@@ -4867,6 +5360,47 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.lineWidth = 1;
         ctx.stroke();
         
+        // Draw rotation slider at bottom of menu (always visible)
+        const sliderY = centerY + size/2 + 15;
+        const sliderStartX = centerX - 70;
+        const sliderWidth = 140;
+        const sliderHeight = 20; // Match other menu sliders
+        
+        // Draw gradient bar (using blue color to match gravity theme)
+        for (let i = 0; i <= sliderWidth; i++) {
+            const brightness = 30 + (i / sliderWidth) * 40;
+            ctx.fillStyle = `hsl(220, 70%, ${brightness}%)`;
+            ctx.fillRect(sliderStartX + i, sliderY - sliderHeight/2, 1, sliderHeight);
+        }
+        
+        // Draw border
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sliderStartX, sliderY - sliderHeight/2, sliderWidth, sliderHeight);
+        
+        // Draw center line (no rotation position)
+        const centerLineX = sliderStartX + sliderWidth / 2;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(centerLineX, sliderY - sliderHeight/2);
+        ctx.lineTo(centerLineX, sliderY + sliderHeight/2);
+        ctx.stroke();
+        
+        // Draw marker (handle)
+        const rotationHandleX = sliderStartX + gravityRotationSlider * sliderWidth;
+        ctx.fillStyle = 'white';
+        ctx.fillRect(rotationHandleX - 2, sliderY - sliderHeight/2 - 3, 4, sliderHeight + 6);
+        ctx.strokeStyle = 'black';
+        ctx.strokeRect(rotationHandleX - 2, sliderY - sliderHeight/2 - 3, 4, sliderHeight + 6);
+        
+        // Draw label inside slider (after gradient so it's on top)
+        ctx.fillStyle = 'black';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Rotation', sliderStartX + sliderWidth/2, sliderY);
+        
         ctx.restore();
     }
     
@@ -4893,10 +5427,49 @@ window.addEventListener('DOMContentLoaded', function() {
             return true;
         }
         
-        // Check if within menu bounds
+        // Check if within menu bounds (expanded for rotation slider)
         if (canvasX < centerX - size/2 - 20 || canvasX > centerX + size/2 + 20 ||
-            canvasY < centerY - size/2 - 38 || canvasY > centerY + size/2 + 20) {
+            canvasY < centerY - size/2 - 38 || canvasY > centerY + size/2 + 60) {
             return false;
+        }
+        
+        // Check rotation slider interaction (always available)
+        const sliderY = centerY + size/2 + 15;
+        const sliderStartX = centerX - 70;
+        const sliderWidth = 140;
+        const sliderHeight = 20;
+        
+        if (canvasX >= sliderStartX && canvasX <= sliderStartX + sliderWidth &&
+            canvasY >= sliderY - sliderHeight/2 && canvasY <= sliderY + sliderHeight/2) {
+            
+            // Calculate slider position (0 to 1)
+            const relativeX = canvasX - sliderStartX;
+            let newSliderPosition = Math.max(0, Math.min(1, relativeX / sliderWidth));
+            
+            // Add detent at center (snap to 0.5 if close)
+            const detentRange = 0.05; // 5% range around center
+            if (Math.abs(newSliderPosition - 0.5) < detentRange) {
+                newSliderPosition = 0.5;
+            }
+            
+            gravityRotationSlider = newSliderPosition;
+            gravityRotationSliderDragging = true;
+            
+            // Calculate rotation speed based on distance from center
+            const centerDistance = Math.abs(gravityRotationSlider - 0.5);
+            const maxRotationSpeed = 0.01; // radians per frame (reduced by 70%)
+            gravityRotationSpeed = centerDistance * 2 * maxRotationSpeed; // Scale to 0-maxSpeed
+            
+            // Set direction based on which side of center (fixed direction)
+            if (gravityRotationSlider < 0.5) {
+                gravityRotationSpeed = gravityRotationSpeed; // Counter-clockwise (positive)
+            } else if (gravityRotationSlider === 0.5) {
+                gravityRotationSpeed = 0; // No rotation at center
+            } else {
+                gravityRotationSpeed = -gravityRotationSpeed; // Clockwise (negative)
+            }
+            
+            return 'rotation-slider';
         }
         
         // Check if clicking within circle (15% larger selection radius for easier interaction)
@@ -5654,10 +6227,9 @@ window.addEventListener('DOMContentLoaded', function() {
                 updatePhysicsMenuPosition();
             }
         } else {
-            // Fade out and reset position tracking
+            // Fade out but preserve position memory
             physicsMenuTargetOpacity = 0;
             physicsMenuAnimating = true;
-            physicsMenuManuallyMoved = false;
         }
     });
     
@@ -5673,7 +6245,6 @@ window.addEventListener('DOMContentLoaded', function() {
         } else {
             gravityMenuTargetOpacity = 0;
             gravityMenuAnimating = true;
-            gravityMenuManuallyMoved = false;
         }
     });
     
@@ -5695,7 +6266,6 @@ window.addEventListener('DOMContentLoaded', function() {
         } else {
             particlesMenuTargetOpacity = 0;
             particlesMenuAnimating = true;
-            particlesMenuManuallyMoved = false;
         }
     });
     
@@ -5844,6 +6414,25 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Mouse move handler for respawn menu position dragging
+    function respawnMenuPositionMove(e) {
+        const bounds = canvas.getBoundingClientRect();
+        const mX = e.clientX - bounds.left - canvas.clientLeft;
+        const mY = e.clientY - bounds.top - canvas.clientTop;
+        respawnMenuCenterX = mX - respawnMenuDragOffsetX;
+        respawnMenuCenterY = mY - respawnMenuDragOffsetY;
+    }
+    
+    function touchRespawnMenuPositionMove(e) {
+        if (e.touches.length === 1) {
+            const bounds = canvas.getBoundingClientRect();
+            const mX = e.touches[0].clientX - bounds.left - canvas.clientLeft;
+            const mY = e.touches[0].clientY - bounds.top - canvas.clientTop;
+            respawnMenuCenterX = mX - respawnMenuDragOffsetX;
+            respawnMenuCenterY = mY - respawnMenuDragOffsetY;
+        }
+    }
+    
     document.getElementById("cluster").oninput = function() {
         makeBalls();}
     document.getElementById("array").oninput = function() {
@@ -5863,11 +6452,9 @@ window.addEventListener('DOMContentLoaded', function() {
             }
             this.setAttribute('data-state', blowerState);
         }
-    document.getElementById('showHungryPuckButton').oninput = function() {
-        if (showHungryPuckButton.checked == true) {
-            showEaters = true;
-        } else {
-            showEaters = false;}}
+    // Note: Hungry puck controls are now handled by a menu system
+    // The showEaters variable is controlled by menu variables
+    
     document.getElementById('showPuckButton').oninput = function() {
         if (showPuckButton.checked == true) {
             // Pucks on
@@ -6130,40 +6717,29 @@ window.addEventListener('DOMContentLoaded', function() {
     
     // Old wall controls removed - now handled by walls menu
     
-    document.getElementById('misterMode').oninput = function() {
-        fountain.checked = true;
-        doFountain = true;
-        if (misterMode.value == "idle") {
-            mrMode = 'idle';
-        } else if (misterMode.value == "billiard") {
-            mrMode = 'billiard';
-            mrMr = MisterMister[0];
-            mrMr.vel.x = .5;
-            mrMr.vel.y = 0.2;
-        } else if (misterMode.value == "typewriter") {
-            mrMode = 'typewriter';
-        } else if (misterMode.value == "printer") {
-            mrMode = 'printer';
-        } else if (misterMode.value == "scanner") {
-            mrMode = 'scanner';
-        } else if (misterMode.value == "circle") {
-            mrMode = 'circle';
-        } else if (misterMode.value == "oval") {
-            mrMode = 'oval';
-        } else if (misterMode.value == "bernoulli") {
-            mrMode = 'bernoulli';
-        } else if (misterMode.value == "worm") {
-            mrMode = 'worm';
-            wormButton.checked = true;
-            doWorm = true;}}
+    // ReSpawn menu toggle event listener
+    document.getElementById('respawnMenuToggle').addEventListener('change', function() {
+        if (this.checked) {
+            // Position menu
+            if (!respawnMenuManuallyMoved || (respawnMenuCenterX === 0 && respawnMenuCenterY === 0)) {
+                updateRespawnMenuPosition();
+            }
+            
+            respawnMenuVisible = true;
+            respawnMenuTargetOpacity = 1;
+            respawnMenuAnimating = true;
+            bringMenuToFront('respawnMenu');
+        } else {
+            respawnMenuTargetOpacity = 0;
+            respawnMenuAnimating = true;
+        }
+    });
+    
+
     
     // Old wall button handlers removed - now handled by walls menu
     
-    document.getElementById('oneShotButton').oninput = function() {
-        if (oneShotButton.checked == true) {
-            doOneShot = true;
-        } else {
-            doOneShot = false;}}
+
     
     // Worm cycling button - three states: off (0), spheres (1), curves (2)
     var wormRenderMode = 'spheres'; // default
@@ -6476,6 +7052,21 @@ window.addEventListener('DOMContentLoaded', function() {
                     wallsMenuManuallyMoved = true;
                     document.addEventListener('mousemove', wallsMenuPositionMove);
                     document.addEventListener('touchmove', touchWallsMenuPositionMove, {passive: false});
+                    return;
+                }
+            } else if (menuName === 'respawnMenu' && respawnMenuVisible) {
+                const handled = handleRespawnMenuInteraction(mX, mY);
+                if (handled === 'checkbox' || handled === 'radio' || handled === 'dropdown') {
+                    bringMenuToFront('respawnMenu');
+                    return;
+                } else if (handled === 'drag') {
+                    bringMenuToFront('respawnMenu');
+                    respawnMenuPositionDragging = true;
+                    respawnMenuDragOffsetX = mX - respawnMenuCenterX;
+                    respawnMenuDragOffsetY = mY - respawnMenuCenterY;
+                    respawnMenuManuallyMoved = true;
+                    document.addEventListener('mousemove', respawnMenuPositionMove);
+                    document.addEventListener('touchmove', touchRespawnMenuPositionMove, {passive: false});
                     return;
                 }
             } else if (menuName === 'particlesMenu' && particlesMenuVisible) {
@@ -7520,12 +8111,22 @@ window.addEventListener('DOMContentLoaded', function() {
         document.removeEventListener('mousemove', wallsMenuPositionMove);
         document.removeEventListener('touchmove', touchWallsMenuPositionMove);
         
+        // Clear respawn menu dragging
+        respawnMenuDragging = false;
+        if (respawnMenuPositionDragging) {
+            respawnMenuManuallyMoved = true;
+        }
+        respawnMenuPositionDragging = false;
+        document.removeEventListener('mousemove', respawnMenuPositionMove);
+        document.removeEventListener('touchmove', touchRespawnMenuPositionMove);
+        
         // Clear gravity menu dragging
         gravityMenuDragging = false;
         if (gravityMenuPositionDragging) {
             gravityMenuManuallyMoved = true;
         }
         gravityMenuPositionDragging = false;
+        gravityRotationSliderDragging = false; // Reset rotation slider dragging
         document.removeEventListener('mousemove', gravityMenuMouseMove);
         document.removeEventListener('touchmove', touchGravityMenuMove);
         document.removeEventListener('mousemove', gravityMenuPositionMove);
@@ -8924,8 +9525,9 @@ window.addEventListener('DOMContentLoaded', function() {
         showCycle = (typeof showCyclePuckButton !== 'undefined') ? showCyclePuckButton.checked : true;
         showOrbit = (typeof orbitButton !== 'undefined') ? orbitButton.checked : false;
         showYinYang = (typeof yinYangButton !== 'undefined') ? yinYangButton.checked : false;
-        doShower = shower.checked;
-        doFountain = fountain.checked;
+        doShower = (respawnMenuSpawnType === 'shower');
+        doFountain = (respawnMenuSpawnType === 'fountain');
+        showEaters = respawnMenuHungryPuck;
         const flyingPuckState = parseInt(flyingPuckButton.getAttribute('data-state') || '1');
         doFlyingPuck = (flyingPuckState === 1);
         doFlyingPuck2 = (flyingPuckState === 2);
@@ -8972,7 +9574,7 @@ window.addEventListener('DOMContentLoaded', function() {
         doGummi = false;
         wasGummi = false;
 
-        doOneShot = oneShotButton.checked;
+        doOneShot = respawnMenuOneShot;
         yeet = 40; // Default value; will be set by mouse in fountain mode
         doGravityDown = false;
         doGravityUp = false;
@@ -9031,11 +9633,15 @@ window.addEventListener('DOMContentLoaded', function() {
 
         setRenderType(particlesMenuRenderType);
         
-        // Initialize menu positions in the desired order (left to right): particles, physics, gravity, color
+        // Initialize menu positions in the desired order (left to right): particles, physics, gravity, respawn, color
         updateParticlesMenuPosition();
         updatePhysicsMenuPosition(); 
         updateGravityMenuPosition();
+        updateRespawnMenuPosition();
         updateColorWheelPosition();
+        
+        // Apply any custom default menu positions (overrides automatic positioning)
+        applyDefaultMenuPositions();
         
         if (firstRun == true) {
             makeBalls();
@@ -10281,6 +10887,10 @@ window.addEventListener('DOMContentLoaded', function() {
 
     //  DEFINE CORNERS  ---------------------------------------------------------------------
     function makeCorners() {
+        if (typeof CORNER === 'undefined') {
+            // CORNER class not yet defined, skip for now
+            return;
+        }
         Corners = [];
         Corners.push(new CORNER(new Vector2(0, 0), 'northwest'));
         Corners.push(new CORNER(new Vector2(simWidth, 0), 'northeast'));
@@ -12593,6 +13203,10 @@ window.addEventListener('DOMContentLoaded', function() {
                     animateGravityMenuOpacity();
                     drawGravityMenu();
                     break;
+                case 'respawnMenu':
+                    animateRespawnMenuOpacity();
+                    drawRespawnMenu();
+                    break;
             }
         }
     }
@@ -12662,6 +13276,20 @@ window.addEventListener('DOMContentLoaded', function() {
     function update() {
         // Calculate FPS
         updateFPS();
+        
+        // Apply gravity rotation if slider is moved from center
+        const gx = physProps.gravity.x;
+        const gy = physProps.gravity.y;
+        const gmag = Math.sqrt(gx * gx + gy * gy);
+        
+        if (gmag > 0.01 && gravityRotationSpeed !== 0) {
+            // Rotate the gravity vector
+            const currentAngle = Math.atan2(gy, gx);
+            const newAngle = currentAngle + gravityRotationSpeed;
+            
+            physProps.gravity.x = Math.cos(newAngle) * gmag;
+            physProps.gravity.y = Math.sin(newAngle) * gmag;
+        }
         
         // Run multiple simulation substeps per frame
         for (let substep = 0; substep < physProps.substeps; substep++) {
