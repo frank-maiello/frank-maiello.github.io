@@ -100,7 +100,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 font-size: 14px;
                 text-align: center;
                 text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(170, 20%, 60%);}  
+                color: hsl(320, 100%, 50%);}  
             bb7 {
                 font-family: monospace; 
                 font-size: 14px;
@@ -3447,11 +3447,11 @@ window.addEventListener('DOMContentLoaded', function() {
         if (window.innerWidth < window.innerHeight) {
             screenVertical = true;
             canvas.width  = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 250; 
+            canvas.height = window.innerHeight - 230; 
         } else {
             screenVertical = false;
             canvas.width  = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 210;
+            canvas.height = window.innerHeight - 170;
         }
         
         if (menuStart) menuStart.style.marginTop = '0px';
@@ -3484,11 +3484,11 @@ window.addEventListener('DOMContentLoaded', function() {
         if (window.innerWidth < window.innerHeight) {
             screenVertical = true;
             canvas.width  = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 250; 
+            canvas.height = window.innerHeight - 230; 
         } else {
             screenVertical = false;
             canvas.width  = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 210;
+            canvas.height = window.innerHeight - 170;
         }
         // Recompute simulation scaling & world dimensions
         cScale    = Math.min(canvas.width, canvas.height) / simMinWidth;
@@ -3907,7 +3907,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Draw title
         ctx.fillStyle = 'hsl(0, 0%, 70%)';
-        ctx.font = 'bold 16px monospace';
+        ctx.font = 'bold 18px verdana, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('Color', centerX, centerY - size/2 - 18);
@@ -3967,9 +3967,41 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.strokeStyle = 'black';
         ctx.strokeRect(barX - 3, lightY - 2, barWidth + 6, 4);
         
-        // Draw persistence slider (horizontal bar at bottom)
+        // Draw sensitivity slider (horizontal bar at top)
+        const velBarX = centerX - size/2 + 20;
+        const velBarY = centerY + size/2 + 0;
+        const velBarWidth = size - 40;
+        const velBarHeight = 20;
+        
+        // Draw velocity bar gradient (gray scale, brighter means more sensitive)
+        for (let i = 0; i <= velBarWidth; i++) {
+            const brightness = 30 + (i / velBarWidth) * 40; // darker to lighter
+            ctx.fillStyle = `hsl(170, 70%, ${brightness}%)`;
+            ctx.fillRect(velBarX + i, velBarY, 1, velBarHeight);
+        }
+        
+        // Draw velocity bar border
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(velBarX, velBarY, velBarWidth, velBarHeight);
+        
+        // Draw velocity marker
+        const velX = velBarX + (colorWheelVelMap / 500) * velBarWidth;
+        ctx.fillStyle = 'white';
+        ctx.fillRect(velX - 2, velBarY - 3, 4, velBarHeight + 6);
+        ctx.strokeStyle = 'black';
+        ctx.strokeRect(velX - 2, velBarY - 3, 4, velBarHeight + 6);
+        
+        // Draw velocity label
+        ctx.fillStyle = 'black';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Sensitivity', centerX, velBarY + velBarHeight/2);
+        
+        // Draw persistence slider (horizontal bar below sensitivity)
         const persBarX = centerX - size/2 + 20;
-        const persBarY = centerY + size/2 + 0;
+        const persBarY = centerY + size/2 + 37;
         const persBarWidth = size - 40;
         const persBarHeight = 20;
         
@@ -3999,38 +4031,6 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('Persistence', centerX, persBarY + persBarHeight/2);
-        
-        // Draw velocity color map slider (horizontal bar below persistence)
-        const velBarX = centerX - size/2 + 20;
-        const velBarY = centerY + size/2 + 37;
-        const velBarWidth = size - 40;
-        const velBarHeight = 20;
-        
-        // Draw velocity bar gradient (gray scale, brighter means more sensitive)
-        for (let i = 0; i <= velBarWidth; i++) {
-            const brightness = 30 + (i / velBarWidth) * 40; // darker to lighter
-            ctx.fillStyle = `hsl(170, 70%, ${brightness}%)`;
-            ctx.fillRect(velBarX + i, velBarY, 1, velBarHeight);
-        }
-        
-        // Draw velocity bar border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(velBarX, velBarY, velBarWidth, velBarHeight);
-        
-        // Draw velocity marker
-        const velX = velBarX + (colorWheelVelMap / 500) * velBarWidth;
-        ctx.fillStyle = 'white';
-        ctx.fillRect(velX - 2, velBarY - 3, 4, velBarHeight + 6);
-        ctx.strokeStyle = 'black';
-        ctx.strokeRect(velX - 2, velBarY - 3, 4, velBarHeight + 6);
-        
-        // Draw velocity label
-        ctx.fillStyle = 'black';
-        ctx.font = '12px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Sensitivity', centerX, velBarY + velBarHeight/2);
         
         // Restore context state
         ctx.restore();
@@ -4122,7 +4122,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Draw title
         ctx.fillStyle = 'hsl(0, 0%, 70%)';
-        ctx.font = 'bold 16px monospace';
+        ctx.font = 'bold 18px verdana, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('Physics', centerX, centerY - h/2 + 12);
@@ -4476,7 +4476,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Draw title
         ctx.fillStyle = 'hsl(0, 0%, 70%)';
-        ctx.font = 'bold 16px monospace';
+        ctx.font = 'bold 18px verdana, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('Walls', centerX, centerY - h/2 + 12);
@@ -4926,7 +4926,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Draw title
         ctx.fillStyle = 'hsl(0, 0%, 70%)';
-        ctx.font = 'bold 16px monospace';
+        ctx.font = 'bold 18px verdana, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('ReSpawn', centerX, centerY - h/2 + 12);
@@ -4935,11 +4935,11 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // 1. One Shot checkbox
         const oneShotCheckX = centerX - w/2 + checkboxPadding;
-        ctx.strokeStyle = respawnMenuOneShot ? 'hsl(30, 80%, 50%)' : 'hsl(0, 0%, 60%)';
+        ctx.strokeStyle = respawnMenuOneShot ? 'hsl(320, 100%, 50%)' : 'hsl(0, 0%, 60%)';
         ctx.lineWidth = 2;
         ctx.strokeRect(oneShotCheckX, currentY - checkboxSize/2, checkboxSize, checkboxSize);
         if (respawnMenuOneShot) {
-            ctx.strokeStyle = 'hsl(30, 80%, 50%)';
+            ctx.strokeStyle = 'hsl(320, 100%, 50%)';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(oneShotCheckX + 3, currentY);
@@ -4948,19 +4948,19 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.stroke();
         }
         ctx.fillStyle = 'hsl(0, 0%, 80%)';
-        ctx.font = '14px monospace';
+        ctx.font = '14px sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText('One Shot (no respawn)', oneShotCheckX + checkboxSize + 10, currentY + 2);
+        ctx.fillText('One Shot, No Respawn', oneShotCheckX + checkboxSize + 10, currentY + 2);
         
         currentY += 35;
         
         // 2. Hungry Puck checkbox
         const hungryCheckX = centerX - w/2 + checkboxPadding;
-        ctx.strokeStyle = respawnMenuHungryPuck ? 'hsl(30, 80%, 50%)' : 'hsl(0, 0%, 60%)';
+        ctx.strokeStyle = respawnMenuHungryPuck ? 'hsl(320, 100%, 50%)' : 'hsl(0, 0%, 60%)';
         ctx.lineWidth = 2;
         ctx.strokeRect(hungryCheckX, currentY - checkboxSize/2, checkboxSize, checkboxSize);
         if (respawnMenuHungryPuck) {
-            ctx.strokeStyle = 'hsl(30, 80%, 50%)';
+            ctx.strokeStyle = 'hsl(320, 100%, 50%)';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(hungryCheckX + 3, currentY);
@@ -4969,7 +4969,6 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.stroke();
         }
         ctx.fillStyle = 'hsl(0, 0%, 80%)';
-        ctx.font = '14px monospace';
         ctx.textAlign = 'left';
         ctx.fillText('Eaters on/off', hungryCheckX + checkboxSize + 10, currentY + 2);
         
@@ -4977,52 +4976,49 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // 3. Spawn Type radio buttons
         ctx.fillStyle = 'hsl(0, 0%, 80%)';
-        ctx.font = 'bold 14px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText('Spawn Type:', centerX - w/2 + checkboxPadding, currentY);
+        ctx.fillText('Re-spawn from...', centerX - w/2 + checkboxPadding, currentY);
         
         currentY += 25;
         
         // Shower radio
         const showerRadioX = centerX - w/2 + checkboxPadding + 20;
-        ctx.strokeStyle = respawnMenuSpawnType === 'shower' ? 'hsl(30, 80%, 50%)' : 'hsl(0, 0%, 60%)';
+        ctx.strokeStyle = respawnMenuSpawnType === 'shower' ? 'hsl(320, 100%, 50%)' : 'hsl(0, 0%, 60%)';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(showerRadioX + 8, currentY, 8, 0, Math.PI * 2);
         ctx.stroke();
         if (respawnMenuSpawnType === 'shower') {
-            ctx.fillStyle = 'hsl(30, 80%, 50%)';
+            ctx.fillStyle = 'hsl(320, 100%, 50%)';
             ctx.beginPath();
             ctx.arc(showerRadioX + 8, currentY, 4, 0, Math.PI * 2);
             ctx.fill();
         }
         ctx.fillStyle = 'hsl(0, 0%, 80%)';
-        ctx.font = '14px monospace';
-        ctx.textAlign = 'left';
+
         ctx.fillText('Shower', showerRadioX + 20, currentY + 4);
 
-        ctx.fillStyle = 'hsl(0, 0%, 80%)';
-        ctx.font = '40px monospace';
+        ctx.fillStyle = 'hsl(320, 100%, 80%)';
+        ctx.font = '40px sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText('\u2602', showerRadioX + 80, currentY);
+        ctx.fillText(' \u2602', showerRadioX + 80, currentY);
         
         currentY += 25;
         
         // Fountain radio (Mr. Mister)
         const fountainRadioX = centerX - w/2 + checkboxPadding + 20;
-        ctx.strokeStyle = respawnMenuSpawnType === 'fountain' ? 'hsl(30, 80%, 50%)' : 'hsl(0, 0%, 60%)';
+        ctx.strokeStyle = respawnMenuSpawnType === 'fountain' ? 'hsl(320, 100%, 50%)' : 'hsl(0, 0%, 60%)';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(fountainRadioX + 8, currentY, 8, 0, Math.PI * 2);
         ctx.stroke();
         if (respawnMenuSpawnType === 'fountain') {
-            ctx.fillStyle = 'hsl(30, 80%, 50%)';
+            ctx.fillStyle = 'hsl(320, 100%, 50%)';
             ctx.beginPath();
             ctx.arc(fountainRadioX + 8, currentY, 4, 0, Math.PI * 2);
             ctx.fill();
         }
         ctx.fillStyle = 'hsl(0, 0%, 80%)';
-        ctx.font = '14px monospace';
+        ctx.font = '14px sans-serif';
         ctx.textAlign = 'left';
         ctx.fillText('Mr. Mister', fountainRadioX + 20, currentY + 4);
     
@@ -5148,6 +5144,7 @@ window.addEventListener('DOMContentLoaded', function() {
                     canvasY >= optionY && canvasY <= optionY + expandedDropdownHeight - 2) {
                     // Select this mode and collapse dropdown
                     respawnMenuMisterMode = expandedMisterModes[i];
+                    mrMode = respawnMenuMisterMode; // Sync with application variable
                     respawnMenuMisterModeExpanded = false;
                     return 'dropdown';
                 }
@@ -5228,6 +5225,7 @@ window.addEventListener('DOMContentLoaded', function() {
                     canvasY >= optionY && canvasY <= optionY + dropdownHeight - 2) {
                     // Select this mode and collapse dropdown
                     respawnMenuMisterMode = misterModes[i];
+                    mrMode = respawnMenuMisterMode; // Sync with application variable
                     respawnMenuMisterModeExpanded = false;
                     return 'dropdown';
                 }
@@ -5292,7 +5290,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Draw title
         ctx.fillStyle = 'hsl(0, 0%, 70%)';
-        ctx.font = 'bold 16px monospace';
+        ctx.font = 'bold 18px verdana, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('Gravity', centerX, centerY - size/2 - 18);
@@ -5590,7 +5588,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Draw title
         ctx.fillStyle = 'hsl(0, 0%, 70%)';
-        ctx.font = 'bold 16px monospace';
+        ctx.font = 'bold 18px verdana, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('Particles', centerX, centerY - h/2 + 12);
@@ -5626,15 +5624,14 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Draw label inside slider (after gradient so it's on top)
         ctx.fillStyle = 'black';
-        ctx.font = '12px sans-serif';
+        ctx.font = '14px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('## Quantity ##', sliderStartX + sliderWidth/2, currentY);
+        ctx.fillText('Quantity', sliderStartX + sliderWidth/2, currentY);
         
         // Draw value display to the right
         const actualCount = particlesMenuQuantity * particlesMenuQuantity;
         ctx.fillStyle = 'hsl(0, 0%, 80%)';
-        ctx.font = '12px monospace';
         ctx.textAlign = 'right';
         ctx.fillText(actualCount.toString(), centerX + w/2 - 15, currentY);
         
@@ -5663,14 +5660,13 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Draw label inside slider (after gradient so it's on top)
         ctx.fillStyle = 'black';
-        ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
+        ctx.font = '12px sans-serif';
         ctx.fillText('Smallest Radius', sliderStartX + sliderWidth/2, currentY);
         
         // Draw value display to the right
         ctx.fillStyle = 'hsl(0, 0%, 80%)';
-        ctx.font = '12px monospace';
         ctx.textAlign = 'right';
         ctx.fillText(particlesMenuSmallRadius.toString(), centerX + w/2 - 15, currentY);
         
@@ -5699,22 +5695,18 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Draw label inside slider (after gradient so it's on top)
         ctx.fillStyle = 'black';
-        ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('Largest Radius', sliderStartX + sliderWidth/2, currentY);
         
         // Draw value display to the right
         ctx.fillStyle = 'hsl(0, 0%, 80%)';
-        ctx.font = '12px monospace';
         ctx.textAlign = 'right';
         ctx.fillText(particlesMenuLargeRadius.toString(), centerX + w/2 - 15, currentY);
         
         currentY += sliderSpacing + 10;
         
         // RENDER TYPE DROPDOWN
-        ctx.fillStyle = 'hsl(0, 0%, 80%)';
-        ctx.font = '12px monospace';
         ctx.textAlign = 'left';
         ctx.fillText('Style', sliderStartX, currentY - 8);
         
@@ -5766,7 +5758,7 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.strokeRect(sliderStartX, currentY, dropdownWidth, dropdownHeight - 2);
             
             ctx.fillStyle = 'hsl(0, 0%, 90%)';
-            ctx.font = '12px monospace';
+            ctx.font = '12px sans-serif';
             ctx.textAlign = 'left';
             ctx.fillText(selectedType.label, sliderStartX + 8, currentY + dropdownHeight/2 - 1);
             
@@ -5919,17 +5911,17 @@ window.addEventListener('DOMContentLoaded', function() {
         const barWidth = 20;
         const barHeight = size - 40;
         
-        // Check if clicking on persistence bar (horizontal bar at bottom)
-        const persBarX = centerX - size/2 + 20;
-        const persBarY = centerY + size/2 + 0;
-        const persBarWidth = size - 40;
-        const persBarHeight = 20;
-        
-        // Check if clicking on velocity bar (horizontal bar below persistence)
+        // Check if clicking on sensitivity bar (horizontal bar at top)
         const velBarX = centerX - size/2 + 20;
-        const velBarY = centerY + size/2 + 37;
+        const velBarY = centerY + size/2 + 0;
         const velBarWidth = size - 40;
         const velBarHeight = 20;
+        
+        // Check if clicking on persistence bar (horizontal bar below sensitivity)
+        const persBarX = centerX - size/2 + 20;
+        const persBarY = centerY + size/2 + 37;
+        const persBarWidth = size - 40;
+        const persBarHeight = 20;
         
         // Check if within expanded color wheel area at all
         if (canvasX < centerX - size/2 - 20 || canvasX > centerX + size/2 + 20 ||
@@ -6186,10 +6178,11 @@ window.addEventListener('DOMContentLoaded', function() {
     // Toggle color wheel visibility
     document.getElementById('colorWheelToggle').addEventListener('change', function() {
         if (this.checked) {
-            // Fade in
+            // Fade in and bring to front
             colorWheelVisible = true;
             colorWheelTargetOpacity = 1;
             colorWheelAnimating = true;
+            bringMenuToFront('colorWheel');
             // Sync color wheel persistence with current persistence value
             colorWheelPersistence = persistence;
             colorWheelVelMap = physProps.velColorMap;
@@ -6206,10 +6199,11 @@ window.addEventListener('DOMContentLoaded', function() {
     
     document.getElementById('physicsMenuToggle').addEventListener('change', function() {
         if (this.checked) {
-            // Fade in
+            // Fade in and bring to front
             physicsMenuVisible = true;
             physicsMenuTargetOpacity = 1;
             physicsMenuAnimating = true;
+            bringMenuToFront('physicsMenu');
             // Sync physics menu values with current physics values
             physicsMenuRepulsionForce = (physProps.repulsionForce || 2.0) * 10;
             physicsMenuRepulsionOn = ballRepulsion;
@@ -6239,6 +6233,7 @@ window.addEventListener('DOMContentLoaded', function() {
             gravityMenuVisible = true;
             gravityMenuTargetOpacity = 1;
             gravityMenuAnimating = true;
+            bringMenuToFront('gravityMenu');
             if (!gravityMenuManuallyMoved) {
                 updateGravityMenuPosition();
             }
@@ -6263,6 +6258,7 @@ window.addEventListener('DOMContentLoaded', function() {
             particlesMenuVisible = true;
             particlesMenuTargetOpacity = 1;
             particlesMenuAnimating = true;
+            bringMenuToFront('particlesMenu');
         } else {
             particlesMenuTargetOpacity = 0;
             particlesMenuAnimating = true;
@@ -6709,6 +6705,7 @@ window.addEventListener('DOMContentLoaded', function() {
             wallsMenuVisible = true;
             wallsMenuTargetOpacity = 1;
             wallsMenuAnimating = true;
+            bringMenuToFront('wallsMenu');
         } else {
             wallsMenuTargetOpacity = 0;
             wallsMenuAnimating = true;
@@ -9528,6 +9525,7 @@ window.addEventListener('DOMContentLoaded', function() {
         doShower = (respawnMenuSpawnType === 'shower');
         doFountain = (respawnMenuSpawnType === 'fountain');
         showEaters = respawnMenuHungryPuck;
+        mrMode = respawnMenuMisterMode;
         const flyingPuckState = parseInt(flyingPuckButton.getAttribute('data-state') || '1');
         doFlyingPuck = (flyingPuckState === 1);
         doFlyingPuck2 = (flyingPuckState === 2);
