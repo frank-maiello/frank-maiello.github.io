@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.57
+		<title>Slosh 2.0
         </title>
         <style>
 			body {font-family: monospace; 
@@ -32,8 +32,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 user-select: none;
                 -webkit-tap-highlight-color: transparent;
                 }
-            h1 {font-family: monospace;
-                font-size: 10px;
+            h1 {font-family: verdana;
+                font-size: 12px;
                 text-align: center;
                 color: hsl(0, 0%, 55%);}
             h2 {font-family: monospace;
@@ -42,417 +42,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             h3 {font-family: monospace;
                 font-size: 2px;
                 text-align: center;}
-            b4 {
-                font-family: verdana, bold;
-                font-size: 18px;
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(140, 80%, 60%);}
-            b5 {
-                font-family: verdana, bold; 
-                font-size: 18px;
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(230, 90%, 65%);}
-            b6 {
-                font-family: verdana, bold; 
-                font-size: 18px;
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(0, 95%, 50%);} 
-            b7 {
-                font-family: verdana, bold; 
-                font-size: 18px;
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(320, 100%, 50%);}  
            
-            b9 {
-                font-family: verdana, bold; 
-                font-size: 18px;
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(23, 70%, 60%);} 
-            b10 {
-                font-family: verdana, bold; 
-                font-size: 18px;
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(45, 80%, 50%);} 
-            c1 {
-                font-family: monospace; 
-                font-size: 14px;
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(0, 80%, 50%);}
-            c2 {
-                font-family: monospace; 
-                font-size: 14px;
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(40, 80%, 50%);}
-            c3 {
-                font-family: monospace; 
-                font-size: 14px;
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(120, 80%, 50%);}
-            c4 {
-                font-family: monospace; 
-                font-size: 14px;
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(240, 80%, 60%);}
-            c5 {
-                font-family: monospace; 
-                font-size: 14px;
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                color: hsl(320, 80%, 50%);}
-
-
-    /*  CHECKBOXES  -------------------------------------------------------- */
-            .checkbox-colorwheel:hover {opacity: 1}
-            .checkbox-colorwheel {-webkit-appearance: none;
-                appearance: none;
-                opacity: 0.8;
-                width: 34px;
-                height: 34px;
-                margin-left: 0px;
-                margin-right: 15px;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                background-color: hsl(190, 45%, 20%);
-                border-radius: 50%;
-                vertical-align: middle;
-                outline: none;
-                cursor: default;
-                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
-            .checkbox-colorwheel:checked {
-                background: conic-gradient(from 0deg, hsl(0, 100%, 50%), hsl(60, 100%, 50%), hsl(120, 100%, 50%), hsl(180, 100%, 50%), hsl(240, 100%, 50%), hsl(300, 100%, 50%), hsl(360, 100%, 50%));
-                border: 3px solid hsl(190, 85%, 60%);}
-
-            .checkbox-pause:hover { opacity: 1; filter: brightness(1.05); }
-            .checkbox-pause { -webkit-appearance: none;
-                appearance: none;
-                opacity: 0.95;
-                width: 24px;
-                height: 24px;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                background: transparent;
-                border: none;
-                border-radius: 50%; /* pretend round for simple shadow */
-                vertical-align: middle;
-                outline: none;
-                cursor: default;
-                position: relative;
-                display: inline-block;
-                box-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                /* Tunables */
-                --stop-dim:    hsl(0, 68%, 20%);
-                --stop-bright: hsl(0, 78%, 54%);
-                --stop-color:  var(--stop-dim);
-            }
-            /* No separate shadow layer; use simple circular box-shadow on host */
-            .checkbox-pause::before { content: none; }
-            /* Inner red octagon fill */
-            .checkbox-pause::after {
-                content: "";
-                position: absolute;
-                left: 50%;
-                top: 50%;
-                transform: translate(-50%, -50%);
-                width: 24px;
-                height: 24px;
-                background: var(--stop-color);
-                clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
-                pointer-events: none;
-                transition: background-color 120ms ease, filter 120ms ease;
-            }
-            .checkbox-pause:checked { --stop-color: var(--stop-bright); }
-
-            /* White octagonal border when checked (sits behind the red fill) */
-            .checkbox-pause:checked::before {
-                content: "";
-                position: absolute;
-                left: 50%;
-                top: 50%;
-                transform: translate(-50%, -50%);
-                width: 28px;   /* slightly larger than the red fill */
-                height: 28px;
-                background: #ffffff; /* white border */
-                clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
-                pointer-events: none;
-            }
-
-            /* Physics Menu toggle: f(x) symbol, dim when off, bright when on */
-            .checkbox-physics:hover { opacity: 1; filter: brightness(1.05); }
-            .checkbox-physics { -webkit-appearance: none;
-                appearance: none;
-                opacity: 0.95;
-                width: 24px;
-                height: 24px;
-                margin-left: 10px;
-                margin-right: 25px;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                border-radius: 50%;
-                vertical-align: middle;
-                border: none;
-                outline: none;
-                cursor: default;
-                background: transparent;
-                position: relative;
-                display: inline-block;
-                /* Tunables */
-                --phys-dim:    hsl(190, 45%, 20%);
-                --phys-bright: hsl(190, 85%, 55%);
-            }
-            .checkbox-physics::after {
-                content: "f(x)";
-                position: absolute;
-                left: 50%;
-                top: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 30px;
-                font-style: italic;
-                font-weight: bold;
-                line-height: 1;
-                color: var(--phys-dim);
-                pointer-events: none;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                transition: color 120ms ease, filter 120ms ease;
-            }
-            .checkbox-physics:checked::after { color: var(--phys-bright); }
-
-            /* Gravity Menu toggle: G symbol, dim when off, bright when on */
-            .checkbox-gravity:hover { opacity: 1; filter: brightness(1.05); }
-            .checkbox-gravity { -webkit-appearance: none;
-                appearance: none;
-                opacity: 0.95;
-                width: 24px;
-                height: 24px;
-                margin-left: 2px;
-                margin-right: 20px;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                border-radius: 50%;
-                vertical-align: middle;
-                border: none;
-                outline: none;
-                cursor: default;
-                background: transparent;
-                position: relative;
-                display: inline-block;
-                /* Tunables */
-                --grav-dim:    hsl(190, 45%, 20%);
-                --grav-bright: hsl(190, 85%, 55%);
-            }
-            .checkbox-gravity::after {
-                content: "G";
-                position: absolute;
-                left: 50%;
-                top: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 40px;
-                font-weight: bold;
-                line-height: 1;
-                color: var(--grav-dim);
-                pointer-events: none;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                transition: color 120ms ease, filter 120ms ease;
-            }
-            .checkbox-gravity:checked::after { color: var(--grav-bright); }
-
-            .checkbox-particles:hover { opacity: 1; filter: brightness(1.05); }
-            .checkbox-particles { -webkit-appearance: none;
-                appearance: none;
-                opacity: 0.95;
-                width: 24px;
-                height: 24px;
-                margin-left: 0px;
-                margin-right: 15px;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                border-radius: 50%;
-                vertical-align: middle;
-                border: none;
-                outline: none;
-                cursor: default;
-                background: transparent;
-                position: relative;
-                display: inline-block;
-                /* Tunables */
-                --particles-dim:    hsl(190, 45%, 20%);
-                --particles-bright: hsl(190, 85%, 55%);
-            }
-            .checkbox-particles::after {
-                content: "#";
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 40px;
-                color: var(--particles-dim);
-                font-weight: bold;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                transition: color 120ms ease, filter 120ms ease;
-            }
-            .checkbox-particles:checked::after { color: var(--particles-bright); }
-
-            .checkbox-walls:hover { opacity: 1; filter: brightness(1.05); }
-            .checkbox-walls { -webkit-appearance: none;
-                appearance: none;
-                opacity: 0.95;
-                width: 24px;
-                height: 24px;
-                margin-left: 10px;
-                margin-right: 25px;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                border-radius: 50%;
-                vertical-align: middle;
-                border: none;
-                outline: none;
-                cursor: default;
-                background: transparent;
-                position: relative;
-                display: inline-block;
-                /* Tunables */
-                --walls-dim:    hsl(190, 45%, 20%);
-                --walls-bright: hsl(190, 85%, 55%);
-            }
-            .checkbox-walls::after {
-                content: "";
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 38px;
-                height: 24px;
-                border: 4px solid var(--walls-dim);
-                border-radius: 12px;
-                background: transparent;
-                transition: border-color 120ms ease, filter 120ms ease;
-            }
-            .checkbox-walls::before {
-                content: "\2194";
-                position: absolute;
-                top: 38%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 40px;
-                color: var(--walls-dim);
-                transition: color 120ms ease;
-                z-index: 1;
-            }
-            .checkbox-walls:checked::after { border-color: var(--walls-bright); }
-            .checkbox-walls:checked::before { color: var(--walls-bright); }
-
-            /* ReSpawn Menu toggle: R symbol, dim when off, bright when on */
-            :root {
-                --respawn-dim:    hsl(190, 45%, 20%);
-                --respawn-bright: hsl(190, 85%, 55%);
-            }
-            .checkbox-respawn {
-                -webkit-appearance: none;
-                appearance: none;
-                opacity: 0.95;
-                width: 24px;
-                height: 24px;
-                margin-left: 5px;
-                margin-right: 20px;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                border-radius: 50%;
-                position: relative;
-                display: inline-block;
-                vertical-align: middle;
-                cursor: pointer;
-                transition: opacity 120ms ease, filter 120ms ease;
-            }
-            .checkbox-respawn::before {
-                content: "\221E";
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 70px;
-                font-weight: bold;
-                color: var(--respawn-dim);
-                transition: color 120ms ease;
-                z-index: 1;
-            }
-            .checkbox-respawn:checked::after { border-color: var(--respawn-bright); }
-            .checkbox-respawn:checked::before { color: var(--respawn-bright); }
-
-            /* Toys Menu toggle: T symbol, dim when off, bright when on */
-            :root {
-                --toys-dim:    hsl(190, 45%, 20%);
-                --toys-bright: hsl(190, 85%, 55%);
-            }
-            .checkbox-toys {
-                -webkit-appearance: none;
-                appearance: none;
-                opacity: 0.95;
-                width: 24px;
-                height: 24px;
-                margin-left: 5px;
-                margin-right: 20px;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                border-radius: 50%;
-                position: relative;
-                display: inline-block;
-                vertical-align: middle;
-                cursor: pointer;
-                transition: opacity 120ms ease, filter 120ms ease;
-            }
-            
-            .checkbox-toys::before {
-                content: "🎁";
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 36px;
-                font-weight: bold;
-                color: var(--toys-dim);
-                opacity: 0.4;
-                filter: brightness(0.6) saturate(0.5);
-                transition: color 120ms ease, opacity 120ms ease, filter 120ms ease;
-                z-index: 1;
-            }
-            .checkbox-toys:checked::before { 
-                color: var(--toys-bright); 
-                opacity: 1; 
-                filter: brightness(1) saturate(1); 
-            }
-
-           
-    /*  RADIO BUTTONS  -------------------------------------------------------- */
-
-            .radio:hover {opacity: 1}
-            .radio {-webkit-appearance: none;
-                appearance: none;
-                padding: 0px;
-                border: 0px;
-                vertical-align: middle;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                width: 20px;
-                height: 20px;
-                border-radius: 10px;
-                background-color: hsl(0, 0%, 20%);
-                opacity: 0.7;
-                border: 4px solid hsl(0, 0%, 60%);
-				cursor: default;
-                box-shadow: 3px 4px 10px hsl(0, 0%, 0%)}
-            .radio:checked {
-                background-color:hsl(300, 60%, 50%);
-            }
-
             /* FPS Counter */
             .fps-counter {
                 position: absolute;
@@ -473,6 +63,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .fps-counter.visible {
                 display: block;
             }
+
             /* NYC Subway Line Button Styles */
             .subway-btn {
                 display: inline-flex;
@@ -534,46 +125,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 margin-left: 8px;
                 width: 2.2em !important;
                 height: 2.2em !important;
-            }
-                
+            } 
         </style>
 	</head>
+
 <body> 
-
-	<!-- <body style="background: hsl(0, 0%, 10%); background-attachment: fixed; margin-left: 0px;"> -->
-    
     <body style="background: linear-gradient(to bottom, hsl(0, 0%, 0%) 0%, hsl(195, 64%, 8%) 100%); background-attachment: fixed; margin-left: 0px;"> 
-    <span style="white-space: nowrap">
-    <b9> Particles
-    <input type="checkbox" title="Particles Menu" id="particlesMenuToggle" class="checkbox-particles" checked>
-    </b9>
-    <b4> Fizix
-    <input type="checkbox" title="Physics Menu" id="physicsMenuToggle" class="checkbox-physics">
-    </b4>
-    <b5> Gravity
-    <input type="checkbox" title="Gravity Menu" id="gravityMenuToggle" class="checkbox-gravity">
-    </b5>
-    <b6> Walls
-    <input type="checkbox" title="Walls Menu" id="wallsMenuToggle" class="checkbox-walls">
-    </b6>
-    <b7> ReSpawn
-    <input type="checkbox" title="ReSpawn Menu" id="respawnMenuToggle" class="checkbox-respawn">
-    </b7>
-    <b10> Toys
-    <input type="checkbox" title="Toys Menu" id="toysMenuToggle" class="checkbox-toys">
-    </b10>
-    <c1> C</c1><c2>o</c2><c3>l</c3><c4>o</c4><c5>r</c5>
-    <c1><i>
-    <input type="checkbox" title="Color Wheel Picker" id="colorWheelToggle" class="checkbox-colorwheel">
-    </i></c1>
-    </span>
-    <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked>
-
-    <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-left: 10px; display: block; cursor: default;"></canvas>
+    
+    <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-top: 5px; margin-left: 10px; display: block; cursor: default;"></canvas>
     <div id="fpsCounter" class="fps-counter">--</div>
 
     <!--
-    <h3><br><br></h3>
     <span style="white-space: nowrap; margin-left: 10px;">
     <button id="preset1Btn" class="subway-btn subway-a" title="Long Press to Save">A</button>
     <button id="preset2Btn" class="subway-btn subway-c" title="Long Press to Save">C</button>
@@ -601,10 +163,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     long press<br>to save
     </span></span></span><br>
     -->
-    <br>
-    <h2><br></h2><h1>:: SL0SH :: repulsive particle simulation ::</h1>
-
 <script>
+
 // Global layout orientation flag for canvas/menu logic and CORNER calculations
 var screenVertical = false;
 
@@ -1091,7 +651,8 @@ window.addEventListener('DOMContentLoaded', function() {
                 respawn: { rx: respawnMenuCenterX / canvas.width, ry: respawnMenuCenterY / canvas.height },
                 walls: { rx: wallsMenuCenterX / canvas.width, ry: wallsMenuCenterY / canvas.height },
                 colorWheel: { rx: colorWheelCenterX / canvas.width, ry: colorWheelCenterY / canvas.height },
-                toys: { rx: toysMenuCenterX / canvas.width, ry: toysMenuCenterY / canvas.height }
+                toys: { rx: toysMenuCenterX / canvas.width, ry: toysMenuCenterY / canvas.height },
+                mainMenu: { rx: mainMenuX / canvas.width, rtx: mainMenuTargetX / canvas.width }
             };
         }
         
@@ -1101,14 +662,14 @@ window.addEventListener('DOMContentLoaded', function() {
         canvas.style.height = '';
         
         // Use same simple sizing logic as handleResizeRestart
-        if (window.innerWidth < window.innerHeight) {
+        if (window.innerWidth <= window.innerHeight) {
             screenVertical = true;
             canvas.width  = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 230; 
+            canvas.height = window.innerHeight - 120; 
         } else {
             screenVertical = false;
             canvas.width  = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 120;
+            canvas.height = window.innerHeight - 30;
         }
         
         if (menuStart) menuStart.style.marginTop = '0px';
@@ -1139,6 +700,14 @@ window.addEventListener('DOMContentLoaded', function() {
             colorWheelCenterY = menuSnapshots.colorWheel.ry * canvas.height;
             toysMenuCenterX = menuSnapshots.toys.rx * canvas.width;
             toysMenuCenterY = menuSnapshots.toys.ry * canvas.height;
+            mainMenuX = menuSnapshots.mainMenu.rx * canvas.width;
+            mainMenuTargetX = menuSnapshots.mainMenu.rtx * canvas.width;
+            
+            // If main menu is visible, keep it centered
+            if (mainMenuVisible) {
+                mainMenuTargetX = (canvas.width - calculateMainMenuWidth()) / 2;
+                mainMenuX = mainMenuTargetX;
+            }
         }
     }
     // (Moved event listeners and initial call below, after gradient logic)
@@ -1165,20 +734,21 @@ window.addEventListener('DOMContentLoaded', function() {
                 respawn: { rx: respawnMenuCenterX / canvas.width, ry: respawnMenuCenterY / canvas.height },
                 walls: { rx: wallsMenuCenterX / canvas.width, ry: wallsMenuCenterY / canvas.height },
                 colorWheel: { rx: colorWheelCenterX / canvas.width, ry: colorWheelCenterY / canvas.height },
-                toys: { rx: toysMenuCenterX / canvas.width, ry: toysMenuCenterY / canvas.height }
+                toys: { rx: toysMenuCenterX / canvas.width, ry: toysMenuCenterY / canvas.height },
+                mainMenu: { rx: mainMenuX / canvas.width, rtx: mainMenuTargetX / canvas.width }
             };
         }
         
         // (If later we need worm node preservation, we can snapshot here similarly.)
         // Determine orientation & set canvas dimensions (mirrors initial logic)
-        if (window.innerWidth < window.innerHeight) {
+        if (window.innerWidth <= window.innerHeight) {
             screenVertical = true;
             canvas.width  = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 230; 
+            canvas.height = window.innerHeight - 120; 
         } else {
             screenVertical = false;
             canvas.width  = window.innerWidth - 40;
-            canvas.height = window.innerHeight - 120;
+            canvas.height = window.innerHeight - 30;
         }
         // Recompute simulation scaling & world dimensions
         cScale    = Math.min(canvas.width, canvas.height) / simMinWidth;
@@ -1217,6 +787,14 @@ window.addEventListener('DOMContentLoaded', function() {
             colorWheelCenterY = menuSnapshots.colorWheel.ry * canvas.height;
             toysMenuCenterX = menuSnapshots.toys.rx * canvas.width;
             toysMenuCenterY = menuSnapshots.toys.ry * canvas.height;
+            mainMenuX = menuSnapshots.mainMenu.rx * canvas.width;
+            mainMenuTargetX = menuSnapshots.mainMenu.rtx * canvas.width;
+            
+            // If main menu is visible, update target to stay centered
+            if (mainMenuVisible) {
+                mainMenuTargetX = (canvas.width - calculateMainMenuWidth()) / 2;
+                mainMenuX = mainMenuTargetX; // Snap to position immediately during resize
+            }
         }
         
         // Rebuild gradient matching background for new geometry
@@ -1297,6 +875,46 @@ window.addEventListener('DOMContentLoaded', function() {
     // Note: Fountain/Shower controls are now handled by the ReSpawn menu system
     // The respawnMenuSpawnType variable controls whether 'shower' or 'fountain' mode is active
     
+    // ===== MAIN MENU SYSTEM =====
+    // Main menu state
+    var mainMenuVisible = false;
+    var mainMenuAnimating = false;
+    var mainMenuX = 0; // Current X position (animates from off-screen left)
+    var mainMenuTargetX = 0; // Target X position
+    const mainMenuSlideSpeed = 40; // Pixels per frame for slide animation
+    const mainMenuPadding = 20; // Pixels from top
+    const mainMenuCornerRadius = 10;
+    const mainMenuHeight = 75;
+    const mainMenuBarAlpha = 0.85;
+    
+    // Ellipsis button (always visible in top-left)
+    const ellipsisSize = 40;
+    const ellipsisMargin = 10;
+    
+    // Pause button blink effect
+    var pauseButtonBlinkTimer = 0;
+    const pauseButtonBlinkCycle = 1.8; // Total cycle time in seconds (0.8s lit + 0.2s dimmed)
+    const pauseButtonDimDuration = 0.3; // Duration of dim phase in seconds
+    
+    // Main menu items with their properties
+    const mainMenuItems = [
+        {id: 'particles', label: 'Particles', color: 'hsl(23, 70%, 60%)', checked: true, variable: 'particlesMenuVisible'},
+        {id: 'physics', label: 'Fizix', color: 'hsl(140, 80%, 60%)', checked: false, variable: 'physicsMenuVisible'},
+        {id: 'gravity', label: 'Gravity', color: 'hsl(230, 90%, 65%)', checked: false, variable: 'gravityMenuVisible'},
+        {id: 'walls', label: 'Walls', color: 'hsl(0, 95%, 50%)', checked: false, variable: 'wallsMenuVisible'},
+        {id: 'respawn', label: 'ReSpawn', color: 'hsl(320, 100%, 50%)', checked: false, variable: 'respawnMenuVisible'},
+        {id: 'toys', label: 'Toys', color: 'hsl(45, 80%, 50%)', checked: false, variable: 'toysMenuVisible'},
+        {id: 'color', label: 'Color', color: '', checked: false, variable: 'colorWheelVisible', multiColor: true},
+        {id: 'pause', label: 'Pause', color: 'hsl(0, 0%, 80%)', checked: false, isPause: true}
+    ];
+    
+    // Calculate main menu width based on items
+    function calculateMainMenuWidth() {
+        const itemWidth = 90;
+        const itemSpacing = 10;
+        const sidePadding = 20;
+        return (mainMenuItems.length * itemWidth) + ((mainMenuItems.length - 1) * itemSpacing) + (sidePadding * 2);
+    }
     
     // Color Wheel Setup - draws on main canvas
     var colorWheelHue = 180;
@@ -1312,6 +930,47 @@ window.addEventListener('DOMContentLoaded', function() {
     var colorWheelPositionDragging = false;
     var colorWheelDragOffsetX = 0;
     var colorWheelDragOffsetY = 0;
+    
+    // Cached color wheel icon for main menu
+    var colorWheelIconCanvas = null;
+    var colorWheelIconCtx = null;
+    
+    // Offscreen canvas for full color wheel (for color menu)
+    var colorWheelOffscreenCanvas = null;
+    var colorWheelOffscreenCtx = null;
+    var colorWheelNeedsRedraw = true;
+    
+    // Initialize offscreen canvas early
+    function initColorWheelOffscreenCanvas() {
+        if (!colorWheelOffscreenCanvas) {
+            const radius = 83.5; // colorWheelSize / 2
+            colorWheelOffscreenCanvas = document.createElement('canvas');
+            // Add padding to prevent cropping at edges
+            colorWheelOffscreenCanvas.width = radius * 2 + 4;
+            colorWheelOffscreenCanvas.height = radius * 2 + 4;
+            colorWheelOffscreenCtx = colorWheelOffscreenCanvas.getContext('2d');
+            
+            // Render the color wheel to the offscreen canvas
+            const offCtx = colorWheelOffscreenCtx;
+            const offCenterX = radius + 2;
+            const offCenterY = radius + 2;
+            const lightness = 50; // Default lightness
+            
+            for (let angle = 0; angle < 360; angle += 2) {
+                for (let r = 0; r <= radius; r += 2) {
+                    const hue = angle;
+                    const saturation = (r / radius) * 100;
+                    
+                    offCtx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                    const x = offCenterX + r * Math.cos(angle * Math.PI / 180);
+                    const y = offCenterY + r * Math.sin(angle * Math.PI / 180);
+                    offCtx.fillRect(x - 1, y - 1, 3, 3);
+                }
+            }
+            
+            colorWheelNeedsRedraw = false;
+        }
+    }
     
     // Color wheel dimensions (in canvas pixels)
     var colorWheelSize = 167;
@@ -1436,13 +1095,13 @@ window.addEventListener('DOMContentLoaded', function() {
     // Default relative menu positions (as percentages of canvas width/height)
     // Set these values after positioning menus where you want them
     var defaultMenuPositions = {
-        physics: { x: 0.31529516293539095, y: 0.639475542077289 },
-        particles: { x: 0.24389960180838127, y: 0.3049545092690603 },
-        gravity: { x: 0.40830611068438905, y: 0.28913235051565556 },
-        respawn: { x: 0.5701878278752247, y: 0.23193202762943393 },
-        walls: { x: 0.4852719534177506, y: 0.6825247290823523 },
-        colorWheel: { x: 0.7192488855959482, y: 0.27595355540207134 },
-        toys: { x: 0.6698520090307942, y: 0.7188349027221569 }
+        physics: { x: 0.3152951629353909, y: 0.6394755420772888 },
+        particles: { x: 0.24389960180838088, y: 0.3049545092690604 },
+        gravity: { x: 0.4083061106843891, y: 0.28913235051565545 },
+        respawn: { x: 0.5636010015279193, y: 0.3390391347365412 },
+        walls: { x: 0.4852719534177511, y: 0.6825247290823522 },
+        colorWheel: { x: 0.719248885595948, y: 0.27595355540207134 },
+        toys: { x: 0.6788340449589383, y: 0.7979139818012363 }
     };
     
     // Function to capture current menu positions as relative coordinates
@@ -1635,21 +1294,39 @@ window.addEventListener('DOMContentLoaded', function() {
         const finalHeight = height + Math.abs(topOffset) + bottomOffset;
         const rectX = centerX - width/2 - borderPadding - leftOffset/2;
         const rectY = centerY - height/2 + topOffset;
+        const cornerRadius = 12;
         
-        // Draw semi-transparent background
-        ctx.fillStyle = backgroundColor;
-        ctx.fillRect(rectX, rectY, finalWidth, finalHeight);
+        // Draw semi-transparent background with linear gradient (less transparent at top, more at bottom)
+        const gradient = ctx.createLinearGradient(rectX, rectY, rectX, rectY + finalHeight);
+        gradient.addColorStop(0, 'hsla(0, 0%, 5%, 0.7)'); // Less transparent at top
+        //gradient.addColorStop(0.4, 'hsla(0, 0%, 20%, 0.7)'); // Less transparent at top
+        gradient.addColorStop(1, 'hsla(0, 0%, 10%, 0.5)'); // More transparent at bottom
+        ctx.fillStyle = gradient;
         
-        // Draw border
+        // Draw rounded rectangle for background
+        ctx.beginPath();
+        ctx.moveTo(rectX + cornerRadius, rectY);
+        ctx.lineTo(rectX + finalWidth - cornerRadius, rectY);
+        ctx.arcTo(rectX + finalWidth, rectY, rectX + finalWidth, rectY + cornerRadius, cornerRadius);
+        ctx.lineTo(rectX + finalWidth, rectY + finalHeight - cornerRadius);
+        ctx.arcTo(rectX + finalWidth, rectY + finalHeight, rectX + finalWidth - cornerRadius, rectY + finalHeight, cornerRadius);
+        ctx.lineTo(rectX + cornerRadius, rectY + finalHeight);
+        ctx.arcTo(rectX, rectY + finalHeight, rectX, rectY + finalHeight - cornerRadius, cornerRadius);
+        ctx.lineTo(rectX, rectY + cornerRadius);
+        ctx.arcTo(rectX, rectY, rectX + cornerRadius, rectY, cornerRadius);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw border with rounded corners
         ctx.strokeStyle = 'hsl(0, 0%, 60%)';
         ctx.lineWidth = 2;
-        ctx.strokeRect(rectX, rectY, finalWidth, finalHeight);
+        ctx.stroke();
         
         // Draw close button (red circle with X) in top-left corner
         if (showCloseButton) {
             const closeButtonX = rectX + 20;
             const closeButtonY = rectY + 20;
-            const closeButtonRadius = 12;
+            const closeButtonRadius = 10;
             
             ctx.beginPath();
             ctx.arc(closeButtonX, closeButtonY, closeButtonRadius, 0, Math.PI * 2);
@@ -1677,6 +1354,347 @@ window.addEventListener('DOMContentLoaded', function() {
         } : null;
     }
     
+    // ===== MAIN MENU DRAWING FUNCTIONS =====
+    
+    // Create cached color wheel icon for main menu
+    function createColorWheelIcon() {
+        if (colorWheelIconCanvas) return; // Already created
+        
+        // Use the full color wheel offscreen canvas if it exists
+        if (colorWheelOffscreenCanvas) {
+            const size = 24;
+            colorWheelIconCanvas = document.createElement('canvas');
+            colorWheelIconCanvas.width = size;
+            colorWheelIconCanvas.height = size;
+            colorWheelIconCtx = colorWheelIconCanvas.getContext('2d');
+            
+            // Draw scaled down version from the offscreen canvas
+            const sourceSize = colorWheelOffscreenCanvas.width;
+            colorWheelIconCtx.drawImage(colorWheelOffscreenCanvas, 0, 0, sourceSize, sourceSize, 0, 0, size, size);
+            return;
+        }
+        
+        // Fallback: create it from scratch if offscreen canvas doesn't exist yet
+        const size = 24;
+        const padding = 2;
+        colorWheelIconCanvas = document.createElement('canvas');
+        colorWheelIconCanvas.width = size + padding * 2;
+        colorWheelIconCanvas.height = size + padding * 2;
+        colorWheelIconCtx = colorWheelIconCanvas.getContext('2d');
+        
+        const centerX = size / 2 + padding;
+        const centerY = size / 2 + padding;
+        const radius = size / 2;
+        
+        // Draw the hue/saturation wheel with padding
+        for (let angle = 0; angle < 360; angle += 3) {
+            for (let r = 0; r <= radius; r += 1) {
+                const hue = angle;
+                const saturation = (r / radius) * 100;
+                const lightness = 50;
+                
+                colorWheelIconCtx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                const x = centerX + r * Math.cos(angle * Math.PI / 180);
+                const y = centerY + r * Math.sin(angle * Math.PI / 180);
+                colorWheelIconCtx.fillRect(x - 1, y - 1, 2, 2);
+            }
+        }
+    }
+    
+    function drawEllipsisButton() {
+        const ctx = c;
+        const x = ellipsisMargin + ellipsisSize / 2;
+        const y = ellipsisMargin + ellipsisSize / 2;
+        
+        // Draw semi-transparent background circle
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = 'rgba(30, 30, 30, 0.9)';
+        ctx.beginPath();
+        ctx.arc(x, y, ellipsisSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw border
+        ctx.strokeStyle = 'hsl(0, 0%, 60%)';
+        ctx.lineWidth = 2;
+        //ctx.stroke();
+        
+        // Draw three dots (ellipsis)
+        ctx.fillStyle = 'hsl(0, 0%, 80%)';
+        const dotRadius = 3;
+        const dotSpacing = 8;
+        const startX = x - dotSpacing;
+        
+        for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.arc(startX + i * dotSpacing, y, dotRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        ctx.globalAlpha = 1;
+    }
+    
+    //  draw main menu  ----------
+    function drawMainMenu() {
+        if (!mainMenuVisible && mainMenuX <= -calculateMainMenuWidth()) {
+            return; // Completely off-screen, skip drawing
+        }
+        
+        const ctx = c;
+        const menuWidth = calculateMainMenuWidth();
+        const menuHeight = mainMenuHeight;
+        const itemWidth = 90;
+        const itemSpacing = 10;
+        const sidePadding = 20;
+        
+        ctx.save();
+        ctx.globalAlpha = mainMenuBarAlpha;
+        
+        // Draw rounded rectangle background bar
+        const barX = mainMenuX;
+        const barY = mainMenuPadding;
+        
+        ctx.fillStyle = 'rgba(20, 20, 20, 0.85)';
+        ctx.beginPath();
+        ctx.moveTo(barX + mainMenuCornerRadius, barY);
+        ctx.lineTo(barX + menuWidth - mainMenuCornerRadius, barY);
+        ctx.arcTo(barX + menuWidth, barY, barX + menuWidth, barY + mainMenuCornerRadius, mainMenuCornerRadius);
+        ctx.lineTo(barX + menuWidth, barY + menuHeight - mainMenuCornerRadius);
+        ctx.arcTo(barX + menuWidth, barY + menuHeight, barX + menuWidth - mainMenuCornerRadius, barY + menuHeight, mainMenuCornerRadius);
+        ctx.lineTo(barX + mainMenuCornerRadius, barY + menuHeight);
+        ctx.arcTo(barX, barY + menuHeight, barX, barY + menuHeight - mainMenuCornerRadius, mainMenuCornerRadius);
+        ctx.lineTo(barX, barY + mainMenuCornerRadius);
+        ctx.arcTo(barX, barY, barX + mainMenuCornerRadius, barY, mainMenuCornerRadius);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw border
+        //ctx.strokeStyle = 'hsl(0, 0%, 60%)';
+        //ctx.lineWidth = 2;
+        //ctx.stroke();
+        
+        ctx.restore();
+        ctx.globalAlpha = 1;
+        
+        // Draw menu items
+        let currentX = mainMenuX + sidePadding;
+        
+        for (const item of mainMenuItems) {
+            drawMainMenuItem(item, currentX, barY + menuHeight / 2, itemWidth, menuHeight - 10);
+            currentX += itemWidth + itemSpacing;
+        }
+    }
+    
+    function drawMainMenuItem(item, x, centerY, width, height) {
+        const ctx = c;
+        const padding = 8;
+        const cornerRadius = 8;
+        
+        // Determine if item is checked
+        let isChecked = false;
+        if (item.isPause) {
+            isChecked = physProps.paused;
+        } else if (item.variable) {
+            isChecked = eval(item.variable); // Get the menu visibility state
+        }
+        
+        // Draw item background (checkbox style)
+        const bgAlpha = isChecked ? 0.6 : 0.3;
+        ctx.globalAlpha = bgAlpha;
+        
+        const rectX = x;
+        const rectY = centerY - height / 2;
+        
+        /*
+        if (isChecked) {
+            // Filled when checked
+            ctx.fillStyle = item.color || 'hsl(0, 0%, 50%)';
+            ctx.beginPath();
+            ctx.moveTo(rectX + cornerRadius, rectY);
+            ctx.lineTo(rectX + width - cornerRadius, rectY);
+            ctx.arcTo(rectX + width, rectY, rectX + width, rectY + cornerRadius, cornerRadius);
+            ctx.lineTo(rectX + width, rectY + height - cornerRadius);
+            ctx.arcTo(rectX + width, rectY + height, rectX + width - cornerRadius, rectY + height, cornerRadius);
+            ctx.lineTo(rectX + cornerRadius, rectY + height);
+            ctx.arcTo(rectX, rectY + height, rectX, rectY + height - cornerRadius, cornerRadius);
+            ctx.lineTo(rectX, rectY + cornerRadius);
+            ctx.arcTo(rectX, rectY, rectX + cornerRadius, rectY, cornerRadius);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Draw border
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = item.color || 'hsl(0, 0%, 60%)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(rectX + cornerRadius, rectY);
+        ctx.lineTo(rectX + width - cornerRadius, rectY);
+        ctx.arcTo(rectX + width, rectY, rectX + width, rectY + cornerRadius, cornerRadius);
+        ctx.lineTo(rectX + width, rectY + height - cornerRadius);
+        ctx.arcTo(rectX + width, rectY + height, rectX + width - cornerRadius, rectY + height, cornerRadius);
+        ctx.lineTo(rectX + cornerRadius, rectY + height);
+        ctx.arcTo(rectX, rectY + height, rectX, rectY + height - cornerRadius, cornerRadius);
+        ctx.lineTo(rectX, rectY + cornerRadius);
+        ctx.arcTo(rectX, rectY, rectX + cornerRadius, rectY, cornerRadius);
+        ctx.closePath();
+        //ctx.stroke();
+        */
+
+        ctx.globalAlpha = 1;
+        // Draw icon above label
+        const iconY = 5 + (rectY + height * 0.35);
+        const iconColor = isChecked ? 'hsla(190, 85%, 55%, 1.0)' : 'hsla(190, 45%, 20%, 1)';
+        
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = iconColor;
+        
+        // Draw icon based on item type
+        if (item.id === 'particles') {
+            ctx.font = 'bold 40px verdana';
+            ctx.fillText('#', rectX + width / 2, iconY - 3);
+        } else if (item.id === 'physics') {
+            ctx.font = 'italic bold 34px sans-serif';
+            ctx.fillText('f(x)', rectX + width / 2, iconY - 6);
+        } else if (item.id === 'gravity') {
+            ctx.font = 'bold 46px times-new-roman';
+            ctx.fillText('G', rectX + width / 2, iconY - 1);
+        } else if (item.id === 'walls') {
+            // Draw rounded rectangle with arrow
+            ctx.strokeStyle = iconColor;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(rectX + width / 2 - 28, iconY - 20, 55, 28, 8);
+            ctx.stroke();
+            ctx.font = '60px sans-serif';
+            ctx.fillText('↔', rectX + width / 2, iconY - 8);
+        } else if (item.id === 'respawn') {
+            ctx.font = 'bold 60px verdana';
+            ctx.fillText('∞', rectX + width / 2, iconY - 4);
+        } else if (item.id === 'toys') {
+            ctx.font = 'bold 38px monospace';
+            ctx.fillStyle = iconColor;
+            if (!isChecked) {
+                ctx.globalAlpha = 0.4;
+            }
+            //ctx.fillText('🎲', rectX + width / 2, iconY - 3);
+            ctx.fillText('🎁', rectX + width / 2, iconY - 3);
+            ctx.globalAlpha = 1;
+        } else if (item.id === 'color') {
+            // Draw color wheel icon using cached canvas
+            if (!colorWheelIconCanvas) {
+                createColorWheelIcon();
+            }
+            
+            const iconSize = 36;
+            const cx = rectX + width / 2;
+            const cy = iconY - 6;
+            
+            // Apply dimming if not checked
+            if (!isChecked) {
+                ctx.globalAlpha = 0.4;
+            }
+            
+            // Draw the cached color wheel image
+            ctx.drawImage(colorWheelIconCanvas, cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
+            
+            ctx.globalAlpha = 1;
+            
+            // Draw border if checked
+            if (isChecked) {
+                ctx.strokeStyle = 'hsl(190, 85%, 60%)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(cx, cy, iconSize / 2, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        } else if (item.isPause) {
+            // Draw pause icon (two vertical bars)
+            const barWidth = 6;
+            const barHeight = 24;
+            const barSpacing = 6;
+            const cx = rectX + width / 2;
+            const cy = iconY - 6;
+            
+            // Apply blinking effect when paused
+            let iconColorWithBlink = iconColor;
+            if (isChecked) {
+                // Calculate blink phase (0.8s lit, 0.2s dim)
+                const cyclePosition = pauseButtonBlinkTimer % pauseButtonBlinkCycle;
+                const isDimPhase = cyclePosition >= (pauseButtonBlinkCycle - pauseButtonDimDuration);
+                
+                if (isDimPhase) {
+                    // Dim the color during the blink
+                    iconColorWithBlink = 'hsla(190, 45%, 25%, 0.4)';
+                }
+            }
+            
+            ctx.fillStyle = iconColorWithBlink;
+            // Left bar
+            ctx.fillRect(cx - barSpacing / 2 - barWidth, cy - barHeight / 2, barWidth, barHeight);
+            // Right bar
+            ctx.fillRect(cx + barSpacing / 2, cy - barHeight / 2, barWidth, barHeight);
+        }
+        
+        // Draw label below icon
+        const labelY = rectY + height * 0.8;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '16px verdana';
+        
+        if (item.multiColor && item.id === 'color') {
+            // Draw "Color" with each letter in different color
+            const colors = ['hsl(0, 80%, 50%)', 'hsl(40, 80%, 50%)', 'hsl(120, 80%, 50%)', 'hsl(200, 80%, 50%)', 'hsl(280, 80%, 50%)'];
+            const letters = ['C', 'o', 'l', 'o', 'r'];
+            const letterSpacing = 12;
+            const startX = rectX + width / 2 - (letters.length * letterSpacing) / 2;
+            
+            for (let i = 0; i < letters.length; i++) {
+                ctx.fillStyle = colors[i];
+                ctx.fillText(letters[i], startX + i * letterSpacing + 4.5, labelY + 4);
+            }
+        } else {
+            ctx.fillStyle = item.color;
+            ctx.fillText(item.label, rectX + width / 2, labelY + 4);
+        }
+    }
+    
+    function animateMainMenu() {
+        if (!mainMenuAnimating) return;
+        
+        // Animate X position towards target
+        const diff = mainMenuTargetX - mainMenuX;
+        
+        if (Math.abs(diff) < 1) {
+            mainMenuX = mainMenuTargetX;
+            mainMenuAnimating = false;
+        } else {
+            mainMenuX += Math.sign(diff) * Math.min(mainMenuSlideSpeed, Math.abs(diff));
+        }
+    }
+    
+    function updatePauseButtonBlink(dt) {
+        // Update blink timer when paused
+        if (physProps.paused) {
+            pauseButtonBlinkTimer += dt;
+        } else {
+            pauseButtonBlinkTimer = 0; // Reset when not paused
+        }
+    }
+    
+    function toggleMainMenu() {
+        mainMenuVisible = !mainMenuVisible;
+        mainMenuAnimating = true;
+        
+        if (mainMenuVisible) {
+            // Slide in - center horizontally on canvas
+            mainMenuTargetX = (canvas.width - calculateMainMenuWidth()) / 2;
+        } else {
+            // Slide out to the left (off-screen)
+            mainMenuTargetX = -calculateMainMenuWidth();
+        }
+    }
+    
     function drawColorWheel() {
         if (colorWheelOpacity <= 0) return;
         
@@ -1685,6 +1703,45 @@ window.addEventListener('DOMContentLoaded', function() {
         const centerX = colorWheelCenterX;
         const centerY = colorWheelCenterY;
         const radius = colorWheelRadius;
+        
+        // Create offscreen canvas if needed
+        if (!colorWheelOffscreenCanvas) {
+            colorWheelOffscreenCanvas = document.createElement('canvas');
+            // Add padding to prevent cropping at edges
+            colorWheelOffscreenCanvas.width = radius * 2 + 4;
+            colorWheelOffscreenCanvas.height = radius * 2 + 4;
+            colorWheelOffscreenCtx = colorWheelOffscreenCanvas.getContext('2d');
+            colorWheelNeedsRedraw = true;
+        }
+        
+        // Redraw offscreen canvas if lightness changed
+        if (colorWheelNeedsRedraw) {
+            const offCtx = colorWheelOffscreenCtx;
+            // Center with padding to prevent edge cropping
+            const offCenterX = radius + 2;
+            const offCenterY = radius + 2;
+            
+            // Clear the offscreen canvas
+            offCtx.clearRect(0, 0, colorWheelOffscreenCanvas.width, colorWheelOffscreenCanvas.height);
+            
+            // Draw the hue/saturation wheel to offscreen canvas
+            for (let angle = 0; angle < 360; angle += 2) {
+                for (let r = 0; r <= radius; r += 2) {
+                    const hue = angle;
+                    const saturation = (r / radius) * 100;
+                    const lightness = colorWheelLight;
+                    
+                    offCtx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                    const x = offCenterX + r * Math.cos(angle * Math.PI / 180);
+                    const y = offCenterY + r * Math.sin(angle * Math.PI / 180);
+                    offCtx.fillRect(x - 1, y - 1, 3, 3);
+                }
+            }
+            colorWheelNeedsRedraw = false;
+            
+            // Invalidate icon cache so it uses the new color wheel
+            colorWheelIconCanvas = null;
+        }
         
         // Save context state and apply global alpha
         ctx.save();
@@ -1705,19 +1762,9 @@ window.addEventListener('DOMContentLoaded', function() {
         // Always center heading on menu width
         ctx.fillText('Color', colorWheelCenterX + 16, centerY - size/2 - 18);
         
-        // Draw the hue/saturation wheel
-        for (let angle = 0; angle < 360; angle += 2) {
-            for (let r = 0; r <= radius; r += 2) {
-                const hue = angle;
-                const saturation = (r / radius) * 100;
-                const lightness = colorWheelLight;
-                
-                ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-                const x = centerX + r * Math.cos(angle * Math.PI / 180);
-                const y = centerY + r * Math.sin(angle * Math.PI / 180);
-                ctx.fillRect(x - 1, y - 1, 3, 3);
-            }
-        }
+        // Draw the color wheel from offscreen canvas
+        // Account for the padding when drawing
+        ctx.drawImage(colorWheelOffscreenCanvas, centerX - radius - 2, centerY - radius - 2);
         
         // Draw lightness slider (vertical bar on the right)
         const barX = centerX + size/2 - 30 + 0.4 * radius;
@@ -2544,7 +2591,6 @@ window.addEventListener('DOMContentLoaded', function() {
         const closeDistX = canvasX - closeButtonX;
         const closeDistY = canvasY - closeButtonY;
         if (Math.sqrt(closeDistX * closeDistX + closeDistY * closeDistY) < closeButtonRadius) {
-            document.getElementById('wallsMenuToggle').checked = false;
             wallsMenuTargetOpacity = 0;
             wallsMenuAnimating = true;
             return 'close';
@@ -3382,7 +3428,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 { id: 'bigTracerButton', icon: '\u2710', checked: doBigTracer, color: 'hsl(170, 20%, 60%)' },
                 null, // Empty slot
                 { id: 'showBlowerButton', icon: '', image: 'aeolus.png', checked: blowerState > 0, color: 'hsl(190, 85%, 55%)' },
-                { id: 'showImploderButton', icon: '\u{1F9F2}', checked: typeof Imploder !== 'undefined' && Imploder.length > 0 && Imploder[0].active, color: 'hsl(320, 85%, 55%)' },
+                { id: 'showImploderButton', icon: '\u{1F9F2}', checked: typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active, color: 'hsl(320, 85%, 55%)' },
                 null, // Empty slot
                 null  // Empty slot
             ];
@@ -3537,7 +3583,6 @@ window.addEventListener('DOMContentLoaded', function() {
         const closeDistX = canvasX - closeButtonX;
         const closeDistY = canvasY - closeButtonY;
         if (Math.sqrt(closeDistX * closeDistX + closeDistY * closeDistY) < closeButtonRadius) {
-            document.getElementById('toysMenuToggle').checked = false;
             toysMenuTargetOpacity = 0;
             toysMenuAnimating = true;
             return 'close';
@@ -3611,8 +3656,8 @@ window.addEventListener('DOMContentLoaded', function() {
                         if (typeof blower !== 'undefined') blower.active = false;
                     }
                 } else if (toy.id === 'showImploderButton') {
-                    if (typeof Imploder !== 'undefined' && Imploder.length > 0) {
-                        Imploder[0].active = !!toy.checked;
+                    if (typeof Magnet !== 'undefined' && Magnet.length > 0) {
+                        Magnet[0].active = !!toy.checked;
                     }
                 } else if (toy.id === 'showHeartButton') {
                     if (toy.checked) {
@@ -3755,12 +3800,12 @@ window.addEventListener('DOMContentLoaded', function() {
                     }
                 } else if (toy.id === 'showImploderButton') {
                     if (toy.checked) {
-                        if (typeof Imploder !== 'undefined' && Imploder.length > 0) {
-                            Imploder[0].active = true;
+                        if (typeof Magnet !== 'undefined' && Magnet.length > 0) {
+                            Magnet[0].active = true;
                         }
                     } else {
-                        if (typeof Imploder !== 'undefined' && Imploder.length > 0) {
-                            Imploder[0].active = false;
+                        if (typeof Magnet !== 'undefined' && Magnet.length > 0) {
+                            Magnet[0].active = false;
                         }
                     }
                 } else if (toy.id === 'flyingPuckButton') {
@@ -4456,7 +4501,7 @@ window.addEventListener('DOMContentLoaded', function() {
             // Close the color wheel with fade out animation
             colorWheelTargetOpacity = 0;
             colorWheelAnimating = true;
-            document.getElementById('colorWheelToggle').checked = false;
+            // HTML checkbox removed - state now managed by main menu
             return true;
         }
         
@@ -4551,7 +4596,6 @@ window.addEventListener('DOMContentLoaded', function() {
         const closeDistX = canvasX - closeButtonX;
         const closeDistY = canvasY - closeButtonY;
         if (Math.sqrt(closeDistX * closeDistX + closeDistY * closeDistY) < closeButtonRadius) {
-            document.getElementById('physicsMenuToggle').checked = false;
             physicsMenuTargetOpacity = 0;
             physicsMenuAnimating = true;
             return 'close';
@@ -4682,7 +4726,6 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Handle close button
         if (hitTest === 'close') {
-            document.getElementById('particlesMenuToggle').checked = false;
             particlesMenuTargetOpacity = 0;
             particlesMenuAnimating = true;
             return 'close';
@@ -4741,95 +4784,7 @@ window.addEventListener('DOMContentLoaded', function() {
         return hitTest; // 'drag'
     }
     
-    // Toggle color wheel visibility
-    document.getElementById('colorWheelToggle').addEventListener('change', function() {
-        if (this.checked) {
-            // Fade in and bring to front
-            colorWheelVisible = true;
-            colorWheelTargetOpacity = 1;
-            colorWheelAnimating = true;
-            bringMenuToFront('colorWheel');
-            // Sync color wheel persistence with current persistence value
-            colorWheelPersistence = persistence;
-            colorWheelVelMap = physProps.velColorMap;
-            // Only center if position hasn't been set (first time opening)
-            if (colorWheelCenterX === 0 && colorWheelCenterY === 0) {
-                updateColorWheelPosition();
-            }
-        } else {
-            // Fade out
-            colorWheelTargetOpacity = 0;
-            colorWheelAnimating = true;
-        }
-    });
-    
-    document.getElementById('physicsMenuToggle').addEventListener('change', function() {
-        if (this.checked) {
-            // Fade in and bring to front
-            physicsMenuVisible = true;
-            physicsMenuTargetOpacity = 1;
-            physicsMenuAnimating = true;
-            bringMenuToFront('physicsMenu');
-            // Sync physics menu values with current physics values
-            physicsMenuRepulsionForce = (physProps.repulsionForce || 2.0) * 10;
-            physicsMenuRepulsionOn = ballRepulsion;
-            physicsMenuBallRest = Math.round((physProps.ballRest || 0) * 100);
-            physicsMenuBounceOn = (physProps.ballRest > 0);
-            // Reverse the time formula to get slider value from dt
-            const substepsFromDt = Math.round((1 / physProps.dt) / 60);
-            const expValue = substepsFromDt - 6;
-            physicsMenuTime = expValue > 0 ? (140 - 10 * Math.log(expValue)) / 0.1 : 1000;
-            physicsMenuSpeed = (physProps.maxSpeed || 2.0) / 0.1;
-            // Sync substeps value with current physics system
-            physicsMenuSubsteps = physProps.substeps || 1;
-            // Only update position if user hasn't manually moved it
-            if (!physicsMenuManuallyMoved) {
-                updatePhysicsMenuPosition();
-            }
-        } else {
-            // Fade out but preserve position memory
-            physicsMenuTargetOpacity = 0;
-            physicsMenuAnimating = true;
-        }
-    });
-    
-    // Gravity menu toggle event listener
-    document.getElementById('gravityMenuToggle').addEventListener('change', function() {
-        if (this.checked) {
-            gravityMenuVisible = true;
-            gravityMenuTargetOpacity = 1;
-            gravityMenuAnimating = true;
-            bringMenuToFront('gravityMenu');
-            if (!gravityMenuManuallyMoved) {
-                updateGravityMenuPosition();
-            }
-        } else {
-            gravityMenuTargetOpacity = 0;
-            gravityMenuAnimating = true;
-        }
-    });
-    
-    // Particles menu toggle event listener
-    document.getElementById('particlesMenuToggle').addEventListener('change', function() {
-        if (this.checked) {
-            // Sync particles menu values with current values
-            if (typeof Balls !== 'undefined' && Array.isArray(Balls)) {
-                particlesMenuQuantity = Math.round(Math.sqrt(Balls.length));
-            }
-            // Only update position if user hasn't manually moved it OR if position hasn't been set yet
-            if (!particlesMenuManuallyMoved || (particlesMenuCenterX === 0 && particlesMenuCenterY === 0)) {
-                updateParticlesMenuPosition();
-            }
-            // Set visibility AFTER position is updated
-            particlesMenuVisible = true;
-            particlesMenuTargetOpacity = 1;
-            particlesMenuAnimating = true;
-            bringMenuToFront('particlesMenu');
-        } else {
-            particlesMenuTargetOpacity = 0;
-            particlesMenuAnimating = true;
-        }
-    });
+    // Event listeners for HTML elements removed - now handled by main menu in canvas
     
     // Mouse move handler for color wheel dragging
     function colorWheelMouseMove(e) {
@@ -5039,78 +4994,7 @@ window.addEventListener('DOMContentLoaded', function() {
     // Three-state logic for worm functionality (variables needed by toys menu)
     let wormState = 0; // 0 = off, 1 = spheres, 2 = curves
     
-    // Walls menu toggle event listener
-    document.getElementById('wallsMenuToggle').addEventListener('change', function() {
-        if (this.checked) {
-            // Sync walls menu values with current wall states
-            wallsMenuCornerRadius = cornerRad || 100;
-            wallsMenuLeftWall = doLeftWall !== undefined ? doLeftWall : true;
-            wallsMenuRightWall = doRightWall !== undefined ? doRightWall : true;
-            wallsMenuCeiling = doCeiling !== undefined ? doCeiling : true;
-            wallsMenuFloor = doFloor !== undefined ? doFloor : true;
-            
-            // Position menu (adjust as needed)
-            if (!wallsMenuManuallyMoved || (wallsMenuCenterX === 0 && wallsMenuCenterY === 0)) {
-                wallsMenuCenterX = canvas.width / 2;
-                wallsMenuCenterY = canvas.height / 2;
-            }
-            
-            wallsMenuVisible = true;
-            wallsMenuTargetOpacity = 1;
-            wallsMenuAnimating = true;
-            bringMenuToFront('wallsMenu');
-        } else {
-            wallsMenuTargetOpacity = 0;
-            wallsMenuAnimating = true;
-        }
-    });
-    
-    // Old wall controls removed - now handled by walls menu
-    
-    // ReSpawn menu toggle event listener
-    document.getElementById('respawnMenuToggle').addEventListener('change', function() {
-        if (this.checked) {
-            // Position menu
-            if (!respawnMenuManuallyMoved || (respawnMenuCenterX === 0 && respawnMenuCenterY === 0)) {
-                updateRespawnMenuPosition();
-            }
-            
-            respawnMenuVisible = true;
-            respawnMenuTargetOpacity = 1;
-            respawnMenuAnimating = true;
-            bringMenuToFront('respawnMenu');
-        } else {
-            respawnMenuTargetOpacity = 0;
-            respawnMenuAnimating = true;
-        }
-    });
-    
-    // Toys menu toggle event listener
-    document.getElementById('toysMenuToggle').addEventListener('change', function() {
-        if (this.checked) {
-            // Position menu
-            if (!toysMenuManuallyMoved || (toysMenuCenterX === 0 && toysMenuCenterY === 0)) {
-                updateToysMenuPosition();
-            }
-            
-            toysMenuVisible = true;
-            toysMenuTargetOpacity = 1;
-            toysMenuAnimating = true;
-            bringMenuToFront('toysMenu');
-        } else {
-            toysMenuTargetOpacity = 0;
-            toysMenuAnimating = true;
-        }
-    });
-    
-
-    
-    // Old wall button handlers removed - now handled by walls menu
-    
-
-    
-    // Worm button handler - moved to toys menu
-    // All tracer button handlers - moved to toys menu
+    // Event listeners for removed HTML elements are now handled by main menu in canvas
     
     // Worm variables (needed for worm functionality in toys menu)
     var wormRenderMode = 'spheres'; // default
@@ -5275,6 +5159,159 @@ window.addEventListener('DOMContentLoaded', function() {
         bounds = canvas.getBoundingClientRect();
         mX = e.clientX - bounds.left - canvas.clientLeft;
         mY = e.clientY - bounds.top - canvas.clientTop;
+        
+        // Check ellipsis button first (always visible)
+        const ellipsisX = ellipsisMargin + ellipsisSize / 2;
+        const ellipsisY = ellipsisMargin + ellipsisSize / 2;
+        const distToEllipsis = Math.sqrt((mX - ellipsisX) ** 2 + (mY - ellipsisY) ** 2);
+        
+        if (distToEllipsis <= ellipsisSize / 2) {
+            toggleMainMenu();
+            return;
+        }
+        
+        // Check main menu items if visible
+        if (mainMenuVisible || mainMenuX > -calculateMainMenuWidth()) {
+            const menuWidth = calculateMainMenuWidth();
+            const itemWidth = 90;
+            const itemSpacing = 10;
+            const sidePadding = 20;
+            const barY = mainMenuPadding;
+            const menuHeight = mainMenuHeight;
+            
+            // Check if clicking within main menu bar
+            if (mX >= mainMenuX && mX <= mainMenuX + menuWidth &&
+                mY >= barY && mY <= barY + menuHeight) {
+                
+                // Determine which item was clicked
+                let currentX = mainMenuX + sidePadding;
+                
+                for (const item of mainMenuItems) {
+                    if (mX >= currentX && mX <= currentX + itemWidth) {
+                        // Toggle the item
+                        if (item.isPause) {
+                            pause();
+                        } else if (item.variable) {
+                            // Toggle menu visibility
+                            const currentValue = eval(item.variable);
+                            const menuCheckboxId = item.id + 'MenuToggle';
+                            
+                            if (item.id === 'particles') {
+                                particlesMenuVisible = !currentValue;
+                                if (particlesMenuVisible) {
+                                    if (typeof Balls !== 'undefined' && Array.isArray(Balls)) {
+                                        particlesMenuQuantity = Math.round(Math.sqrt(Balls.length));
+                                    }
+                                    if (!particlesMenuManuallyMoved || (particlesMenuCenterX === 0 && particlesMenuCenterY === 0)) {
+                                        updateParticlesMenuPosition();
+                                    }
+                                    particlesMenuTargetOpacity = 1;
+                                    particlesMenuAnimating = true;
+                                    bringMenuToFront('particlesMenu');
+                                } else {
+                                    particlesMenuTargetOpacity = 0;
+                                    particlesMenuAnimating = true;
+                                }
+                            } else if (item.id === 'physics') {
+                                physicsMenuVisible = !currentValue;
+                                if (physicsMenuVisible) {
+                                    physicsMenuTargetOpacity = 1;
+                                    physicsMenuAnimating = true;
+                                    bringMenuToFront('physicsMenu');
+                                    physicsMenuRepulsionForce = (physProps.repulsionForce || 2.0) * 10;
+                                    physicsMenuRepulsionOn = ballRepulsion;
+                                    physicsMenuBallRest = Math.round((physProps.ballRest || 0) * 100);
+                                    physicsMenuBounceOn = (physProps.ballRest > 0);
+                                    const substepsFromDt = Math.round((1 / physProps.dt) / 60);
+                                    const expValue = substepsFromDt - 6;
+                                    physicsMenuTime = expValue > 0 ? (140 - 10 * Math.log(expValue)) / 0.1 : 1000;
+                                    physicsMenuSpeed = (physProps.maxSpeed || 2.0) / 0.1;
+                                    physicsMenuSubsteps = physProps.substeps || 1;
+                                    if (!physicsMenuManuallyMoved) {
+                                        updatePhysicsMenuPosition();
+                                    }
+                                } else {
+                                    physicsMenuTargetOpacity = 0;
+                                    physicsMenuAnimating = true;
+                                }
+                            } else if (item.id === 'gravity') {
+                                gravityMenuVisible = !currentValue;
+                                if (gravityMenuVisible) {
+                                    gravityMenuTargetOpacity = 1;
+                                    gravityMenuAnimating = true;
+                                    bringMenuToFront('gravityMenu');
+                                    if (!gravityMenuManuallyMoved) {
+                                        updateGravityMenuPosition();
+                                    }
+                                } else {
+                                    gravityMenuTargetOpacity = 0;
+                                    gravityMenuAnimating = true;
+                                }
+                            } else if (item.id === 'walls') {
+                                wallsMenuVisible = !currentValue;
+                                if (wallsMenuVisible) {
+                                    wallsMenuTargetOpacity = 1;
+                                    wallsMenuAnimating = true;
+                                    bringMenuToFront('wallsMenu');
+                                    if (!wallsMenuManuallyMoved) {
+                                        updateWallsMenuPosition();
+                                    }
+                                } else {
+                                    wallsMenuTargetOpacity = 0;
+                                    wallsMenuAnimating = true;
+                                }
+                            } else if (item.id === 'respawn') {
+                                respawnMenuVisible = !currentValue;
+                                if (respawnMenuVisible) {
+                                    if (!respawnMenuManuallyMoved || (respawnMenuCenterX === 0 && respawnMenuCenterY === 0)) {
+                                        updateRespawnMenuPosition();
+                                    }
+                                    respawnMenuTargetOpacity = 1;
+                                    respawnMenuAnimating = true;
+                                    bringMenuToFront('respawnMenu');
+                                } else {
+                                    respawnMenuTargetOpacity = 0;
+                                    respawnMenuAnimating = true;
+                                }
+                            } else if (item.id === 'toys') {
+                                toysMenuVisible = !currentValue;
+                                if (toysMenuVisible) {
+                                    if (!toysMenuManuallyMoved || (toysMenuCenterX === 0 && toysMenuCenterY === 0)) {
+                                        updateToysMenuPosition();
+                                    }
+                                    toysMenuTargetOpacity = 1;
+                                    toysMenuAnimating = true;
+                                    bringMenuToFront('toysMenu');
+                                } else {
+                                    toysMenuTargetOpacity = 0;
+                                    toysMenuAnimating = true;
+                                }
+                            } else if (item.id === 'color') {
+                                colorWheelVisible = !currentValue;
+                                if (colorWheelVisible) {
+                                    colorWheelTargetOpacity = 1;
+                                    colorWheelAnimating = true;
+                                    bringMenuToFront('colorWheel');
+                                    colorWheelPersistence = persistence;
+                                    colorWheelVelMap = physProps.velColorMap;
+                                    if (colorWheelCenterX === 0 && colorWheelCenterY === 0) {
+                                        updateColorWheelPosition();
+                                    }
+                                } else {
+                                    colorWheelTargetOpacity = 0;
+                                    colorWheelAnimating = true;
+                                }
+                            }
+                        }
+                        return;
+                    }
+                    currentX += itemWidth + itemSpacing;
+                }
+                
+                // Clicked on main menu bar but not on any item - do nothing special
+                return;
+            }
+        }
         
         // Check menus in reverse z-order (top to bottom) so topmost menu gets priority
         for (let i = menuDrawOrder.length - 1; i >= 0; i--) {
@@ -6931,7 +6968,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Toggle paused state
         physProps.paused = !physProps.paused;
         // Update the pause button checkbox to reflect the state (in case called programmatically)
-        var pauseCheckbox = document.querySelector('.checkbox-pause');
+        //var pauseCheckbox = document.querySelector('.checkbox-pause');
         if (pauseCheckbox) {
             pauseCheckbox.checked = physProps.paused;
         }
@@ -6977,6 +7014,7 @@ window.addEventListener('DOMContentLoaded', function() {
     
     // Continuous implode functionality
     let implodeInterval = null;
+    let imploderHoldTimer = null;
     
     function startContinuousImplode() {
         // Start continuous implode effect
@@ -6987,7 +7025,6 @@ window.addEventListener('DOMContentLoaded', function() {
     }
 
     function stopContinuousImplode() {
-        
         // Stop continuous implode effect
         if (implodeInterval) {
             clearInterval(implodeInterval);
@@ -6995,10 +7032,10 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-        // Button-based event listeners removed; Imploder is now only activated via canvas interaction.
+        // Button-based event listeners removed; Magnet is now only activated via canvas interaction.
 
 	function pauseAndStep() {
-        let input = document.querySelectorAll('.checkbox-pause');
+        //let input = document.querySelectorAll('.checkbox-pause');
         for (i = 0; i < input.length; i++) {
             input[i].checked = true;
         }
@@ -7817,10 +7854,12 @@ window.addEventListener('DOMContentLoaded', function() {
     
 	//  SETUP SCENE ======================================================
 	function setupScene() {
-        let input = document.querySelectorAll('.checkbox-pause');
-        for (i = 0; i < input.length; i++) {
-            input[i].checked = false;
-        }
+        // Initialize main menu to off-screen position
+        mainMenuX = -calculateMainMenuWidth();
+        mainMenuTargetX = mainMenuX;
+        mainMenuVisible = false;
+        mainMenuAnimating = false;
+        
         currentDate = new Date();
         mSecs = currentDate.getMilliseconds();
         dumpSqueeze2 = 0.2;
@@ -10500,74 +10539,122 @@ window.addEventListener('DOMContentLoaded', function() {
         }
 	}
 
-    //  IMPLODER CONSTRUCTOR ----------------------------------------------------------------
-    class IMPLODER {
+    //  MAGNET CONSTRUCTOR ----------------------------------------------------------------
+    let poleGlowTicker = 0;
+    class MAGNET {
         constructor(pos) {
             this.radius = 0.2;
             this.pos = pos.clone();
             this.force = 5;
         }
         draw() {
-            // draw magnet icon with two lines and an arc, representing a horseshoe magnet, red in color with gray poles
             const iconRadius = 30;
             const centerX = this.pos.x * cScale;
             const centerY = (simHeight - this.pos.y) * cScale;
 
-            c.lineWidth = 40;
-            var schwarz = 'hsla(0, 0%, 0%, 0.5)';
-            var schwarzlicht = 'hsla(0, 0%, 0%, 0.3)';
-            // Left pole
-            c.beginPath();
-            c.moveTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
-            c.lineTo(centerX - iconRadius, centerY);
-            c.strokeStyle = schwarz;
-            c.stroke();
-            c.beginPath();
-            c.moveTo(centerX - iconRadius, centerY - 1.8 * iconRadius);
-            c.lineTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
-            c.strokeStyle = schwarzlicht;
-            c.stroke();
-            // Right pole
-            c.beginPath();
-            c.moveTo(centerX + iconRadius, centerY - 0.9 * iconRadius);
-            c.lineTo(centerX + iconRadius, centerY);
-            c.strokeStyle = schwarz;
-            c.stroke();
-            c.beginPath();
-            c.moveTo(centerX + iconRadius, centerY - 1.8 * iconRadius);
-            c.lineTo(centerX + iconRadius, centerY - 0.9 * iconRadius);
-            c.strokeStyle = schwarzlicht;
-            c.stroke();
-            // Arc connecting poles
-            c.beginPath();
-            c.arc(centerX, centerY, iconRadius, Math.PI, 0, true);
-            c.strokeStyle = schwarz;
-            c.stroke();
+            if (imploderHoldTimer != null) {
+                poleGlowTicker += 0.05;
+                if (poleGlowTicker > 2 * Math.PI) {
+                    poleGlowTicker = 0;
+                }  
 
-            c.lineWidth = 22;
-            const grau = 'hsla(0, 0%, 60%, 1)';
-            const rott = 'hsla(0, 85%, 40%, 1)';
+                const poleGlowAlpha = 0.6 * Math.abs(Math.sin(poleGlowTicker));
+                const glowRadius = 0.4 * iconRadius + poleGlowAlpha * 0.8 * iconRadius + (this.force / 5) * 0.4 * iconRadius;
+                var poleGlow = c.createRadialGradient(
+                    centerX - iconRadius, 
+                    centerY - 1.2 * iconRadius, 
+                    0, 
+                    centerX - iconRadius, 
+                    centerY - 1.2 * iconRadius, 
+                    glowRadius);
+                poleGlow.addColorStop(0, `hsla(270, 0%, 70%, ${poleGlowAlpha})`);
+                poleGlow.addColorStop(1, `hsla(270, 0%, 50%, 0.0)`);
+                c.fillStyle = poleGlow;
+                drawCircle(centerX - iconRadius, centerY - 1.2 * iconRadius, glowRadius);
+                c.fill();
+                
+                poleGlow = c.createRadialGradient(
+                    centerX + iconRadius, 
+                    centerY - 1.2 * iconRadius, 
+                    0, 
+                    centerX + iconRadius, 
+                    centerY - 1.2 * iconRadius, 
+                    glowRadius);
+                poleGlow.addColorStop(0, `hsla(270, 0%, 70%, ${poleGlowAlpha})`);
+                poleGlow.addColorStop(1, `hsla(270, 0%, 50%, 0.0)`);
+                c.fillStyle = poleGlow;
+                
+                drawCircle(centerX + iconRadius, centerY - 1.2 * iconRadius, glowRadius);
+                c.fill();
+            };
+
+            c.shadowBlur = 8;
+            c.shadowColor = 'hsla(0, 0%, 0%, 0.9)';
+            // black base for poles and arc
+            c.lineWidth = 24;
             // Left pole
             c.beginPath();
             c.moveTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
             c.lineTo(centerX - iconRadius, centerY);
-            c.strokeStyle = rott;
+            c.strokeStyle = 'hsla(0, 0%, 0%, 1.0)';
             c.stroke();
+            // left pole tip
             c.beginPath();
             c.moveTo(centerX - iconRadius, centerY - 1.5 * iconRadius);
             c.lineTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
-            c.strokeStyle = grau;
-            c.stroke();
+            //c.stroke();
             // Right pole
             c.beginPath();
             c.moveTo(centerX + iconRadius, centerY - 0.9 * iconRadius);
             c.lineTo(centerX + iconRadius, centerY);
-            c.strokeStyle = rott;
             c.stroke();
+            // right pole tip
             c.beginPath();
             c.moveTo(centerX + iconRadius, centerY - 1.5 * iconRadius);
             c.lineTo(centerX + iconRadius, centerY - 0.9 * iconRadius);
-            c.strokeStyle = grau;
+            //c.stroke();
+            // Arc connecting poles
+            c.beginPath();
+            c.arc(centerX, centerY, iconRadius, Math.PI, 0, true);
+            c.stroke();
+            c.shadowBlur = 0;
+
+            // colored overlay for poles and arc
+            c.lineWidth = 22;
+            const grau = 'hsla(0, 0%, 50%, 1)';
+            const lichtgrau = 'hsla(0, 0%, 80%, 1)';
+            const rott = 'hsla(0, 85%, 40%, 1)';
+            // Left pole
+            c.beginPath();
+            c.moveTo(centerX - iconRadius, centerY - 0.85 * iconRadius);
+            c.lineTo(centerX - iconRadius, centerY + 0.1 * iconRadius);
+            c.strokeStyle = rott;
+            c.stroke();
+            // left pole tip
+            c.beginPath();
+            c.moveTo(centerX - iconRadius, centerY - 1.5 * iconRadius);
+            c.lineTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
+            if (imploderHoldTimer == null) {
+                c.strokeStyle = grau;
+            } else {
+                c.strokeStyle = lichtgrau;
+            }
+            c.stroke();
+            // Right pole
+            c.beginPath();
+            c.moveTo(centerX + iconRadius, centerY - 0.85 * iconRadius);
+            c.lineTo(centerX + iconRadius, centerY + 0.1 * iconRadius);
+            c.strokeStyle = rott;
+            c.stroke();
+            // right pole tip
+            c.beginPath();
+            c.moveTo(centerX + iconRadius, centerY - 1.5 * iconRadius);
+            c.lineTo(centerX + iconRadius, centerY - 0.9 * iconRadius);
+            if (imploderHoldTimer == null) {
+                c.strokeStyle = grau;
+            } else {
+                c.strokeStyle = lichtgrau;
+            }
             c.stroke();
             // Arc connecting poles
             c.beginPath();
@@ -10595,8 +10682,8 @@ window.addEventListener('DOMContentLoaded', function() {
             for (let i = 0; i < gaugeSteps; i++) {
                 const t = i / (gaugeSteps - 1);
                 const angle = Math.PI - t * Math.PI;
-                const dotX = centerX + (iconRadius - 0.03 * iconRadius) * Math.cos(angle);
-                const dotY = centerY + (iconRadius - 0.03 * iconRadius) * Math.sin(angle);
+                const dotX = centerX + (iconRadius - 0.02 * iconRadius) * Math.cos(angle);
+                const dotY = centerY + (iconRadius - 0.02 * iconRadius) * Math.sin(angle);
                 drawCircle(dotX, dotY, gaugeRadius);
                 if (i < this.force) {
                     if (this.force < 1) {
@@ -10613,28 +10700,27 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    //  MAKE IMPLODER  --------------------------------------------------------------------------
+    //  MAKE MAGNET  --------------------------------------------------------------------------
     function makeImploder(radius, pos) {
-        Imploder = [];
-        var obj = new IMPLODER(radius, pos);
+        Magnet = [];
+        var obj = new MAGNET(radius, pos);
         obj.active = true;
-        Imploder.push(obj);
-        // Mouse/touch controls for moving Imploder
+        Magnet.push(obj);
+        // Mouse/touch controls for moving Magnet
         var isImploderDragging = false;
         var imploderDragOffset = {x:0, y:0};
 
-        let imploderHoldTimer = null;
         canvas.addEventListener('mousedown', function(e) {
-            if (typeof Imploder !== 'undefined' && Imploder.length > 0) {
-                if (!Imploder[0].active) return;
+            if (typeof Magnet !== 'undefined' && Magnet.length > 0) {
+                if (!Magnet[0].active) return;
                 
-                var imploder = Imploder[0];
+                var magnet = Magnet[0];
                 
                 // Work in canvas pixel coordinates for the icon
                 const canvasX = e.offsetX;
                 const canvasY = e.offsetY;
-                const centerX = imploder.pos.x * cScale;
-                const centerY = (simHeight - imploder.pos.y) * cScale;
+                const centerX = magnet.pos.x * cScale;
+                const centerY = (simHeight - magnet.pos.y) * cScale;
                 
                 const iconRadius = 30;
                 const clickRadius = 20; // 20 pixel click area
@@ -10644,11 +10730,11 @@ window.addEventListener('DOMContentLoaded', function() {
                 const minusCanvasY = centerY - 1.2 * iconRadius;
                 
                 if (Math.abs(canvasX - minusCanvasX) < clickRadius && Math.abs(canvasY - minusCanvasY) < clickRadius) {
-                    if (imploder.force <= 1) {
-                        imploder.force = Math.max(0.1 , imploder.force - 0.1);
+                    if (magnet.force <= 1) {
+                        magnet.force = Math.max(0.1 , magnet.force - 0.1);
                         return;
                     };
-                    imploder.force = Math.max(1, imploder.force - 1);
+                    magnet.force = Math.max(1, magnet.force - 1);
                     return;
                 }
                 
@@ -10657,20 +10743,20 @@ window.addEventListener('DOMContentLoaded', function() {
                 const plusCanvasY = centerY - 1.2 * iconRadius;
                 
                 if (Math.abs(canvasX - plusCanvasX) < clickRadius && Math.abs(canvasY - plusCanvasY) < clickRadius) {
-                    if (imploder.force < 1) {
-                        imploder.force = Math.min(1, imploder.force + 0.1);
+                    if (magnet.force < 1) {
+                        magnet.force = Math.min(1, magnet.force + 0.1);
                         return;
                     };
                     
-                    imploder.force = Math.min(10, imploder.force + 1);
+                    magnet.force = Math.min(10, magnet.force + 1);
                     return;
                 }
                 
                 // Check for drag - convert back to sim coordinates
                 var mouseX = e.offsetX / cScale;
                 var mouseY = (simHeight - e.offsetY / cScale);
-                var dx = mouseX - imploder.pos.x;
-                var dy = mouseY - imploder.pos.y;
+                var dx = mouseX - magnet.pos.x;
+                var dy = mouseY - magnet.pos.y;
                 const magnetRadius = 60 / cScale; // 60 pixels in sim units
                 const distFromCenter = Math.sqrt(dx*dx + dy*dy);
                 
@@ -10698,25 +10784,25 @@ window.addEventListener('DOMContentLoaded', function() {
             isImploderDragging = false;
         });
         canvas.addEventListener('mousemove', function(e) {
-            if (isImploderDragging && typeof Imploder !== 'undefined' && Imploder.length > 0) {
+            if (isImploderDragging && typeof Magnet !== 'undefined' && Magnet.length > 0) {
                 var mouseX = e.offsetX / cScale;
                 var mouseY = (simHeight - e.offsetY / cScale);
-                Imploder[0].pos.x = mouseX - imploderDragOffset.x;
-                Imploder[0].pos.y = mouseY - imploderDragOffset.y;
+                Magnet[0].pos.x = mouseX - imploderDragOffset.x;
+                Magnet[0].pos.y = mouseY - imploderDragOffset.y;
             }
         });
         canvas.addEventListener('mouseup', function(e) {
             isImploderDragging = false;
         });
         canvas.addEventListener('touchstart', function(e) {
-        if (typeof Imploder !== 'undefined' && Imploder.length > 0 && Imploder[0].active) {
+        if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active) {
             var touch = e.touches[0];
             var rect = canvas.getBoundingClientRect();
             var mouseX = (touch.clientX - rect.left) / cScale;
             var mouseY = (simHeight - (touch.clientY - rect.top) / cScale);
-            var dx = mouseX - Imploder[0].pos.x;
-            var dy = mouseY - Imploder[0].pos.y;
-            if (Math.sqrt(dx*dx + dy*dy) < Imploder[0].radius) {
+            var dx = mouseX - Magnet[0].pos.x;
+            var dy = mouseY - Magnet[0].pos.y;
+            if (Math.sqrt(dx*dx + dy*dy) < Magnet[0].radius) {
                 isImploderDragging = true;
                 imploderDragOffset.x = dx;
                 imploderDragOffset.y = dy;
@@ -10724,13 +10810,13 @@ window.addEventListener('DOMContentLoaded', function() {
         }
         }, { passive: true });
         canvas.addEventListener('touchmove', function(e) {
-            if (isImploderDragging && typeof Imploder !== 'undefined' && Imploder.length > 0) {
+            if (isImploderDragging && typeof Magnet !== 'undefined' && Magnet.length > 0) {
                 var touch = e.touches[0];
                 var rect = canvas.getBoundingClientRect();
                 var mouseX = (touch.clientX - rect.left) / cScale;
                 var mouseY = (simHeight - (touch.clientY - rect.top) / cScale);
-                Imploder[0].pos.x = mouseX - imploderDragOffset.x;
-                Imploder[0].pos.y = mouseY - imploderDragOffset.y;
+                Magnet[0].pos.x = mouseX - imploderDragOffset.x;
+                Magnet[0].pos.y = mouseY - imploderDragOffset.y;
             }
         }, { passive: true });
         canvas.addEventListener('touchend', function(e) {
@@ -10739,14 +10825,22 @@ window.addEventListener('DOMContentLoaded', function() {
     }
     makeImploder(new Vector2(0.22 * simWidth, 0.35 * simHeight));
 
+    //  HANDLE MAGNET ----------------------------------------------------------------
+    let leftPole = true;
     function instantImplode() {
-        const implosionForce = Imploder[0] ? (Imploder[0].force) : 1;
+        const implosionForce = Magnet[0] ? (Magnet[0].force) : 1;
         const baseSpeed = implosionForce * physProps.dt;
-        // Use Imploder center if active, else canvas center
+        // Use Magnet center if active, else canvas center
         let centerX, centerY;
-        if (typeof Imploder !== 'undefined' && Imploder.length > 0 && Imploder[0].active) {
-            centerX = Imploder[0].pos.x;
-            centerY = Imploder[0].pos.y;
+        if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active) {
+            if (leftPole == true) {
+                centerX = Magnet[0].pos.x - 0.5 * Magnet[0].radius;
+                leftPole = false;
+            } else {
+                centerX = Magnet[0].pos.x + 0.5 * Magnet[0].radius;
+                leftPole = true;
+            }
+            centerY = Magnet[0].pos.y + 0.5 * Magnet[0].radius; 
         } else {
             centerX = 0.5 * simWidth;
             centerY = 0.5 * simHeight;
@@ -10755,9 +10849,12 @@ window.addEventListener('DOMContentLoaded', function() {
             var ball = Balls[i];
             var d = new Vector2();
             d.subtractVectors(ball.pos, new Vector2(centerX, centerY));
-            const angle = Math.atan2(d.y, d.x);
-            ball.vel.x -= baseSpeed * Math.cos(angle);
-            ball.vel.y -= baseSpeed * Math.sin(angle);
+        
+            // Apply inward drawing force inversely proportional to distance
+            var influenceDist = d.length();
+            d.scale(1 / (influenceDist)); 
+            ball.vel.x -= d.x * baseSpeed;
+            ball.vel.y -= d.y * baseSpeed;
         }
     }
 
@@ -10804,7 +10901,7 @@ window.addEventListener('DOMContentLoaded', function() {
             drawCircle(
                 gripX, 
                 gripY, 
-                0.15 * this.radius * cScale);
+                0.12 * this.radius * cScale);
             c.fillStyle = 'green';
             c.fill();
 
@@ -11657,8 +11754,8 @@ window.addEventListener('DOMContentLoaded', function() {
             blower.draw();
         }
 
-        if (typeof Imploder !== 'undefined' && Imploder.length > 0 && Imploder[0].active) {
-            Imploder[0].draw();
+        if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active) {
+            Magnet[0].draw();
         }
         
         //  DRAW HUNGRY PUCKS ---------------------------------------------------------------     
@@ -11857,6 +11954,12 @@ window.addEventListener('DOMContentLoaded', function() {
                     break;
             }
         }
+        
+        // Draw main menu (always on top) and ellipsis button
+        updatePauseButtonBlink(physProps.dt);
+        animateMainMenu();
+        drawMainMenu();
+        drawEllipsisButton();
     }
 
     //  FPS CALCULATION FUNCTION -------------------------------------------------------------
@@ -11918,6 +12021,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
     //  MAIN SEQUENCE ----------------------------------------------------------------------------
 	firstRun = true;
+    initColorWheelOffscreenCanvas(); // Initialize offscreen canvas early
     setupScene();
     positionFpsCounter(); // Position FPS counter initially
     
