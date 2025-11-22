@@ -1,5 +1,5 @@
 <!-- 
-PLINK(0) LAB :: a simulated particle kinetics toy ::
+SL0SH :: repulsive particle simulation ::
 copyright 2025 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 1.56
+		<title>Slosh 1.57
         </title>
         <style>
 			body {font-family: monospace; 
@@ -430,47 +430,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 filter: brightness(1) saturate(1); 
             }
 
-            /* Impulse buttons (explode/implode/unravel): dim when off, bright when 'checked' */
-            input.implodeButton:hover,
-            input.implodeButton,
-            input.implodeButton {
-                --imp-dim: hsl(108, 50%, 50%);
-                --imp-bright: hsl(108, 60%, 55%);
-                position: relative;
-                display: inline-block;
-                vertical-align: middle;
-                -webkit-appearance: none;
-                appearance: none;
-                background: transparent;
-                border: none;
-                width: 32px;
-                height: 32px;
-                margin: 0 8px;
-                outline: none;
-                cursor: pointer;
-            }
-            input.implodeButton::after {
-                /* two-line: arrows pointing inward (diagonals flipped) */
-                content: "\2198 \2199\A\2197 \2196"; /* ↘ ↙ \A ↗ ↖ */
-                white-space: pre;
-                position: absolute;
-                left: 50%;
-                top: 32%;
-                margin-left: 10px;
-                margin-right: 15px;
-                padding-left: 5px;
-                padding-right: 10px;
-                transform: translate(-50%, -50%);
-                font-family: monospace, bold;
-                font-size: 28px;
-                line-height: 0.7;
-                color: var(--imp-dim);
-                pointer-events: none;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                transition: color 120ms ease, filter 120ms ease;
-            }
-            input.implodeButton:checked::after { color: var(--imp-bright); }
-                
+           
     /*  RADIO BUTTONS  -------------------------------------------------------- */
 
             .radio:hover {opacity: 1}
@@ -608,7 +568,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     </i></c1>
     </span>
     <input type="checkbox" title="Pause" id="x" value="false" class="checkbox-pause" onclick="pause()" unchecked>
-    <input type="checkbox" title="Implode (Hold)" id="implodeButton" class="implodeButton" onmousedown="startContinuousImplode()" onmouseup="stopContinuousImplode()" onmouseleave="stopContinuousImplode()">
 
     <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-left: 10px; display: block; cursor: default;"></canvas>
     <div id="fpsCounter" class="fps-counter">--</div>
@@ -3423,7 +3382,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 { id: 'bigTracerButton', icon: '\u2710', checked: doBigTracer, color: 'hsl(170, 20%, 60%)' },
                 null, // Empty slot
                 { id: 'showBlowerButton', icon: '', image: 'aeolus.png', checked: blowerState > 0, color: 'hsl(190, 85%, 55%)' },
-                null, // Empty slot
+                { id: 'showImploderButton', icon: '\u{1F9F2}', checked: typeof Imploder !== 'undefined' && Imploder.length > 0 && Imploder[0].active, color: 'hsl(320, 85%, 55%)' },
                 null, // Empty slot
                 null  // Empty slot
             ];
@@ -3539,10 +3498,18 @@ window.addEventListener('DOMContentLoaded', function() {
                     ctx.fillText(toy.icon, 0, 0);
                     ctx.restore();
                 } else {
+                    if (toy.id === 'showImploderButton') {
+                    ctx.save();
+                    ctx.translate(x, y - 1);
+                    ctx.rotate(Math.PI);
+                    ctx.scale(1.0, 1.0);
+                    ctx.fillText(toy.icon, 0, 0);
+                    ctx.restore();
+                } else {
                     ctx.fillText(toy.icon, x, y + 3);
                 }
             }
-    }}}}}});
+    }}}}}}});
         
         // Restore context state
         ctx.restore();
@@ -3606,7 +3573,48 @@ window.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Apply the toy's effect based on its ID
-                if (toy.id === 'showHeartButton') {
+                if (toy.id === 'showBumperEntry') {
+                    showBumpers = toy.checked;
+                    if (toy.checked) {
+                        // Optionally re-create bumpers if needed
+                        if (typeof makeBumpers === 'function' && (!Bumpers || Bumpers.length === 0)) {
+                            makeBumpers();
+                        }
+                    } else {
+                        // Hide bumpers
+                        if (Array.isArray(Bumpers)) {
+                            Bumpers.length = 0;
+                        }
+                    }
+                } else 
+                if (toy.id === 'showPuckButton') {
+                    showPucks = toy.checked;
+                    if (typeof Puck !== 'undefined' && Array.isArray(Puck)) {
+                        for (var p = 0; p < Puck.length; p++) {
+                            if (!Puck[p].heartBeat && !Puck[p].cycle && !Puck[p].flying && !Puck[p].orbit && !Puck[p].yinyang) {
+                                if (toy.checked) {
+                                    Puck[p].radius = Puck[p].OGradius && Puck[p].OGradius > 0 ? Puck[p].OGradius : 0.3;
+                                    Puck[p].puckArriving = true;
+                                } else {
+                                    Puck[p].radius = 0;
+                                    Puck[p].puckArriving = false;
+                                }
+                            }
+                        }
+                    }
+                } else if (toy.id === 'showBlowerButton') {
+                    if (toy.checked) {
+                        blowerState = 1;
+                        if (typeof blower !== 'undefined') blower.active = true;
+                    } else {
+                        blowerState = 0;
+                        if (typeof blower !== 'undefined') blower.active = false;
+                    }
+                } else if (toy.id === 'showImploderButton') {
+                    if (typeof Imploder !== 'undefined' && Imploder.length > 0) {
+                        Imploder[0].active = !!toy.checked;
+                    }
+                } else if (toy.id === 'showHeartButton') {
                     if (toy.checked) {
                         for (var p = 0; p < Puck.length; p++) {
                             if (Puck[p].heartBeat === true) {
@@ -3745,35 +3753,14 @@ window.addEventListener('DOMContentLoaded', function() {
                         WormProps.hideStartTime = 0;
                         WormProps.SpaceWorm = null;
                     }
-                } else if (toy.id === 'showBlowerButton') {
+                } else if (toy.id === 'showImploderButton') {
                     if (toy.checked) {
-                        blowerState = 1; // visible but not simulating
-                    } else {
-                        blowerState = 0; // off
-                    }
-                } else if (toy.id === 'showBumperEntry') {
-                    showBumpers = toy.checked;
-                } else if (toy.id === 'showPuckButton') {
-                    showPucks = toy.checked;
-                    if (toy.checked) {
-                        // Restore all normal pucks
-                        for (var p = 0; p < Puck.length; p++) {
-                            if (!Puck[p].heartBeat && !Puck[p].cycle && !Puck[p].flying && !Puck[p].orbit && !Puck[p].yinyang) {
-                                if (Puck[p].OGradius && Puck[p].OGradius > 0) {
-                                    Puck[p].radius = Puck[p].OGradius;
-                                } else {
-                                    Puck[p].radius = 0.3; // fallback default
-                                }
-                                Puck[p].puckArriving = true;
-                            }
+                        if (typeof Imploder !== 'undefined' && Imploder.length > 0) {
+                            Imploder[0].active = true;
                         }
                     } else {
-                        // Hide all normal pucks
-                        for (var p = 0; p < Puck.length; p++) {
-                            if (!Puck[p].heartBeat && !Puck[p].cycle && !Puck[p].flying && !Puck[p].orbit && !Puck[p].yinyang) {
-                                Puck[p].radius = 0;
-                                Puck[p].puckArriving = false;
-                            }
+                        if (typeof Imploder !== 'undefined' && Imploder.length > 0) {
+                            Imploder[0].active = false;
                         }
                     }
                 } else if (toy.id === 'flyingPuckButton') {
@@ -5834,19 +5821,42 @@ window.addEventListener('DOMContentLoaded', function() {
         }
         if (!normalPuckHandled) {
             if (dBlower < 2.0 * blower.radius) {
-                // Check if clicking on red off button (only in state 1)
+                // Check if clicking on blower yellow suspend button (only in state 1)
                 if (blowerState === 1) {
-                    const offButtonX = blower.pos.x + Math.cos(Math.PI + blower.blowerAngle) * 1.2 * blower.radius;
-                    const offButtonY = blower.pos.y + Math.sin(Math.PI + blower.blowerAngle) * 1.2 * blower.radius;
+                    const suspendButtonX = blower.pos.x + Math.cos(Math.PI + blower.blowerAngle) * 1.0 * blower.radius;
+                    const suspendButtonY = blower.pos.y + Math.sin(Math.PI + blower.blowerAngle) * 1.0 * blower.radius;
+                    const dSuspendButton = Math.sqrt(
+                        Math.pow(mousePos.x - suspendButtonX, 2) + 
+                        Math.pow(mousePos.y - suspendButtonY, 2)
+                    );
+                    if (dSuspendButton < 0.15 * blower.radius) {
+                        // Toggle blower active state
+                        blowerActive = !blowerActive;
+                        e.preventDefault();
+                        return; // Don't proceed with other blower interactions
+                    }
+                    const offButtonX = blower.pos.x + Math.cos(Math.PI + blower.blowerAngle) * 1.35 * blower.radius;
+                    const offButtonY = blower.pos.y + Math.sin(Math.PI + blower.blowerAngle) * 1.35 * blower.radius;
                     const dOffButton = Math.sqrt(
                         Math.pow(mousePos.x - offButtonX, 2) + 
                         Math.pow(mousePos.y - offButtonY, 2)
                     );
                     if (dOffButton < 0.15 * blower.radius) {
-                        // Toggle blower active state
-                        blowerActive = !blowerActive;
-                        e.preventDefault();
-                        return; // Don't proceed with other blower interactions
+                            // Turn blower completely off and hide it
+                            blower.active = false;
+                            if (typeof blowerState !== 'undefined') blowerState = 0;
+                            // Update the toys menu blower icon
+                            var blowerButton = document.getElementById('showBlowerButton');
+                            if (blowerButton) {
+                               blowerButton.checked = false;
+                               blowerButton.className = 'checkbox-blower';
+                               blowerButton.title = 'Blower';
+                               blowerButton.setAttribute('data-state', 0);
+                            }
+                            var blowerToy = toysMenuItems && toysMenuItems.find(item => item && item.id === 'showBlowerButton');
+                            if (blowerToy) blowerToy.checked = false;
+                            e.preventDefault();
+                            return; // Don't proceed with other blower interactions
                     }
                 }
                 
@@ -6969,8 +6979,6 @@ window.addEventListener('DOMContentLoaded', function() {
     let implodeInterval = null;
     
     function startContinuousImplode() {
-        const el = document.getElementById('implodeButton');
-        if (el) el.checked = true; 
         // Start continuous implode effect
         if (implodeInterval) clearInterval(implodeInterval);
         implodeInterval = setInterval(() => {
@@ -6979,8 +6987,6 @@ window.addEventListener('DOMContentLoaded', function() {
     }
 
     function stopContinuousImplode() {
-        const el = document.getElementById('implodeButton');
-        if (el) el.checked = false;
         
         // Stop continuous implode effect
         if (implodeInterval) {
@@ -6989,14 +6995,7 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Set up touch event listeners for implode button
-    window.addEventListener('DOMContentLoaded', function() {
-        const implodeButton = document.getElementById('implodeButton');
-        if (implodeButton) {
-            implodeButton.addEventListener('touchstart', startContinuousImplode, {passive: true});
-            implodeButton.addEventListener('touchend', stopContinuousImplode, {passive: true});
-        }
-    });
+        // Button-based event listeners removed; Imploder is now only activated via canvas interaction.
 
 	function pauseAndStep() {
         let input = document.querySelectorAll('.checkbox-pause');
@@ -7453,6 +7452,8 @@ window.addEventListener('DOMContentLoaded', function() {
             var velX = 0.1 * yeet * Math.cos(mrMr.respawnDir + alpha);
             var velY = 0.1 * yeet * Math.sin(mrMr.respawnDir + alpha);
         } else {
+            ball.growing = true;
+            ball.radius = 0.003;
             var spawnX = mrMr.pos.x - (0.3 * mrMr.radius - ball.radius) + (Math.random() * (0.9 * mrMr.radius - 6 * ball.radius));
             var spawnY = mrMr.pos.y - 0.60 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.6 * mrMr.radius - 4 * ball.radius));
             ball.pos.x = Math.max(0, Math.min(simWidth, spawnX));
@@ -8049,22 +8050,13 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function instantImplode() {
-        const baseSpeed = 50 * physProps.dt;
-        for (let i = Balls.length - 1; i >= 0; i--) {
-            var ball = Balls[i];
-            var d = new Vector2();
-            d.subtractVectors(ball.pos, new Vector2(0.5 * simWidth, 0.5 * simHeight));
-            const angle = Math.atan2(d.y, d.x);
-            ball.vel.x -= baseSpeed * Math.cos(angle);
-            ball.vel.y -= baseSpeed * Math.sin(angle);
-        }
-    }
+    
 
 	//  BALL CONSTRUCTOR  -----------------------------------------------------------------------
 	class BALL {
 		constructor(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius) {
 			this.radius = radius;
+            this.OGradius = radius; // Store original radius for reference
 			this.mass = mass;
 			this.pos = pos.clone();
 			this.vel = vel.clone();
@@ -8103,6 +8095,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 this.tracer = true;
                 this.speedHue = 0;
                 this.speedHueRatio = 1;
+                this.growing = false;
             }
 		}
         get top() {
@@ -8146,6 +8139,14 @@ window.addEventListener('DOMContentLoaded', function() {
             this.trailLast = 0;
         }
         simulate() {
+            if (this.growing == true) {
+                this.radius += 0.00025;
+                if (this.radius >= this.OGradius) {
+                    this.radius = this.OGradius;
+                    this.growing = false;
+                }
+            }
+            //this.radius = 0.005;
             this.vel.add(physProps.gravity, physProps.dt);
             var speed = (this.vel.length() * 60 * physProps.dt);
             if (speed > (physProps.maxSpeed / physProps.substeps)) {
@@ -10499,12 +10500,274 @@ window.addEventListener('DOMContentLoaded', function() {
         }
 	}
 
+    //  IMPLODER CONSTRUCTOR ----------------------------------------------------------------
+    class IMPLODER {
+        constructor(pos) {
+            this.radius = 0.2;
+            this.pos = pos.clone();
+            this.force = 5;
+        }
+        draw() {
+            // draw magnet icon with two lines and an arc, representing a horseshoe magnet, red in color with gray poles
+            const iconRadius = 30;
+            const centerX = this.pos.x * cScale;
+            const centerY = (simHeight - this.pos.y) * cScale;
+
+            c.lineWidth = 40;
+            var schwarz = 'hsla(0, 0%, 0%, 0.5)';
+            var schwarzlicht = 'hsla(0, 0%, 0%, 0.3)';
+            // Left pole
+            c.beginPath();
+            c.moveTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
+            c.lineTo(centerX - iconRadius, centerY);
+            c.strokeStyle = schwarz;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(centerX - iconRadius, centerY - 1.8 * iconRadius);
+            c.lineTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
+            c.strokeStyle = schwarzlicht;
+            c.stroke();
+            // Right pole
+            c.beginPath();
+            c.moveTo(centerX + iconRadius, centerY - 0.9 * iconRadius);
+            c.lineTo(centerX + iconRadius, centerY);
+            c.strokeStyle = schwarz;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(centerX + iconRadius, centerY - 1.8 * iconRadius);
+            c.lineTo(centerX + iconRadius, centerY - 0.9 * iconRadius);
+            c.strokeStyle = schwarzlicht;
+            c.stroke();
+            // Arc connecting poles
+            c.beginPath();
+            c.arc(centerX, centerY, iconRadius, Math.PI, 0, true);
+            c.strokeStyle = schwarz;
+            c.stroke();
+
+            c.lineWidth = 22;
+            const grau = 'hsla(0, 0%, 60%, 1)';
+            const rott = 'hsla(0, 85%, 40%, 1)';
+            // Left pole
+            c.beginPath();
+            c.moveTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
+            c.lineTo(centerX - iconRadius, centerY);
+            c.strokeStyle = rott;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(centerX - iconRadius, centerY - 1.5 * iconRadius);
+            c.lineTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
+            c.strokeStyle = grau;
+            c.stroke();
+            // Right pole
+            c.beginPath();
+            c.moveTo(centerX + iconRadius, centerY - 0.9 * iconRadius);
+            c.lineTo(centerX + iconRadius, centerY);
+            c.strokeStyle = rott;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(centerX + iconRadius, centerY - 1.5 * iconRadius);
+            c.lineTo(centerX + iconRadius, centerY - 0.9 * iconRadius);
+            c.strokeStyle = grau;
+            c.stroke();
+            // Arc connecting poles
+            c.beginPath();
+            c.arc(centerX, centerY, iconRadius, Math.PI, 0, true);
+            c.strokeStyle = rott;
+            c.stroke();
+
+            // + - force level indicators
+            c.fillStyle = 'black';
+            c.textBaseline = 'middle';
+            c.textAlign = "center";
+            c.font = `13px verdana`;
+            // minus sign on left side
+            c.fillText("-", centerX - iconRadius - 0.01 * iconRadius, centerY - 1.18 * iconRadius);
+            // plus sign on right side
+            c.fillText("+", centerX + iconRadius + 0.01 * iconRadius, centerY - 1.18 * iconRadius);
+
+            // draw force level indicator dot gauge along the bottom U of the magnget
+            const gaugeRadius = 3;
+            const gaugeStartX = centerX - iconRadius + 0.2 * iconRadius;
+            const gaugeEndX = centerX + iconRadius - 0.2 * iconRadius;
+            const gaugeY = centerY + 0.2 * iconRadius;
+            const gaugeSteps = 10;
+            // draw gauge dots in an arc centered on the U-bend
+            for (let i = 0; i < gaugeSteps; i++) {
+                const t = i / (gaugeSteps - 1);
+                const angle = Math.PI - t * Math.PI;
+                const dotX = centerX + (iconRadius - 0.03 * iconRadius) * Math.cos(angle);
+                const dotY = centerY + (iconRadius - 0.03 * iconRadius) * Math.sin(angle);
+                drawCircle(dotX, dotY, gaugeRadius);
+                if (i < this.force) {
+                    if (this.force < 1) {
+                        c.fillStyle = `hsl(0, 0%, ${this.force * 100}%)`;
+                        //c.fillStyle = 'blue';
+                    } else {
+                        c.fillStyle = 'white';
+                    }
+                } else {
+                    c.fillStyle = 'red';
+                }
+                c.fill();
+            }
+        }
+    }
+
+    //  MAKE IMPLODER  --------------------------------------------------------------------------
+    function makeImploder(radius, pos) {
+        Imploder = [];
+        var obj = new IMPLODER(radius, pos);
+        obj.active = true;
+        Imploder.push(obj);
+        // Mouse/touch controls for moving Imploder
+        var isImploderDragging = false;
+        var imploderDragOffset = {x:0, y:0};
+
+        let imploderHoldTimer = null;
+        canvas.addEventListener('mousedown', function(e) {
+            if (typeof Imploder !== 'undefined' && Imploder.length > 0) {
+                if (!Imploder[0].active) return;
+                
+                var imploder = Imploder[0];
+                
+                // Work in canvas pixel coordinates for the icon
+                const canvasX = e.offsetX;
+                const canvasY = e.offsetY;
+                const centerX = imploder.pos.x * cScale;
+                const centerY = (simHeight - imploder.pos.y) * cScale;
+                
+                const iconRadius = 30;
+                const clickRadius = 20; // 20 pixel click area
+                
+                // Minus button (left gray pole)
+                const minusCanvasX = centerX - iconRadius;
+                const minusCanvasY = centerY - 1.2 * iconRadius;
+                
+                if (Math.abs(canvasX - minusCanvasX) < clickRadius && Math.abs(canvasY - minusCanvasY) < clickRadius) {
+                    if (imploder.force <= 1) {
+                        imploder.force = Math.max(0.1 , imploder.force - 0.1);
+                        return;
+                    };
+                    imploder.force = Math.max(1, imploder.force - 1);
+                    return;
+                }
+                
+                // Plus button (right gray pole)
+                const plusCanvasX = centerX + iconRadius;
+                const plusCanvasY = centerY - 1.2 * iconRadius;
+                
+                if (Math.abs(canvasX - plusCanvasX) < clickRadius && Math.abs(canvasY - plusCanvasY) < clickRadius) {
+                    if (imploder.force < 1) {
+                        imploder.force = Math.min(1, imploder.force + 0.1);
+                        return;
+                    };
+                    
+                    imploder.force = Math.min(10, imploder.force + 1);
+                    return;
+                }
+                
+                // Check for drag - convert back to sim coordinates
+                var mouseX = e.offsetX / cScale;
+                var mouseY = (simHeight - e.offsetY / cScale);
+                var dx = mouseX - imploder.pos.x;
+                var dy = mouseY - imploder.pos.y;
+                const magnetRadius = 60 / cScale; // 60 pixels in sim units
+                const distFromCenter = Math.sqrt(dx*dx + dy*dy);
+                
+                if (distFromCenter < magnetRadius) {
+                    isImploderDragging = true;
+                    imploderDragOffset.x = dx;
+                    imploderDragOffset.y = dy;
+                    // Start instantImplode on hold
+                    imploderHoldTimer = setInterval(instantImplode, 50);
+                }
+            }
+        });
+        canvas.addEventListener('mouseup', function(e) {
+            if (imploderHoldTimer) {
+                clearInterval(imploderHoldTimer);
+                imploderHoldTimer = null;
+            }
+            isImploderDragging = false;
+        });
+        canvas.addEventListener('mouseleave', function(e) {
+            if (imploderHoldTimer) {
+                clearInterval(imploderHoldTimer);
+                imploderHoldTimer = null;
+            }
+            isImploderDragging = false;
+        });
+        canvas.addEventListener('mousemove', function(e) {
+            if (isImploderDragging && typeof Imploder !== 'undefined' && Imploder.length > 0) {
+                var mouseX = e.offsetX / cScale;
+                var mouseY = (simHeight - e.offsetY / cScale);
+                Imploder[0].pos.x = mouseX - imploderDragOffset.x;
+                Imploder[0].pos.y = mouseY - imploderDragOffset.y;
+            }
+        });
+        canvas.addEventListener('mouseup', function(e) {
+            isImploderDragging = false;
+        });
+        canvas.addEventListener('touchstart', function(e) {
+        if (typeof Imploder !== 'undefined' && Imploder.length > 0 && Imploder[0].active) {
+            var touch = e.touches[0];
+            var rect = canvas.getBoundingClientRect();
+            var mouseX = (touch.clientX - rect.left) / cScale;
+            var mouseY = (simHeight - (touch.clientY - rect.top) / cScale);
+            var dx = mouseX - Imploder[0].pos.x;
+            var dy = mouseY - Imploder[0].pos.y;
+            if (Math.sqrt(dx*dx + dy*dy) < Imploder[0].radius) {
+                isImploderDragging = true;
+                imploderDragOffset.x = dx;
+                imploderDragOffset.y = dy;
+            }
+        }
+        }, { passive: true });
+        canvas.addEventListener('touchmove', function(e) {
+            if (isImploderDragging && typeof Imploder !== 'undefined' && Imploder.length > 0) {
+                var touch = e.touches[0];
+                var rect = canvas.getBoundingClientRect();
+                var mouseX = (touch.clientX - rect.left) / cScale;
+                var mouseY = (simHeight - (touch.clientY - rect.top) / cScale);
+                Imploder[0].pos.x = mouseX - imploderDragOffset.x;
+                Imploder[0].pos.y = mouseY - imploderDragOffset.y;
+            }
+        }, { passive: true });
+        canvas.addEventListener('touchend', function(e) {
+            isImploderDragging = false;
+        });
+    }
+    makeImploder(new Vector2(0.22 * simWidth, 0.35 * simHeight));
+
+    function instantImplode() {
+        const implosionForce = Imploder[0] ? (Imploder[0].force) : 1;
+        const baseSpeed = implosionForce * physProps.dt;
+        // Use Imploder center if active, else canvas center
+        let centerX, centerY;
+        if (typeof Imploder !== 'undefined' && Imploder.length > 0 && Imploder[0].active) {
+            centerX = Imploder[0].pos.x;
+            centerY = Imploder[0].pos.y;
+        } else {
+            centerX = 0.5 * simWidth;
+            centerY = 0.5 * simHeight;
+        }
+        for (let i = Balls.length - 1; i >= 0; i--) {
+            var ball = Balls[i];
+            var d = new Vector2();
+            d.subtractVectors(ball.pos, new Vector2(centerX, centerY));
+            const angle = Math.atan2(d.y, d.x);
+            ball.vel.x -= baseSpeed * Math.cos(angle);
+            ball.vel.y -= baseSpeed * Math.sin(angle);
+        }
+    }
+
     //  BLOWER CONSTRUCTOR ----------------------------------------------------------------
     class BLOWER {
-		constructor(radius, pos) {
-			this.radius = radius;
-			this.pos = pos.clone();
-            this.blowerAngle = 0.65 * Math.PI;;
+        constructor(radius, pos) {
+            this.radius = radius;
+            this.OGradius = radius; // Remember original size
+            this.pos = pos.clone();
+            this.blowerAngle = 0.65 * Math.PI;
             this.force = 100;
 		}
         get left() {
@@ -10545,11 +10808,12 @@ window.addEventListener('DOMContentLoaded', function() {
             c.fillStyle = 'green';
             c.fill();
 
-
             // Draw yellow off button (only when not in auto-rotate mode)
             if (blowerState === 1) {
-                const offX = (this.pos.x + Math.cos(Math.PI + this.blowerAngle) * 1.2 * this.radius) * cScale;
-                const offY = (simHeight - this.pos.y - Math.sin(Math.PI + this.blowerAngle) * 1.2 * this.radius) * cScale;
+                const offX = (this.pos.x + Math.cos(Math.PI + this.blowerAngle) * 1.0 * this.radius) * cScale;
+                const offY = (simHeight - this.pos.y - Math.sin(Math.PI + this.blowerAngle) * 1.0 * this.radius) * cScale;
+                const offX2 = (this.pos.x + Math.cos(Math.PI + this.blowerAngle) * 1.35 * this.radius) * cScale;
+                const offY2 = (simHeight - this.pos.y - Math.sin(Math.PI + this.blowerAngle) * 1.35 * this.radius) * cScale;
                 drawCircle(
                     offX, 
                     offY, 
@@ -10562,6 +10826,15 @@ window.addEventListener('DOMContentLoaded', function() {
                     c.fillStyle = 'hsl(60, 30%, 30%)';
                 }
                 c.fill();
+            
+                // Draw off button
+                drawCircle(
+                    offX2, 
+                    offY2, 
+                    0.1 * this.radius * cScale);
+                c.fillStyle = 'hsl(0, 90%, 40%)'; // Dim dark red
+                c.fill();
+            
             }
 
             // Draw image background circle
@@ -11383,6 +11656,11 @@ window.addEventListener('DOMContentLoaded', function() {
             var blower = Blower[0];
             blower.draw();
         }
+
+        if (typeof Imploder !== 'undefined' && Imploder.length > 0 && Imploder[0].active) {
+            Imploder[0].draw();
+        }
+        
         //  DRAW HUNGRY PUCKS ---------------------------------------------------------------     
         if (showEaters == true) {
             // draw first hungry puck
