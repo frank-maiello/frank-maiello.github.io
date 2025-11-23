@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.1
+		<title>Slosh 2.2
         </title>
         <style>
 			body {font-family: monospace; 
@@ -634,6 +634,11 @@ window.addEventListener('DOMContentLoaded', function() {
     aeolusImage.onload = function() { aeolusReady = true; };
     aeolusImage.src = 'aeolus.png';
 
+    var pepeImage = new Image();
+    var pepeReady = false;
+    pepeImage.onload = function() { pepeReady = true; };
+    pepeImage.src = 'pepe.png';
+
     //  CANVAS SETUP AND SCALING --------------------------------------------------------------
     canvas = document.getElementById("myCanvas");
     c = canvas.getContext("2d");
@@ -933,9 +938,13 @@ window.addEventListener('DOMContentLoaded', function() {
     var colorWheelAnimating = false;
     var colorWheelTargetOpacity = 0;
     var colorWheelDragging = false;
+    var colorWheelDraggingControl = null; // Tracks which control: 'wheel', 'lightness', 'sensitivity', 'persistence'
     var colorWheelPositionDragging = false;
     var colorWheelDragOffsetX = 0;
     var colorWheelDragOffsetY = 0;
+    
+    // Global interaction lock - prevents multiple objects from being interacted with simultaneously
+    var globalInteractionLock = false;
     
     // Cached color wheel icon for main menu
     var colorWheelIconCanvas = null;
@@ -1000,6 +1009,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var physicsMenuAnimating = false;
     var physicsMenuTargetOpacity = 0;
     var physicsMenuDragging = false;
+    var physicsMenuDraggingControl = null; // Tracks which slider is being dragged
     var physicsMenuPositionDragging = false;
     var physicsMenuDragOffsetX = 0;
     var physicsMenuDragOffsetY = 0;
@@ -1020,6 +1030,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var gravityMenuAnimating = false;
     var gravityMenuTargetOpacity = 0;
     var gravityMenuDragging = false;
+    var gravityMenuDraggingControl = null; // Tracks which control is being dragged ('rotation' or 'gravity')
     var gravityMenuPositionDragging = false;
     var gravityMenuDragOffsetX = 0;
     var gravityMenuDragOffsetY = 0;
@@ -1036,6 +1047,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var wallsMenuAnimating = false;
     var wallsMenuTargetOpacity = 0;
     var wallsMenuDragging = false;
+    var wallsMenuDraggingControl = null; // Tracks which slider is being dragged
     var wallsMenuPositionDragging = false;
     var wallsMenuDragOffsetX = 0;
     var wallsMenuDragOffsetY = 0;
@@ -1219,6 +1231,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var particlesMenuAnimating = false;
     var particlesMenuTargetOpacity = 1;
     var particlesMenuDragging = false;
+    var particlesMenuDraggingControl = null; // Tracks which slider is being dragged
     var particlesMenuPositionDragging = false;
     var particlesMenuDragOffsetX = 0;
     var particlesMenuDragOffsetY = 0;
@@ -1331,15 +1344,15 @@ window.addEventListener('DOMContentLoaded', function() {
             
             ctx.beginPath();
             ctx.arc(closeButtonX, closeButtonY, closeButtonRadius, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(139, 0, 0, 0.5)';
+            ctx.fillStyle = 'hsl(0, 70%, 30%)';
             ctx.fill();
-            ctx.strokeStyle = 'rgba(255, 100, 100, 0.6)';
+            ctx.strokeStyle = 'black';
             ctx.lineWidth = 2;
-            ctx.stroke();
+            //ctx.stroke();
             
             // Draw X symbol
             ctx.beginPath();
-            const xSize = 6;
+            const xSize = 4;
             ctx.moveTo(closeButtonX - xSize, closeButtonY - xSize);
             ctx.lineTo(closeButtonX + xSize, closeButtonY + xSize);
             ctx.moveTo(closeButtonX + xSize, closeButtonY - xSize);
@@ -1552,26 +1565,31 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Draw icon based on item type
         if (item.id === 'particles') {
-            ctx.font = 'bold 40px verdana';
-            ctx.fillText('#', rectX + width / 2, iconY - 3);
+            ctx.font = 'bold 44px verdana';
+            ctx.fillText('#', rectX + width / 2, iconY - 0);
         } else if (item.id === 'physics') {
-            ctx.font = 'italic bold 34px sans-serif';
-            ctx.fillText('f(x)', rectX + width / 2, iconY - 6);
+            ctx.font = 'italic bold 36px sans-serif';
+            ctx.fillText('f(x)', rectX + width / 2, iconY - 4);
         } else if (item.id === 'gravity') {
-            ctx.font = 'bold 46px times-new-roman';
-            ctx.fillText('G', rectX + width / 2, iconY - 1);
+            ctx.font = 'bold 48px times-new-roman';
+            ctx.fillText('G', rectX + width / 2, iconY - 0);
         } else if (item.id === 'walls') {
             // Draw rounded rectangle with arrow
             ctx.strokeStyle = iconColor;
             ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.roundRect(rectX + width / 2 - 28, iconY - 20, 55, 28, 8);
+            ctx.roundRect(
+                rectX + width / 2 - 30, 
+                iconY - 20, 
+                60, 
+                34, 
+                15);
             ctx.stroke();
             ctx.font = '60px sans-serif';
-            ctx.fillText('↔', rectX + width / 2, iconY - 8);
+            ctx.fillText('↔', rectX + width / 2, iconY - 5);
         } else if (item.id === 'respawn') {
             ctx.font = 'bold 60px verdana';
-            ctx.fillText('∞', rectX + width / 2, iconY - 4);
+            ctx.fillText('∞', rectX + width / 2, iconY - 2);
         } else if (item.id === 'toys') {
             ctx.font = 'bold 38px monospace';
             ctx.fillStyle = iconColor;
@@ -1579,7 +1597,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 ctx.globalAlpha = 0.4;
             }
             //ctx.fillText('🎲', rectX + width / 2, iconY - 3);
-            ctx.fillText('🎁', rectX + width / 2, iconY - 3);
+            ctx.fillText('🎁', rectX + width / 2, iconY - 0);
             ctx.globalAlpha = 1;
         } else if (item.id === 'color') {
             // Draw color wheel icon using cached canvas
@@ -1647,7 +1665,7 @@ window.addEventListener('DOMContentLoaded', function() {
             // Draw "Color" with each letter in different color
             const colors = ['hsl(0, 80%, 50%)', 'hsl(40, 80%, 50%)', 'hsl(120, 80%, 50%)', 'hsl(200, 80%, 50%)', 'hsl(280, 80%, 50%)'];
             const letters = ['C', 'o', 'l', 'o', 'r'];
-            const letterSpacing = 12;
+            const letterSpacing = 10.5;
             const startX = rectX + width / 2 - (letters.length * letterSpacing) / 2;
             
             for (let i = 0; i < letters.length; i++) {
@@ -2594,20 +2612,32 @@ window.addEventListener('DOMContentLoaded', function() {
         const centerX = wallsMenuCenterX;
         const centerY = wallsMenuCenterY;
         
-        // Check if click is within walls menu bounds
-        if (canvasX < centerX - w/2 || canvasX > centerX + w/2 ||
-            canvasY < centerY - h/2 || canvasY > centerY + h/2) {
-            return false;
-        }
-        
-        // Check corner radius slider FIRST (before any complex calculations)
         const sliderY = centerY + h/2 - 22;
         const sliderLeft = centerX - w/2 + 40;
         const sliderWidth = w - 80;
         const sliderHeight = 30;
         
+        // If already dragging the slider, update it regardless of mouse position
+        if (wallsMenuDragging && wallsMenuDraggingControl === 'cornerRadius') {
+            const percent = Math.max(0, Math.min(1, 1 - (canvasX - sliderLeft) / sliderWidth)); // Reversed direction
+            wallsMenuCornerRadius = percent * 150;
+            cornerRad = wallsMenuCornerRadius;
+            updateCornerGeometry();
+            return 'slider';
+        }
+        
+        // Check if click is within walls menu bounds - skip if already dragging
+        if (!wallsMenuDragging) {
+            if (canvasX < centerX - w/2 || canvasX > centerX + w/2 ||
+                canvasY < centerY - h/2 || canvasY > centerY + h/2) {
+                return false;
+            }
+        }
+        
+        // Check corner radius slider FIRST (before any complex calculations)
         if (canvasX >= sliderLeft && canvasX <= sliderLeft + sliderWidth &&
             canvasY >= sliderY - sliderHeight/2 && canvasY <= sliderY + sliderHeight/2) {
+            wallsMenuDraggingControl = 'cornerRadius';
             const percent = 1 - (canvasX - sliderLeft) / sliderWidth; // Reversed direction
             wallsMenuCornerRadius = percent * 150;
             cornerRad = wallsMenuCornerRadius; // Update global variable
@@ -2618,16 +2648,18 @@ window.addEventListener('DOMContentLoaded', function() {
             return 'slider';
         }
         
-        // Check close button
-        const closeButtonX = centerX - w/2 + 12;
-        const closeButtonY = centerY - h/2 + 12;
-        const closeButtonRadius = 12;
-        const closeDistX = canvasX - closeButtonX;
-        const closeDistY = canvasY - closeButtonY;
-        if (Math.sqrt(closeDistX * closeDistX + closeDistY * closeDistY) < closeButtonRadius) {
-            wallsMenuTargetOpacity = 0;
-            wallsMenuAnimating = true;
-            return 'close';
+        // Check close button - only when not dragging
+        if (!wallsMenuDragging) {
+            const closeButtonX = centerX - w/2 + 12;
+            const closeButtonY = centerY - h/2 + 12;
+            const closeButtonRadius = 12;
+            const closeDistX = canvasX - closeButtonX;
+            const closeDistY = canvasY - closeButtonY;
+            if (Math.sqrt(closeDistX * closeDistX + closeDistY * closeDistY) < closeButtonRadius) {
+                wallsMenuTargetOpacity = 0;
+                wallsMenuAnimating = true;
+                return 'close';
+            }
         }
         
         // Define walls area for checkbox detection (using taller representation)
@@ -3445,7 +3477,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Initialize toys menu items if not already done, or if tracer buttons are missing
         if (toysMenuItems.length === 0 || !toysMenuItems.find(item => item && item.id === 'smallTracerButton')) {
             toysMenuItems = [
-                { id: 'showPuckButton', icon: '\u261C', checked: true, color: 'hsl(190, 85%, 55%)' },
+                { id: 'showPuckButton', icon: '\u261C', checked: showPucks, color: 'hsl(190, 85%, 55%)' },
                 { id: 'showCyclePuckButton', icon: '\u26A0', checked: false, color: 'hsl(190, 80%, 55%)' },
                 { id: 'showHeartButton', icon: '\u2665', checked: false, color: 'hsl(338, 100%, 72%)' },
                 { id: 'flyingPuckButton', icon: '\u2604', checked: false, color: 'hsl(190, 85%, 55%)' },
@@ -3463,7 +3495,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 null, // Empty slot
                 { id: 'showBlowerButton', icon: '', image: 'aeolus.png', checked: blowerState > 0, color: 'hsl(190, 85%, 55%)' },
                 { id: 'showImploderButton', icon: '\u{1F9F2}', checked: typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active, color: 'hsl(320, 85%, 55%)' },
-                null, // Empty slot
+                { id: 'showStinkerButton', icon: '', image: 'pepe.png', checked: typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active, color: 'hsl(120, 85%, 55%)' },
                 null  // Empty slot
             ];
         }
@@ -3487,10 +3519,21 @@ window.addEventListener('DOMContentLoaded', function() {
             
             // Draw icon
             if (toy.image) {
-                // Special handling for image-based icons like blower
-                const img = new Image();
-                img.src = toy.image;
-                if (img.complete) {
+                // Special handling for image-based icons like blower and stinker
+                let img, imgReady;
+                if (toy.image === 'aeolus.png') {
+                    img = aeolusImage;
+                    imgReady = aeolusReady;
+                } else if (toy.image === 'pepe.png') {
+                    img = pepeImage;
+                    imgReady = pepeReady;
+                } else {
+                    img = new Image();
+                    img.src = toy.image;
+                    imgReady = img.complete;
+                }
+                
+                if (imgReady && img && img.complete) {
                     ctx.save();
                     if (!toy.checked) {
                         // Dim the image when not checked
@@ -3498,9 +3541,11 @@ window.addEventListener('DOMContentLoaded', function() {
                     }
                     const imageSize = iconSize * 0.8; // Slightly smaller than the box
                     
-                    // Rotate 90 degrees counter-clockwise for blower image
                     ctx.translate(x, y);
-                    ctx.rotate(-Math.PI / 2); // -90 degrees
+                    // Rotate 90 degrees counter-clockwise for blower image only
+                    if (toy.image === 'aeolus.png') {
+                        ctx.rotate(-Math.PI / 2); // -90 degrees
+                    }
                     ctx.drawImage(img, -imageSize/2, -imageSize/2, imageSize, imageSize);
                     
                     ctx.restore();
@@ -3510,7 +3555,11 @@ window.addEventListener('DOMContentLoaded', function() {
                     ctx.font = '12px sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText('Blow', x, y);
+                    if (toy.image === 'aeolus.png') {
+                        ctx.fillText('Blow', x, y);
+                    } else if (toy.image === 'pepe.png') {
+                        ctx.fillText('Pepe', x, y);
+                    }
                 }
             } else {
                 ctx.fillStyle = toy.checked ? toy.color : 'hsl(190, 45%, 20%)';
@@ -3842,6 +3891,16 @@ window.addEventListener('DOMContentLoaded', function() {
                             Magnet[0].active = false;
                         }
                     }
+                } else if (toy.id === 'showStinkerButton') {
+                    if (toy.checked) {
+                        if (typeof Stinker !== 'undefined' && Stinker.length > 0) {
+                            Stinker[0].active = true;
+                        }
+                    } else {
+                        if (typeof Stinker !== 'undefined' && Stinker.length > 0) {
+                            Stinker[0].active = false;
+                        }
+                    }
                 } else if (toy.id === 'flyingPuckButton') {
                     doFlyingPuck = toy.checked;
                 } else if (toy.id === 'smallTracerButton') {
@@ -4069,39 +4128,17 @@ window.addEventListener('DOMContentLoaded', function() {
         const radius = gravityMenuRadius;
         const size = radius * 2 + 50;
         
-        // Check close button
-        const closeButtonX = centerX - size/2 - 8 + 20;
-        const closeButtonY = centerY - size/2 - 38 + 20;
-        const closeButtonRadius = 12;
-        const dxClose = canvasX - closeButtonX;
-        const dyClose = canvasY - closeButtonY;
-        const distClose = Math.sqrt(dxClose * dxClose + dyClose * dyClose);
-        
-        if (distClose <= closeButtonRadius) {
-            gravityMenuTargetOpacity = 0;
-            gravityMenuAnimating = true;
-            document.getElementById('gravityMenuToggle').checked = false;
-            return true;
-        }
-        
-        // Check if within menu bounds (expanded for rotation slider)
-        if (canvasX < centerX - size/2 - 20 || canvasX > centerX + size/2 + 20 ||
-            canvasY < centerY - size/2 - 38 || canvasY > centerY + size/2 + 60) {
-            return false;
-        }
-        
-        // Check rotation slider interaction (always available)
         const sliderY = centerY + size/2 + 15;
         const sliderStartX = centerX - 70;
         const sliderWidth = 140;
         const sliderHeight = 20;
         
-        if (canvasX >= sliderStartX && canvasX <= sliderStartX + sliderWidth &&
-            canvasY >= sliderY - sliderHeight/2 && canvasY <= sliderY + sliderHeight/2) {
-            
+        // If already dragging the rotation slider, update it regardless of mouse position
+        if (gravityMenuDragging && gravityMenuDraggingControl === 'rotation') {
             // Calculate slider position (0 to 1)
             const relativeX = canvasX - sliderStartX;
-            let newSliderPosition = Math.max(0, Math.min(1, relativeX / sliderWidth));
+            const rawPosition = relativeX / sliderWidth;
+            let newSliderPosition = Math.max(0, Math.min(1, rawPosition));
             
             // Add detent at center (snap to 0.5 if close)
             const detentRange = 0.05; // 5% range around center
@@ -4110,14 +4147,74 @@ window.addEventListener('DOMContentLoaded', function() {
             }
             
             gravityRotationSlider = newSliderPosition;
-            gravityRotationSliderDragging = true;
             
             // Calculate rotation speed based on distance from center
             const centerDistance = Math.abs(gravityRotationSlider - 0.5);
-            const maxRotationSpeed = 0.01; // radians per frame (reduced by 70%)
+            const maxRotationSpeed = 0.01; // radians per frame
             gravityRotationSpeed = centerDistance * 2 * maxRotationSpeed; // Scale to 0-maxSpeed
             
-            // Set direction based on which side of center (fixed direction)
+            // Set direction based on which side of center
+            if (gravityRotationSlider < 0.5) {
+                gravityRotationSpeed = gravityRotationSpeed; // Counter-clockwise (positive)
+            } else if (gravityRotationSlider === 0.5) {
+                gravityRotationSpeed = 0; // No rotation at center
+            } else {
+                gravityRotationSpeed = -gravityRotationSpeed; // Clockwise (negative)
+            }
+            
+            return 'rotation-slider';
+        }
+        
+        // Check close button - only when not dragging
+        if (!gravityMenuDragging) {
+            const closeButtonX = centerX - size/2 - 8 + 20;
+            const closeButtonY = centerY - size/2 - 38 + 20;
+            const closeButtonRadius = 12;
+            const dxClose = canvasX - closeButtonX;
+            const dyClose = canvasY - closeButtonY;
+            const distClose = Math.sqrt(dxClose * dxClose + dyClose * dyClose);
+            
+            if (distClose <= closeButtonRadius) {
+                gravityMenuTargetOpacity = 0;
+                gravityMenuAnimating = true;
+                document.getElementById('gravityMenuToggle').checked = false;
+                return true;
+            }
+        }
+        
+        // Check if within menu bounds - skip when already dragging
+        if (!gravityMenuDragging) {
+            if (canvasX < centerX - size/2 - 20 || canvasX > centerX + size/2 + 20 ||
+                canvasY < centerY - size/2 - 38 || canvasY > centerY + size/2 + 60) {
+                return false;
+            }
+        }
+        
+        // Check rotation slider interaction (always available)
+        if (canvasX >= sliderStartX && canvasX <= sliderStartX + sliderWidth &&
+            canvasY >= sliderY - sliderHeight/2 && canvasY <= sliderY + sliderHeight/2) {
+            
+            gravityMenuDraggingControl = 'rotation';
+            
+            // Calculate slider position (0 to 1)
+            const relativeX = canvasX - sliderStartX;
+            const rawPosition = relativeX / sliderWidth;
+            let newSliderPosition = Math.max(0, Math.min(1, rawPosition));
+            
+            // Add detent at center (snap to 0.5 if close)
+            const detentRange = 0.05; // 5% range around center
+            if (Math.abs(newSliderPosition - 0.5) < detentRange) {
+                newSliderPosition = 0.5;
+            }
+            
+            gravityRotationSlider = newSliderPosition;
+            
+            // Calculate rotation speed based on distance from center
+            const centerDistance = Math.abs(gravityRotationSlider - 0.5);
+            const maxRotationSpeed = 0.01; // radians per frame
+            gravityRotationSpeed = centerDistance * 2 * maxRotationSpeed; // Scale to 0-maxSpeed
+            
+            // Set direction based on which side of center
             if (gravityRotationSlider < 0.5) {
                 gravityRotationSpeed = gravityRotationSpeed; // Counter-clockwise (positive)
             } else if (gravityRotationSlider === 0.5) {
@@ -4447,9 +4544,11 @@ window.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Check if inside menu bounds
-        if (mouseX < menuLeft || mouseX > menuRight || mouseY < menuTop || mouseY > menuBottom) {
-            return null;
+        // Check if inside menu bounds - skip when already dragging
+        if (!particlesMenuDragging) {
+            if (mouseX < menuLeft || mouseX > menuRight || mouseY < menuTop || mouseY > menuBottom) {
+                return null;
+            }
         }
         
         // Check close button
@@ -4523,80 +4622,112 @@ window.addEventListener('DOMContentLoaded', function() {
         const centerY = colorWheelCenterY;
         const radius = colorWheelRadius;
         
-        // Check if clicking close button (top-left corner)
-        const closeButtonX = centerX - radius + 12;
-        const closeButtonY = centerY - radius - 18;
-        const closeButtonRadius = 12;
-        const dxClose = canvasX - closeButtonX;
-        const dyClose = canvasY - closeButtonY;
-        const distClose = Math.sqrt(dxClose * dxClose + dyClose * dyClose);
-        
-        if (distClose <= closeButtonRadius) {
-            // Close the color wheel with fade out animation
-            colorWheelTargetOpacity = 0;
-            colorWheelAnimating = true;
-            // HTML checkbox removed - state now managed by main menu
-            return true;
-        }
-  
-        // Check if clicking on lightness bar
+        // Define control positions
         const barX = centerX + radius + 32;
         const barY = centerY - radius;
         const barWidth = 20;
         const barHeight = radius * 2;
         
-        // Check if clicking on sensitivity bar (horizontal bar at top)
         const velBarX = centerX - radius + 14;
         const velBarY = centerY + radius + 20;
         const velBarWidth = radius * 2;
         const velBarHeight = 20;
         
-        // Check if clicking on persistence bar (horizontal bar below sensitivity)
         const persBarX = centerX - radius + 14;
         const persBarY = centerY + radius + 57;
         const persBarWidth = radius * 2;
         const persBarHeight = 20;
         
-        // Check if within expanded color wheel area at all
-        // Account for: title above, close button, lightness bar to right, and sliders below
-        if (canvasX < centerX - radius - 20 || canvasX > centerX + radius + 55 ||
-            canvasY < centerY - radius - 38 || canvasY > centerY + radius + 88) {
-            return false;
+        const wheelDrawX = centerX - radius - 2 + 12;
+        const wheelDrawY = centerY - radius - 2;
+        const actualWheelCenterX = wheelDrawX + radius + 2;
+        const actualWheelCenterY = wheelDrawY + radius + 2;
+        
+        // If already dragging a specific control, update that control regardless of mouse position
+        if (colorWheelDragging && colorWheelDraggingControl) {
+            if (colorWheelDraggingControl === 'sensitivity') {
+                const velPos = Math.max(0, Math.min(1, (canvasX - velBarX) / velBarWidth));
+                colorWheelVelMap = Math.round(velPos * 500);
+                physProps.velColorMap = colorWheelVelMap;
+                return 'color';
+            } else if (colorWheelDraggingControl === 'persistence') {
+                const persPos = Math.max(0, Math.min(1, (canvasX - persBarX) / persBarWidth));
+                colorWheelPersistence = Math.round(persPos * 30);
+                persistence = colorWheelPersistence;
+                return 'color';
+            } else if (colorWheelDraggingControl === 'lightness') {
+                const lightPos = Math.max(0, Math.min(1, (canvasY - barY) / barHeight));
+                colorWheelLight = Math.round(100 - lightPos * 95 + 5);
+                ballLightness = colorWheelLight;
+                return 'color';
+            } else if (colorWheelDraggingControl === 'wheel') {
+                const dx = canvasX - actualWheelCenterX;
+                const dy = canvasY - actualWheelCenterY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                if (angle < 0) angle += 360;
+                
+                colorWheelHue = Math.round(angle);
+                colorWheelSat = Math.round(Math.min(100, (distance / radius) * 100));
+                
+                physProps.baseColor = colorWheelHue;
+                ballSaturation = colorWheelSat;
+                return 'color';
+            }
         }
         
+        // Check close button - only when not dragging
+        if (!colorWheelDragging) {
+            const closeButtonX = centerX - radius + 12;
+            const closeButtonY = centerY - radius - 18;
+            const closeButtonRadius = 12;
+            const dxClose = canvasX - closeButtonX;
+            const dyClose = canvasY - closeButtonY;
+            const distClose = Math.sqrt(dxClose * dxClose + dyClose * dyClose);
+            
+            if (distClose <= closeButtonRadius) {
+                colorWheelTargetOpacity = 0;
+                colorWheelAnimating = true;
+                return true;
+            }
+            
+            // Check if within expanded color wheel area
+            if (canvasX < centerX - radius - 20 || canvasX > centerX + radius + 55 ||
+                canvasY < centerY - radius - 38 || canvasY > centerY + radius + 88) {
+                return false;
+            }
+        }
+        
+        // Determine which control was clicked (for initial drag)
         if (canvasX >= velBarX - 5 && canvasX <= velBarX + velBarWidth + 5 &&
             canvasY >= velBarY - 5 && canvasY <= velBarY + velBarHeight + 5) {
-            // Update velocity color map
+            colorWheelDraggingControl = 'sensitivity';
             const velPos = Math.max(0, Math.min(1, (canvasX - velBarX) / velBarWidth));
             colorWheelVelMap = Math.round(velPos * 500);
             physProps.velColorMap = colorWheelVelMap;
             return 'color';
         } else if (canvasX >= persBarX - 5 && canvasX <= persBarX + persBarWidth + 5 &&
             canvasY >= persBarY - 5 && canvasY <= persBarY + persBarHeight + 5) {
-            // Update persistence
+            colorWheelDraggingControl = 'persistence';
             const persPos = Math.max(0, Math.min(1, (canvasX - persBarX) / persBarWidth));
             colorWheelPersistence = Math.round(persPos * 30);
             persistence = colorWheelPersistence;
             return 'color';
         } else if (canvasX >= barX - 5 && canvasX <= barX + barWidth + 5 &&
             canvasY >= barY && canvasY <= barY + barHeight) {
-            // Update lightness
+            colorWheelDraggingControl = 'lightness';
             const lightPos = Math.max(0, Math.min(1, (canvasY - barY) / barHeight));
             colorWheelLight = Math.round(100 - lightPos * 95 + 5);
             ballLightness = colorWheelLight;
             return 'color';
         } else {
-            // Update hue and saturation from wheel
-            // Calculate the actual wheel center the same way as in drawing
-            const wheelDrawX = centerX - radius - 2 + 12;
-            const wheelDrawY = centerY - radius - 2;
-            const actualWheelCenterX = wheelDrawX + radius + 2;
-            const actualWheelCenterY = wheelDrawY + radius + 2;
             const dx = canvasX - actualWheelCenterX;
             const dy = canvasY - actualWheelCenterY;
             const distance = Math.sqrt(dx * dx + dy * dy);
             
             if (distance <= radius) {
+                colorWheelDraggingControl = 'wheel';
                 let angle = Math.atan2(dy, dx) * 180 / Math.PI;
                 if (angle < 0) angle += 360;
                 
@@ -4622,29 +4753,70 @@ window.addEventListener('DOMContentLoaded', function() {
         const centerY = physicsMenuCenterY;
         const checkboxPadding = 8;
         const sliderSpacing = 35;
-        
-        // Check if click is within physics menu bounds
-        if (canvasX < centerX - w/2 || canvasX > centerX + w/2 ||
-            canvasY < centerY - h/2 || canvasY > centerY + h/2) {
-            return false;
-        }
-        
-        // Check close button
-        const closeButtonX = centerX - w/2 + 15;
-        const closeButtonY = centerY - h/2 + 15;
-        const closeButtonRadius = 12;
-        const closeDistX = canvasX - closeButtonX;
-        const closeDistY = canvasY - closeButtonY;
-        if (Math.sqrt(closeDistX * closeDistX + closeDistY * closeDistY) < closeButtonRadius) {
-            physicsMenuTargetOpacity = 0;
-            physicsMenuAnimating = true;
-            return 'close';
-        }
-        
-        // Slider positions
         const sliderStartX = centerX - w/2 + 35;
         const sliderWidth = w - 50;
         const sliderHeight = 20;
+        
+        // If already dragging a specific slider, update it regardless of mouse position
+        if (physicsMenuDragging && physicsMenuDraggingControl) {
+            const percent = Math.max(0, Math.min(1, (canvasX - sliderStartX) / sliderWidth));
+            
+            if (physicsMenuDraggingControl === 'repulsionForce') {
+                physicsMenuRepulsionForce = 1 + percent * (20 - 1);
+                physProps.repulsionForce = physicsMenuRepulsionForce / 10;
+                return 'slider';
+            } else if (physicsMenuDraggingControl === 'repulsionDist') {
+                physicsMenuRepulsionDist = percent * 10;
+                physProps.repulsionDist = physicsMenuRepulsionDist;
+                return 'slider';
+            } else if (physicsMenuDraggingControl === 'ballRest') {
+                physicsMenuBallRest = Math.round(percent * 100);
+                physProps.ballRest = physicsMenuBallRest / 100;
+                if (physicsMenuBallRest > 0) {
+                    physicsMenuBounceOn = true;
+                } else {
+                    physicsMenuBounceOn = false;
+                }
+                return 'slider';
+            } else if (physicsMenuDraggingControl === 'time') {
+                physicsMenuTime = 500 + percent * (1000 - 500);
+                physProps.dt = 1 / (Math.floor(Math.exp(((140 - 0.1 * physicsMenuTime) / 10))) + 6);
+                return 'slider';
+            } else if (physicsMenuDraggingControl === 'speed') {
+                physicsMenuSpeed = 1 + percent * (50 - 1);
+                physProps.maxSpeed = 0.1 * physicsMenuSpeed;
+                return 'slider';
+            } else if (physicsMenuDraggingControl === 'substeps') {
+                const substepsSliderWidth = sliderWidth / 2;
+                const substepsPercent = Math.max(0, Math.min(1, (canvasX - sliderStartX) / substepsSliderWidth));
+                physicsMenuSubsteps = Math.round(1 + substepsPercent * 3);
+                physicsMenuSubsteps = Math.max(1, Math.min(4, physicsMenuSubsteps));
+                updateSubsteps(physicsMenuSubsteps);
+                return 'slider';
+            }
+        }
+        
+        // Check if click is within physics menu bounds - skip if already dragging
+        if (!physicsMenuDragging) {
+            if (canvasX < centerX - w/2 || canvasX > centerX + w/2 ||
+                canvasY < centerY - h/2 || canvasY > centerY + h/2) {
+                return false;
+            }
+            
+            // Check close button - only when not dragging
+            const closeButtonX = centerX - w/2 + 15;
+            const closeButtonY = centerY - h/2 + 15;
+            const closeButtonRadius = 12;
+            const closeDistX = canvasX - closeButtonX;
+            const closeDistY = canvasY - closeButtonY;
+            if (Math.sqrt(closeDistX * closeDistX + closeDistY * closeDistY) < closeButtonRadius) {
+                physicsMenuTargetOpacity = 0;
+                physicsMenuAnimating = true;
+                return 'close';
+            }
+        }
+        
+        // Track Y position for each control
         let currentY = centerY - h/2 + 50;
         
         // 1. Repulsion Force slider and checkbox
@@ -4662,6 +4834,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Check repulsion slider
         if (canvasX >= sliderStartX && canvasX <= sliderStartX + sliderWidth &&
             canvasY >= currentY - sliderHeight/2 && canvasY <= currentY + sliderHeight/2) {
+            physicsMenuDraggingControl = 'repulsionForce';
             const percent = (canvasX - sliderStartX) / sliderWidth;
             physicsMenuRepulsionForce = 1 + percent * (20 - 1);
             physProps.repulsionForce = physicsMenuRepulsionForce / 10;
@@ -4673,6 +4846,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // 2. Repulsion Distance slider
         if (canvasX >= sliderStartX && canvasX <= sliderStartX + sliderWidth &&
             canvasY >= currentY - sliderHeight/2 && canvasY <= currentY + sliderHeight/2) {
+            physicsMenuDraggingControl = 'repulsionDist';
             const percent = (canvasX - sliderStartX) / sliderWidth;
             physicsMenuRepulsionDist = percent * 10;
             physProps.repulsionDist = physicsMenuRepulsionDist;
@@ -4694,6 +4868,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Check ball rest slider
         if (canvasX >= sliderStartX && canvasX <= sliderStartX + sliderWidth &&
             canvasY >= currentY - sliderHeight/2 && canvasY <= currentY + sliderHeight/2) {
+            physicsMenuDraggingControl = 'ballRest';
             const percent = (canvasX - sliderStartX) / sliderWidth;
             physicsMenuBallRest = Math.round(percent * 100);
             physProps.ballRest = physicsMenuBallRest / 100;
@@ -4710,6 +4885,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // 4. Time slider
         if (canvasX >= sliderStartX && canvasX <= sliderStartX + sliderWidth &&
             canvasY >= currentY - sliderHeight/2 && canvasY <= currentY + sliderHeight/2) {
+            physicsMenuDraggingControl = 'time';
             const percent = (canvasX - sliderStartX) / sliderWidth;
             physicsMenuTime = 500 + percent * (1000 - 500);
             physProps.dt = 1 / (Math.floor(Math.exp(((140 - 0.1 * physicsMenuTime) / 10))) + 6);
@@ -4721,6 +4897,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // 5. Speed Limit slider
         if (canvasX >= sliderStartX && canvasX <= sliderStartX + sliderWidth &&
             canvasY >= currentY - sliderHeight/2 && canvasY <= currentY + sliderHeight/2) {
+            physicsMenuDraggingControl = 'speed';
             const percent = (canvasX - sliderStartX) / sliderWidth;
             physicsMenuSpeed = 1 + percent * (50 - 1);
             physProps.maxSpeed = 0.1 * physicsMenuSpeed;
@@ -4733,6 +4910,7 @@ window.addEventListener('DOMContentLoaded', function() {
         const substepsSliderWidth = sliderWidth / 2;
         if (canvasX >= sliderStartX && canvasX <= sliderStartX + substepsSliderWidth &&
             canvasY >= currentY - sliderHeight/2 && canvasY <= currentY + sliderHeight/2) {
+            physicsMenuDraggingControl = 'substeps';
             const percent = (canvasX - sliderStartX) / substepsSliderWidth;
             // Snap to 4 detents: 1, 2, 3, 4
             physicsMenuSubsteps = Math.round(1 + percent * 3);
@@ -4761,6 +4939,32 @@ window.addEventListener('DOMContentLoaded', function() {
     function handleParticlesMenuInteraction(canvasX, canvasY) {
         if (!particlesMenuVisible) return false;
         
+        const sliderStartX = particlesMenuCenterX - particlesMenuWidth/2 + 20;
+        const sliderWidth = particlesMenuWidth - 80;
+        
+        // If already dragging a specific slider, update it regardless of mouse position
+        if (particlesMenuDragging && particlesMenuDraggingControl) {
+            const percent = Math.max(0, Math.min(1, (canvasX - sliderStartX) / sliderWidth));
+            
+            if (particlesMenuDraggingControl === 'quantity') {
+                particlesMenuQuantity = Math.round(1 + percent * 99);
+                adjustParticleCount(particlesMenuQuantity * particlesMenuQuantity);
+                return 'slider';
+            } else if (particlesMenuDraggingControl === 'smallRadius') {
+                const newSmallRadius = Math.round(percent * 50);
+                particlesMenuSmallRadius = Math.min(newSmallRadius, particlesMenuLargeRadius - 1);
+                rescaleBalls();
+                return 'slider';
+            } else if (particlesMenuDraggingControl === 'largeRadius') {
+                particlesMenuLargeRadius = Math.round(1 + percent * 49);
+                if (particlesMenuSmallRadius >= particlesMenuLargeRadius) {
+                    particlesMenuSmallRadius = Math.max(0, particlesMenuLargeRadius - 1);
+                }
+                rescaleBalls();
+                return 'slider';
+            }
+        }
+        
         const hitTest = particlesMenuHitTest(canvasX, canvasY);
         if (!hitTest) return false;
         
@@ -4771,10 +4975,9 @@ window.addEventListener('DOMContentLoaded', function() {
             return 'close';
         }
         
-        // Handle sliders
+        // Handle sliders - set which control is being dragged
         if (hitTest === 'quantity') {
-            const sliderStartX = particlesMenuCenterX - particlesMenuWidth/2 + 20;
-            const sliderWidth = particlesMenuWidth - 80;
+            particlesMenuDraggingControl = 'quantity';
             const percent = Math.max(0, Math.min(1, (canvasX - sliderStartX) / sliderWidth));
             particlesMenuQuantity = Math.round(1 + percent * 99);
             adjustParticleCount(particlesMenuQuantity * particlesMenuQuantity);
@@ -4782,8 +4985,7 @@ window.addEventListener('DOMContentLoaded', function() {
         }
         
         if (hitTest === 'smallRadius') {
-            const sliderStartX = particlesMenuCenterX - particlesMenuWidth/2 + 20;
-            const sliderWidth = particlesMenuWidth - 80;
+            particlesMenuDraggingControl = 'smallRadius';
             const percent = Math.max(0, Math.min(1, (canvasX - sliderStartX) / sliderWidth));
             const newSmallRadius = Math.round(percent * 50);
             // Ensure small radius stays below large radius
@@ -4793,8 +4995,7 @@ window.addEventListener('DOMContentLoaded', function() {
         }
         
         if (hitTest === 'largeRadius') {
-            const sliderStartX = particlesMenuCenterX - particlesMenuWidth/2 + 20;
-            const sliderWidth = particlesMenuWidth - 80;
+            particlesMenuDraggingControl = 'largeRadius';
             const percent = Math.max(0, Math.min(1, (canvasX - sliderStartX) / sliderWidth));
             particlesMenuLargeRadius = Math.round(1 + percent * 49);
             // Ensure small is less than large
@@ -5196,6 +5397,11 @@ window.addEventListener('DOMContentLoaded', function() {
     function mouseDownHandler(ev) {
         const e = ev || window.event;
         
+        // If another object is being interacted with, ignore this mousedown
+        if (globalInteractionLock) {
+            return;
+        }
+        
         // Calculate mouse position in canvas coordinates
         bounds = canvas.getBoundingClientRect();
         mX = e.clientX - bounds.left - canvas.clientLeft;
@@ -5454,12 +5660,14 @@ window.addEventListener('DOMContentLoaded', function() {
             if (menuName === 'colorWheel' && colorWheelVisible) {
                 const handled = handleColorWheelInteraction(mX, mY);
                 if (handled === 'color') {
+                    globalInteractionLock = true;
                     bringMenuToFront('colorWheel');
                     colorWheelDragging = true;
                     document.addEventListener('mousemove', colorWheelMouseMove);
                     document.addEventListener('touchmove', touchColorWheelMove, {passive: false});
                     return;
                 } else if (handled === 'drag') {
+                    globalInteractionLock = true;
                     bringMenuToFront('colorWheel');
                     colorWheelPositionDragging = true;
                     colorWheelDragOffsetX = mX - colorWheelCenterX;
@@ -5471,15 +5679,18 @@ window.addEventListener('DOMContentLoaded', function() {
             } else if (menuName === 'physicsMenu' && physicsMenuVisible) {
                 const handled = handlePhysicsMenuInteraction(mX, mY);
                 if (handled === 'slider' || handled === 'checkbox') {
+                    globalInteractionLock = true;
                     bringMenuToFront('physicsMenu');
                     physicsMenuDragging = true;
                     document.addEventListener('mousemove', physicsMenuMouseMove);
                     document.addEventListener('touchmove', touchPhysicsMenuMove, {passive: false});
                     return;
                 } else if (handled === 'button') {
+                    globalInteractionLock = true;
                     bringMenuToFront('physicsMenu');
                     return;
                 } else if (handled === 'drag') {
+                    globalInteractionLock = true;
                     bringMenuToFront('physicsMenu');
                     physicsMenuPositionDragging = true;
                     physicsMenuDragOffsetX = mX - physicsMenuCenterX;
@@ -5491,15 +5702,18 @@ window.addEventListener('DOMContentLoaded', function() {
             } else if (menuName === 'wallsMenu' && wallsMenuVisible) {
                 const handled = handleWallsMenuInteraction(mX, mY);
                 if (handled === 'slider' || handled === 'checkbox') {
+                    globalInteractionLock = true;
                     bringMenuToFront('wallsMenu');
                     wallsMenuDragging = true;
                     document.addEventListener('mousemove', wallsMenuMouseMove);
                     document.addEventListener('touchmove', touchWallsMenuMove, {passive: false});
                     return;
                 } else if (handled === 'close') {
+                    globalInteractionLock = true;
                     bringMenuToFront('wallsMenu');
                     return;
                 } else if (handled === 'drag') {
+                    globalInteractionLock = true;
                     bringMenuToFront('wallsMenu');
                     wallsMenuPositionDragging = true;
                     wallsMenuDragOffsetX = mX - wallsMenuCenterX;
@@ -5512,9 +5726,11 @@ window.addEventListener('DOMContentLoaded', function() {
             } else if (menuName === 'respawnMenu' && respawnMenuVisible) {
                 const handled = handleRespawnMenuInteraction(mX, mY);
                 if (handled === 'checkbox' || handled === 'radio' || handled === 'dropdown') {
+                    globalInteractionLock = true;
                     bringMenuToFront('respawnMenu');
                     return;
                 } else if (handled === 'drag') {
+                    globalInteractionLock = true;
                     bringMenuToFront('respawnMenu');
                     respawnMenuPositionDragging = true;
                     respawnMenuDragOffsetX = mX - respawnMenuCenterX;
@@ -5527,9 +5743,11 @@ window.addEventListener('DOMContentLoaded', function() {
             } else if (menuName === 'toysMenu' && toysMenuVisible) {
                 const handled = handleToysMenuInteraction(mX, mY);
                 if (handled === 'toy' || handled === 'close') {
+                    globalInteractionLock = true;
                     bringMenuToFront('toysMenu');
                     return;
                 } else if (handled === 'drag') {
+                    globalInteractionLock = true;
                     bringMenuToFront('toysMenu');
                     toysMenuPositionDragging = true;
                     toysMenuDragOffsetX = mX - toysMenuCenterX;
@@ -5542,12 +5760,14 @@ window.addEventListener('DOMContentLoaded', function() {
             } else if (menuName === 'particlesMenu' && particlesMenuVisible) {
                 const handled = handleParticlesMenuInteraction(mX, mY);
                 if (handled === 'slider' || handled === 'renderType') {
+                    globalInteractionLock = true;
                     bringMenuToFront('particlesMenu');
                     particlesMenuDragging = true;
                     document.addEventListener('mousemove', particlesMenuMouseMove);
                     document.addEventListener('touchmove', touchParticlesMenuMove, {passive: false});
                     return;
                 } else if (handled === 'drag') {
+                    globalInteractionLock = true;
                     bringMenuToFront('particlesMenu');
                     particlesMenuPositionDragging = true;
                     particlesMenuDragOffsetX = mX - particlesMenuCenterX;
@@ -5558,13 +5778,15 @@ window.addEventListener('DOMContentLoaded', function() {
                 }
             } else if (menuName === 'gravityMenu' && gravityMenuVisible) {
                 const handled = handleGravityMenuInteraction(mX, mY);
-                if (handled === 'gravity') {
+                if (handled === 'gravity' || handled === 'rotation-slider') {
+                    globalInteractionLock = true;
                     bringMenuToFront('gravityMenu');
                     gravityMenuDragging = true;
                     document.addEventListener('mousemove', gravityMenuMouseMove);
                     document.addEventListener('touchmove', touchGravityMenuMove, {passive: false});
                     return;
                 } else if (handled === 'drag') {
+                    globalInteractionLock = true;
                     bringMenuToFront('gravityMenu');
                     gravityMenuPositionDragging = true;
                     gravityMenuDragOffsetX = mX - gravityMenuX;
@@ -6561,6 +6783,9 @@ window.addEventListener('DOMContentLoaded', function() {
     }
     
     function mouseUp() {
+        // Release global interaction lock
+        globalInteractionLock = false;
+        
         // Clear long-press timer and remove move listener
         if (longPressTimer) {
             clearTimeout(longPressTimer);
@@ -6570,6 +6795,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Clear color wheel dragging
         colorWheelDragging = false;
+        colorWheelDraggingControl = null;
         if (colorWheelPositionDragging) {
             colorWheelManuallyMoved = true;
         }
@@ -6581,6 +6807,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Clear physics menu dragging
         physicsMenuDragging = false;
+        physicsMenuDraggingControl = null;
         if (physicsMenuPositionDragging) {
             physicsMenuManuallyMoved = true;
         }
@@ -6592,6 +6819,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Clear particles menu dragging
         particlesMenuDragging = false;
+        particlesMenuDraggingControl = null;
         if (particlesMenuPositionDragging) {
             particlesMenuManuallyMoved = true;
         }
@@ -6603,6 +6831,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Clear walls menu dragging
         wallsMenuDragging = false;
+        wallsMenuDraggingControl = null;
         if (wallsMenuPositionDragging) {
             wallsMenuManuallyMoved = true;
         }
@@ -6632,6 +6861,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Clear gravity menu dragging
         gravityMenuDragging = false;
+        gravityMenuDraggingControl = null;
         if (gravityMenuPositionDragging) {
             gravityMenuManuallyMoved = true;
         }
@@ -7152,6 +7382,8 @@ window.addEventListener('DOMContentLoaded', function() {
     // Continuous implode functionality
     let implodeInterval = null;
     let imploderHoldTimer = null;
+    let stinkerHoldTimer = null;
+    let heartSpawnTimer = null;
     
     function startContinuousImplode() {
         // Start continuous implode effect
@@ -10358,7 +10590,7 @@ window.addEventListener('DOMContentLoaded', function() {
                     const gripCos = Math.cos(1.75 * Math.PI); // 315 degrees
                     const gripSin = Math.sin(1.75 * Math.PI);
                     const gripDist = this.radius - 0.3 * this.radius;
-                    const gripDist2 = this.radius - 0.4 * this.radius;
+                    const gripDist2 = this.radius - 0.35 * this.radius;
                     this.gripPos = new Vector2(this.pos.x + gripDist * gripCos, this.pos.y + gripDist * gripSin);
                     this.gripPos2 = new Vector2(this.pos.x + gripDist2 * gripCos, this.pos.y + gripDist2 * gripSin);
                     
@@ -10367,15 +10599,15 @@ window.addEventListener('DOMContentLoaded', function() {
                     
                     //  minus button
                     //const minusAngle = buttonBaseAngle + (25 * Math.PI / 180);
-                    const minusAngle = 0.9 * Math.PI;
+                    const minusAngle = 0.82 * Math.PI;
                     this.minusPos = new Vector2(this.pos.x + gripDist * Math.cos(minusAngle), this.pos.y + gripDist * Math.sin(minusAngle));
                     
                     //  plus button
-                    const plusAngle = 0.6 * Math.PI;
+                    const plusAngle = 0.68 * Math.PI;
                     this.plusPos = new Vector2(this.pos.x + gripDist * Math.cos(plusAngle), this.pos.y + gripDist * Math.sin(plusAngle));
                     
                     //  off button 
-                    const offAngle = 1.25 * Math.PI;
+                    const offAngle = 1.18 * Math.PI;
                     this.offPos = new Vector2(this.pos.x + gripDist * Math.cos(offAngle), this.pos.y + gripDist * Math.sin(offAngle));
 
                     //  arrow button 
@@ -10384,43 +10616,57 @@ window.addEventListener('DOMContentLoaded', function() {
               
                     // Draw resize grip indicator
                     drawCircle(
+                        this.arrowPos.x * cScale,
+                        (simHeight - this.arrowPos.y) * cScale,
+                        0.1 * this.radius * cScale);
+                    c.fillStyle = 'blue';
+                    c.fill();
+
+                //  resize arrow buttons ----------
+                //  arrow button 
+                    const resizeAngle = 0.82 * Math.PI;
+                    this.arrowPos = new Vector2(this.pos.x + gripDist * Math.cos(arrowAngle), this.pos.y + gripDist * Math.sin(arrowAngle));
+              
+                    // Draw resize grip indicator
+                    drawCircle(
                         this.gripPos.x * cScale,
                         (simHeight - this.gripPos.y) * cScale,
                         0.1 * this.radius * cScale);
                     c.fillStyle = 'green';
-                    c.fill();
+                    //c.fill();
                     
-                    // draw cycle arrow indicators
                     // Draw arrow pointing out
                     drawArrow(
-                            this.arrowPos.x,
-                            simHeight - this.arrowPos.y,
-                            1.5 * Math.PI,
-                            0.25 * this.radius, 
+                            this.gripPos.x,
+                            simHeight - this.gripPos.y,
+                            1.25 * Math.PI,
+                            0.2 * this.radius, 
                         )
-                    c.fillStyle = 'blue';
+                    c.fillStyle = 'green';
                     c.fill();
 
                     // Draw arrow pointing in
                     drawArrow(
-                            this.arrowPos.x - 0.1 * this.radius,
-                            simHeight - this.arrowPos.y,
-                            0.5 * Math.PI,
-                            0.25 * this.radius, 
+                            this.gripPos2.x,
+                            simHeight - this.gripPos2.y,
+                            0.25 * Math.PI,
+                            0.2 * this.radius, 
                         )
                     c.fill();
 
-                    //////////////////////////////////
+                  
 
 
-                    // Draw plus button
+                    // Draw plus button  ----------
                     drawCircle(
                         cX(this.plusPos), 
                         cY(this.plusPos), 
                         0.1 * this.radius * cScale);
-                    c.fillStyle = 'cyan';
+                    c.fillStyle = 'hsl(320, 100%, 30%)'; 
                     c.fill();
-                    c.strokeStyle = 'white';
+                    
+                    c.strokeStyle = 'black';
+                    //c.stroke();
                     c.lineWidth = 0.02 * this.radius * cScale;
                     // Draw + symbol
                     c.beginPath();
@@ -10439,10 +10685,11 @@ window.addEventListener('DOMContentLoaded', function() {
                         cX(this.minusPos), 
                         cY(this.minusPos), 
                         0.1 * this.radius * cScale);
-                    c.fillStyle = isLastNormalPuck ? 'rgba(255, 165, 0, 0.3)' : 'orange'; // Dim if last puck
+                    c.fillStyle = isLastNormalPuck ? 'hsl(320, 100%, 15%)' : 'hsl(320, 100%, 30%)'; // Dim if last puck
                     c.fill();
-                    c.strokeStyle = isLastNormalPuck ? 'rgba(255, 255, 255, 0.3)' : 'white'; // Dim if last puck
-                    c.lineWidth = 0.02 * this.radius * cScale;
+                    
+                    c.strokeStyle = isLastNormalPuck ? 'black' : 'black'; // Dim if last puck
+                    c.lineWidth = 0.03 * this.radius * cScale;
                     // Draw - symbol
                     c.beginPath();
                     c.moveTo(cX(this.minusPos) - 0.05 * this.radius * cScale, cY(this.minusPos));
@@ -10454,9 +10701,9 @@ window.addEventListener('DOMContentLoaded', function() {
                         cX(this.offPos), 
                         cY(this.offPos), 
                         0.1 * this.radius * cScale);
-                    c.fillStyle = 'rgba(139, 0, 0, 0.5)'; // Dim dark red
+                    c.fillStyle = 'rgba(139, 0, 0, 0.6)'; // Dim dark red
                     c.fill();
-                    c.strokeStyle = 'rgba(255, 100, 100, 0.6)'; // Dim red for X
+                    c.strokeStyle = 'black'; // Dim  X
                     c.lineWidth = 0.02 * this.radius * cScale;
                     // Draw X symbol
                     c.beginPath();
@@ -10676,6 +10923,239 @@ window.addEventListener('DOMContentLoaded', function() {
         }
 	}
 
+    class HEART {
+        constructor(pos, vel) {
+            this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.radius = 0.007 + Math.random() * 0.015;
+            this.hue = 320;
+            this.alpha = 0;
+            this.birthday = Date.now();
+            this.lifespan = 250 + Math.random() * 400; // 250-650ms 
+        }
+        simulate() {
+            // Move based on velocity
+            this.pos.x += this.vel.x * physProps.dt;
+            this.pos.y += this.vel.y * physProps.dt;
+            
+            // Slow down over time
+            this.vel.x *= 0.98;
+            this.vel.y *= 0.98;
+            
+            // Get age ratio (0 at birth, 1 at end of lifespan)
+            const age = Date.now() - this.birthday;
+            const ageRatio = age / this.lifespan;
+            
+            // Fade in during first 20% of life, fade out during last 20%
+            if (ageRatio < 0.2) {
+                this.alpha = ageRatio / 0.2;
+            } else if (ageRatio > 0.8) {
+                this.alpha = (1 - ageRatio) / 0.2;
+            } else {
+                this.alpha = 1;
+            }
+            
+            /*// Grow radius during first 30% of life
+            const maxRadius = 0.03;
+            if (ageRatio < 0.3) {
+                this.radius = 0.02 + (maxRadius - 0.02) * (ageRatio / 0.5);
+            }*/
+
+            this.radius += 0.0007; // Slight growth over time
+            
+            // Remove if lifespan exceeded and fully faded
+            if (age > this.lifespan && this.alpha <= 0) {
+                const index = Hearts.indexOf(this);
+                if (index > -1) {
+                    Hearts.splice(index, 1);
+                }
+            }
+        }
+        draw() {
+            drawHeart(this.pos.x, simHeight - this.pos.y, this.radius);
+            c.fillStyle = `hsla(${this.hue}, 100%, 60%, ${this.alpha})`;
+            c.fill();
+        }
+    }
+
+    Hearts = [];
+    function spawnHearts() {
+        if (typeof Stinker === 'undefined' || Stinker.length === 0 || !Stinker[0].active) return;
+        
+        const stinker = Stinker[0];
+        // Spawn slightly behind the stinker (random offset)
+        const offsetX = 0.3 * stinker.radius * (-1 + 2 * Math.random());
+        const offsetY = 0.3 * stinker.radius * (-1 + 2 * Math.random());
+        const pos = new Vector2(stinker.pos.x + offsetX, stinker.pos.y + offsetY);
+        
+        // Random outward velocity
+        const heartSpeed = 1;
+        const rayAngle = Math.random() * 2 * Math.PI;
+        const vel = new Vector2(heartSpeed * Math.cos(rayAngle), heartSpeed * Math.sin(rayAngle));
+        
+        Hearts.push(new HEART(pos, vel));
+    }
+
+    //  MAKE PEPE'S HEARTS  ----------------------------------------------
+    function drawHeart(posX, posY, radius) {
+        c.beginPath();
+        c.moveTo(posX * cScale, (posY - 0.5 * radius) * cScale);
+        for (var f = 0; f < Math.PI - 0.8; f += 0.1) {
+                var drawX = posX + 0.08 * radius * 16 * Math.pow(Math.sin(f), 3);
+                var drawY = posY - 0.08 * radius * (13 * Math.cos(f) - 5 * Math.cos(2 * f) - 2 * Math.cos(3 * f) - Math.cos(4 * f));   
+                c.lineTo(drawX * cScale, drawY * cScale);
+            }
+            var f = Math.PI - 0.8;
+            var drawX = posX + 0.08 * radius * 16 * Math.pow(Math.sin(f), 3);
+            var drawY = posY - 0.08 * radius * (13 * Math.cos(f) - 5 * Math.cos(2 * f) - 2 * Math.cos(3 * f) - Math.cos(4 * f));   
+            c.lineTo(drawX * cScale, drawY * cScale);
+            c.lineTo(drawX * cScale, drawY * cScale);
+        c.lineTo(posX * cScale, (posY + 1.15 * radius) * cScale);   
+        for (var f = Math.PI + 0.8; f < 2 * Math.PI; f += 0.1) {
+            var drawX = posX + 0.08 * radius * 16 * Math.pow(Math.sin(f), 3);
+            var drawY = posY - 0.08 * radius * (13 * Math.cos(f) - 5 * Math.cos(2 * f) - 2 * Math.cos(3 * f) - Math.cos(4 * f));   
+            c.lineTo(drawX * cScale, drawY * cScale);
+            }
+        c.closePath();
+    }
+
+    //  PEPE CONSTRUCTOR ----------------------------------------------------------------
+    class STINKER {
+        constructor(pos) {
+            this.radius = 0.2;
+            this.pos = pos.clone();
+            this.force = 1;
+        }
+        draw() {
+            const iconRadius = 60; 
+            const centerX = this.pos.x * cScale;
+            const centerY = (simHeight - this.pos.y) * cScale;
+
+            // Draw pepe.png image
+            if (pepeReady && pepeImage && pepeImage.complete && pepeImage.width > 0 && pepeImage.height > 0) {
+                c.save();
+                c.translate(centerX, centerY);
+                
+                const iw = pepeImage.width;
+                const ih = pepeImage.height;
+                const aspectRatio = iw / ih;
+                const targetHeight = iconRadius * 2;
+                const targetWidth = targetHeight * aspectRatio;
+                
+                c.drawImage(pepeImage, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
+                c.restore();
+            }
+        }
+    }
+
+    //  MAKE STINKER  --------------------------------------------------------------------------
+    function makeStinker(pos) {
+        Stinker = [];
+        var obj = new STINKER(pos);
+        obj.active = true;
+        Stinker.push(obj);
+        // Mouse/touch controls for moving Stinker
+        var isStinkerDragging = false;
+        var stinkerDragOffset = {x:0, y:0};
+
+        canvas.addEventListener('mousedown', function(e) {
+            if (globalInteractionLock) return; // Don't interact if something else is being used
+            
+            if (typeof Stinker !== 'undefined' && Stinker.length > 0) {
+                if (!Stinker[0].active) return;
+                
+                var stinker = Stinker[0];
+                
+                // Check for drag - convert to sim coordinates
+                var mouseX = e.offsetX / cScale;
+                var mouseY = (simHeight - e.offsetY / cScale);
+                var dx = mouseX - stinker.pos.x;
+                var dy = mouseY - stinker.pos.y;
+                const stinkerRadius = 60 / cScale; // 60 pixels in sim units
+                const distFromCenter = Math.sqrt(dx*dx + dy*dy);
+                const stinkerTiming = 110 - (Magnet[0].force * 10); // spawn hearts faster with stronger magnet
+                if (distFromCenter < stinkerRadius) {
+                    globalInteractionLock = true;
+                    isStinkerDragging = true;
+                    stinkerDragOffset.x = dx;
+                    stinkerDragOffset.y = dy;
+                    // Start stink on hold
+                    stinkerHoldTimer = setInterval(stink, 50);
+                    // Start spawning hearts at ~20 per second (50ms interval)
+                    heartSpawnTimer = setInterval(spawnHearts, stinkerTiming);
+                }
+            }
+        });
+        canvas.addEventListener('mouseup', function(e) {
+            if (stinkerHoldTimer) {
+                clearInterval(stinkerHoldTimer);
+                stinkerHoldTimer = null;
+            }
+            if (heartSpawnTimer) {
+                clearInterval(heartSpawnTimer);
+                heartSpawnTimer = null;
+            }
+            isStinkerDragging = false;
+        });
+        canvas.addEventListener('mouseleave', function(e) {
+            if (stinkerHoldTimer) {
+                clearInterval(stinkerHoldTimer);
+                stinkerHoldTimer = null;
+            }
+            if (heartSpawnTimer) {
+                clearInterval(heartSpawnTimer);
+                heartSpawnTimer = null;
+            }
+            isStinkerDragging = false;
+        });
+        canvas.addEventListener('mousemove', function(e) {
+            if (isStinkerDragging && typeof Stinker !== 'undefined' && Stinker.length > 0) {
+                var mouseX = e.offsetX / cScale;
+                var mouseY = (simHeight - e.offsetY / cScale);
+                Stinker[0].pos.x = mouseX - stinkerDragOffset.x;
+                Stinker[0].pos.y = mouseY - stinkerDragOffset.y;
+            }
+        });
+        canvas.addEventListener('touchstart', function(e) {
+        if (typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active) {
+            var touch = e.touches[0];
+            var rect = canvas.getBoundingClientRect();
+            var mouseX = (touch.clientX - rect.left) / cScale;
+            var mouseY = (simHeight - (touch.clientY - rect.top) / cScale);
+            var dx = mouseX - Stinker[0].pos.x;
+            var dy = mouseY - Stinker[0].pos.y;
+            if (Math.sqrt(dx*dx + dy*dy) < Stinker[0].radius) {
+                isStinkerDragging = true;
+                stinkerDragOffset.x = dx;
+                stinkerDragOffset.y = dy;
+            }
+        }
+        }, { passive: true });
+        canvas.addEventListener('touchmove', function(e) {
+            if (isStinkerDragging && typeof Stinker !== 'undefined' && Stinker.length > 0) {
+                var touch = e.touches[0];
+                var rect = canvas.getBoundingClientRect();
+                var mouseX = (touch.clientX - rect.left) / cScale;
+                var mouseY = (simHeight - (touch.clientY - rect.top) / cScale);
+                Stinker[0].pos.x = mouseX - stinkerDragOffset.x;
+                Stinker[0].pos.y = mouseY - stinkerDragOffset.y;
+            }
+        }, { passive: true });
+        canvas.addEventListener('touchend', function(e) {
+            if (stinkerHoldTimer) {
+                clearInterval(stinkerHoldTimer);
+                stinkerHoldTimer = null;
+            }
+            if (heartSpawnTimer) {
+                clearInterval(heartSpawnTimer);
+                heartSpawnTimer = null;
+            }
+            isStinkerDragging = false;
+        });
+    }
+    makeStinker(new Vector2(0.5 * simWidth, 0.07 * simHeight));
+
+
     //  MAGNET CONSTRUCTOR ----------------------------------------------------------------
     let poleGlowTicker = 0;
     class MAGNET {
@@ -10725,15 +11205,15 @@ window.addEventListener('DOMContentLoaded', function() {
                 c.fill();
             };
 
-            c.shadowBlur = 8;
-            c.shadowColor = 'hsla(0, 0%, 0%, 0.9)';
+            c.shadowBlur = 6;
+            c.shadowColor = 'hsla(0, 0%, 0%, 1)';
             // black base for poles and arc
             c.lineWidth = 24;
             // Left pole
             c.beginPath();
             c.moveTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
             c.lineTo(centerX - iconRadius, centerY);
-            c.strokeStyle = 'hsla(0, 0%, 0%, 1.0)';
+            c.strokeStyle = 'hsla(0, 0%, 90%, 1.0)';
             c.stroke();
             // left pole tip
             c.beginPath();
@@ -10776,7 +11256,9 @@ window.addEventListener('DOMContentLoaded', function() {
             } else {
                 c.strokeStyle = lichtgrau;
             }
+            c.shadowBlur = 6;
             c.stroke();
+            c.shadowBlur = 0;
             // Right pole
             c.beginPath();
             c.moveTo(centerX + iconRadius, centerY - 0.85 * iconRadius);
@@ -10792,7 +11274,9 @@ window.addEventListener('DOMContentLoaded', function() {
             } else {
                 c.strokeStyle = lichtgrau;
             }
+            c.shadowBlur = 6;
             c.stroke();
+            c.shadowBlur = 0;
             // Arc connecting poles
             c.beginPath();
             c.arc(centerX, centerY, iconRadius, Math.PI, 0, true);
@@ -10848,6 +11332,8 @@ window.addEventListener('DOMContentLoaded', function() {
         var imploderDragOffset = {x:0, y:0};
 
         canvas.addEventListener('mousedown', function(e) {
+            if (globalInteractionLock) return; // Don't interact if something else is being used
+            
             if (typeof Magnet !== 'undefined' && Magnet.length > 0) {
                 if (!Magnet[0].active) return;
                 
@@ -10867,6 +11353,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 const minusCanvasY = centerY - 1.2 * iconRadius;
                 
                 if (Math.abs(canvasX - minusCanvasX) < clickRadius && Math.abs(canvasY - minusCanvasY) < clickRadius) {
+                    globalInteractionLock = true;
                     if (magnet.force <= 1) {
                         magnet.force = Math.max(0.1 , magnet.force - 0.1);
                         return;
@@ -10880,6 +11367,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 const plusCanvasY = centerY - 1.2 * iconRadius;
                 
                 if (Math.abs(canvasX - plusCanvasX) < clickRadius && Math.abs(canvasY - plusCanvasY) < clickRadius) {
+                    globalInteractionLock = true;
                     if (magnet.force < 1) {
                         magnet.force = Math.min(1, magnet.force + 0.1);
                         return;
@@ -10898,6 +11386,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 const distFromCenter = Math.sqrt(dx*dx + dy*dy);
                 
                 if (distFromCenter < magnetRadius) {
+                    globalInteractionLock = true;
                     isImploderDragging = true;
                     imploderDragOffset.x = dx;
                     imploderDragOffset.y = dy;
@@ -10995,21 +11484,21 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    //  HANDLE SCATTERER ----------------------------------------------------------------
-    function scatter() {
-        const implosionForce = Magnet[0] ? (Magnet[0].force) : 1;
-        const baseSpeed = implosionForce * physProps.dt;
-        // Use Magnet center if active, else canvas center
+    //  HANDLE STINKER ----------------------------------------------------------------
+    function stink() {
+        const stinkForce = Magnet[0] ? (Magnet[0].force) : 1;
+        const stinkSpeed = stinkForce * physProps.dt;
+        // Use stinker center if active, else canvas center
         let centerX, centerY;
-        if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active) {
+        if (typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active) {
             if (leftPole == true) {
-                centerX = Magnet[0].pos.x - 0.5 * Magnet[0].radius;
+                centerX = Stinker[0].pos.x - 0.5 * Stinker[0].radius;
                 leftPole = false;
             } else {
-                centerX = Magnet[0].pos.x + 0.5 * Magnet[0].radius;
+                centerX = Stinker[0].pos.x + 0.5 * Stinker[0].radius;
                 leftPole = true;
             }
-            centerY = Magnet[0].pos.y + 0.5 * Magnet[0].radius; 
+            centerY = Stinker[0].pos.y + 0.5 * Stinker[0].radius; 
         } else {
             centerX = 0.5 * simWidth;
             centerY = 0.5 * simHeight;
@@ -11021,9 +11510,9 @@ window.addEventListener('DOMContentLoaded', function() {
         
             // Apply inward drawing force inversely proportional to distance
             var influenceDist = d.length();
-            d.scale(1 / (influenceDist * influenceDist)); 
-            ball.vel.x += d.x * baseSpeed;
-            ball.vel.y += d.y * baseSpeed;
+            d.scale(1 / (influenceDist)); 
+            ball.vel.x += d.x * stinkSpeed;
+            ball.vel.y += d.y * stinkSpeed;
         }
     }
 
@@ -11572,6 +12061,13 @@ window.addEventListener('DOMContentLoaded', function() {
             blower.simulate();
         }
 
+        //  SIMULATE HEARTS  ---------------------------------------------------------------
+        if (typeof Hearts !== 'undefined' && Hearts.length > 0) {
+            for (let i = Hearts.length - 1; i >= 0; i--) {
+                Hearts[i].simulate();
+            }
+        }
+
         //  BALLS ----------------------------------
         // Precompute bumper sweep structures once per frame
         let bumperCtx = null;
@@ -11925,6 +12421,19 @@ window.addEventListener('DOMContentLoaded', function() {
 
         if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active) {
             Magnet[0].draw();
+        }
+
+        
+        // Draw stinker ----------------------------------
+        if (typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active) {
+            Stinker[0].draw();
+        }
+
+        // Draw hearts ---------------------------------------------------------------
+        if (typeof Hearts !== 'undefined' && Hearts.length > 0) {
+            for (let i = 0; i < Hearts.length; i++) {
+                Hearts[i].draw();
+            }
         }
         
         //  DRAW HUNGRY PUCKS ---------------------------------------------------------------     
