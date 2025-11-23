@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.0
+		<title>Slosh 2.1
         </title>
         <style>
 			body {font-family: monospace; 
@@ -881,11 +881,17 @@ window.addEventListener('DOMContentLoaded', function() {
     var mainMenuAnimating = false;
     var mainMenuX = 0; // Current X position (animates from off-screen left)
     var mainMenuTargetX = 0; // Target X position
-    const mainMenuSlideSpeed = 40; // Pixels per frame for slide animation
+    const mainMenuSlideSpeed = 60; // Pixels per frame for slide animation (used for slide out)
     const mainMenuPadding = 20; // Pixels from top
     const mainMenuCornerRadius = 10;
     const mainMenuHeight = 75;
     const mainMenuBarAlpha = 0.85;
+    
+    // Spring animation for opening
+    var mainMenuVelocity = 0; // Current velocity for spring animation
+    var mainMenuUsingSpring = false; // Whether to use spring animation (true for opening, false for closing)
+    const mainMenuSpringStrength = 0.3; // Spring force coefficient
+    const mainMenuSpringDamping = 0.7; // Damping factor (0-1, lower = more bouncy)
     
     // Ellipsis button (always visible in top-left)
     const ellipsisSize = 40;
@@ -977,6 +983,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var colorWheelCenterX = 0;
     var colorWheelCenterY = 0;
     var colorWheelRadius = 0;
+    var colorWheelManuallyMoved = false;
     
     // Physics Menu Setup - draws on main canvas
     var physicsMenuRepulsionForce = 20;
@@ -1095,13 +1102,13 @@ window.addEventListener('DOMContentLoaded', function() {
     // Default relative menu positions (as percentages of canvas width/height)
     // Set these values after positioning menus where you want them
     var defaultMenuPositions = {
-        physics: { x: 0.3152951629353909, y: 0.6394755420772888 },
-        particles: { x: 0.24389960180838088, y: 0.3049545092690604 },
-        gravity: { x: 0.4083061106843891, y: 0.28913235051565545 },
-        respawn: { x: 0.5636010015279193, y: 0.3390391347365412 },
-        walls: { x: 0.4852719534177511, y: 0.6825247290823522 },
-        colorWheel: { x: 0.719248885595948, y: 0.27595355540207134 },
-        toys: { x: 0.6788340449589383, y: 0.7979139818012363 }
+        physics: { x: 0.3347305389221557, y: 0.49340285815231294 },
+        particles: { x: 0.22237619002832038, y: 0.3068240625649903 },
+        gravity: { x: 0.41377245508982036, y: 0.2829643888354187 },
+        respawn: { x: 0.5718562874251497, y: 0.2897016361886429 },
+        walls: { x: 0.5, y: 0.6246390760346487 },
+        colorWheel: { x: 0.6491017964071857, y: 0.717516843118383 },
+        toys: { x: 0.7658682634730539, y: 0.352261790182868 }
     };
     
     // Function to capture current menu positions as relative coordinates
@@ -1147,40 +1154,34 @@ window.addEventListener('DOMContentLoaded', function() {
     function applyDefaultMenuPositions() {
         if (canvas.width > 0 && canvas.height > 0) {
             // Only apply default positions if they've been set (not 0.0)
+            // Don't set ManuallyMoved flag here - let the first open handle collision detection
             if (defaultMenuPositions.physics.x > 0.0 || defaultMenuPositions.physics.y > 0.0) {
                 physicsMenuCenterX = defaultMenuPositions.physics.x * canvas.width;
                 physicsMenuCenterY = defaultMenuPositions.physics.y * canvas.height;
-                physicsMenuManuallyMoved = true;
             }
             if (defaultMenuPositions.particles.x > 0.0 || defaultMenuPositions.particles.y > 0.0) {
                 particlesMenuCenterX = defaultMenuPositions.particles.x * canvas.width;
                 particlesMenuCenterY = defaultMenuPositions.particles.y * canvas.height;
-                particlesMenuManuallyMoved = true;
             }
             if (defaultMenuPositions.gravity.x > 0.0 || defaultMenuPositions.gravity.y > 0.0) {
                 gravityMenuX = defaultMenuPositions.gravity.x * canvas.width;
                 gravityMenuY = defaultMenuPositions.gravity.y * canvas.height;
-                gravityMenuManuallyMoved = true;
             }
             if (defaultMenuPositions.respawn.x > 0.0 || defaultMenuPositions.respawn.y > 0.0) {
                 respawnMenuCenterX = defaultMenuPositions.respawn.x * canvas.width;
                 respawnMenuCenterY = defaultMenuPositions.respawn.y * canvas.height;
-                respawnMenuManuallyMoved = true;
             }
             if (defaultMenuPositions.walls.x > 0.0 || defaultMenuPositions.walls.y > 0.0) {
                 wallsMenuCenterX = defaultMenuPositions.walls.x * canvas.width;
                 wallsMenuCenterY = defaultMenuPositions.walls.y * canvas.height;
-                wallsMenuManuallyMoved = true;
             }
             if (defaultMenuPositions.colorWheel.x > 0.0 || defaultMenuPositions.colorWheel.y > 0.0) {
                 colorWheelCenterX = defaultMenuPositions.colorWheel.x * canvas.width;
                 colorWheelCenterY = defaultMenuPositions.colorWheel.y * canvas.height;
-                colorWheelManuallyMoved = true;
             }
             if (defaultMenuPositions.toys && (defaultMenuPositions.toys.x > 0.0 || defaultMenuPositions.toys.y > 0.0)) {
                 toysMenuCenterX = defaultMenuPositions.toys.x * canvas.width;
                 toysMenuCenterY = defaultMenuPositions.toys.y * canvas.height;
-                toysMenuManuallyMoved = true;
             }
         }
     }
@@ -1252,9 +1253,9 @@ window.addEventListener('DOMContentLoaded', function() {
         // Position to the right of respawn menu with spacing
         const spacing = 30; // Gap between menus
         const respawnMenuRight = respawnMenuCenterX + respawnMenuWidth / 2;
-        colorWheelCenterX = respawnMenuRight + spacing + colorWheelSize / 2;
+        colorWheelCenterX = respawnMenuRight + spacing + colorWheelSize / 2 + 12;
         colorWheelCenterY = canvas.height / 2;
-        colorWheelRadius = colorWheelSize / 2 - 10;
+        colorWheelRadius = colorWheelSize / 2;
     }
     
     function updateRespawnMenuPosition() {
@@ -1662,14 +1663,36 @@ window.addEventListener('DOMContentLoaded', function() {
     function animateMainMenu() {
         if (!mainMenuAnimating) return;
         
-        // Animate X position towards target
-        const diff = mainMenuTargetX - mainMenuX;
-        
-        if (Math.abs(diff) < 1) {
-            mainMenuX = mainMenuTargetX;
-            mainMenuAnimating = false;
+        if (mainMenuUsingSpring) {
+            // Spring animation for opening (bouncy)
+            const diff = mainMenuTargetX - mainMenuX;
+            
+            // Apply spring force
+            const springForce = diff * mainMenuSpringStrength;
+            mainMenuVelocity += springForce;
+            
+            // Apply damping
+            mainMenuVelocity *= mainMenuSpringDamping;
+            
+            // Update position
+            mainMenuX += mainMenuVelocity;
+            
+            // Stop when settled (small diff and small velocity)
+            if (Math.abs(diff) < 0.5 && Math.abs(mainMenuVelocity) < 0.5) {
+                mainMenuX = mainMenuTargetX;
+                mainMenuAnimating = false;
+                mainMenuVelocity = 0;
+            }
         } else {
-            mainMenuX += Math.sign(diff) * Math.min(mainMenuSlideSpeed, Math.abs(diff));
+            // Simple slide animation for closing
+            const diff = mainMenuTargetX - mainMenuX;
+            
+            if (Math.abs(diff) < 1) {
+                mainMenuX = mainMenuTargetX;
+                mainMenuAnimating = false;
+            } else {
+                mainMenuX += Math.sign(diff) * Math.min(mainMenuSlideSpeed, Math.abs(diff));
+            }
         }
     }
     
@@ -1687,15 +1710,20 @@ window.addEventListener('DOMContentLoaded', function() {
         mainMenuAnimating = true;
         
         if (mainMenuVisible) {
-            // Slide in - center horizontally on canvas
+            // Slide in from the left with spring animation - center horizontally on canvas
+            mainMenuX = -calculateMainMenuWidth(); // Start off-screen left
             mainMenuTargetX = (canvas.width - calculateMainMenuWidth()) / 2;
+            mainMenuUsingSpring = true;
+            mainMenuVelocity = 0; // Reset velocity
         } else {
-            // Slide out to the left (off-screen)
-            mainMenuTargetX = -calculateMainMenuWidth();
+            // Slide out to the right (off-screen) - simple slide
+            mainMenuTargetX = canvas.width;
+            mainMenuUsingSpring = false;
+            mainMenuVelocity = 0;
         }
     }
     
-    function drawColorWheel() {
+    function drawColorMenu() {
         if (colorWheelOpacity <= 0) return;
         
         const ctx = c;
@@ -1751,7 +1779,7 @@ window.addEventListener('DOMContentLoaded', function() {
         drawMenuBackground(ctx, centerX, centerY, size, size, {
             topOffset: -38,
             bottomOffset: 100,
-            rightOffset: 30
+            rightOffset: 70
         });
         
         // Draw title
@@ -1760,17 +1788,24 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         // Always center heading on menu width
-        ctx.fillText('Color', colorWheelCenterX + 16, centerY - size/2 - 18);
+        ctx.fillText('Color', colorWheelCenterX + 30, centerY - size/2 - 18);
         
         // Draw the color wheel from offscreen canvas
-        // Account for the padding when drawing
-        ctx.drawImage(colorWheelOffscreenCanvas, centerX - radius - 2, centerY - radius - 2);
+        // The offscreen canvas is (radius*2 + 4) in size, with wheel centered at (radius+2, radius+2)
+        const offscreenSize = radius * 2 + 4;
+        const wheelDrawX = centerX - radius - 2 + 12;
+        const wheelDrawY = centerY - radius - 2;
+        ctx.drawImage(colorWheelOffscreenCanvas, wheelDrawX, wheelDrawY);
+        
+        // The actual visual center of the wheel (used for mouse interaction)
+        const actualWheelCenterX = wheelDrawX + radius + 2;
+        const actualWheelCenterY = wheelDrawY + radius + 2;
         
         // Draw lightness slider (vertical bar on the right)
-        const barX = centerX + size/2 - 30 + 0.4 * radius;
-        const barY = centerY - size/2 + 20;
+        const barX = centerX + radius + 32;
+        const barY = centerY - radius;
         const barWidth = 20;
-        const barHeight = size - 40;
+        const barHeight = radius * 2;
         
         for (let i = 0; i <= barHeight; i++) {
             const lightness = 100 - (i / barHeight) * 95 + 5; // 5-100%
@@ -1800,8 +1835,9 @@ window.addEventListener('DOMContentLoaded', function() {
         // Draw marker for current hue/saturation position
         const markerAngle = colorWheelHue * Math.PI / 180;
         const markerDist = (colorWheelSat / 100) * radius;
-        const markerX = centerX + markerDist * Math.cos(markerAngle);
-        const markerY = centerY + markerDist * Math.sin(markerAngle);
+        // Use the actual wheel center position
+        const markerX = actualWheelCenterX + markerDist * Math.cos(markerAngle);
+        const markerY = actualWheelCenterY + markerDist * Math.sin(markerAngle);
         
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 3;
@@ -1820,13 +1856,11 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.fillRect(barX - 3, lightY - 2, barWidth + 6, 4);
         ctx.strokeStyle = 'black';
         ctx.strokeRect(barX - 3, lightY - 2, barWidth + 6, 4);
-
-
         
         // Draw sensitivity slider (horizontal bar at top)
-        const velBarX = centerX - size/2 + 20;
-        const velBarY = centerY + size/2 + 10;
-        const velBarWidth = size - 40;
+        const velBarX = centerX - radius + 14;
+        const velBarY = centerY + radius + 20;
+        const velBarWidth = radius * 2;
         const velBarHeight = 20;
         
         // Draw velocity bar gradient (gray scale, brighter means more sensitive)
@@ -1853,12 +1887,12 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.font = 'bold 14px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Sensitivity', centerX, velBarY + velBarHeight/2);
+        ctx.fillText('Sensitivity', velBarX + velBarWidth / 2, velBarY + velBarHeight/2);
         
         // Draw persistence slider (horizontal bar below sensitivity)
-        const persBarX = centerX - size/2 + 20;
-        const persBarY = centerY + size/2 + 47;
-        const persBarWidth = size - 40;
+        const persBarX = centerX - radius + 14;
+        const persBarY = centerY + radius + 57;
+        const persBarWidth = radius * 2;
         const persBarHeight = 20;
         
         // Draw persistence bar gradient (gray scale)
@@ -1886,7 +1920,7 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.font = 'bold 14px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Persistence', centerX, persBarY + persBarHeight/2);
+        ctx.fillText('Persistence', persBarX + persBarWidth / 2, persBarY + persBarHeight/2);
         
         // Restore context state
         ctx.restore();
@@ -4490,8 +4524,8 @@ window.addEventListener('DOMContentLoaded', function() {
         const radius = colorWheelRadius;
         
         // Check if clicking close button (top-left corner)
-        const closeButtonX = centerX - size/2 + 12;
-        const closeButtonY = centerY - size/2 - 18;
+        const closeButtonX = centerX - radius + 12;
+        const closeButtonY = centerY - radius - 18;
         const closeButtonRadius = 12;
         const dxClose = canvasX - closeButtonX;
         const dyClose = canvasY - closeButtonY;
@@ -4504,28 +4538,29 @@ window.addEventListener('DOMContentLoaded', function() {
             // HTML checkbox removed - state now managed by main menu
             return true;
         }
-        
+  
         // Check if clicking on lightness bar
-        const barX = centerX + size/2 - 30 + 0.4 * radius;
-        const barY = centerY - size/2 + 20;
+        const barX = centerX + radius + 32;
+        const barY = centerY - radius;
         const barWidth = 20;
-        const barHeight = size - 40;
+        const barHeight = radius * 2;
         
         // Check if clicking on sensitivity bar (horizontal bar at top)
-        const velBarX = centerX - size/2 + 20;
-        const velBarY = centerY + size/2 + 0;
-        const velBarWidth = size - 40;
+        const velBarX = centerX - radius + 14;
+        const velBarY = centerY + radius + 20;
+        const velBarWidth = radius * 2;
         const velBarHeight = 20;
         
         // Check if clicking on persistence bar (horizontal bar below sensitivity)
-        const persBarX = centerX - size/2 + 20;
-        const persBarY = centerY + size/2 + 37;
-        const persBarWidth = size - 40;
+        const persBarX = centerX - radius + 14;
+        const persBarY = centerY + radius + 57;
+        const persBarWidth = radius * 2;
         const persBarHeight = 20;
         
         // Check if within expanded color wheel area at all
-        if (canvasX < centerX - size/2 - 20 || canvasX > centerX + size/2 + 20 ||
-            canvasY < centerY - size/2 - 38 || canvasY > centerY + size/2 + 88) {
+        // Account for: title above, close button, lightness bar to right, and sliders below
+        if (canvasX < centerX - radius - 20 || canvasX > centerX + radius + 55 ||
+            canvasY < centerY - radius - 38 || canvasY > centerY + radius + 88) {
             return false;
         }
         
@@ -4552,8 +4587,13 @@ window.addEventListener('DOMContentLoaded', function() {
             return 'color';
         } else {
             // Update hue and saturation from wheel
-            const dx = canvasX - centerX;
-            const dy = canvasY - centerY;
+            // Calculate the actual wheel center the same way as in drawing
+            const wheelDrawX = centerX - radius - 2 + 12;
+            const wheelDrawY = centerY - radius - 2;
+            const actualWheelCenterX = wheelDrawX + radius + 2;
+            const actualWheelCenterY = wheelDrawY + radius + 2;
+            const dx = canvasX - actualWheelCenterX;
+            const dy = canvasY - actualWheelCenterY;
             const distance = Math.sqrt(dx * dx + dy * dy);
             
             if (distance <= radius) {
@@ -5133,8 +5173,9 @@ window.addEventListener('DOMContentLoaded', function() {
     canvas.addEventListener('touchstart', touchStartHandler, {passive: false});
     canvas.addEventListener('touchend', touchEndHandler, {passive: false});
     canvas.addEventListener('touchcancel', touchEndHandler, {passive: false});
+    
     // Double-click anywhere on the canvas to restart the simulation without reloading the page
-    canvas.addEventListener('dblclick', function(e) {
+    /*canvas.addEventListener('dblclick', function(e) {
         // Only prevent restart if user is actively dragging for shower width adjustment
         if (isDoubleTapDrag) return;
         
@@ -5150,7 +5191,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 selectTracerBall();
             }
         }
-    });
+    });*/
     
     function mouseDownHandler(ev) {
         const e = ev || window.event;
@@ -5202,9 +5243,23 @@ window.addEventListener('DOMContentLoaded', function() {
                                     if (typeof Balls !== 'undefined' && Array.isArray(Balls)) {
                                         particlesMenuQuantity = Math.round(Math.sqrt(Balls.length));
                                     }
-                                    if (!particlesMenuManuallyMoved || (particlesMenuCenterX === 0 && particlesMenuCenterY === 0)) {
-                                        updateParticlesMenuPosition();
+                                    
+                                    // Use stored position if manually moved, otherwise use default
+                                    if (!particlesMenuManuallyMoved) {
+                                        particlesMenuCenterX = defaultMenuPositions.particles.x * canvas.width;
+                                        particlesMenuCenterY = defaultMenuPositions.particles.y * canvas.height;
+                                        
+                                        // Check if menu would overlap main menu bar
+                                        const menuTopY = particlesMenuCenterY - particlesMenuHeight / 2;
+                                        const mainMenuBottomY = mainMenuPadding + mainMenuHeight;
+                                        
+                                        if (menuTopY < mainMenuBottomY) {
+                                            // Move below main menu with random gap
+                                            const randomGap = 10 + Math.random() * 15; // 10-25px
+                                            particlesMenuCenterY = mainMenuBottomY + randomGap + particlesMenuHeight / 2;
+                                        }
                                     }
+                                    
                                     particlesMenuTargetOpacity = 1;
                                     particlesMenuAnimating = true;
                                     bringMenuToFront('particlesMenu');
@@ -5215,6 +5270,22 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'physics') {
                                 physicsMenuVisible = !currentValue;
                                 if (physicsMenuVisible) {
+                                    // Use stored position if manually moved, otherwise use default
+                                    if (!physicsMenuManuallyMoved) {
+                                        physicsMenuCenterX = defaultMenuPositions.physics.x * canvas.width;
+                                        physicsMenuCenterY = defaultMenuPositions.physics.y * canvas.height;
+                                        
+                                        // Check if menu would overlap main menu bar
+                                        const menuTopY = physicsMenuCenterY - physicsMenuHeight / 2;
+                                        const mainMenuBottomY = mainMenuPadding + mainMenuHeight;
+                                        
+                                        if (menuTopY < mainMenuBottomY) {
+                                            // Move below main menu with random gap
+                                            const randomGap = 10 + Math.random() * 15; // 10-25px
+                                            physicsMenuCenterY = mainMenuBottomY + randomGap + physicsMenuHeight / 2;
+                                        }
+                                    }
+                                    
                                     physicsMenuTargetOpacity = 1;
                                     physicsMenuAnimating = true;
                                     bringMenuToFront('physicsMenu');
@@ -5227,9 +5298,6 @@ window.addEventListener('DOMContentLoaded', function() {
                                     physicsMenuTime = expValue > 0 ? (140 - 10 * Math.log(expValue)) / 0.1 : 1000;
                                     physicsMenuSpeed = (physProps.maxSpeed || 2.0) / 0.1;
                                     physicsMenuSubsteps = physProps.substeps || 1;
-                                    if (!physicsMenuManuallyMoved) {
-                                        updatePhysicsMenuPosition();
-                                    }
                                 } else {
                                     physicsMenuTargetOpacity = 0;
                                     physicsMenuAnimating = true;
@@ -5237,12 +5305,26 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'gravity') {
                                 gravityMenuVisible = !currentValue;
                                 if (gravityMenuVisible) {
+                                    // Use stored position if manually moved, otherwise use default
+                                    if (!gravityMenuManuallyMoved) {
+                                        gravityMenuX = defaultMenuPositions.gravity.x * canvas.width;
+                                        gravityMenuY = defaultMenuPositions.gravity.y * canvas.height;
+                                        
+                                        // Check if menu would overlap main menu bar
+                                        const gravityMenuSize = gravityMenuRadius * 2 + 50;
+                                        const menuTopY = gravityMenuY - gravityMenuSize / 2;
+                                        const mainMenuBottomY = mainMenuPadding + mainMenuHeight;
+                                        
+                                        if (menuTopY < mainMenuBottomY) {
+                                            // Move below main menu with random gap
+                                            const randomGap = 10 + Math.random() * 15; // 10-25px
+                                            gravityMenuY = mainMenuBottomY + randomGap + gravityMenuSize / 2;
+                                        }
+                                    }
+                                    
                                     gravityMenuTargetOpacity = 1;
                                     gravityMenuAnimating = true;
                                     bringMenuToFront('gravityMenu');
-                                    if (!gravityMenuManuallyMoved) {
-                                        updateGravityMenuPosition();
-                                    }
                                 } else {
                                     gravityMenuTargetOpacity = 0;
                                     gravityMenuAnimating = true;
@@ -5250,12 +5332,25 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'walls') {
                                 wallsMenuVisible = !currentValue;
                                 if (wallsMenuVisible) {
+                                    // Use stored position if manually moved, otherwise use default
+                                    if (!wallsMenuManuallyMoved) {
+                                        wallsMenuCenterX = defaultMenuPositions.walls.x * canvas.width;
+                                        wallsMenuCenterY = defaultMenuPositions.walls.y * canvas.height;
+                                        
+                                        // Check if menu would overlap main menu bar
+                                        const menuTopY = wallsMenuCenterY - wallsMenuHeight / 2;
+                                        const mainMenuBottomY = mainMenuPadding + mainMenuHeight;
+                                        
+                                        if (menuTopY < mainMenuBottomY) {
+                                            // Move below main menu with random gap
+                                            const randomGap = 10 + Math.random() * 15; // 10-25px
+                                            wallsMenuCenterY = mainMenuBottomY + randomGap + wallsMenuHeight / 2;
+                                        }
+                                    }
+                                    
                                     wallsMenuTargetOpacity = 1;
                                     wallsMenuAnimating = true;
                                     bringMenuToFront('wallsMenu');
-                                    if (!wallsMenuManuallyMoved) {
-                                        updateWallsMenuPosition();
-                                    }
                                 } else {
                                     wallsMenuTargetOpacity = 0;
                                     wallsMenuAnimating = true;
@@ -5263,9 +5358,22 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'respawn') {
                                 respawnMenuVisible = !currentValue;
                                 if (respawnMenuVisible) {
-                                    if (!respawnMenuManuallyMoved || (respawnMenuCenterX === 0 && respawnMenuCenterY === 0)) {
-                                        updateRespawnMenuPosition();
+                                    // Use stored position if manually moved, otherwise use default
+                                    if (!respawnMenuManuallyMoved) {
+                                        respawnMenuCenterX = defaultMenuPositions.respawn.x * canvas.width;
+                                        respawnMenuCenterY = defaultMenuPositions.respawn.y * canvas.height;
+                                        
+                                        // Check if menu would overlap main menu bar
+                                        const menuTopY = respawnMenuCenterY - respawnMenuHeight / 2;
+                                        const mainMenuBottomY = mainMenuPadding + mainMenuHeight;
+                                        
+                                        if (menuTopY < mainMenuBottomY) {
+                                            // Move below main menu with random gap
+                                            const randomGap = 10 + Math.random() * 15; // 10-25px
+                                            respawnMenuCenterY = mainMenuBottomY + randomGap + respawnMenuHeight / 2;
+                                        }
                                     }
+                                    
                                     respawnMenuTargetOpacity = 1;
                                     respawnMenuAnimating = true;
                                     bringMenuToFront('respawnMenu');
@@ -5276,9 +5384,22 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'toys') {
                                 toysMenuVisible = !currentValue;
                                 if (toysMenuVisible) {
-                                    if (!toysMenuManuallyMoved || (toysMenuCenterX === 0 && toysMenuCenterY === 0)) {
-                                        updateToysMenuPosition();
+                                    // Use stored position if manually moved, otherwise use default
+                                    if (!toysMenuManuallyMoved) {
+                                        toysMenuCenterX = defaultMenuPositions.toys.x * canvas.width;
+                                        toysMenuCenterY = defaultMenuPositions.toys.y * canvas.height;
+                                        
+                                        // Check if menu would overlap main menu bar
+                                        const menuTopY = toysMenuCenterY - toysMenuHeight / 2;
+                                        const mainMenuBottomY = mainMenuPadding + mainMenuHeight;
+                                        
+                                        if (menuTopY < mainMenuBottomY) {
+                                            // Move below main menu with random gap
+                                            const randomGap = 10 + Math.random() * 15; // 10-25px
+                                            toysMenuCenterY = mainMenuBottomY + randomGap + toysMenuHeight / 2;
+                                        }
                                     }
+                                    
                                     toysMenuTargetOpacity = 1;
                                     toysMenuAnimating = true;
                                     bringMenuToFront('toysMenu');
@@ -5289,14 +5410,27 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'color') {
                                 colorWheelVisible = !currentValue;
                                 if (colorWheelVisible) {
+                                    // Use stored position if manually moved, otherwise use default
+                                    if (!colorWheelManuallyMoved) {
+                                        colorWheelCenterX = defaultMenuPositions.colorWheel.x * canvas.width;
+                                        colorWheelCenterY = defaultMenuPositions.colorWheel.y * canvas.height;
+                                        
+                                        // Check if menu would overlap main menu bar
+                                        const menuTopY = colorWheelCenterY - colorWheelSize / 2;
+                                        const mainMenuBottomY = mainMenuPadding + mainMenuHeight;
+                                        
+                                        if (menuTopY < mainMenuBottomY) {
+                                            // Move below main menu with random gap
+                                            const randomGap = 10 + Math.random() * 15; // 10-25px
+                                            colorWheelCenterY = mainMenuBottomY + randomGap + colorWheelSize / 2;
+                                        }
+                                    }
+                                    
                                     colorWheelTargetOpacity = 1;
                                     colorWheelAnimating = true;
                                     bringMenuToFront('colorWheel');
                                     colorWheelPersistence = persistence;
                                     colorWheelVelMap = physProps.velColorMap;
-                                    if (colorWheelCenterX === 0 && colorWheelCenterY === 0) {
-                                        updateColorWheelPosition();
-                                    }
                                 } else {
                                     colorWheelTargetOpacity = 0;
                                     colorWheelAnimating = true;
@@ -6436,6 +6570,9 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Clear color wheel dragging
         colorWheelDragging = false;
+        if (colorWheelPositionDragging) {
+            colorWheelManuallyMoved = true;
+        }
         colorWheelPositionDragging = false;
         document.removeEventListener('mousemove', colorWheelMouseMove);
         document.removeEventListener('touchmove', touchColorWheelMove);
@@ -7020,7 +7157,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Start continuous implode effect
         if (implodeInterval) clearInterval(implodeInterval);
         implodeInterval = setInterval(() => {
-            try { instantImplode(); } catch(e) {}
+            try { magnetize(); } catch(e) {}
         }, 16); // ~60fps for smooth continuous effect
     }
 
@@ -10764,8 +10901,8 @@ window.addEventListener('DOMContentLoaded', function() {
                     isImploderDragging = true;
                     imploderDragOffset.x = dx;
                     imploderDragOffset.y = dy;
-                    // Start instantImplode on hold
-                    imploderHoldTimer = setInterval(instantImplode, 50);
+                    // Start magnetize on hold
+                    imploderHoldTimer = setInterval(magnetize, 50);
                 }
             }
         });
@@ -10827,7 +10964,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
     //  HANDLE MAGNET ----------------------------------------------------------------
     let leftPole = true;
-    function instantImplode() {
+    function magnetize() {
         const implosionForce = Magnet[0] ? (Magnet[0].force) : 1;
         const baseSpeed = implosionForce * physProps.dt;
         // Use Magnet center if active, else canvas center
@@ -10855,6 +10992,38 @@ window.addEventListener('DOMContentLoaded', function() {
             d.scale(1 / (influenceDist)); 
             ball.vel.x -= d.x * baseSpeed;
             ball.vel.y -= d.y * baseSpeed;
+        }
+    }
+
+    //  HANDLE SCATTERER ----------------------------------------------------------------
+    function scatter() {
+        const implosionForce = Magnet[0] ? (Magnet[0].force) : 1;
+        const baseSpeed = implosionForce * physProps.dt;
+        // Use Magnet center if active, else canvas center
+        let centerX, centerY;
+        if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active) {
+            if (leftPole == true) {
+                centerX = Magnet[0].pos.x - 0.5 * Magnet[0].radius;
+                leftPole = false;
+            } else {
+                centerX = Magnet[0].pos.x + 0.5 * Magnet[0].radius;
+                leftPole = true;
+            }
+            centerY = Magnet[0].pos.y + 0.5 * Magnet[0].radius; 
+        } else {
+            centerX = 0.5 * simWidth;
+            centerY = 0.5 * simHeight;
+        }
+        for (let i = Balls.length - 1; i >= 0; i--) {
+            var ball = Balls[i];
+            var d = new Vector2();
+            d.subtractVectors(ball.pos, new Vector2(centerX, centerY));
+        
+            // Apply inward drawing force inversely proportional to distance
+            var influenceDist = d.length();
+            d.scale(1 / (influenceDist * influenceDist)); 
+            ball.vel.x += d.x * baseSpeed;
+            ball.vel.y += d.y * baseSpeed;
         }
     }
 
@@ -11926,7 +12095,7 @@ window.addEventListener('DOMContentLoaded', function() {
             switch(menuName) {
                 case 'colorWheel':
                     animateColorWheelOpacity();
-                    drawColorWheel();
+                    drawColorMenu();
                     break;
                 case 'physicsMenu':
                     animatePhysicsMenuOpacity();
