@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.2
+		<title>Slosh 2.4
         </title>
         <style>
 			body {font-family: monospace; 
@@ -896,7 +896,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var mainMenuVelocity = 0; // Current velocity for spring animation
     var mainMenuUsingSpring = false; // Whether to use spring animation (true for opening, false for closing)
     const mainMenuSpringStrength = 0.3; // Spring force coefficient
-    const mainMenuSpringDamping = 0.7; // Damping factor (0-1, lower = more bouncy)
+    const mainMenuSpringDamping = 0.65; // Damping factor (0-1, lower = more bouncy)
     
     // Ellipsis button (always visible in top-left)
     const ellipsisSize = 40;
@@ -907,6 +907,10 @@ window.addEventListener('DOMContentLoaded', function() {
     const pauseButtonBlinkCycle = 1.8; // Total cycle time in seconds (0.8s lit + 0.2s dimmed)
     const pauseButtonDimDuration = 0.3; // Duration of dim phase in seconds
     
+    // Submenu hide/show toggle
+    var submenusHidden = false;
+    var savedSubmenuStates = {}; // Store which menus were visible before hiding
+    
     // Main menu items with their properties
     const mainMenuItems = [
         {id: 'particles', label: 'Particles', color: 'hsl(23, 70%, 60%)', checked: true, variable: 'particlesMenuVisible'},
@@ -916,7 +920,7 @@ window.addEventListener('DOMContentLoaded', function() {
         {id: 'respawn', label: 'ReSpawn', color: 'hsl(320, 100%, 50%)', checked: false, variable: 'respawnMenuVisible'},
         {id: 'toys', label: 'Toys', color: 'hsl(45, 80%, 50%)', checked: false, variable: 'toysMenuVisible'},
         {id: 'color', label: 'Color', color: '', checked: false, variable: 'colorWheelVisible', multiColor: true},
-        {id: 'pause', label: 'Pause', color: 'hsl(0, 0%, 80%)', checked: false, isPause: true}
+        {id: 'pause', label: 'Play', color: 'hsl(0, 0%, 80%)', checked: false, isPause: true}
     ];
     
     // Calculate main menu width based on items
@@ -1420,8 +1424,13 @@ window.addEventListener('DOMContentLoaded', function() {
         const x = ellipsisMargin + ellipsisSize / 2;
         const y = ellipsisMargin + ellipsisSize / 2;
         
+        // Calculate fade based on menu visibility
+        const fadeAlpha = mainMenuVisible ? 0 : 0.7;
+        
+        if (fadeAlpha === 0) return; // Don't draw when menu is open
+        
         // Draw semi-transparent background circle
-        ctx.globalAlpha = 0.7;
+        ctx.globalAlpha = fadeAlpha;
         ctx.fillStyle = 'rgba(30, 30, 30, 0.9)';
         ctx.beginPath();
         ctx.arc(x, y, ellipsisSize / 2, 0, Math.PI * 2);
@@ -1447,7 +1456,7 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.globalAlpha = 1;
     }
     
-    //  draw main menu  ----------
+    //  DRAW MAIN MENU  --------------------------------------
     function drawMainMenu() {
         if (!mainMenuVisible && mainMenuX <= -calculateMainMenuWidth()) {
             return; // Completely off-screen, skip drawing
@@ -1489,6 +1498,53 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.restore();
         ctx.globalAlpha = 1;
         
+        // Draw red X close button at top-left
+        if (mainMenuVisible) {
+            const closeButtonSize = 20;
+            const closeButtonX = mainMenuX + 15;
+            const closeButtonY = barY + 15;
+            
+            // Draw circle background
+            ctx.fillStyle = 'hsl(0, 70%, 30%)';
+            ctx.beginPath();
+            ctx.arc(closeButtonX, closeButtonY, closeButtonSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw X symbol
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            const xSize = closeButtonSize * 0.2;
+            ctx.beginPath();
+            ctx.moveTo(closeButtonX - xSize, closeButtonY - xSize);
+            ctx.lineTo(closeButtonX + xSize, closeButtonY + xSize);
+            ctx.moveTo(closeButtonX + xSize, closeButtonY - xSize);
+            ctx.lineTo(closeButtonX - xSize, closeButtonY + xSize);
+            ctx.stroke();
+        }
+        
+        // Draw submenu hide/show toggle button on far right
+        if (mainMenuVisible) {
+            const toggleButtonSize = 20;
+            const toggleButtonX = mainMenuX + menuWidth - 15;
+            const toggleButtonY = barY + 15;
+            
+            // Draw circle background - bright yellow when menus shown, dim when hidden
+            const yellowColor = submenusHidden ? 'hsla(50, 100%, 50%, 0.4)' : 'hsla(50, 100%, 40%, 1.0)';
+            ctx.fillStyle = yellowColor;
+            ctx.beginPath();
+            ctx.arc(toggleButtonX, toggleButtonY, toggleButtonSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw icon - eye symbol (circle with dot for open, line through for closed)
+            ctx.strokeStyle = 'black';
+            ctx.fillStyle = 'black';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(toggleButtonX - 5, toggleButtonY);
+            ctx.lineTo(toggleButtonX + 5, toggleButtonY);
+            ctx.stroke();
+        }
+        
         // Draw menu items
         let currentX = mainMenuX + sidePadding;
         
@@ -1517,42 +1573,6 @@ window.addEventListener('DOMContentLoaded', function() {
         
         const rectX = x;
         const rectY = centerY - height / 2;
-        
-        /*
-        if (isChecked) {
-            // Filled when checked
-            ctx.fillStyle = item.color || 'hsl(0, 0%, 50%)';
-            ctx.beginPath();
-            ctx.moveTo(rectX + cornerRadius, rectY);
-            ctx.lineTo(rectX + width - cornerRadius, rectY);
-            ctx.arcTo(rectX + width, rectY, rectX + width, rectY + cornerRadius, cornerRadius);
-            ctx.lineTo(rectX + width, rectY + height - cornerRadius);
-            ctx.arcTo(rectX + width, rectY + height, rectX + width - cornerRadius, rectY + height, cornerRadius);
-            ctx.lineTo(rectX + cornerRadius, rectY + height);
-            ctx.arcTo(rectX, rectY + height, rectX, rectY + height - cornerRadius, cornerRadius);
-            ctx.lineTo(rectX, rectY + cornerRadius);
-            ctx.arcTo(rectX, rectY, rectX + cornerRadius, rectY, cornerRadius);
-            ctx.closePath();
-            ctx.fill();
-        }
-
-        // Draw border
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = item.color || 'hsl(0, 0%, 60%)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(rectX + cornerRadius, rectY);
-        ctx.lineTo(rectX + width - cornerRadius, rectY);
-        ctx.arcTo(rectX + width, rectY, rectX + width, rectY + cornerRadius, cornerRadius);
-        ctx.lineTo(rectX + width, rectY + height - cornerRadius);
-        ctx.arcTo(rectX + width, rectY + height, rectX + width - cornerRadius, rectY + height, cornerRadius);
-        ctx.lineTo(rectX + cornerRadius, rectY + height);
-        ctx.arcTo(rectX, rectY + height, rectX, rectY + height - cornerRadius, cornerRadius);
-        ctx.lineTo(rectX, rectY + cornerRadius);
-        ctx.arcTo(rectX, rectY, rectX + cornerRadius, rectY, cornerRadius);
-        ctx.closePath();
-        //ctx.stroke();
-        */
 
         ctx.globalAlpha = 1;
         // Draw icon above label
@@ -1628,31 +1648,43 @@ window.addEventListener('DOMContentLoaded', function() {
                 ctx.stroke();
             }
         } else if (item.isPause) {
-            // Draw pause icon (two vertical bars)
+            // Draw pause icon (two vertical bars) and play icon (triangle)
             const barWidth = 6;
             const barHeight = 24;
             const barSpacing = 6;
             const cx = rectX + width / 2;
             const cy = iconY - 6;
             
-            // Apply blinking effect when paused
-            let iconColorWithBlink = iconColor;
+            // Determine which icon should be bright/dim based on paused state
+            let pauseColor, playColor;
             if (isChecked) {
-                // Calculate blink phase (0.8s lit, 0.2s dim)
+                // Paused: pause icon bright with blink, play icon dim
                 const cyclePosition = pauseButtonBlinkTimer % pauseButtonBlinkCycle;
                 const isDimPhase = cyclePosition >= (pauseButtonBlinkCycle - pauseButtonDimDuration);
-                
-                if (isDimPhase) {
-                    // Dim the color during the blink
-                    iconColorWithBlink = 'hsla(190, 45%, 25%, 0.4)';
-                }
+                pauseColor = isDimPhase ? 'hsla(190, 45%, 25%, 0.4)' : iconColor;
+                playColor = 'hsla(190, 45%, 25%, 0.3)';
+            } else {
+                // Playing: pause icon dim, play icon bright
+                pauseColor = 'hsla(190, 45%, 25%, 0.3)';
+                playColor = 'hsl(190, 100%, 70%)';
             }
             
-            ctx.fillStyle = iconColorWithBlink;
-            // Left bar
-            ctx.fillRect(cx - barSpacing / 2 - barWidth, cy - barHeight / 2, barWidth, barHeight);
-            // Right bar
-            ctx.fillRect(cx + barSpacing / 2, cy - barHeight / 2, barWidth, barHeight);
+            // Draw pause bars (left side)
+            ctx.fillStyle = pauseColor;
+            const groupOffset = 12; // Shift entire group left to center it
+            ctx.fillRect(cx - groupOffset - barSpacing / 2 - barWidth, cy - barHeight / 2, barWidth, barHeight);
+            ctx.fillRect(cx - groupOffset + barSpacing / 2, cy - barHeight / 2, barWidth, barHeight);
+            
+            // Draw play triangle (right side) - twice as large
+            ctx.fillStyle = playColor;
+            const triangleSize = 24;
+            const triangleOffset = 18 - groupOffset;
+            ctx.beginPath();
+            ctx.moveTo(cx + triangleOffset, cy - triangleSize / 2);
+            ctx.lineTo(cx + triangleOffset, cy + triangleSize / 2);
+            ctx.lineTo(cx + triangleOffset + triangleSize * 0.866, cy);
+            ctx.closePath();
+            ctx.fill();
         }
         
         // Draw label below icon
@@ -1674,7 +1706,9 @@ window.addEventListener('DOMContentLoaded', function() {
             }
         } else {
             ctx.fillStyle = item.color;
-            ctx.fillText(item.label, rectX + width / 2, labelY + 4);
+            // Dynamic label for pause button
+            const displayLabel = item.isPause ? (isChecked ? 'Pause' : 'Play') : item.label;
+            ctx.fillText(displayLabel, rectX + width / 2, labelY + 4);
         }
     }
     
@@ -1720,6 +1754,98 @@ window.addEventListener('DOMContentLoaded', function() {
             pauseButtonBlinkTimer += dt;
         } else {
             pauseButtonBlinkTimer = 0; // Reset when not paused
+        }
+    }
+    
+    function toggleSubmenus() {
+        submenusHidden = !submenusHidden;
+        
+        if (submenusHidden) {
+            // Save current states and hide all submenus
+            savedSubmenuStates = {
+                particles: particlesMenuVisible,
+                physics: physicsMenuVisible,
+                gravity: gravityMenuVisible,
+                walls: wallsMenuVisible,
+                respawn: respawnMenuVisible,
+                toys: toysMenuVisible,
+                color: colorWheelVisible
+            };
+            
+            // Hide all submenus with fade out animation
+            if (particlesMenuVisible) {
+                particlesMenuTargetOpacity = 0;
+                particlesMenuAnimating = true;
+            }
+            if (physicsMenuVisible) {
+                physicsMenuTargetOpacity = 0;
+                physicsMenuAnimating = true;
+            }
+            if (gravityMenuVisible) {
+                gravityMenuTargetOpacity = 0;
+                gravityMenuAnimating = true;
+            }
+            if (wallsMenuVisible) {
+                wallsMenuTargetOpacity = 0;
+                wallsMenuAnimating = true;
+            }
+            if (respawnMenuVisible) {
+                respawnMenuTargetOpacity = 0;
+                respawnMenuAnimating = true;
+            }
+            if (toysMenuVisible) {
+                toysMenuTargetOpacity = 0;
+                toysMenuAnimating = true;
+            }
+            if (colorWheelVisible) {
+                colorWheelTargetOpacity = 0;
+                colorWheelAnimating = true;
+            }
+            
+            particlesMenuVisible = false;
+            physicsMenuVisible = false;
+            gravityMenuVisible = false;
+            wallsMenuVisible = false;
+            respawnMenuVisible = false;
+            toysMenuVisible = false;
+            colorWheelVisible = false;
+        } else {
+            // Restore saved states with fade in animation
+            if (savedSubmenuStates.particles) {
+                particlesMenuVisible = true;
+                particlesMenuTargetOpacity = 1;
+                particlesMenuAnimating = true;
+            }
+            if (savedSubmenuStates.physics) {
+                physicsMenuVisible = true;
+                physicsMenuTargetOpacity = 1;
+                physicsMenuAnimating = true;
+            }
+            if (savedSubmenuStates.gravity) {
+                gravityMenuVisible = true;
+                gravityMenuTargetOpacity = 1;
+                gravityMenuAnimating = true;
+            }
+            if (savedSubmenuStates.walls) {
+                wallsMenuVisible = true;
+                wallsMenuTargetOpacity = 1;
+                wallsMenuAnimating = true;
+            }
+            if (savedSubmenuStates.respawn) {
+                respawnMenuVisible = true;
+                respawnMenuTargetOpacity = 1;
+                respawnMenuAnimating = true;
+            }
+            if (savedSubmenuStates.toys) {
+                toysMenuVisible = true;
+                toysMenuTargetOpacity = 1;
+                toysMenuAnimating = true;
+            }
+            if (savedSubmenuStates.color) {
+                colorWheelVisible = true;
+                colorWheelTargetOpacity = 1;
+                colorWheelAnimating = true;
+            }
         }
     }
     
@@ -1831,24 +1957,19 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.fillRect(barX, barY + i, barWidth, 1);
         }
         
-        // Draw lightness bar border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(barX, barY, barWidth, barHeight);
-
         // Draw vertical 'Lightness' label to the left of the slider
-            ctx.save();
-            ctx.font = 'bold 14px verdana, sans-serif';
-            ctx.fillStyle = 'hsl(0, 0%, 0%)';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            // Position: left of the slider, vertically centered
-            const labelX = barX + 11; // 11px left of slider
-            const labelY = barY + barHeight / 2;
-            ctx.translate(labelX, labelY);
-            ctx.rotate(-Math.PI / 2); // 90 degrees counterclockwise
-            ctx.fillText('Lightness', 0, 0);
-            ctx.restore();
+        ctx.save();
+        ctx.font = 'bold 14px verdana, sans-serif';
+        ctx.fillStyle = 'hsl(0, 0%, 0%)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // Position: left of the slider, vertically centered
+        const labelX = barX + 11; // 11px left of slider
+        const labelY = barY + barHeight / 2;
+        ctx.translate(labelX, labelY);
+        ctx.rotate(-Math.PI / 2); // 90 degrees counterclockwise
+        ctx.fillText('Lightness', 0, 0);
+        ctx.restore();
         
         // Draw marker for current hue/saturation position
         const markerAngle = colorWheelHue * Math.PI / 180;
@@ -1888,10 +2009,12 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.fillRect(velBarX + i, velBarY, 1, velBarHeight);
         }
         
-        // Draw velocity bar border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(velBarX, velBarY, velBarWidth, velBarHeight);
+        // Draw velocity label
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Sensitivity', velBarX + velBarWidth / 2, velBarY + velBarHeight/2);
         
         // Draw velocity marker
         const velX = velBarX + (colorWheelVelMap / 500) * velBarWidth;
@@ -1899,13 +2022,6 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.fillRect(velX - 2, velBarY - 3, 4, velBarHeight + 6);
         ctx.strokeStyle = 'black';
         ctx.strokeRect(velX - 2, velBarY - 3, 4, velBarHeight + 6);
-        
-        // Draw velocity label
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Sensitivity', velBarX + velBarWidth / 2, velBarY + velBarHeight/2);
         
         // Draw persistence slider (horizontal bar below sensitivity)
         const persBarX = centerX - radius + 14;
@@ -1920,27 +2036,21 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.fillStyle = `hsl(200, 70%, ${brightness}%)`;
             ctx.fillRect(persBarX + i, persBarY, 1, persBarHeight);
         }
-        
-        // Draw persistence bar border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(persBarX, persBarY, persBarWidth, persBarHeight);
-        
+
+        // Draw persistence label
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Persistence', persBarX + persBarWidth / 2, persBarY + persBarHeight/2);
+      
         // Draw persistence marker
         const persX = persBarX + (colorWheelPersistence / 30) * persBarWidth;
         ctx.fillStyle = 'white';
         ctx.fillRect(persX - 2, persBarY - 3, 4, persBarHeight + 6);
         ctx.strokeStyle = 'black';
         ctx.strokeRect(persX - 2, persBarY - 3, 4, persBarHeight + 6);
-        
-        // Draw persistence label
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Persistence', persBarX + persBarWidth / 2, persBarY + persBarHeight/2);
-        
-        // Restore context state
+    
         ctx.restore();
     }
     
@@ -2021,15 +2131,10 @@ window.addEventListener('DOMContentLoaded', function() {
         const repulsionCheckSize = 14;
         
         // Draw checkbox
-        ctx.fillStyle = physicsMenuRepulsionOn ? 'hsl(120, 60%, 40%)' : 'hsl(0, 0%, 30%)';
-        ctx.fillRect(repulsionCheckX, currentY - repulsionCheckSize/2, repulsionCheckSize, repulsionCheckSize);
-        ctx.strokeStyle = 'hsl(0, 0%, 60%)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = physicsMenuRepulsionOn ? 'hsl(140, 80%, 40%)' : 'hsl(0, 0%, 30%)';
+        ctx.lineWidth = 2;
         ctx.strokeRect(repulsionCheckX, currentY - repulsionCheckSize/2, repulsionCheckSize, repulsionCheckSize);
-        
         if (physicsMenuRepulsionOn) {
-            ctx.strokeStyle = 'white';
-            ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(repulsionCheckX + 3, currentY);
             ctx.lineTo(repulsionCheckX + 6, currentY + 4);
@@ -2041,14 +2146,16 @@ window.addEventListener('DOMContentLoaded', function() {
         // Draw gradient bar
         for (let i = 0; i <= sliderWidth; i++) {
             const brightness = 30 + (i / sliderWidth) * 40;
-            ctx.fillStyle = `hsl(30, 70%, ${brightness}%)`;
+            ctx.fillStyle = `hsl(140, 50%, ${brightness}%)`;
             ctx.fillRect(sliderStartX + i, currentY - sliderHeight/2, 1, sliderHeight);
         }
         
-        // Draw border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderStartX, currentY - sliderHeight/2, sliderWidth, sliderHeight);
+        // Draw label inside slider (after gradient so it's on top)
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Repulsion Force', sliderStartX + sliderWidth/2, currentY);
         
         // Draw marker
         const repulsionPercent = (physicsMenuRepulsionForce - 1) / (20 - 1);
@@ -2058,28 +2165,23 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.strokeStyle = 'black';
         ctx.strokeRect(repulsionHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         
-        // Draw label inside slider (after gradient so it's on top)
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Repulsion Force', sliderStartX + sliderWidth/2, currentY);
-        
         currentY += sliderSpacing;
         
         // 2. Repulsion Distance slider
         // Draw gradient bar
         for (let i = 0; i <= sliderWidth; i++) {
             const brightness = 30 + (i / sliderWidth) * 40;
-            ctx.fillStyle = `hsl(45, 70%, ${brightness}%)`;
+            ctx.fillStyle = `hsl(140, 50%, ${brightness}%)`;
             ctx.fillRect(sliderStartX + i, currentY - sliderHeight/2, 1, sliderHeight);
         }
         
-        // Draw border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderStartX, currentY - sliderHeight/2, sliderWidth, sliderHeight);
-        
+        // Draw label inside slider (after gradient so it's on top)
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Repulsion Distance', sliderStartX + sliderWidth/2, currentY);
+
         // Draw marker
         const repulsionDistPercent = physicsMenuRepulsionDist / 10;
         const repulsionDistHandleX = sliderStartX + repulsionDistPercent * sliderWidth;
@@ -2088,28 +2190,16 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.strokeStyle = 'black';
         ctx.strokeRect(repulsionDistHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         
-        // Draw label inside slider (after gradient so it's on top)
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Repulsion Distance', sliderStartX + sliderWidth/2, currentY);
-        
         currentY += sliderSpacing;
         
         // 3. Ball Rest (Restitution) slider with checkbox
         const bounceCheckX = centerX - w/2 + checkboxPadding;
         
         // Draw checkbox
-        ctx.fillStyle = physicsMenuBounceOn ? 'hsl(120, 60%, 40%)' : 'hsl(0, 0%, 30%)';
-        ctx.fillRect(bounceCheckX, currentY - repulsionCheckSize/2, repulsionCheckSize, repulsionCheckSize);
-        ctx.strokeStyle = 'hsl(0, 0%, 60%)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = physicsMenuBounceOn ? 'hsl(120, 60%, 40%)' : 'hsl(0, 0%, 30%)';
+        ctx.lineWidth = 2;
         ctx.strokeRect(bounceCheckX, currentY - repulsionCheckSize/2, repulsionCheckSize, repulsionCheckSize);
-        
         if (physicsMenuBounceOn) {
-            ctx.strokeStyle = 'white';
-            ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(bounceCheckX + 3, currentY);
             ctx.lineTo(bounceCheckX + 6, currentY + 4);
@@ -2121,14 +2211,16 @@ window.addEventListener('DOMContentLoaded', function() {
         // Draw gradient bar
         for (let i = 0; i <= sliderWidth; i++) {
             const brightness = 30 + (i / sliderWidth) * 40;
-            ctx.fillStyle = `hsl(200, 70%, ${brightness}%)`;
+            ctx.fillStyle = `hsl(80, 50%, ${brightness}%)`;
             ctx.fillRect(sliderStartX + i, currentY - sliderHeight/2, 1, sliderHeight);
         }
         
-        // Draw border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderStartX, currentY - sliderHeight/2, sliderWidth, sliderHeight);
+        // Draw label inside slider (after gradient so it's on top)
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Restitution', sliderStartX + sliderWidth/2, currentY);
         
         // Draw marker
         const ballRestPercent = physicsMenuBallRest / 100;
@@ -2138,27 +2230,22 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.strokeStyle = 'black';
         ctx.strokeRect(ballRestHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         
-        // Draw label inside slider (after gradient so it's on top)
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Restitution', sliderStartX + sliderWidth/2, currentY);
-        
         currentY += sliderSpacing;
         
         // 4. Time slider
         // Draw gradient bar
         for (let i = 0; i <= sliderWidth; i++) {
             const brightness = 30 + (i / sliderWidth) * 40;
-            ctx.fillStyle = `hsl(170, 70%, ${brightness}%)`;
+            ctx.fillStyle = `hsl(160, 50%, ${brightness}%)`;
             ctx.fillRect(sliderStartX + i, currentY - sliderHeight/2, 1, sliderHeight);
         }
         
-        // Draw border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderStartX, currentY - sliderHeight/2, sliderWidth, sliderHeight);
+        // Draw label inside slider (after gradient so it's on top)
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Time', sliderStartX + sliderWidth/2, currentY);
         
         // Draw marker
         const timePercent = (physicsMenuTime - 500) / (1000 - 500);
@@ -2168,27 +2255,22 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.strokeStyle = 'black';
         ctx.strokeRect(timeHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         
-        // Draw label inside slider (after gradient so it's on top)
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Time', sliderStartX + sliderWidth/2, currentY);
-        
         currentY += sliderSpacing;
         
         // 5. Speed Limit slider
         // Draw gradient bar
         for (let i = 0; i <= sliderWidth; i++) {
             const brightness = 30 + (i / sliderWidth) * 40;
-            ctx.fillStyle = `hsl(150, 70%, ${brightness}%)`;
+            ctx.fillStyle = `hsl(180, 50%, ${brightness}%)`;
             ctx.fillRect(sliderStartX + i, currentY - sliderHeight/2, 1, sliderHeight);
         }
-        
-        // Draw border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderStartX, currentY - sliderHeight/2, sliderWidth, sliderHeight);
+
+        // Draw label inside slider (after gradient so it's on top)
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Speed Limit', sliderStartX + sliderWidth/2, currentY);
         
         // Draw marker
         const speedPercent = (physicsMenuSpeed - 1) / (50 - 1);
@@ -2198,13 +2280,6 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.strokeStyle = 'black';
         ctx.strokeRect(speedHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         
-        // Draw label inside slider (after gradient so it's on top)
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Speed Limit', sliderStartX + sliderWidth/2, currentY);
-        
         currentY += sliderSpacing;
         
         // 6. Substeps slider (half width, 4 detents) with FPS toggle
@@ -2213,14 +2288,16 @@ window.addEventListener('DOMContentLoaded', function() {
         // Draw gradient bar (using cyan/teal color like Time slider)
         for (let i = 0; i <= substepsSliderWidth; i++) {
             const brightness = 30 + (i / substepsSliderWidth) * 40;
-            ctx.fillStyle = `hsl(180, 70%, ${brightness}%)`;
+            ctx.fillStyle = `hsl(200, 50%, ${brightness}%)`;
             ctx.fillRect(sliderStartX + i, currentY - sliderHeight/2, 1, sliderHeight);
         }
-        
-        // Draw border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderStartX, currentY - sliderHeight/2, substepsSliderWidth, sliderHeight);
+
+        // Draw label inside slider (after gradient so it's on top)
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Substeps', sliderStartX + substepsSliderWidth/2, currentY);
         
         // Draw marker (handle)
         const substepsPercent = (physicsMenuSubsteps - 1) / 3; // 0 to 1 for values 1-4
@@ -2230,16 +2307,9 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.strokeStyle = 'black';
         ctx.strokeRect(substepsHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         
-        // Draw label inside slider (after gradient so it's on top)
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Substeps', sliderStartX + substepsSliderWidth/2, currentY);
-        
         // Draw value display to the right of slider
         ctx.fillStyle = 'hsl(0, 0%, 80%)';
-        ctx.font = '12px monospace';
+        ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(physicsMenuSubsteps.toString(), sliderStartX + substepsSliderWidth + 10, currentY);
@@ -2574,15 +2644,17 @@ window.addEventListener('DOMContentLoaded', function() {
         // Draw slider track gradient
         for (let i = 0; i <= sliderWidth; i++) {
             const brightness = 30 + (i / sliderWidth) * 40;
-            ctx.fillStyle = `hsl(30, 70%, ${brightness}%)`;
+            ctx.fillStyle = `hsl(0, 50%, ${brightness}%)`;
             
             ctx.fillRect(sliderLeft + i, sliderY - sliderHeight/2, 1, sliderHeight);
         }
-        
-        // Draw slider border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderLeft, sliderY - sliderHeight/2, sliderWidth, sliderHeight);
+
+        // Draw slider label
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Play Area', sliderLeft + sliderWidth/2, sliderY);
         
         // Draw slider handle
         const radiusPercent = 1 - (wallsMenuCornerRadius / 150); // Reversed to match input direction
@@ -2590,16 +2662,9 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.fillStyle = 'white';
         ctx.fillRect(handleX - 2, sliderY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         ctx.strokeStyle = 'black';
+        ctx.lineWidth = 1;
         ctx.strokeRect(handleX - 2, sliderY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         
-        // Draw slider label
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Play Area', sliderLeft + sliderWidth/2, sliderY);
-        
-        // Restore context state
         ctx.restore();
     }
     
@@ -3478,13 +3543,13 @@ window.addEventListener('DOMContentLoaded', function() {
         if (toysMenuItems.length === 0 || !toysMenuItems.find(item => item && item.id === 'smallTracerButton')) {
             toysMenuItems = [
                 { id: 'showPuckButton', icon: '\u261C', checked: showPucks, color: 'hsl(190, 85%, 55%)' },
+                { id: 'showBoxButton', icon: '\u25A0', checked: false, color: 'hsl(40, 70%, 55%)' },
                 { id: 'showCyclePuckButton', icon: '\u26A0', checked: false, color: 'hsl(190, 80%, 55%)' },
                 { id: 'showHeartButton', icon: '\u2665', checked: false, color: 'hsl(338, 100%, 72%)' },
                 { id: 'flyingPuckButton', icon: '\u2604', checked: false, color: 'hsl(190, 85%, 55%)' },
                 { id: 'wormButton', icon: '\u223F', checked: false, color: 'hsl(23, 70%, 60%)' },
                 { id: 'orbitButton', icon: '\u21BB', checked: false, color: 'hsl(120, 80%, 50%)' },
                 { id: 'yinYangButton', icon: '\u262F', checked: false, color: 'hsl(120, 80%, 50%)' },
-                null, // Empty slot (was blower)
                 { id: 'showBumperEntry', icon: '\u2684', checked: false, color: 'hsl(190, 85%, 55%)' },
                 null, // Empty slot
                 null, // Empty slot
@@ -3492,7 +3557,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 { id: 'smallTracerButton', icon: '\u2710', checked: doSmallTracer, color: 'hsl(170, 20%, 60%)' },
                 { id: 'mediumTracerButton', icon: '\u2710', checked: doMediumTracer, color: 'hsl(170, 20%, 60%)' },
                 { id: 'bigTracerButton', icon: '\u2710', checked: doBigTracer, color: 'hsl(170, 20%, 60%)' },
-                null, // Empty slot
+                null,  // Empty slot
                 { id: 'showBlowerButton', icon: '', image: 'aeolus.png', checked: blowerState > 0, color: 'hsl(190, 85%, 55%)' },
                 { id: 'showImploderButton', icon: '\u{1F9F2}', checked: typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active, color: 'hsl(320, 85%, 55%)' },
                 { id: 'showStinkerButton', icon: '', image: 'pepe.png', checked: typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active, color: 'hsl(120, 85%, 55%)' },
@@ -3512,10 +3577,27 @@ window.addEventListener('DOMContentLoaded', function() {
             
             // Draw icon background
             ctx.fillStyle = toy.checked ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.3)';
-            ctx.fillRect(x - iconSize/2, y - iconSize/2, iconSize, iconSize);
-            ctx.strokeStyle = 'hsl(0, 0%, 60%)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(x - iconSize/2, y - iconSize/2, iconSize, iconSize);
+            const cornerRadius = 8;
+            const rectX = x - iconSize/2;
+            const rectY = y - iconSize/2;
+            ctx.beginPath();
+            ctx.moveTo(rectX + cornerRadius, rectY);
+            ctx.lineTo(rectX + iconSize - cornerRadius, rectY);
+            ctx.quadraticCurveTo(rectX + iconSize, rectY, rectX + iconSize, rectY + cornerRadius);
+            ctx.lineTo(rectX + iconSize, rectY + iconSize - cornerRadius);
+            ctx.quadraticCurveTo(rectX + iconSize, rectY + iconSize, rectX + iconSize - cornerRadius, rectY + iconSize);
+            ctx.lineTo(rectX + cornerRadius, rectY + iconSize);
+            ctx.quadraticCurveTo(rectX, rectY + iconSize, rectX, rectY + iconSize - cornerRadius);
+            ctx.lineTo(rectX, rectY + cornerRadius);
+            ctx.quadraticCurveTo(rectX, rectY, rectX + cornerRadius, rectY);
+            ctx.closePath();
+            ctx.fill();
+            // toy icon border
+            if (toy.checked) {
+                ctx.strokeStyle = 'hsl(45, 90%, 50%)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
             
             // Draw icon
             if (toy.image) {
@@ -3577,11 +3659,32 @@ window.addEventListener('DOMContentLoaded', function() {
                 ctx.textBaseline = 'middle';
 
                 if (toy.id === 'showPuckButton') {
+                    // Draw circle outline under puck icon (green color)
+                    ctx.strokeStyle = toy.checked ? 'hsl(190, 70%, 50%)' : 'hsl(190, 45%, 30%)';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(x - 0, y + 0, 18, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.fillStyle = toy.checked ? 'hsl(30, 60%, 65%)' : 'hsl(190, 45%, 30%)';
                     ctx.save();
                     ctx.translate(x - 2, y + 3);
+                    ctx.scale(0.9, 0.9);
                     ctx.rotate(40 * Math.PI / 180); // 50 degrees clockwise
-                    ctx.scale(1.3, 1.3);
                     ctx.fillText(toy.icon, 0, 0);
+                    ctx.restore();
+                } else if (toy.id === 'showBoxButton') {
+                    // Draw square outline under box icon (green color)
+                    ctx.strokeStyle = toy.checked ? 'hsl(190, 70%, 50%)'  : 'hsl(190, 45%, 30%)';
+                    ctx.lineWidth = 3;
+                    const squareSize = 32;
+                    ctx.strokeRect(x - squareSize/2, y - squareSize/2, squareSize, squareSize);
+                
+                    ctx.save();
+                    ctx.translate(x - 2, y + 3);
+                    ctx.scale(0.9, 0.9);
+                    ctx.rotate(40 * Math.PI / 180); // 50 degrees clockwise
+                    ctx.fillText('\u261C', 0, 0);
                     ctx.restore();
                 } else 
                 if (toy.id === 'showCyclePuckButton') {
@@ -3602,6 +3705,10 @@ window.addEventListener('DOMContentLoaded', function() {
                 if (toy.id === 'yinYangButton') {
                     ctx.save();
                     ctx.translate(x + 0, y + 3);
+                    if (yinYangState === -1) {
+                        ctx.translate(0, -6); // Compensate for drop when flipped
+                        ctx.rotate(Math.PI); // Flip upside-down in reverse state
+                    }
                     ctx.scale(1.4, 1.4);
                     ctx.fillText(toy.icon, 0, 0);
                     ctx.restore();
@@ -3632,7 +3739,12 @@ window.addEventListener('DOMContentLoaded', function() {
                     ctx.translate(x, y - 1);
                     ctx.rotate(Math.PI);
                     ctx.scale(1.0, 1.0);
+                    // Apply grayscale and color filter to make unchecked magnet appear cyan
+                    if (!toy.checked) {
+                        ctx.filter = 'grayscale(100%) brightness(0.5) sepia(100%) hue-rotate(140deg) saturate(50%)';
+                    }
                     ctx.fillText(toy.icon, 0, 0);
+                    ctx.filter = 'none';
                     ctx.restore();
                 } else {
                     ctx.fillText(toy.icon, x, y + 3);
@@ -3730,6 +3842,21 @@ window.addEventListener('DOMContentLoaded', function() {
                             }
                         }
                     }
+                } else if (toy.id === 'showBoxButton') {
+                    showBoxes = toy.checked;
+                    if (typeof Box !== 'undefined' && Array.isArray(Box)) {
+                        for (var b = 0; b < Box.length; b++) {
+                            if (toy.checked) {
+                                Box[b].width = Box[b].OGwidth && Box[b].OGwidth > 0 ? Box[b].OGwidth : 0.4;
+                                Box[b].height = Box[b].OGheight && Box[b].OGheight > 0 ? Box[b].OGheight : 0.3;
+                                Box[b].boxArriving = true;
+                            } else {
+                                Box[b].width = 0;
+                                Box[b].height = 0;
+                                Box[b].boxArriving = false;
+                            }
+                        }
+                    }
                 } else if (toy.id === 'showBlowerButton') {
                     if (toy.checked) {
                         blowerState = 1;
@@ -3785,7 +3912,7 @@ window.addEventListener('DOMContentLoaded', function() {
                         orbitDirection = 1;
                         toy.checked = true;
                         // Deactivate yin-yang if active
-                        const yinYangToy = toysMenuItems.find(item => item.id === 'yinYangButton');
+                        const yinYangToy = toysMenuItems.find(item => item && item.id === 'yinYangButton');
                         if (yinYangToy) yinYangToy.checked = false;
                         yinYangState = 0;
                         showYinYang = false;
@@ -3804,29 +3931,34 @@ window.addEventListener('DOMContentLoaded', function() {
                         orbitState = -1;
                         orbitDirection = -1;
                         toy.checked = true; // keep checked in reverse state
+                        toy.icon = '\u21BA'; // Change to counter-clockwise arrow
                         showOrbit = true;
                     } else {
                         // Turn OFF
                         orbitState = 0;
                         orbitDirection = 1;
                         toy.checked = false;
+                        toy.icon = '\u21BB'; // Reset to clockwise arrow
                         showOrbit = false;
                     }
                 } else if (toy.id === 'yinYangButton') {
                     // Cycle through yin-yang states: 0 = off, 1 = normal, -1 = reverse
+                    console.log('[DEBUG] Yin-Yang button clicked, current state:', yinYangState);
                     if (yinYangState === 0) {
                         // Turn ON, normal direction
                         yinYangState = 1;
                         yinYangDirection = 1;
                         toy.checked = true;
                         // Deactivate orbit if active
-                        const orbitToy = toysMenuItems.find(item => item.id === 'orbitButton');
+                        const orbitToy = toysMenuItems.find(item => item && item.id === 'orbitButton');
                         if (orbitToy) orbitToy.checked = false;
                         orbitState = 0;
                         // Initialize both yin-yang orbit pucks
+                        console.log('[DEBUG] Turning ON yin-yang, Puck.length:', Puck.length);
                         let found = 0;
                         for (var p = 0; p < Puck.length; p++) {
                             if (Puck[p].yinyang === true || (Puck[p].orbit === true && !Puck[p].yinyang && found === 0)) {
+                                console.log('[DEBUG] Found yin-yang puck at index', p, 'yinyang:', Puck[p].yinyang, 'orbit:', Puck[p].orbit);
                                 Puck[p].puckArriving = false;
                                 Puck[p].radius = Puck[p].OGradius;
                                 Puck[p].orbitAngle = found === 0 ? 0 : Math.PI;
@@ -3837,6 +3969,7 @@ window.addEventListener('DOMContentLoaded', function() {
                         }
                         showOrbit = true;
                         showYinYang = true;
+                        console.log('[DEBUG] Set showOrbit and showYinYang to true');
                     } else if (yinYangState === 1) {
                         // Reverse direction for both pucks
                         yinYangState = -1;
@@ -3903,6 +4036,13 @@ window.addEventListener('DOMContentLoaded', function() {
                     }
                 } else if (toy.id === 'flyingPuckButton') {
                     doFlyingPuck = toy.checked;
+                    // Initialize flying puck radius when turned on
+                    if (toy.checked) {
+                        const flyingPuck = Puck.find(p => p.flying);
+                        if (flyingPuck) {
+                            flyingPuck.radius = 0.7 * flyingPuck.OGradius + 0.3 * Math.random() * flyingPuck.OGradius;
+                        }
+                    }
                 } else if (toy.id === 'smallTracerButton') {
                     // Toggle small tracer - mutual exclusion with other tracers
                     const wasChecked = doSmallTracer;
@@ -4089,11 +4229,6 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.fillRect(sliderStartX + i, sliderY - sliderHeight/2, 1, sliderHeight);
         }
         
-        // Draw border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderStartX, sliderY - sliderHeight/2, sliderWidth, sliderHeight);
-        
         // Draw center line (no rotation position)
         const centerLineX = sliderStartX + sliderWidth / 2;
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
@@ -4103,19 +4238,19 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.lineTo(centerLineX, sliderY + sliderHeight/2);
         ctx.stroke();
         
+        // Draw label inside slider (after gradient so it's on top)
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Rotation', sliderStartX + sliderWidth/2, sliderY);
+
         // Draw marker (handle)
         const rotationHandleX = sliderStartX + gravityRotationSlider * sliderWidth;
         ctx.fillStyle = 'white';
         ctx.fillRect(rotationHandleX - 2, sliderY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         ctx.strokeStyle = 'black';
         ctx.strokeRect(rotationHandleX - 2, sliderY - sliderHeight/2 - 3, 4, sliderHeight + 6);
-        
-        // Draw label inside slider (after gradient so it's on top)
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Rotation', sliderStartX + sliderWidth/2, sliderY);
         
         ctx.restore();
     }
@@ -4339,11 +4474,13 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.fillStyle = `hsl(30, 70%, ${brightness}%)`;
             ctx.fillRect(sliderStartX + i, currentY - sliderHeight/2, 1, sliderHeight);
         }
-        
-        // Draw border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderStartX, currentY - sliderHeight/2, sliderWidth, sliderHeight);
+
+        // Draw label inside slider (after gradient so it's on top)
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Quantity', sliderStartX + sliderWidth/2, currentY);
         
         // Draw marker
         const quantityPercent = (particlesMenuQuantity - 1) / 99;
@@ -4352,13 +4489,6 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.fillRect(quantityHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         ctx.strokeStyle = 'black';
         ctx.strokeRect(quantityHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
-        
-        // Draw label inside slider (after gradient so it's on top)
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Quantity', sliderStartX + sliderWidth/2, currentY);
         
         // Draw value display to the right
         const actualCount = particlesMenuQuantity * particlesMenuQuantity;
@@ -4372,14 +4502,9 @@ window.addEventListener('DOMContentLoaded', function() {
         // Draw gradient bar
         for (let i = 0; i <= sliderWidth; i++) {
             const brightness = 30 + (i / sliderWidth) * 40;
-            ctx.fillStyle = `hsl(170, 70%, ${brightness}%)`;
+            ctx.fillStyle = `hsl(10, 50%, ${brightness}%)`;
             ctx.fillRect(sliderStartX + i, currentY - sliderHeight/2, 1, sliderHeight);
         }
-        
-        // Draw border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderStartX, currentY - sliderHeight/2, sliderWidth, sliderHeight);
         
         // Draw marker (range 0-50)
         const smallRadiusPercent = particlesMenuSmallRadius / 50;
@@ -4393,7 +4518,7 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.fillStyle = 'black';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = 'bold 14px sans-serif';
+        ctx.font = 'bold 13px sans-serif';
         ctx.fillText('Smallest Radius', sliderStartX + sliderWidth/2, currentY);
         
         // Draw value display to the right
@@ -4407,14 +4532,15 @@ window.addEventListener('DOMContentLoaded', function() {
         // Draw gradient bar
         for (let i = 0; i <= sliderWidth; i++) {
             const brightness = 30 + (i / sliderWidth) * 40;
-            ctx.fillStyle = `hsl(180, 70%, ${brightness}%)`;
+            ctx.fillStyle = `hsl(350, 50%, ${brightness}%)`;
             ctx.fillRect(sliderStartX + i, currentY - sliderHeight/2, 1, sliderHeight);
         }
-        
-        // Draw border
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sliderStartX, currentY - sliderHeight/2, sliderWidth, sliderHeight);
+
+        // Draw label inside slider (after gradient so it's on top)
+        ctx.fillStyle = 'black';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Largest Radius', sliderStartX + sliderWidth/2, currentY);
         
         // Draw marker (range 1-50)
         const largeRadiusPercent = (particlesMenuLargeRadius - 1) / 49;
@@ -4424,12 +4550,7 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.strokeStyle = 'black';
         ctx.strokeRect(largeRadiusHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         
-        // Draw label inside slider (after gradient so it's on top)
-        ctx.fillStyle = 'black';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Largest Radius', sliderStartX + sliderWidth/2, currentY);
-        
+
         // Draw value display to the right
         ctx.fillStyle = 'hsl(0, 0%, 80%)';
         ctx.textAlign = 'right';
@@ -4439,15 +4560,15 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // RENDER TYPE DROPDOWN
         ctx.textAlign = 'left';
-        ctx.fillText('Style', sliderStartX, currentY - 12);
+        ctx.fillText('Drawing Style', sliderStartX, currentY - 12);
         
         const dropdownHeight = 24;
         const dropdownWidth = w - 40;  // Equal 20px spacing on both sides
         const renderTypes = [
-            { value: 'drawSpheres', label: 'spheres' },
-            { value: 'drawDiscs', label: 'discs' },
-            { value: 'drawCircles', label: 'circles' },
-            { value: 'drawRings', label: 'rings' },
+            { value: 'drawSpheres', label: 'spheres ($$$)' },
+            { value: 'drawDiscs', label: 'coins ($$)' },
+            { value: 'drawCircles', label: 'discs ($)' },
+            { value: 'drawRings', label: 'rings ($)' },
             { value: 'drawGummies', label: 'gummies (beta)' }
         ];
         
@@ -5417,6 +5538,30 @@ window.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Check main menu close button (red X at top-left)
+        if (mainMenuVisible) {
+            const closeButtonSize = 30;
+            const closeButtonX = mainMenuX + 15;
+            const closeButtonY = mainMenuPadding + 15;
+            const distToClose = Math.sqrt((mX - closeButtonX) ** 2 + (mY - closeButtonY) ** 2);
+            
+            if (distToClose <= closeButtonSize / 2) {
+                toggleMainMenu();
+                return;
+            }
+            
+            // Check submenu hide/show toggle button
+            const toggleButtonSize = 35;
+            const toggleButtonX = mainMenuX + calculateMainMenuWidth() - 15;
+            const toggleButtonY = mainMenuPadding + 15;
+            const distToToggle = Math.sqrt((mX - toggleButtonX) ** 2 + (mY - toggleButtonY) ** 2);
+            
+            if (distToToggle <= toggleButtonSize / 2) {
+                toggleSubmenus();
+                return;
+            }
+        }
+        
         // Check main menu items if visible
         if (mainMenuVisible || mainMenuX > -calculateMainMenuWidth()) {
             const menuWidth = calculateMainMenuWidth();
@@ -5446,6 +5591,9 @@ window.addEventListener('DOMContentLoaded', function() {
                             if (item.id === 'particles') {
                                 particlesMenuVisible = !currentValue;
                                 if (particlesMenuVisible) {
+                                    // Reset submenu hide state if manually turned on
+                                    if (submenusHidden) submenusHidden = false;
+                                    
                                     if (typeof Balls !== 'undefined' && Array.isArray(Balls)) {
                                         particlesMenuQuantity = Math.round(Math.sqrt(Balls.length));
                                     }
@@ -5476,6 +5624,9 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'physics') {
                                 physicsMenuVisible = !currentValue;
                                 if (physicsMenuVisible) {
+                                    // Reset submenu hide state if manually turned on
+                                    if (submenusHidden) submenusHidden = false;
+                                    
                                     // Use stored position if manually moved, otherwise use default
                                     if (!physicsMenuManuallyMoved) {
                                         physicsMenuCenterX = defaultMenuPositions.physics.x * canvas.width;
@@ -5511,6 +5662,9 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'gravity') {
                                 gravityMenuVisible = !currentValue;
                                 if (gravityMenuVisible) {
+                                    // Reset submenu hide state if manually turned on
+                                    if (submenusHidden) submenusHidden = false;
+                                    
                                     // Use stored position if manually moved, otherwise use default
                                     if (!gravityMenuManuallyMoved) {
                                         gravityMenuX = defaultMenuPositions.gravity.x * canvas.width;
@@ -5538,6 +5692,9 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'walls') {
                                 wallsMenuVisible = !currentValue;
                                 if (wallsMenuVisible) {
+                                    // Reset submenu hide state if manually turned on
+                                    if (submenusHidden) submenusHidden = false;
+                                    
                                     // Use stored position if manually moved, otherwise use default
                                     if (!wallsMenuManuallyMoved) {
                                         wallsMenuCenterX = defaultMenuPositions.walls.x * canvas.width;
@@ -5564,6 +5721,9 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'respawn') {
                                 respawnMenuVisible = !currentValue;
                                 if (respawnMenuVisible) {
+                                    // Reset submenu hide state if manually turned on
+                                    if (submenusHidden) submenusHidden = false;
+                                    
                                     // Use stored position if manually moved, otherwise use default
                                     if (!respawnMenuManuallyMoved) {
                                         respawnMenuCenterX = defaultMenuPositions.respawn.x * canvas.width;
@@ -5590,6 +5750,9 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'toys') {
                                 toysMenuVisible = !currentValue;
                                 if (toysMenuVisible) {
+                                    // Reset submenu hide state if manually turned on
+                                    if (submenusHidden) submenusHidden = false;
+                                    
                                     // Use stored position if manually moved, otherwise use default
                                     if (!toysMenuManuallyMoved) {
                                         toysMenuCenterX = defaultMenuPositions.toys.x * canvas.width;
@@ -5616,6 +5779,9 @@ window.addEventListener('DOMContentLoaded', function() {
                             } else if (item.id === 'color') {
                                 colorWheelVisible = !currentValue;
                                 if (colorWheelVisible) {
+                                    // Reset submenu hide state if manually turned on
+                                    if (submenusHidden) submenusHidden = false;
+                                    
                                     // Use stored position if manually moved, otherwise use default
                                     if (!colorWheelManuallyMoved) {
                                         colorWheelCenterX = defaultMenuPositions.colorWheel.x * canvas.width;
@@ -6027,6 +6193,213 @@ window.addEventListener('DOMContentLoaded', function() {
             document.addEventListener('mousemove', mousePuck3Move);
             document.addEventListener('touchmove', touchPuck3Move, {passive: false});
         } else {
+        // Check all boxes for button and grip clicks
+        let boxHandled = false;
+        for (let i = Box.length - 1; i >= 0; i--) {
+            const box = Box[i];
+            if (!box) continue;
+            
+            // Calculate button radius based on box size for accurate hit detection
+            const minDimension = Math.min(box.width, box.height);
+            const btnRadius = 0.06 * minDimension;
+            const hitRadius = btnRadius * 1.2; // Slightly larger than visual button for easier clicking
+            
+            // Check add button (add new box)
+            if (box.addPos) {
+                const dx = mousePos.x - box.addPos.x;
+                const dy = mousePos.y - box.addPos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < hitRadius) {
+                    addBox(box);
+                    boxHandled = true;
+                    break;
+                }
+            }
+            
+            // Check subtract button (remove this box)
+            if (box.subtractPos) {
+                const dx = mousePos.x - box.subtractPos.x;
+                const dy = mousePos.y - box.subtractPos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < hitRadius) {
+                    if (Box.length > 0) {
+                        Box.splice(i, 1);
+                    }
+                    boxHandled = true;
+                    break;
+                }
+            }
+            
+            // Check horizontal arrow button (oscillate left/right)
+            if (box.arrowPos) {
+                const dx = mousePos.x - box.arrowPos.x;
+                const dy = mousePos.y - box.arrowPos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < hitRadius) {
+                    // Toggle horizontal oscillation for all boxes
+                    doOscillateBoxes = !doOscillateBoxes;
+                    
+                    if (!doOscillateBoxes) {
+                        // Stop oscillation - reset properties
+                        for (let j = 0; j < Box.length; j++) {
+                            Box[j].oscInit = false;
+                            Box[j].oscOriginX = undefined;
+                            Box[j].oscAmplitude = undefined;
+                            Box[j].oscCenterX = undefined;
+                            Box[j].oscStartTime = undefined;
+                            Box[j].oscPhaseOffset = undefined;
+                        }
+                    }
+                    boxHandled = true;
+                    break;
+                }
+            }
+            
+            // Check vertical arrow button (oscillate up/down)
+            if (box.verticalArrowPos) {
+                const dx = mousePos.x - box.verticalArrowPos.x;
+                const dy = mousePos.y - box.verticalArrowPos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < hitRadius) {
+                    // Toggle vertical oscillation for all boxes
+                    doOscillateBoxesVertical = !doOscillateBoxesVertical;
+                    
+                    if (!doOscillateBoxesVertical) {
+                        // Stop vertical oscillation - reset properties
+                        for (let j = 0; j < Box.length; j++) {
+                            Box[j].oscInitVertical = false;
+                            Box[j].oscOriginY = undefined;
+                            Box[j].oscAmplitudeVertical = undefined;
+                            Box[j].oscCenterY = undefined;
+                            Box[j].oscStartTimeVertical = undefined;
+                            Box[j].oscPhaseOffsetVertical = undefined;
+                        }
+                    }
+                    boxHandled = true;
+                    break;
+                }
+            }
+            
+            // Check off button (turn off all boxes and remember positions)
+            if (box.offPos) {
+                const dx = mousePos.x - box.offPos.x;
+                const dy = mousePos.y - box.offPos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < hitRadius) {
+                    // Turn off boxes but keep them in memory
+                    showBoxes = false;
+                    const boxButton = toysMenuItems.find(item => item && item.id === 'showBoxButton');
+                    if (boxButton) boxButton.checked = false;
+                    boxHandled = true;
+                    break;
+                }
+            }
+            
+            // Check resize grip (bottom-right corner)
+            if (box.resizePos) {
+                const dx = mousePos.x - box.resizePos.x;
+                const dy = mousePos.y - box.resizePos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const gripHitRadius = 0.15 * minDimension * 1.2; // Match grip size
+                if (dist < gripHitRadius) {
+                    activeBoxIndex = i;
+                    initialBoxWidth = box.width;
+                    initialBoxHeight = box.height;
+                    initialMouseX = mousePos.x;
+                    initialMouseY = mousePos.y;
+                    initialBoxRotation = box.rotation;
+                    
+                    // Calculate and lock the opposite corner (top-left) in world space
+                    if (Math.abs(box.rotation) < 0.001) {
+                        lockedBoxPosX = box.left;
+                        lockedBoxPosY = box.top;
+                    } else {
+                        const hw = box.width / 2;
+                        const hh = box.height / 2;
+                        const cos = Math.cos(box.rotation);
+                        const sin = Math.sin(box.rotation);
+                        // Top-left corner in world space
+                        lockedBoxPosX = box.pos.x + (-hw) * cos - (hh) * sin;
+                        lockedBoxPosY = box.pos.y + (-hw) * sin + (hh) * cos;
+                    }
+                    
+                    document.addEventListener('mousemove', mouseBoxResize);
+                    boxHandled = true;
+                    break;
+                }
+            }
+            
+            // Check rotate button (top-right corner)
+            if (box.rotatePos) {
+                const dx = mousePos.x - box.rotatePos.x;
+                const dy = mousePos.y - box.rotatePos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < hitRadius) {
+                    activeBoxIndex = i;
+                    initialMouseX = mousePos.x;
+                    initialMouseY = mousePos.y;
+                    initialBoxRotation = box.rotation;
+                    document.addEventListener('mousemove', mouseBoxRotate);
+                    boxHandled = true;
+                    break;
+                }
+            }
+            
+            // Check if clicking on box body (handle rotation)
+            let isInsideBox = false;
+            if (Math.abs(box.rotation) < 0.001) {
+                // Non-rotated: simple AABB check
+                isInsideBox = mousePos.x >= box.left && mousePos.x <= box.right &&
+                              mousePos.y >= box.bottom && mousePos.y <= box.top;
+            } else {
+                // Rotated: transform mouse to box's local coordinate system
+                // Note: Canvas uses -rotation for rendering, but rotation matrix uses +rotation
+                const cos = Math.cos(box.rotation);
+                const sin = Math.sin(box.rotation);
+                // Inverse rotation matrix
+                const dx = mousePos.x - box.pos.x;
+                const dy = mousePos.y - box.pos.y;
+                const localX = dx * cos + dy * sin;
+                const localY = -dx * sin + dy * cos;
+                isInsideBox = Math.abs(localX) < box.width / 2 && Math.abs(localY) < box.height / 2;
+            }
+            
+            if (isInsideBox) {
+                
+                // If oscillating, stop oscillation for all boxes
+                if (doOscillateBoxes || doOscillateBoxesVertical) {
+                    doOscillateBoxes = false;
+                    doOscillateBoxesVertical = false;
+                    
+                    // Reset oscillation properties for all boxes
+                    for (let j = 0; j < Box.length; j++) {
+                        Box[j].oscInit = false;
+                        Box[j].oscInitVertical = false;
+                        Box[j].oscOriginX = undefined;
+                        Box[j].oscAmplitude = undefined;
+                        Box[j].oscCenterX = undefined;
+                        Box[j].oscStartTime = undefined;
+                        Box[j].oscPhaseOffset = undefined;
+                        Box[j].oscOriginY = undefined;
+                        Box[j].oscAmplitudeVertical = undefined;
+                        Box[j].oscCenterY = undefined;
+                        Box[j].oscStartTimeVertical = undefined;
+                        Box[j].oscPhaseOffsetVertical = undefined;
+                    }
+                    boxHandled = true;
+                } else {
+                    // Normal drag behavior when not oscillating
+                    dX = startX / cScale - box.pos.x;
+                    dY = (simHeight - startY / cScale) - box.pos.y;
+                    activeBoxIndex = i;
+                    document.addEventListener('mousemove', mouseBoxMove);
+                    document.addEventListener('touchmove', touchBoxMove, {passive: false});
+                    boxHandled = true;
+                }
+                break;
+            }
+        }
+        if (!boxHandled) {
         // Check all normal pucks dynamically for button and grip clicks
         // Find the closest match across all normal pucks
         let normalPuckHandled = false;
@@ -6323,7 +6696,7 @@ window.addEventListener('DOMContentLoaded', function() {
                     lastTapY = cursorY;
             }
         }
-        }}}}}}
+        }}}}}}} // close normalPuckHandled, boxHandled and nested else structure
 
     function setNewDir(e) {
         const ev = e || window.event;
@@ -6568,6 +6941,16 @@ window.addEventListener('DOMContentLoaded', function() {
     var activeDragPuckIndex = -1;
     var activeResizePuckIndex = -1;
     
+    // Variables to track which box is being interacted with
+    var activeBoxIndex = -1;
+    var initialBoxWidth = 0;
+    var initialBoxHeight = 0;
+    var initialBoxRotation = 0;
+    var initialMouseX = 0;
+    var initialMouseY = 0;
+    var lockedBoxPosX = 0;
+    var lockedBoxPosY = 0;
+    
     // Dynamic move function for any normal puck
     function mouseDynamicPuckMove(event) {
         if (activeDragPuckIndex < 0 || activeDragPuckIndex >= Puck.length) return;
@@ -6782,6 +7165,185 @@ window.addEventListener('DOMContentLoaded', function() {
         puck4.OGradius = puck4.radius;
     }
     
+    // BOX INTERACTION HANDLERS ------------------------------------------------
+    var activeBoxIndex = -1;
+    var isBoxHResizeMode = false;
+    var isBoxVResizeMode = false;
+    var initialBoxWidth = 0;
+    var initialBoxHeight = 0;
+    
+    function mouseBoxMove(event) {
+        if (activeBoxIndex < 0 || !Box || !Box[activeBoxIndex]) return;
+        const box = Box[activeBoxIndex];
+        
+        const rect = canvas.getBoundingClientRect();
+        newX = event.clientX - rect.left;
+        newY = event.clientY - rect.top;
+        
+        box.moving = true;
+        
+        // Update position using offset
+        box.pos.x = (newX / cScale) - dX;
+        box.pos.y = (simHeight - newY / cScale) - dY;
+    }
+    
+    function touchBoxMove(event) {
+        if (activeBoxIndex < 0 || !Box || !Box[activeBoxIndex]) return;
+        const box = Box[activeBoxIndex];
+        
+        event.preventDefault();
+        const touch = event.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        newX = touch.clientX - rect.left;
+        newY = touch.clientY - rect.top;
+        
+        box.moving = true;
+        
+        // Update position using offset
+        box.pos.x = (newX / cScale) - dX;
+        box.pos.y = (simHeight - newY / cScale) - dY;
+    }
+    
+    function mouseBoxResize(event) {
+        if (activeBoxIndex < 0 || !Box || !Box[activeBoxIndex]) return;
+        const box = Box[activeBoxIndex];
+        
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = (event.clientX - rect.left) / cScale;
+        const mouseY = (simHeight - (event.clientY - rect.top) / cScale);
+        
+        if (Math.abs(initialBoxRotation) < 0.001) {
+            // Non-rotated: simple axis-aligned resize
+            const newWidth = Math.max(0.1, Math.min(3.0, mouseX - lockedBoxPosX));
+            const newHeight = Math.max(0.1, Math.min(3.0, lockedBoxPosY - mouseY));
+            
+            box.width = newWidth;
+            box.OGwidth = newWidth;
+            box.height = newHeight;
+            box.OGheight = newHeight;
+            
+            // Update center position to keep top-left corner fixed
+            box.pos.x = lockedBoxPosX + newWidth / 2;
+            box.pos.y = lockedBoxPosY - newHeight / 2;
+        } else {
+            // Rotated: calculate dimensions along local axes
+            const cos = Math.cos(initialBoxRotation);
+            const sin = Math.sin(initialBoxRotation);
+            
+            // Vector from locked corner (top-left) to mouse
+            const dx = mouseX - lockedBoxPosX;
+            const dy = mouseY - lockedBoxPosY;
+            
+            // Project onto local axes
+            // Local X axis points right: (cos, sin)
+            // Local Y axis points down (in world space, which is up visually): (-sin, cos)
+            const localWidth = dx * cos + dy * sin;
+            const localHeight = -dx * sin + dy * cos;
+            
+            // Apply constraints and ensure positive values
+            const newWidth = Math.max(0.1, Math.min(3.0, Math.abs(localWidth)));
+            const newHeight = Math.max(0.1, Math.min(3.0, Math.abs(localHeight)));
+            
+            box.width = newWidth;
+            box.OGwidth = newWidth;
+            box.height = newHeight;
+            box.OGheight = newHeight;
+            
+            // Calculate new center position: locked corner + half dimensions along local axes
+            // Use sign of original projection to maintain correct direction
+            const hw = newWidth / 2;
+            const hh = newHeight / 2;
+            const signX = localWidth >= 0 ? 1 : -1;
+            const signY = localHeight >= 0 ? 1 : -1;
+            box.pos.x = lockedBoxPosX + (hw * signX) * cos - (hh * signY) * sin;
+            box.pos.y = lockedBoxPosY + (hw * signX) * sin + (hh * signY) * cos;
+        }
+        
+        box.vel.x = 0;
+        box.vel.y = 0;
+    }
+    
+    function mouseBoxRotate(event) {
+        if (activeBoxIndex < 0 || !Box || !Box[activeBoxIndex]) return;
+        const box = Box[activeBoxIndex];
+        
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = (event.clientX - rect.left) / cScale;
+        const mouseY = (simHeight - (event.clientY - rect.top) / cScale);
+        
+        // Calculate angle from box center to mouse
+        const dx = mouseX - box.pos.x;
+        const dy = mouseY - box.pos.y;
+        const angle = Math.atan2(dy, dx);
+        
+        // Calculate initial angle from box center to initial mouse position
+        const initialDx = initialMouseX - box.pos.x;
+        const initialDy = initialMouseY - box.pos.y;
+        const initialAngle = Math.atan2(initialDy, initialDx);
+        
+        // Update rotation relative to initial rotation
+        box.rotation = initialBoxRotation + (angle - initialAngle);
+    }
+    
+    function addBox(parentBox) {
+        let newWidth, newHeight, newPosX, newPosY;
+        
+        if (parentBox) {
+            // Copy parent dimensions
+            newWidth = parentBox.width;
+            newHeight = parentBox.height;
+            
+            // Position based on parent's aspect ratio
+            if (parentBox.width > parentBox.height) {
+                // Wider than tall: place above with 1/20 simHeight gap
+                const gap = simHeight / 20;
+                newPosX = parentBox.pos.x;
+                newPosY = parentBox.top + gap + newHeight / 2;
+            } else {
+                // Taller than wide: place to the right with 1/20 simWidth gap
+                const gap = simWidth / 20;
+                newPosX = parentBox.right + gap + newWidth / 2;
+                newPosY = parentBox.pos.y;
+            }
+        } else {
+            // Default box at center
+            const offset = 0.1;
+            newWidth = 0.3;
+            newHeight = 0.5;
+            newPosX = simWidth / 2 + offset * Box.length;
+            newPosY = simHeight / 2 + offset * Box.length;
+        }
+        
+        const newBox = new BOX(
+            newWidth,
+            newHeight,
+            new Vector2(newPosX, newPosY),
+            'hsl(200, 70%, 50%)'
+        );
+        Box.push(newBox);
+    }
+    
+    function duplicateBox(boxIndex) {
+        if (!Box || !Box[boxIndex]) return;
+        const originalBox = Box[boxIndex];
+        const offset = 0.1;
+        const newBox = new BOX(
+            originalBox.OGwidth,
+            originalBox.OGheight,
+            new Vector2(originalBox.pos.x + offset, originalBox.pos.y + offset),
+            originalBox.color
+        );
+        newBox.width = originalBox.width;
+        newBox.height = originalBox.height;
+        newBox.boxArriving = false;
+        Box.push(newBox);
+    }
+    
+    function deleteBox(boxIndex) {
+        if (!Box || boxIndex < 0 || boxIndex >= Box.length) return;
+        Box.splice(boxIndex, 1);
+    }
+    
     function mouseUp() {
         // Release global interaction lock
         globalInteractionLock = false;
@@ -6881,6 +7443,17 @@ window.addEventListener('DOMContentLoaded', function() {
         // Clear dynamic puck interaction indices
         activeDragPuckIndex = -1;
         activeResizePuckIndex = -1;
+        
+        // Clear box interaction
+        activeBoxIndex = -1;
+        
+        // Reset box moving state
+        if (Box && Box.length > 0) {
+            for (let i = 0; i < Box.length; i++) {
+                if (Box[i]) Box[i].moving = false;
+            }
+        }
+        
         mouseDown = false;
         isBlowerAngleMode = false;
         isBumperScaleMode = false;
@@ -6898,6 +7471,9 @@ window.addEventListener('DOMContentLoaded', function() {
         document.removeEventListener('mousemove', mousePuck3Resize);
         document.removeEventListener('mousemove', mouseDynamicPuckMove);
         document.removeEventListener('mousemove', mouseDynamicPuckResize);
+        document.removeEventListener('mousemove', mouseBoxMove);
+        document.removeEventListener('mousemove', mouseBoxResize);
+        document.removeEventListener('mousemove', mouseBoxRotate);
         document.removeEventListener('mousemove', mouseMisterMisterMove);
         document.removeEventListener('mousemove', mouseBumperMove);
         document.removeEventListener('mousemove', mouseBumperScale);
@@ -6913,6 +7489,7 @@ window.addEventListener('DOMContentLoaded', function() {
         document.removeEventListener('touchmove', touchPuck2Move);
         document.removeEventListener('touchmove', touchPuck3Move);
         document.removeEventListener('touchmove', touchDynamicPuckMove);
+        document.removeEventListener('touchmove', touchBoxMove);
         document.removeEventListener('touchmove', touchMisterMisterMove);
         document.removeEventListener('touchmove', touchBumperMove);
         document.removeEventListener('touchmove', doubleTapDragMoveTouch);
@@ -7741,6 +8318,203 @@ window.addEventListener('DOMContentLoaded', function() {
         }
 	}
 
+    //  HANDLE BOX TO BALL HITS  -------------------------------------------------------------------- 
+	function handleBoxHits(ball, box) {
+        // Use simple axis-aligned method if box is not rotated
+        if (Math.abs(box.rotation) < 0.001) {
+            // Check if ball center is inside the box
+            const centerInside = ball.pos.x > box.left && ball.pos.x < box.right &&
+                                 ball.pos.y > box.bottom && ball.pos.y < box.top;
+            
+            if (centerInside) {
+                // Ball center is inside - push it out the nearest edge
+                const distToLeft = ball.pos.x - box.left;
+                const distToRight = box.right - ball.pos.x;
+                const distToBottom = ball.pos.y - box.bottom;
+                const distToTop = box.top - ball.pos.y;
+                
+                const minDist = Math.min(distToLeft, distToRight, distToBottom, distToTop);
+                
+                if (minDist === distToLeft) {
+                    ball.pos.x = box.left - ball.radius - 0.001;
+                    ball.vel.x = -Math.abs(ball.vel.x) * physProps.puckRest;
+                } else if (minDist === distToRight) {
+                    ball.pos.x = box.right + ball.radius + 0.001;
+                    ball.vel.x = Math.abs(ball.vel.x) * physProps.puckRest;
+                } else if (minDist === distToBottom) {
+                    ball.pos.y = box.bottom - ball.radius - 0.001;
+                    ball.vel.y = -Math.abs(ball.vel.y) * physProps.puckRest;
+                } else {
+                    ball.pos.y = box.top + ball.radius + 0.001;
+                    ball.vel.y = Math.abs(ball.vel.y) * physProps.puckRest;
+                }
+                return;
+            }
+            
+            // Normal edge collision - ball is outside
+            // Right edge
+            if (ball.pos.x - ball.radius < box.right && ball.pos.x > box.right &&
+                ball.pos.y > box.bottom && ball.pos.y < box.top && ball.vel.x < 0) {
+                ball.pos.x = box.right + ball.radius;
+                ball.vel.x *= -physProps.puckRest;
+            }
+            
+            // Left edge
+            if (ball.pos.x + ball.radius > box.left && ball.pos.x < box.left &&
+                ball.pos.y > box.bottom && ball.pos.y < box.top && ball.vel.x > 0) {
+                ball.pos.x = box.left - ball.radius;
+                ball.vel.x *= -physProps.puckRest;
+            }
+            
+            // Top edge
+            if (ball.pos.y - ball.radius < box.top && ball.pos.y > box.top &&
+                ball.pos.x > box.left && ball.pos.x < box.right && ball.vel.y < 0) {
+                ball.pos.y = box.top + ball.radius;
+                ball.vel.y *= -physProps.puckRest;
+            }
+            
+            // Bottom edge
+            if (ball.pos.y + ball.radius > box.bottom && ball.pos.y < box.bottom &&
+                ball.pos.x > box.left && ball.pos.x < box.right && ball.vel.y > 0) {
+                ball.pos.y = box.bottom - ball.radius;
+                ball.vel.y *= -physProps.puckRest;
+            }
+            
+            // Handle corners
+            const corners = [
+                {x: box.left, y: box.top},
+                {x: box.right, y: box.top},
+                {x: box.left, y: box.bottom},
+                {x: box.right, y: box.bottom}
+            ];
+            
+            for (const corner of corners) {
+                const dx = ball.pos.x - corner.x;
+                const dy = ball.pos.y - corner.y;
+                const distSq = dx * dx + dy * dy;
+                
+                if (distSq < ball.radius * ball.radius) {
+                    const dist = Math.sqrt(distSq);
+                    const normalX = dx / dist;
+                    const normalY = dy / dist;
+                    
+                    ball.pos.x = corner.x + normalX * (ball.radius + 0.001);
+                    ball.pos.y = corner.y + normalY * (ball.radius + 0.001);
+                    
+                    const dot = ball.vel.x * normalX + ball.vel.y * normalY;
+                    if (dot < 0) {
+                        ball.vel.x -= 2 * dot * normalX * physProps.puckRest;
+                        ball.vel.y -= 2 * dot * normalY * physProps.puckRest;
+                    }
+                }
+            }
+            return;
+        }
+        
+        // Rotated box - use EXACT same rotation formula as drawControls rotatePoint
+        const hw = box.width / 2;
+        const hh = box.height / 2;
+        const cos = Math.cos(box.rotation);
+        const sin = Math.sin(box.rotation);
+        
+        // rotatePoint formula: x = pos.x + localX * cos - localY * sin
+        //                      y = pos.y + localX * sin + localY * cos
+        // WORLD space corners (not canvas space): top has +hh, bottom has -hh
+        const corners = [
+            {x: box.pos.x + (-hw) * cos - (hh) * sin, y: box.pos.y + (-hw) * sin + (hh) * cos}, // top-left
+            {x: box.pos.x + (hw) * cos - (hh) * sin, y: box.pos.y + (hw) * sin + (hh) * cos},   // top-right
+            {x: box.pos.x + (hw) * cos - (-hh) * sin, y: box.pos.y + (hw) * sin + (-hh) * cos}, // bottom-right
+            {x: box.pos.x + (-hw) * cos - (-hh) * sin, y: box.pos.y + (-hw) * sin + (-hh) * cos}  // bottom-left
+        ];
+        
+        // First check if ball center is inside rotated box - transform ball to box's local coordinates
+        const localX = (ball.pos.x - box.pos.x) * cos + (ball.pos.y - box.pos.y) * sin;
+        const localY = -(ball.pos.x - box.pos.x) * sin + (ball.pos.y - box.pos.y) * cos;
+        
+        if (Math.abs(localX) < hw && Math.abs(localY) < hh) {
+            // Ball center is inside - push out nearest edge in local space
+            const distToLeft = localX + hw;
+            const distToRight = hw - localX;
+            const distToBottom = localY + hh;
+            const distToTop = hh - localY;
+            
+            const minDist = Math.min(distToLeft, distToRight, distToBottom, distToTop);
+            
+            let pushX = 0, pushY = 0;
+            if (minDist === distToLeft) {
+                pushX = -hw - ball.radius - 0.001;
+                pushY = localY;
+            } else if (minDist === distToRight) {
+                pushX = hw + ball.radius + 0.001;
+                pushY = localY;
+            } else if (minDist === distToBottom) {
+                pushX = localX;
+                pushY = -hh - ball.radius - 0.001;
+            } else {
+                pushX = localX;
+                pushY = hh + ball.radius + 0.001;
+            }
+            
+            // Transform back to world space
+            ball.pos.x = box.pos.x + pushX * cos - pushY * sin;
+            ball.pos.y = box.pos.y + pushX * sin + pushY * cos;
+            
+            // Reflect velocity in world space based on which edge
+            if (minDist === distToLeft || minDist === distToRight) {
+                const worldNormalX = cos * (minDist === distToLeft ? -1 : 1);
+                const worldNormalY = sin * (minDist === distToLeft ? -1 : 1);
+                const dot = ball.vel.x * worldNormalX + ball.vel.y * worldNormalY;
+                ball.vel.x -= 2 * dot * worldNormalX * physProps.puckRest;
+                ball.vel.y -= 2 * dot * worldNormalY * physProps.puckRest;
+            } else {
+                const worldNormalX = -sin * (minDist === distToBottom ? -1 : 1);
+                const worldNormalY = cos * (minDist === distToBottom ? -1 : 1);
+                const dot = ball.vel.x * worldNormalX + ball.vel.y * worldNormalY;
+                ball.vel.x -= 2 * dot * worldNormalX * physProps.puckRest;
+                ball.vel.y -= 2 * dot * worldNormalY * physProps.puckRest;
+            }
+            return;
+        }
+        
+        // Check 4 edges - process each edge immediately (like non-rotated corner code)
+        for (let i = 0; i < 4; i++) {
+            const p1 = corners[i];
+            const p2 = corners[(i + 1) % 4];
+            
+            const edgeX = p2.x - p1.x;
+            const edgeY = p2.y - p1.y;
+            const lenSq = edgeX * edgeX + edgeY * edgeY;
+            
+            const t = Math.max(0, Math.min(1, ((ball.pos.x - p1.x) * edgeX + (ball.pos.y - p1.y) * edgeY) / lenSq));
+            
+            const closestX = p1.x + t * edgeX;
+            const closestY = p1.y + t * edgeY;
+            
+            const dx = ball.pos.x - closestX;
+            const dy = ball.pos.y - closestY;
+            const distSq = dx * dx + dy * dy;
+            
+            if (distSq < ball.radius * ball.radius) {
+                const dist = Math.sqrt(distSq);
+                if (dist < 0.0001) continue;
+                
+                const nx = dx / dist;
+                const ny = dy / dist;
+                
+                ball.pos.x = closestX + nx * (ball.radius + 0.001);
+                ball.pos.y = closestY + ny * (ball.radius + 0.001);
+                
+                const dot = ball.vel.x * nx + ball.vel.y * ny;
+                if (dot < 0) {
+                    ball.vel.x -= 2 * dot * nx * physProps.puckRest;
+                    ball.vel.y -= 2 * dot * ny * physProps.puckRest;
+                }
+                
+                return;
+            }
+        }
+	}
+
     //  HANDLE CORNER HITS  --------------------------------------------------------------------
     function handleCornerHits(ball1, corner) {
         // Find arc center based on corner position and type
@@ -8263,6 +9037,9 @@ window.addEventListener('DOMContentLoaded', function() {
         const puckToy = toysMenuItems.find(item => item.id === 'showPuckButton');
         showPucks = puckToy ? puckToy.checked : true;
         
+        const boxToy = toysMenuItems.find(item => item.id === 'showBoxButton');
+        showBoxes = boxToy ? boxToy.checked : false;
+        
         // Initialize FPS counter state
         if (physicsMenuFpsOn) {
             startFPSCounter();
@@ -8302,6 +9079,19 @@ window.addEventListener('DOMContentLoaded', function() {
         const showPuckToy = toysMenuItems.find(item => item.id === 'showPuckButton');
         const puckState = showPuckToy ? (showPuckToy.checked ? 1 : 0) : 0;
         doOscillatePucks = (puckState === 2);
+        
+        // Initialize doOscillateBoxes if it doesn't exist
+        if (typeof doOscillateBoxes === 'undefined') {
+            window.doOscillateBoxes = false;
+        }
+        // Initialize doOscillateBoxesVertical if it doesn't exist
+        if (typeof doOscillateBoxesVertical === 'undefined') {
+            window.doOscillateBoxesVertical = false;
+        }
+        // Initialize doOscillateBoxesVertical if it doesn't exist
+        if (typeof doOscillateBoxesVertical === 'undefined') {
+            window.doOscillateBoxesVertical = false;
+        }
         
         const smallTracerToy = toysMenuItems.find(item => item.id === 'smallTracerButton');
         doSmallTracer = smallTracerToy ? smallTracerToy.checked : false;
@@ -8394,11 +9184,12 @@ window.addEventListener('DOMContentLoaded', function() {
         }
         
         makeBlower(
-            0.2, 
+            0.15, 
             new Vector2(
                 0.7 * simWidth, 
                 0.4 * simHeight));
         makeHungryPucks();
+        makeBoxes();
         makeMisterMister();
 
         setRenderType(particlesMenuRenderType);
@@ -10087,6 +10878,323 @@ window.addEventListener('DOMContentLoaded', function() {
 	}
 
     //  PUCK CONSTRUCTOR -----------------------------------------------------------------------
+    class BOX {
+		constructor(width, height, pos, color) {
+			this.width = 0; // Start at zero width
+            this.height = 0; // Start at zero height
+            this.OGwidth = width;
+            this.OGheight = height;
+			this.pos = pos.clone();
+            this.vel = new Vector2(0, 0);
+            this.prevPos = pos.clone();
+            this.color = color;
+            this.mass = 0.01 * width * height;
+            this.moving = false;
+            this.boxArriving = true; // Start with arriving animation
+            this.rotation = 0; // Rotation angle in radians
+            this.addPos = null; // Position for add box button (top-left)
+            this.subtractPos = null; // Position for subtract box button (top-left)
+            this.arrowPos = null; // Position for horizontal oscillate button (top-right)
+            this.verticalArrowPos = null; // Position for vertical oscillate button (top-right, left of arrowPos)
+            this.offPos = null; // Position for turn off all boxes button (bottom-left)
+            this.resizePos = null; // Position for resize grip (bottom-right corner)
+            this.rotatePos = null; // Position for rotation button (top-right corner)
+        }
+        
+        get left() {
+            return this.pos.x - this.width / 2;
+        }
+        get right() {
+            return this.pos.x + this.width / 2;
+        }
+        get top() {
+            return this.pos.y + this.height / 2;
+        }
+        get bottom() {
+            return this.pos.y - this.height / 2;
+        }
+        
+        simulate() {
+            // Handle arriving animation
+            if (this.boxArriving) {
+                const targetWidth = this.OGwidth;
+                const targetHeight = this.OGheight;
+                const growthRate = 0.15;
+                
+                this.width += (targetWidth - this.width) * growthRate;
+                this.height += (targetHeight - this.height) * growthRate;
+                
+                if (Math.abs(this.width - targetWidth) < 0.001 && Math.abs(this.height - targetHeight) < 0.001) {
+                    this.width = targetWidth;
+                    this.height = targetHeight;
+                    this.boxArriving = false;
+                }
+                return;
+            }
+            
+            // Handle horizontal oscillation
+            if (typeof doOscillateBoxes !== 'undefined' && doOscillateBoxes && !this.moving) {
+                if (!this.oscInit) {
+                    this.oscInit = true;
+                    this.oscOriginX = this.pos.x;
+                    const centerX = simWidth / 2;
+                    this.oscAmplitude = Math.abs(this.pos.x - centerX);
+                    this.oscCenterX = centerX;
+                    this.oscStartTime = performance.now();
+                    const totalBoxes = Box.length;
+                    const boxIndex = Box.indexOf(this);
+                    
+                    // Calculate initial phase based on current position to start smoothly
+                    // If box is at pos.x, we want: pos.x = centerX + amplitude * sin(initialPhase)
+                    // So: sin(initialPhase) = (pos.x - centerX) / amplitude
+                    const currentOffset = this.pos.x - centerX;
+                    const normalizedOffset = this.oscAmplitude > 0 ? currentOffset / this.oscAmplitude : 0;
+                    // Clamp to [-1, 1] in case of floating point errors
+                    const clampedOffset = Math.max(-1, Math.min(1, normalizedOffset));
+                    const initialPhase = Math.asin(clampedOffset);
+                    
+                    // Add the box index phase offset
+                    this.oscPhaseOffset = initialPhase + (boxIndex / totalBoxes) * 2 * Math.PI;
+                }
+                
+                const elapsed = performance.now() - this.oscStartTime;
+                const frequency = 0.3;
+                const phase = (elapsed / 1000) * frequency * 2 * Math.PI + this.oscPhaseOffset;
+                this.pos.x = this.oscCenterX + this.oscAmplitude * Math.sin(phase);
+            } else if (this.oscInit && !doOscillateBoxes) {
+                // Reset to origin when oscillation stops
+                this.oscInit = false;
+            }
+            
+            // Handle vertical oscillation
+            if (typeof doOscillateBoxesVertical !== 'undefined' && doOscillateBoxesVertical && !this.moving) {
+                if (!this.oscInitVertical) {
+                    this.oscInitVertical = true;
+                    this.oscOriginY = this.pos.y;
+                    const centerY = simHeight / 2;
+                    this.oscAmplitudeVertical = Math.abs(this.pos.y - centerY);
+                    this.oscCenterY = centerY;
+                    this.oscStartTimeVertical = performance.now();
+                    const totalBoxes = Box.length;
+                    const boxIndex = Box.indexOf(this);
+                    
+                    // Calculate initial phase based on current position to start smoothly
+                    const currentOffset = this.pos.y - centerY;
+                    const normalizedOffset = this.oscAmplitudeVertical > 0 ? currentOffset / this.oscAmplitudeVertical : 0;
+                    const clampedOffset = Math.max(-1, Math.min(1, normalizedOffset));
+                    const initialPhase = Math.asin(clampedOffset);
+                    
+                    // Add the box index phase offset
+                    this.oscPhaseOffsetVertical = initialPhase + (boxIndex / totalBoxes) * 2 * Math.PI;
+                }
+                
+                const elapsed = performance.now() - this.oscStartTimeVertical;
+                const frequency = 0.3;
+                const phase = (elapsed / 1000) * frequency * 2 * Math.PI + this.oscPhaseOffsetVertical;
+                this.pos.y = this.oscCenterY + this.oscAmplitudeVertical * Math.sin(phase);
+            } else if (this.oscInitVertical && !doOscillateBoxesVertical) {
+                // Reset to origin when oscillation stops
+                this.oscInitVertical = false;
+            }
+        }
+        
+        draw() {
+            // Store previous position for THIS draw call
+            if (typeof this.lastDrawnPos === 'undefined') {
+                this.lastDrawnPos = {x: this.pos.x, y: this.pos.y};
+            }
+            
+            // Save canvas state
+            c.save();
+            
+            // Translate to box center and rotate
+            c.translate(cX(this.pos), cY(this.pos));
+            c.rotate(-this.rotation); // Negative because canvas Y is flipped
+            
+            // Calculate dimensions relative to center (0, 0)
+            const left = -(this.width * cScale / 2);
+            const top = -(this.height * cScale / 2);
+            const width = this.width * cScale;
+            const height = this.height * cScale;
+            
+            // Draw box with horizontal gradient
+            const grdH = c.createLinearGradient(
+                left, 
+                0, 
+                left + width, 
+                0);
+            grdH.addColorStop(0, `hsl(220, 76%, 20%)`);
+            grdH.addColorStop(0.5, `hsl(220, 60%, 5%)`);
+            grdH.addColorStop(1, `hsl(220, 60%, 20%)`);
+            c.fillStyle = grdH;
+            c.fillRect(left, top, width, height);
+            
+            // Draw box with vertical gradient (darken mode)
+            c.globalCompositeOperation = 'soft-light';
+            const grdV = c.createLinearGradient(
+                0, 
+                top, 
+                0, 
+                top + height);
+            grdV.addColorStop(0, `hsl(220, 60%, 20%)`);
+            grdV.addColorStop(0.5, `hsl(220, 60%, 5%)`);
+            grdV.addColorStop(1, `hsl(220, 60%, 20%)`);
+            c.fillStyle = grdV;
+            c.fillRect(left, top, width, height);
+            c.globalCompositeOperation = 'source-over';
+            
+            // Draw box border
+            c.lineWidth = 0.005 * cScale;
+            c.strokeStyle = `hsl(0, 0%, 70%)`;
+            c.strokeRect(left, top, width, height);
+            
+            // Restore canvas state
+            c.restore();
+            
+            // Draw control buttons and grips if not arriving and not too small
+            // (these should not rotate with the box)
+            if (!this.boxArriving && this.width > 0.1 && this.height > 0.1) {
+                this.drawControls();
+            }
+            
+            // Update prevPos at end of draw for next frame's collision detection
+            this.prevPos.x = this.pos.x;
+            this.prevPos.y = this.pos.y;
+        }
+        
+        drawControls() {
+            // Helper function to rotate a point around the box center
+            const rotatePoint = (localX, localY) => {
+                const cos = Math.cos(this.rotation);
+                const sin = Math.sin(this.rotation);
+                return {
+                    x: this.pos.x + localX * cos - localY * sin,
+                    y: this.pos.y + localX * sin + localY * cos
+                };
+            };
+            
+            // Scale button size based on smaller dimension of box
+            const minDimension = Math.min(this.width, this.height);
+            const btnRadius = Math.min(0.03, Math.max(0.02, 0.06 * minDimension)); // Scale with box size
+            const btnDistance = btnRadius * 2; // Distance from edge
+            
+            // Top-left: Add button (plus)
+            const addLocalPos = rotatePoint(-this.width/2 + btnDistance + (btnRadius * 3), this.height/2 - btnDistance);
+            this.addPos = addLocalPos;
+            drawCircle(cX(this.addPos), cY(this.addPos), btnRadius * cScale);
+            c.fillStyle = 'hsl(320, 100%, 30%)';
+            c.fill();
+            c.strokeStyle = 'black';
+            c.lineWidth = 0.2 * btnRadius * cScale;
+            // Draw + symbol
+            c.beginPath();
+            c.moveTo(cX(this.addPos) - 0.5 * btnRadius * cScale, cY(this.addPos));
+            c.lineTo(cX(this.addPos) + 0.5 * btnRadius * cScale, cY(this.addPos));
+            c.moveTo(cX(this.addPos), cY(this.addPos) - 0.5 * btnRadius * cScale);
+            c.lineTo(cX(this.addPos), cY(this.addPos) + 0.5 * btnRadius * cScale);
+            c.stroke();
+            
+            // Top-left: Subtract button (minus) - below add button
+            const subtractLocalPos = rotatePoint(-this.width/2 + btnDistance, this.height/2 - btnDistance - (btnRadius * 3));
+            this.subtractPos = subtractLocalPos;
+            
+            // Check if this is the last box
+            const isLastBox = Box && Box.length === 1;
+            
+            drawCircle(cX(this.subtractPos), cY(this.subtractPos), btnRadius * cScale);
+            c.fillStyle = isLastBox ? 'hsl(320, 100%, 15%)' : 'hsl(320, 100%, 30%)';
+            c.fill();
+            c.strokeStyle = 'black';
+            c.lineWidth = 0.2 * btnRadius * cScale;
+            // Draw - symbol
+            c.beginPath();
+            c.moveTo(cX(this.subtractPos) - 0.5 * btnRadius * cScale, cY(this.subtractPos));
+            c.lineTo(cX(this.subtractPos) + 0.5 * btnRadius * cScale, cY(this.subtractPos));
+            c.stroke();
+            
+            // Right side: Horizontal oscillate button - centered vertically
+            const arrowLocalPos = rotatePoint(this.width/2 - btnDistance, 0);
+            this.arrowPos = arrowLocalPos;
+            drawCircle(cX(this.arrowPos), cY(this.arrowPos), btnRadius * cScale);
+            c.fillStyle = 'blue';
+            c.fill();
+            
+            // Right side: Vertical oscillate button - to the left of horizontal button
+            const verticalArrowLocalPos = rotatePoint(this.width/2 - btnDistance - (btnRadius * 3), 0);
+            this.verticalArrowPos = verticalArrowLocalPos;
+            drawCircle(cX(this.verticalArrowPos), cY(this.verticalArrowPos), btnRadius * cScale);
+            c.fillStyle = 'blue';
+            c.fill();
+            
+            // Bottom-left: Off button (turn off all boxes)
+            const offLocalPos = rotatePoint(-this.width/2 + btnDistance, -this.height/2 + btnDistance);
+            this.offPos = offLocalPos;
+            drawCircle(cX(this.offPos), cY(this.offPos), btnRadius * cScale);
+            c.fillStyle = 'rgba(139, 0, 0, 0.6)';
+            c.fill();
+            c.strokeStyle = 'black';
+            c.lineWidth = 0.2 * btnRadius * cScale;
+            // Draw X symbol
+            c.beginPath();
+            c.moveTo(cX(this.offPos) - 0.4 * btnRadius * cScale, cY(this.offPos) - 0.4 * btnRadius * cScale);
+            c.lineTo(cX(this.offPos) + 0.4 * btnRadius * cScale, cY(this.offPos) + 0.4 * btnRadius * cScale);
+            c.moveTo(cX(this.offPos) + 0.4 * btnRadius * cScale, cY(this.offPos) - 0.4 * btnRadius * cScale);
+            c.lineTo(cX(this.offPos) - 0.4 * btnRadius * cScale, cY(this.offPos) + 0.4 * btnRadius * cScale);
+            c.stroke();
+            
+            // Resize grip (bottom-right corner)
+            const cornerGripSize = 0.15 * minDimension; // Scale with box
+            const resizeLocalPos = rotatePoint(this.width/2 - cornerGripSize, -this.height/2 + cornerGripSize);
+            this.resizePos = resizeLocalPos;
+            
+            // Draw arrow at resize grip - rotate with box
+            const baseArrowAngle = 1.25 * Math.PI; // Southeast in local space
+            
+            // Arrow pointing toward corner (rotated with box)
+            drawArrow(
+                this.resizePos.x,
+                simHeight - this.resizePos.y,
+                baseArrowAngle + this.rotation,
+                3.0 * btnRadius, 
+            )
+            c.fillStyle = 'green';
+            c.fill();
+            
+            // Top-right corner: Rotate button (yellow)
+            const rotateLocalPos = rotatePoint(this.width/2 - btnDistance, this.height/2 - btnDistance);
+            this.rotatePos = rotateLocalPos;
+            drawCircle(cX(this.rotatePos), cY(this.rotatePos), btnRadius * cScale);
+            c.fillStyle = 'hsl(50, 100%, 50%)';
+            c.fill();
+            
+            // Draw circular arrow icon for rotation
+            c.strokeStyle = 'black';
+            c.lineWidth = 0.15 * btnRadius * cScale;
+            c.beginPath();
+            c.arc(cX(this.rotatePos), cY(this.rotatePos), 0.4 * btnRadius * cScale, 0.3 * Math.PI, 1.7 * Math.PI);
+            c.stroke();
+            // Draw arrowhead
+            const arrowAngle = 1.7 * Math.PI;
+            const arrowSize = 0.3 * btnRadius * cScale;
+            c.beginPath();
+            c.moveTo(
+                cX(this.rotatePos) + 0.4 * btnRadius * cScale * Math.cos(arrowAngle),
+                cY(this.rotatePos) - 0.4 * btnRadius * cScale * Math.sin(arrowAngle)
+            );
+            c.lineTo(
+                cX(this.rotatePos) + 0.4 * btnRadius * cScale * Math.cos(arrowAngle) - arrowSize * Math.cos(arrowAngle - 0.3),
+                cY(this.rotatePos) - 0.4 * btnRadius * cScale * Math.sin(arrowAngle) + arrowSize * Math.sin(arrowAngle - 0.3)
+            );
+            c.lineTo(
+                cX(this.rotatePos) + 0.4 * btnRadius * cScale * Math.cos(arrowAngle) - arrowSize * Math.cos(arrowAngle + 0.3),
+                cY(this.rotatePos) - 0.4 * btnRadius * cScale * Math.sin(arrowAngle) + arrowSize * Math.sin(arrowAngle + 0.3)
+            );
+            c.closePath();
+            c.fill();
+        }
+    }
+
+    //  PUCK CONSTRUCTOR -----------------------------------------------------------------------
     class PUCK {
 		constructor(radius, pos, color, heartBeat) {
 			this.radius = 0; // Start at zero radius
@@ -10581,7 +11689,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
                 c.strokeStyle = `hsla(0, 0%, 60%, ${alphaPercent})`;
                 c.setLineDash([]); // solid line
-                c.lineWidth = 0.01 * cScale;
+                c.lineWidth = 0.005 * cScale;
                 c.stroke();  
 
                 // Only draw resize grip and plus/minus buttons for normal pucks (not heartbeat or cycle)
@@ -11165,6 +12273,7 @@ window.addEventListener('DOMContentLoaded', function() {
             this.force = 5;
         }
         draw() {
+            // draw magnet  ----------
             const iconRadius = 30;
             const centerX = this.pos.x * cScale;
             const centerY = (simHeight - this.pos.y) * cScale;
@@ -11214,6 +12323,7 @@ window.addEventListener('DOMContentLoaded', function() {
             c.moveTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
             c.lineTo(centerX - iconRadius, centerY);
             c.strokeStyle = 'hsla(0, 0%, 90%, 1.0)';
+            c.lineCap = 'butt';
             c.stroke();
             // left pole tip
             c.beginPath();
@@ -12013,6 +13123,18 @@ window.addEventListener('DOMContentLoaded', function() {
         Hungrypuck.push (new HUNGRYPUCK(0.15, new Vector2(0.3 * simWidth, -0.1 * 0.15), hungryPuckVel, `hsl(0, 50%, 50%)`));
     }
     
+    //  DEFINE BOXES  ----------------------------------------------------------
+    function makeBoxes() {
+        Box = [];
+        const boxColor = `hsla(40, 50%, 45%, 65%)`;
+        Box.push(new BOX(
+            0.4, // width
+            0.3, // height
+            new Vector2(0.3 * simWidth, 0.5 * simHeight),
+            boxColor
+        ));
+    }
+    
     // DEFINE MR. MISTER  ------------------------------------------------------------
     function makeMisterMister() {
         MisterMister = [];
@@ -12053,6 +13175,13 @@ window.addEventListener('DOMContentLoaded', function() {
                             (puck.puckArriving && !puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit) ||
                             (doOscillatePucks && !puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !puck.yinyang);
             if (shouldSim) puck.simulate();
+        }
+
+        // SIMULATE BOXES  ----------------------------------
+        if (showBoxes && Array.isArray(Box)) {
+            for (let b = 0; b < Box.length; b++) {
+                Box[b].simulate();
+            }
         }
 
         //  SIMUALTE BLOWER  ---------------------------------------------------------------     
@@ -12178,6 +13307,28 @@ window.addEventListener('DOMContentLoaded', function() {
                 if (puck.right < ball.left) continue;
                 if (Math.abs(ball.pos.y - puck.pos.y) <= ball.radius + puck.radius) handlePuckHits(ball, puck);
             }
+            
+            // BOX COLLISIONS -------------------
+            if (showBoxes && Array.isArray(Box)) {
+                for (let b = 0; b < Box.length; b++) {
+                    const box = Box[b];
+                    
+                    // Broad-phase: Account for box movement
+                    const boxMoveDist = Math.sqrt((box.pos.x - box.prevPos.x) ** 2 + (box.pos.y - box.prevPos.y) ** 2);
+                    const boxDiagonal = Math.sqrt(box.width * box.width + box.height * box.height) / 2;
+                    const broadRadius = boxDiagonal + ball.radius + boxMoveDist + 1.0; // Add movement distance
+                    
+                    const dx = Math.abs(ball.pos.x - box.pos.x);
+                    const dy = Math.abs(ball.pos.y - box.pos.y);
+                    
+                    if (dx > broadRadius || dy > broadRadius) {
+                        continue;
+                    }
+                    
+                    handleBoxHits(ball, box);
+                }
+            }
+            
             // Worm segment collisions - use outline in curves mode, circles in spheres mode
             if (!ball.immuneToWorm && doWorm && WormProps.SpaceWorm && WormProps.SpaceWorm.pos.length > 1) {
                 const worm = WormProps.SpaceWorm;
@@ -12402,6 +13553,14 @@ window.addEventListener('DOMContentLoaded', function() {
             }
             ball.draw();
 		}
+        
+        //  DRAW BOXES ----------------------------------------------------------------
+        if (showBoxes && Array.isArray(Box)) {
+            for (let b = 0; b < Box.length; b++) {
+                Box[b].draw();
+            }
+        }
+        
         //  DRAW WORM ---------------------------------------------------------------------
         if (doWorm == true && mrMode != "worm") {
              WormProps.SpaceWorm.draw()
@@ -12453,13 +13612,14 @@ window.addEventListener('DOMContentLoaded', function() {
             // Respect toggles for each puck type
             if (puck.heartBeat === true && !showHeart) continue;
             if (puck.cycle === true && !showCycle) continue;
-            if (puck.orbit === true && puck.yinyang !== true && !showOrbit && !showYinYang) continue;
+            if (puck.orbit === true && puck.yinyang !== true && !showOrbit) continue;
             if (puck.orbit === true && puck.yinyang === true && !showYinYang) continue;
             if (puck.flying === true && !doFlyingPuck && !doFlyingPuck2) continue;
             // Only check showPucks for normal pucks (not heartBeat, cycle, flying, or orbit)
             if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
             puck.draw();
         }
+        
         //  DRAW CORNERS  ---------------------------------------------------------------------
         for (var v = 0; v < Corners.length; v++) {
             corner = Corners[v];
@@ -12579,7 +13739,7 @@ window.addEventListener('DOMContentLoaded', function() {
             // Respect toggles for each puck type
             if (puck.heartBeat === true && !showHeart) continue;
             if (puck.cycle === true && !showCycle) continue;
-            if (puck.orbit === true && puck.yinyang !== true && !showOrbit && !showYinYang) continue;
+            if (puck.orbit === true && puck.yinyang !== true && !showOrbit) continue;
             if (puck.orbit === true && puck.yinyang === true && !showYinYang) continue;
             if (puck.flying === true && !doFlyingPuck && !doFlyingPuck2) continue;
             // Only check showPucks for normal pucks (not heartBeat, cycle, flying, or orbit)
