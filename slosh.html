@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.4
+		<title>Slosh 2.6
         </title>
         <style>
 			body {font-family: monospace; 
@@ -927,7 +927,7 @@ window.addEventListener('DOMContentLoaded', function() {
     function calculateMainMenuWidth() {
         const itemWidth = 90;
         const itemSpacing = 10;
-        const sidePadding = 20;
+        const sidePadding = 15;
         return (mainMenuItems.length * itemWidth) + ((mainMenuItems.length - 1) * itemSpacing) + (sidePadding * 2);
     }
     
@@ -1424,13 +1424,8 @@ window.addEventListener('DOMContentLoaded', function() {
         const x = ellipsisMargin + ellipsisSize / 2;
         const y = ellipsisMargin + ellipsisSize / 2;
         
-        // Calculate fade based on menu visibility
-        const fadeAlpha = mainMenuVisible ? 0 : 0.7;
-        
-        if (fadeAlpha === 0) return; // Don't draw when menu is open
-        
         // Draw semi-transparent background circle
-        ctx.globalAlpha = fadeAlpha;
+        ctx.globalAlpha = 0.7;
         ctx.fillStyle = 'rgba(30, 30, 30, 0.9)';
         ctx.beginPath();
         ctx.arc(x, y, ellipsisSize / 2, 0, Math.PI * 2);
@@ -1501,7 +1496,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Draw red X close button at top-left
         if (mainMenuVisible) {
             const closeButtonSize = 20;
-            const closeButtonX = mainMenuX + 15;
+            const closeButtonX = mainMenuX - 72;
             const closeButtonY = barY + 15;
             
             // Draw circle background
@@ -1522,14 +1517,14 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.stroke();
         }
         
-        // Draw submenu hide/show toggle button on far right
+        // Draw submenu hide/show toggle button to the right of close button
         if (mainMenuVisible) {
             const toggleButtonSize = 20;
-            const toggleButtonX = mainMenuX + menuWidth - 15;
+            const toggleButtonX = mainMenuX - 43.5;
             const toggleButtonY = barY + 15;
             
             // Draw circle background - bright yellow when menus shown, dim when hidden
-            const yellowColor = submenusHidden ? 'hsla(50, 100%, 50%, 0.4)' : 'hsla(50, 100%, 40%, 1.0)';
+            const yellowColor = submenusHidden ? 'hsla(50, 100%, 45%, 0.4)' : 'hsla(50, 100%, 36%, 1.0)';
             ctx.fillStyle = yellowColor;
             ctx.beginPath();
             ctx.arc(toggleButtonX, toggleButtonY, toggleButtonSize / 2, 0, Math.PI * 2);
@@ -1545,8 +1540,27 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.stroke();
         }
         
+        // Draw green restart button on the right side
+        if (mainMenuVisible) {
+            const restartButtonSize = 20;
+            const restartButtonX = mainMenuX - 15;
+            const restartButtonY = barY + 15;
+            
+            // Draw circle background
+            ctx.fillStyle = 'hsl(120, 60%, 35%)';
+            ctx.beginPath();
+            ctx.arc(restartButtonX, restartButtonY, restartButtonSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw circle background
+            ctx.fillStyle = 'hsl(0, 0%, 0%)';
+            ctx.beginPath();
+            ctx.arc(restartButtonX, restartButtonY, restartButtonSize / 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
         // Draw menu items
-        let currentX = mainMenuX + sidePadding;
+        let currentX = mainMenuX + 15;
         
         for (const item of mainMenuItems) {
             drawMainMenuItem(item, currentX, barY + menuHeight / 2, itemWidth, menuHeight - 10);
@@ -4566,9 +4580,9 @@ window.addEventListener('DOMContentLoaded', function() {
         const dropdownWidth = w - 40;  // Equal 20px spacing on both sides
         const renderTypes = [
             { value: 'drawSpheres', label: 'spheres ($$$)' },
-            { value: 'drawDiscs', label: 'coins ($$)' },
-            { value: 'drawCircles', label: 'discs ($)' },
-            { value: 'drawRings', label: 'rings ($)' },
+            { value: 'drawDiscs', label: 'outlined circles ($$)' },
+            { value: 'drawCircles', label: 'plain circles ($)' },
+            { value: 'drawRings', label: 'unfilled circles ($)' },
             { value: 'drawGummies', label: 'gummies (beta)' }
         ];
         
@@ -5403,9 +5417,9 @@ window.addEventListener('DOMContentLoaded', function() {
             doSpheres = false;
             doRings = false;
             colorWheelSat = 50;
-            ballSaturation = 50;
+            ballSaturation = 75;
             colorWheelLight = 45;
-            ballLightness = 50;
+            ballLightness = 55;
             physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 particlesMenuQuantity = 64;
@@ -5425,7 +5439,7 @@ window.addEventListener('DOMContentLoaded', function() {
             colorWheelSat = 100;
             ballSaturation = 100;
             colorWheelLight = 70;
-            ballLightness = 70;
+            ballLightness = 60;
             physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 particlesMenuQuantity = 64;
@@ -5541,7 +5555,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Check main menu close button (red X at top-left)
         if (mainMenuVisible) {
             const closeButtonSize = 30;
-            const closeButtonX = mainMenuX + 15;
+            const closeButtonX = mainMenuX - 72;
             const closeButtonY = mainMenuPadding + 15;
             const distToClose = Math.sqrt((mX - closeButtonX) ** 2 + (mY - closeButtonY) ** 2);
             
@@ -5552,12 +5566,23 @@ window.addEventListener('DOMContentLoaded', function() {
             
             // Check submenu hide/show toggle button
             const toggleButtonSize = 35;
-            const toggleButtonX = mainMenuX + calculateMainMenuWidth() - 15;
+            const toggleButtonX = mainMenuX - 43.5;
             const toggleButtonY = mainMenuPadding + 15;
             const distToToggle = Math.sqrt((mX - toggleButtonX) ** 2 + (mY - toggleButtonY) ** 2);
             
             if (distToToggle <= toggleButtonSize / 2) {
                 toggleSubmenus();
+                return;
+            }
+            
+            // Check restart button
+            const restartButtonSize = 35;
+            const restartButtonX = mainMenuX - 15;
+            const restartButtonY = mainMenuPadding + 15;
+            const distToRestart = Math.sqrt((mX - restartButtonX) ** 2 + (mY - restartButtonY) ** 2);
+            
+            if (distToRestart <= restartButtonSize / 2) {
+                wipeRestart();
                 return;
             }
         }
@@ -5567,7 +5592,7 @@ window.addEventListener('DOMContentLoaded', function() {
             const menuWidth = calculateMainMenuWidth();
             const itemWidth = 90;
             const itemSpacing = 10;
-            const sidePadding = 20;
+            const sidePadding = 15;
             const barY = mainMenuPadding;
             const menuHeight = mainMenuHeight;
             
@@ -6494,9 +6519,11 @@ window.addEventListener('DOMContentLoaded', function() {
         if (closestPlusDist < plusButtonRadius) {
             duplicateNormalPuck(closestPlusIndex);
             normalPuckHandled = true;
+            return;
         } else if (closestMinusDist < minusButtonRadius) {
             deleteNormalPuck(closestMinusIndex);
             normalPuckHandled = true;
+            return;
         } else if (closestOffDist < offButtonRadius) {
             // Turn off all normal pucks and update the toys menu puck button
             const button = document.getElementById('showPuckButton');
@@ -6518,6 +6545,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 }
             }
             normalPuckHandled = true;
+            return;
         } else if (closestArrowDist < arrowButtonRadius) {
             // Toggle oscillation mode
             doOscillatePucks = !doOscillatePucks;
@@ -6546,6 +6574,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 }
             }
             normalPuckHandled = true;
+            return;
         } else if (closestGripDist < gripRadius) {
             activeResizePuckIndex = closestGripIndex;
             initialPuckRadius = Puck[closestGripIndex].radius;
@@ -9184,7 +9213,7 @@ window.addEventListener('DOMContentLoaded', function() {
         }
         
         makeBlower(
-            0.15, 
+            0.1, 
             new Vector2(
                 0.7 * simWidth, 
                 0.4 * simHeight));
@@ -9345,7 +9374,6 @@ window.addEventListener('DOMContentLoaded', function() {
                     this.growing = false;
                 }
             }
-            //this.radius = 0.005;
             this.vel.add(physProps.gravity, physProps.dt);
             var speed = (this.vel.length() * 60 * physProps.dt);
             if (speed > (physProps.maxSpeed / physProps.substeps)) {
@@ -9355,10 +9383,26 @@ window.addEventListener('DOMContentLoaded', function() {
             this.pos.add(this.vel, physProps.dt)
             this.speedHue = physProps.baseColor + speed * physProps.velColorMap * physProps.substeps;
             
-            if (this.speedHue > physProps.baseColor + 330) {
-                this.speedHue = physProps.baseColor + 330;
+            // Validate and clamp speedHue - use max velocity color as fallback
+            if (isNaN(this.speedHue) || !isFinite(this.speedHue) || this.speedHue < 0) {
+                // Fallback: color at maximum velocity
+                this.speedHue = physProps.baseColor + (physProps.maxSpeed / physProps.substeps) * physProps.velColorMap * physProps.substeps;
             }
+            
+            if (this.speedHue > physProps.baseColor + 360) {
+                this.speedHue = physProps.baseColor + 360;
+            }
+            
+            // Ensure speedHue stays within valid range [0, 360)
+            while (this.speedHue >= 360) this.speedHue -= 360;
+            while (this.speedHue < 0) this.speedHue += 360;
+            
             this.speedHueRatio = Math.min(0.8 + 0.2 * speed);
+            
+            // Validate speedHueRatio
+            if (isNaN(this.speedHueRatio) || !isFinite(this.speedHueRatio)) {
+                this.speedHueRatio = 1.0;
+            }
         }
         drawTrace() {
             c.lineCap = 'round';
@@ -11700,7 +11744,6 @@ window.addEventListener('DOMContentLoaded', function() {
                     const gripDist = this.radius - 0.3 * this.radius;
                     const gripDist2 = this.radius - 0.35 * this.radius;
                     this.gripPos = new Vector2(this.pos.x + gripDist * gripCos, this.pos.y + gripDist * gripSin);
-                    this.gripPos2 = new Vector2(this.pos.x + gripDist2 * gripCos, this.pos.y + gripDist2 * gripSin);
                     
                     // Position buttons on opposite corner (around 135 degrees, upper left)
                     const buttonBaseAngle = 0.75 * Math.PI; // 135 degrees
@@ -11752,18 +11795,6 @@ window.addEventListener('DOMContentLoaded', function() {
                         )
                     c.fillStyle = 'green';
                     c.fill();
-
-                    // Draw arrow pointing in
-                    drawArrow(
-                            this.gripPos2.x,
-                            simHeight - this.gripPos2.y,
-                            0.25 * Math.PI,
-                            0.2 * this.radius, 
-                        )
-                    c.fill();
-
-                  
-
 
                     // Draw plus button  ----------
                     drawCircle(
@@ -12317,7 +12348,7 @@ window.addEventListener('DOMContentLoaded', function() {
             c.shadowBlur = 6;
             c.shadowColor = 'hsla(0, 0%, 0%, 1)';
             // black base for poles and arc
-            c.lineWidth = 24;
+            c.lineWidth = 25;
             // Left pole
             c.beginPath();
             c.moveTo(centerX - iconRadius, centerY - 0.9 * iconRadius);
@@ -13108,7 +13139,7 @@ window.addEventListener('DOMContentLoaded', function() {
             }
         // NORMAL PUCKS (Puck[5+]) - can be duplicated/deleted ----------------------------------------------------------
         Puck.push (new PUCK(
-            0.3, 
+            0.2, 
             new Vector2(0.35 * simWidth, 
                 0.2 * simHeight), 
                 puck2color, 
