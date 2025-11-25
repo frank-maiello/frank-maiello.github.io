@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.6
+		<title>Slosh 2.7
         </title>
         <style>
 			body {font-family: monospace; 
@@ -1064,7 +1064,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var wallsMenuCenterY = 0;
     
     // Wall state variables (replacing the HTML controls)
-    var wallsMenuCornerRadius = 100;
+    var wallsMenuCornerRadius = 50;
     var wallsMenuLeftWall = true;
     var wallsMenuRightWall = true;
     var wallsMenuCeiling = true;
@@ -1219,7 +1219,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var doRightWall = true;
     var doCeiling = true;
     var doFloor = true;
-    var cornerRad = 100;
+    var cornerRad = 50;
     
     // Initialize Corners array
     var Corners = [];
@@ -2326,7 +2326,7 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(physicsMenuSubsteps.toString(), sliderStartX + substepsSliderWidth + 10, currentY);
+        ctx.fillText((physicsMenuSubsteps - 1).toString(), sliderStartX + substepsSliderWidth + 10, currentY);
         
         // Draw FPS toggle button (film strip style) to the right
         const fpsButtonX = sliderStartX + substepsSliderWidth + 40;
@@ -4519,6 +4519,13 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.fillStyle = `hsl(10, 50%, ${brightness}%)`;
             ctx.fillRect(sliderStartX + i, currentY - sliderHeight/2, 1, sliderHeight);
         }
+
+        // Draw label inside slider 
+        ctx.fillStyle = 'black';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('Smallest Particle Size', sliderStartX + sliderWidth/2, currentY);
         
         // Draw marker (range 0-50)
         const smallRadiusPercent = particlesMenuSmallRadius / 50;
@@ -4527,13 +4534,6 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.fillRect(smallRadiusHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
         ctx.strokeStyle = 'black';
         ctx.strokeRect(smallRadiusHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
-        
-        // Draw label inside slider (after gradient so it's on top)
-        ctx.fillStyle = 'black';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = 'bold 13px sans-serif';
-        ctx.fillText('Smallest Radius', sliderStartX + sliderWidth/2, currentY);
         
         // Draw value display to the right
         ctx.fillStyle = 'hsl(0, 0%, 80%)';
@@ -4554,7 +4554,7 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.fillStyle = 'black';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Largest Radius', sliderStartX + sliderWidth/2, currentY);
+        ctx.fillText('Largest Particle Size', sliderStartX + sliderWidth/2, currentY);
         
         // Draw marker (range 1-50)
         const largeRadiusPercent = (particlesMenuLargeRadius - 1) / 49;
@@ -9453,6 +9453,8 @@ window.addEventListener('DOMContentLoaded', function() {
         }
         draw() {
             if (doDiscs == true) {
+                const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 50);
+                const satLevel = ballSaturation * this.saturation;
                 drawCircle(cX(this.pos), cY(this.pos), 0.95 * this.radius * cScale);    
                 if (this.whiteBall == true || this.tracerBall == true) {
                     // reg color
@@ -9461,38 +9463,48 @@ window.addEventListener('DOMContentLoaded', function() {
                     c.strokeStyle = `hsl(0, 0%, ${ballLightness + 50}%)`;
                     c.lineWidth = 0.2 * this.radius * cScale;
                 } else {
+                    
                     // reg color   
-                    c.fillStyle = `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness}%)`;
+                    c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
                     // hi color
-                    c.strokeStyle = `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness + 25}%)`;
+                    c.strokeStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp + 25}%)`;
                     c.lineWidth = 0.2 * this.radius * cScale;
                 }
                 c.fill();
                 c.stroke();
             } else if (doSpheres == true) {
-                const shineOffsetX = cScale * this.radius * 0.3; // old masterShineShiftX;
-                const shineOffsetY = cScale * this.radius * 0.4; // old masterShineShiftY;
-                const shineVector = Math.sqrt(shineOffsetX * shineOffsetX + shineOffsetY * shineOffsetY);
-                const shineRadius = 0.5 * cScale * this.radius + shineVector;
+                const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 55);
+                const satLevel = ballSaturation * this.saturation;
+                // Pre-calculate shine offset constants (avoids per-particle calculations)
+                const scaledRadius = this.radius * cScale;
+                const shineOffsetX = scaledRadius * 0.3; // old masterShineShiftX;
+                const shineOffsetY = scaledRadius * 0.4; // old masterShineShiftY;
+                const centerX = cX(this.pos);
+                const centerY = cY(this.pos);
+                const shineRadius = 0.5 * scaledRadius + scaledRadius * 0.5; // simplified: sqrt(0.3^2 + 0.4^2) ≈ 0.5
                 const shading = c.createRadialGradient(
-                    cX(this.pos) - shineOffsetX, 
-                    cY(this.pos) - shineOffsetY, 
+                    centerX - shineOffsetX, 
+                    centerY - shineOffsetY, 
                     shineRadius, 
-                    cX(this.pos) - shineOffsetX, 
-                    cY(this.pos) - shineOffsetY, 
+                    centerX - shineOffsetX, 
+                    centerY - shineOffsetY, 
                     0);
-                shading.addColorStop(0, `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness - 15}%)`);
-                shading.addColorStop(1, `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness + 25}%)`);
-                drawCircle(cX(this.pos), cY(this.pos), 0.95 *this.radius * cScale);
+                shading.addColorStop(0, `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp - 15}%)`);
+                shading.addColorStop(1, `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp + 25}%)`);
+                drawCircle(centerX, centerY, 0.95 * scaledRadius);
                 c.fillStyle = shading;
                 c.fill()
             } else if (doCircles == true) {
+                const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 65);
+                const satLevel = ballSaturation * this.saturation;
                 drawCircle(cX(this.pos), cY(this.pos), 0.90 *this.radius * cScale);    
-                c.fillStyle = `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness}%)`;
+                c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
                 c.fill();
             } else if (doRings == true) {
+                const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 65);
+                const satLevel = ballSaturation * this.saturation;
                 drawCircle(cX(this.pos), cY(this.pos), 0.80 *this.radius * cScale);    
-                c.strokeStyle = `hsl(${this.speedHue}, ${ballSaturation * this.saturation}%, ${this.speedHueRatio * ballLightness}%)`;
+                c.strokeStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
                 c.lineWidth = 0.3 * this.radius * cScale;
                 c.stroke();
             } else if (doGummi == true) {
@@ -9857,8 +9869,8 @@ window.addEventListener('DOMContentLoaded', function() {
             }
             
             // Draw the arc outlines
-            c.strokeStyle = 'hsl(0, 0%, 25%)';
-            c.lineWidth = 0.008 * cScale;
+            c.strokeStyle = 'hsl(200, 50%, 25%)';
+            c.lineWidth = 0.004 * cScale;
             c.lineCap = 'butt';
             var budge = 0.003;
             if (this.corner == 'northwest') {
@@ -9913,7 +9925,7 @@ window.addEventListener('DOMContentLoaded', function() {
             }
             // left edge
             budge = 0.0;
-            c.lineWidth = 0.016 * cScale;
+            c.lineWidth = 0.008 * cScale;
             if (doLeftWall == true) {
                 c.beginPath();
                 // When corner radius > 0, connect to corner arcs; when corner radius = 0 or adjacent wall disabled, extend to edge
@@ -10095,7 +10107,6 @@ window.addEventListener('DOMContentLoaded', function() {
                 this.drawSpheres();
             }
         }
-        
         drawSpheres() {
             var p = this;
             //  CIRCLES  ----------
@@ -10122,11 +10133,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 sphereGradient.addColorStop(1.0, shadow);
                 c.fillStyle = sphereGradient;
                 c.fill();
-                //c.lineWidth = .02 * cScale;  
-                //c.strokeStyle = "blue";       
-                //c.fillStyle = "darkblue";
-                //c.fill();
-                //c.stroke();
+                
             }
             // pivot (pos[0]) is intentionally not drawn so the first visible
             // circle (pos[1]) is the head of the chain.
@@ -12066,7 +12073,7 @@ window.addEventListener('DOMContentLoaded', function() {
         constructor(pos, vel) {
             this.pos = pos.clone();
             this.vel = vel.clone();
-            this.radius = 0.007 + Math.random() * 0.015;
+            this.radius = 0.01;
             this.hue = 320;
             this.alpha = 0;
             this.birthday = Date.now();
@@ -12086,8 +12093,8 @@ window.addEventListener('DOMContentLoaded', function() {
             const ageRatio = age / this.lifespan;
             
             // Fade in during first 20% of life, fade out during last 20%
-            if (ageRatio < 0.2) {
-                this.alpha = ageRatio / 0.2;
+            if (ageRatio < 0.05) {
+                this.alpha = ageRatio / 0.05;
             } else if (ageRatio > 0.8) {
                 this.alpha = (1 - ageRatio) / 0.2;
             } else {
@@ -12117,19 +12124,29 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    let leftHandHeart = true;
     Hearts = [];
-    function spawnHearts() {
+    function makeHeart() {
         if (typeof Stinker === 'undefined' || Stinker.length === 0 || !Stinker[0].active) return;
-        
         const stinker = Stinker[0];
-        // Spawn slightly behind the stinker (random offset)
-        const offsetX = 0.3 * stinker.radius * (-1 + 2 * Math.random());
-        const offsetY = 0.3 * stinker.radius * (-1 + 2 * Math.random());
+        if (leftHandHeart == false) {
+            var offsetX = -0.2 * stinker.radius;
+            var offsetY = -0.05 * stinker.radius;
+            leftHandHeart = true;
+        } else {
+            var offsetX = 0.5 * stinker.radius;
+            var offsetY = -0.08 * stinker.radius;
+            leftHandHeart = false;
+        }
         const pos = new Vector2(stinker.pos.x + offsetX, stinker.pos.y + offsetY);
         
         // Random outward velocity
         const heartSpeed = 1;
-        const rayAngle = Math.random() * 2 * Math.PI;
+        if (leftHandHeart == true) {
+            var rayAngle = 2.5 * Math.PI + (Math.random() * 0.7 * Math.PI); 
+        } else {
+            var rayAngle = 1.8 * Math.PI + (Math.random() * 0.7 * Math.PI);
+        }
         const vel = new Vector2(heartSpeed * Math.cos(rayAngle), heartSpeed * Math.sin(rayAngle));
         
         Hearts.push(new HEART(pos, vel));
@@ -12212,7 +12229,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 var dy = mouseY - stinker.pos.y;
                 const stinkerRadius = 60 / cScale; // 60 pixels in sim units
                 const distFromCenter = Math.sqrt(dx*dx + dy*dy);
-                const stinkerTiming = 110 - (Magnet[0].force * 10); // spawn hearts faster with stronger magnet
+                const stinkerTiming = (60 - (Magnet[0].force * 10)) * physProps.substeps; // spawn hearts faster with stronger magnet
                 if (distFromCenter < stinkerRadius) {
                     globalInteractionLock = true;
                     isStinkerDragging = true;
@@ -12221,7 +12238,7 @@ window.addEventListener('DOMContentLoaded', function() {
                     // Start stink on hold
                     stinkerHoldTimer = setInterval(stink, 50);
                     // Start spawning hearts at ~20 per second (50ms interval)
-                    heartSpawnTimer = setInterval(spawnHearts, stinkerTiming);
+                    heartSpawnTimer = setInterval(makeHeart, stinkerTiming);
                 }
             }
         });
@@ -12629,6 +12646,7 @@ window.addEventListener('DOMContentLoaded', function() {
     function stink() {
         const stinkForce = Magnet[0] ? (Magnet[0].force) : 1;
         const stinkSpeed = stinkForce * physProps.dt;
+        const stinkLimit = Stinker[0] ? 4 * Stinker[0].radius : 1;
         // Use stinker center if active, else canvas center
         let centerX, centerY;
         if (typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active) {
@@ -12650,6 +12668,9 @@ window.addEventListener('DOMContentLoaded', function() {
             d.subtractVectors(ball.pos, new Vector2(centerX, centerY));
         
             // Apply inward drawing force inversely proportional to distance
+            // Only apply if within stinkLimit
+            var dist = d.length();
+            if (dist > stinkLimit) continue;
             var influenceDist = d.length();
             d.scale(1 / (influenceDist)); 
             ball.vel.x += d.x * stinkSpeed;
@@ -13921,6 +13942,307 @@ window.addEventListener('DOMContentLoaded', function() {
     }
     
     update();
+
+/*
+===========================================
+VARIABLES AND CONSTANTS REFERENCE
+===========================================
+
+LAYOUT AND CANVAS
+-----------------
+screenVertical - Boolean flag indicating if canvas is in vertical (portrait) orientation
+canvas - The main HTML canvas element
+c - 2D rendering context for the canvas
+cScale - Scaling factor for converting simulation units to canvas pixels
+simWidth - Width of simulation world in simulation units
+simHeight - Height of simulation world in simulation units
+simMinWidth - Minimum world width in simulation units (used for scaling)
+topMargin - Top margin for canvas rendering
+bottomMargin - Bottom margin for canvas rendering
+cornerFillGradient - Gradient used to fill canvas corners/masks to match page background
+
+BUMPER CONFIGURATION
+--------------------
+bumperRows - Number of rows of bumpers (default: 3)
+bumperRadius - Radius of bumper objects (default: 0.040)
+
+FOUNTAIN AND SPAWN STATES
+--------------------------
+fountainState - Current state of fountain (0=off, 1=normal, 2=sweep, 3=cw, 4=ccw)
+doShower - Boolean flag for shower particle spawning mode
+doFountain - Boolean flag for fountain particle spawning mode
+
+PRESET MANAGEMENT
+-----------------
+PRESET_KEYS - Array of localStorage/cookie keys for saving presets (19 presets)
+DEFAULT_PRESETS - Array storing default preset configurations
+CONTROL_IDS - Array of HTML element IDs to save/restore in presets
+
+FPS COUNTER
+-----------
+fpsCounter - Object containing FPS tracking data (lastTime, frameCount, frameTimes, etc.)
+fpsCounter.maxSamples - Number of frame samples to average (default: 10)
+fpsCounter.updateInterval - How often to update FPS display (every 5 frames)
+
+IMAGE ASSETS
+------------
+gummiImage - Image object for gummy bear particle rendering
+gummiReady - Boolean flag indicating if gummy bear image is loaded
+doGummi - Boolean flag to enable gummy bear rendering style
+gummiHeadingTau - Smoothing speed for gummy bear orientation (default: 0.05 seconds)
+gummiHeadingOffset - Orientation offset for gummy bear image (Math.PI/2 radians)
+aeolusImage - Image object for Aeolus character
+aeolusReady - Boolean flag indicating if Aeolus image is loaded
+pepeImage - Image object for Pepe character
+pepeReady - Boolean flag indicating if Pepe image is loaded
+
+TRACER SYSTEM
+-------------
+doTracer - Boolean flag to enable particle tracking
+doSmallTracer - Boolean flag for small tracer size
+doMediumTracer - Boolean flag for medium tracer size
+doBigTracer - Boolean flag for big tracer size
+
+MAIN MENU SYSTEM
+----------------
+mainMenuVisible - Boolean flag for main menu visibility
+mainMenuAnimating - Boolean flag indicating menu is animating
+mainMenuX - Current X position of main menu (animates from off-screen)
+mainMenuTargetX - Target X position for menu animation
+mainMenuSlideSpeed - Pixels per frame for slide animation (default: 60)
+mainMenuPadding - Pixels from top edge (default: 20)
+mainMenuCornerRadius - Corner radius for rounded menu (default: 10)
+mainMenuHeight - Height of main menu bar (default: 75)
+mainMenuBarAlpha - Transparency of main menu bar (default: 0.85)
+mainMenuVelocity - Current velocity for spring animation
+mainMenuUsingSpring - Boolean flag for spring vs. slide animation
+mainMenuSpringStrength - Spring force coefficient (default: 0.3)
+mainMenuSpringDamping - Damping factor 0-1, lower = more bouncy (default: 0.65)
+ellipsisSize - Size of ellipsis button (default: 40)
+ellipsisMargin - Margin for ellipsis button (default: 10)
+pauseButtonBlinkTimer - Timer for pause button blink effect
+pauseButtonBlinkCycle - Total cycle time for blink (default: 1.8 seconds)
+pauseButtonDimDuration - Duration of dim phase in blink (default: 0.3 seconds)
+submenusHidden - Boolean flag indicating if submenus are hidden
+savedSubmenuStates - Object storing which menus were visible before hiding
+mainMenuItems - Array of menu item objects with properties (id, label, color, variable)
+
+COLOR WHEEL MENU
+----------------
+colorWheelHue - Current hue value (0-360, default: 180)
+colorWheelSat - Current saturation value (0-100, default: 70)
+colorWheelLight - Current lightness value (0-100, default: 30)
+colorWheelPersistence - Trail persistence value (0-30, default: 12)
+colorWheelVelMap - Velocity color mapping sensitivity (0-500, default: 100)
+colorWheelVisible - Boolean flag for color wheel menu visibility
+colorWheelOpacity - Current opacity for fade animation (0-1)
+colorWheelAnimating - Boolean flag indicating menu is animating
+colorWheelTargetOpacity - Target opacity for animation
+colorWheelDragging - Boolean flag for dragging state
+colorWheelDraggingControl - String tracking which control is being dragged
+colorWheelPositionDragging - Boolean flag for position dragging
+colorWheelDragOffsetX - X offset for drag operations
+colorWheelDragOffsetY - Y offset for drag operations
+colorWheelIconCanvas - Cached canvas for color wheel icon in main menu
+colorWheelIconCtx - Rendering context for icon canvas
+colorWheelOffscreenCanvas - Offscreen canvas for full color wheel rendering
+colorWheelOffscreenCtx - Rendering context for offscreen canvas
+colorWheelNeedsRedraw - Boolean flag indicating wheel needs redrawing
+colorWheelSize - Size of color wheel in pixels (default: 167)
+colorWheelCenterX - X position of color wheel center
+colorWheelCenterY - Y position of color wheel center
+colorWheelRadius - Radius of color wheel
+colorWheelManuallyMoved - Boolean flag indicating user has moved menu
+
+PHYSICS MENU
+------------
+physicsMenuRepulsionForce - Force of particle repulsion (1-20, default: 20)
+physicsMenuRepulsionDist - Distance for repulsion (0-10, default: 4)
+physicsMenuRepulsionOn - Boolean flag to enable repulsion
+physicsMenuBallRest - Ball restitution/rest value (0-100, default: 0)
+physicsMenuBounceOn - Boolean flag to enable bounce
+physicsMenuTime - Time step value (500-1000, default: 1000)
+physicsMenuSpeed - Speed limit value (1-50, default: 20)
+physicsMenuSubsteps - Number of physics substeps per frame (1-4, default: 1)
+physicsMenuFpsOn - Boolean flag to show FPS counter
+physicsMenuVisible - Boolean flag for physics menu visibility
+physicsMenuOpacity - Current opacity for fade animation (0-1)
+physicsMenuAnimating - Boolean flag indicating menu is animating
+physicsMenuTargetOpacity - Target opacity for animation
+physicsMenuDragging - Boolean flag for dragging state
+physicsMenuDraggingControl - String tracking which slider is being dragged
+physicsMenuPositionDragging - Boolean flag for position dragging
+physicsMenuDragOffsetX - X offset for drag operations
+physicsMenuDragOffsetY - Y offset for drag operations
+physicsMenuManuallyMoved - Boolean flag indicating user has moved menu
+physicsMenuWidth - Width of physics menu (default: 240)
+physicsMenuHeight - Height of physics menu (default: 250)
+physicsMenuCenterX - X position of physics menu center
+physicsMenuCenterY - Y position of physics menu center
+
+GRAVITY MENU
+------------
+gravityMenuX - X position of gravity menu
+gravityMenuY - Y position of gravity menu
+gravityMenuRadius - Radius of circular gravity menu (default: 80)
+gravityMenuVisible - Boolean flag for gravity menu visibility
+gravityMenuOpacity - Current opacity for fade animation (0-1)
+gravityMenuAnimating - Boolean flag indicating menu is animating
+gravityMenuTargetOpacity - Target opacity for animation
+gravityMenuDragging - Boolean flag for dragging state
+gravityMenuDraggingControl - String tracking which control is being dragged
+gravityMenuPositionDragging - Boolean flag for position dragging
+gravityMenuDragOffsetX - X offset for drag operations
+gravityMenuDragOffsetY - Y offset for drag operations
+gravityMenuManuallyMoved - Boolean flag indicating user has moved menu
+gravityRotationSlider - Rotation slider value (0-1, 0.5 = no rotation)
+gravityRotationSpeed - Current rotation speed in radians per frame
+gravityRotationSliderDragging - Boolean flag for slider dragging state
+
+WALLS MENU
+----------
+wallsMenuVisible - Boolean flag for walls menu visibility
+wallsMenuOpacity - Current opacity for fade animation (0-1)
+wallsMenuAnimating - Boolean flag indicating menu is animating
+wallsMenuTargetOpacity - Target opacity for animation
+wallsMenuDragging - Boolean flag for dragging state
+wallsMenuDraggingControl - String tracking which slider is being dragged
+wallsMenuPositionDragging - Boolean flag for position dragging
+wallsMenuDragOffsetX - X offset for drag operations
+wallsMenuDragOffsetY - Y offset for drag operations
+wallsMenuManuallyMoved - Boolean flag indicating user has moved menu
+wallsMenuWidth - Width of walls menu (default: 240)
+wallsMenuHeight - Height of walls menu (default: 258)
+wallsMenuCenterX - X position of walls menu center
+wallsMenuCenterY - Y position of walls menu center
+wallsMenuCornerRadius - Corner radius for walls (0-150)
+wallsMenuLeftWall - Boolean flag to enable left wall
+wallsMenuRightWall - Boolean flag to enable right wall
+wallsMenuCeiling - Boolean flag to enable ceiling
+wallsMenuFloor - Boolean flag to enable floor
+
+WALL STATE (GLOBAL)
+-------------------
+doLeftWall - Global boolean flag for left wall state
+doRightWall - Global boolean flag for right wall state
+doCeiling - Global boolean flag for ceiling state
+doFloor - Global boolean flag for floor state
+cornerRad - Global corner radius value (default: 100)
+Corners - Array of corner objects for physics simulation
+
+RESPAWN MENU
+------------
+respawnMenuVisible - Boolean flag for respawn menu visibility
+respawnMenuOpacity - Current opacity for fade animation (0-1)
+respawnMenuAnimating - Boolean flag indicating menu is animating
+respawnMenuTargetOpacity - Target opacity for animation
+respawnMenuDragging - Boolean flag for dragging state
+respawnMenuPositionDragging - Boolean flag for position dragging
+respawnMenuDragOffsetX - X offset for drag operations
+respawnMenuDragOffsetY - Y offset for drag operations
+respawnMenuManuallyMoved - Boolean flag indicating user has moved menu
+respawnMenuWidth - Width of respawn menu (default: 240)
+respawnMenuHeight - Height of respawn menu (default: 340)
+respawnMenuCenterX - X position of respawn menu center
+respawnMenuCenterY - Y position of respawn menu center
+respawnMenuOneShot - Boolean flag for one-shot spawn mode
+respawnMenuHungryPuck - Boolean flag to enable hungry puck
+respawnMenuSpawnType - String indicating spawn type ('shower' or 'fountain')
+respawnMenuLayoutType - String indicating layout type ('cluster' or 'array')
+respawnMenuMisterMode - String indicating mister mode ('idle', 'active', etc.)
+respawnMenuMisterModeExpanded - Boolean flag for dropdown expanded state
+
+TOYS MENU
+---------
+toysMenuVisible - Boolean flag for toys menu visibility
+toysMenuOpacity - Current opacity for fade animation (0-1)
+toysMenuAnimating - Boolean flag indicating menu is animating
+toysMenuTargetOpacity - Target opacity for animation
+toysMenuDragging - Boolean flag for dragging state
+toysMenuPositionDragging - Boolean flag for position dragging
+toysMenuDragOffsetX - X offset for drag operations
+toysMenuDragOffsetY - Y offset for drag operations
+toysMenuManuallyMoved - Boolean flag indicating user has moved menu
+toysMenuItems - Array of toy menu item objects
+toysMenuWidth - Width of toys menu (default: 280)
+toysMenuHeight - Height of toys menu (default: 418)
+toysMenuCenterX - X position of toys menu center
+toysMenuCenterY - Y position of toys menu center
+
+PARTICLES MENU
+--------------
+particlesMenuQuantity - Square root of particle count (1-100, default: 71)
+particlesMenuSmallRadius - Minimum particle radius (default: 7)
+particlesMenuLargeRadius - Maximum particle radius (default: 13)
+particlesMenuRenderType - String indicating render style (drawSpheres, drawDiscs, etc.)
+particlesMenuRenderTypeExpanded - Boolean flag for dropdown expanded state
+particlesMenuVisible - Boolean flag for particles menu visibility
+particlesMenuOpacity - Current opacity for fade animation (0-1, default: 1)
+particlesMenuAnimating - Boolean flag indicating menu is animating
+particlesMenuTargetOpacity - Target opacity for animation
+particlesMenuDragging - Boolean flag for dragging state
+particlesMenuDraggingControl - String tracking which slider is being dragged
+particlesMenuPositionDragging - Boolean flag for position dragging
+particlesMenuDragOffsetX - X offset for drag operations
+particlesMenuDragOffsetY - Y offset for drag operations
+particlesMenuManuallyMoved - Boolean flag indicating user has moved menu
+particlesMenuWidth - Width of particles menu (default: 240)
+particlesMenuHeight - Height of particles menu (default: 220)
+particlesMenuCenterX - X position of particles menu center
+particlesMenuCenterY - Y position of particles menu center
+
+MENU POSITIONING
+----------------
+defaultMenuPositions - Object containing default relative positions for all menus
+menuDrawOrder - Array defining z-order for menu drawing (first = bottom, last = top)
+
+INTERACTION
+-----------
+globalInteractionLock - Boolean flag to prevent multiple simultaneous interactions
+heartResumeDelayMs - Delay before heartbeat resumes after interaction (default: 1500ms)
+
+RESIZE HANDLING
+---------------
+_resizeDebounce - Timeout handle for debouncing resize events
+
+PHYSICS PROPERTIES (physProps object)
+--------------------------------------
+paused - Boolean flag for simulation pause state
+dt - Time step for physics calculations
+maxSpeed - Maximum speed limit for particles
+repulsionForce - Force coefficient for particle repulsion
+repulsionDist - Distance threshold for repulsion calculations
+ballRest - Restitution coefficient for particle bouncing
+baseColor - Base hue value for particle colors
+velColorMap - Velocity-to-color mapping sensitivity
+worldSize - Object containing simulation world dimensions {x, y}
+gravity - Object containing gravity vector {x, y}
+substeps - Number of physics substeps per frame
+
+PARTICLE ARRAYS
+---------------
+Ball - Array of particle objects
+Puck - Array of puck objects (interactive circular objects)
+Blower - Array of blower objects (wind sources)
+Hungrypuck - Array of hungry puck objects (particle consumers)
+MisterMister - Array of mister objects (particle sprayers)
+Bumper - Array of bumper objects (fixed obstacles)
+Worm - Array of worm segment objects (chain-like structure)
+
+PARTICLE PROPERTIES
+-------------------
+ballSaturation - Global saturation value for particle colors
+ballLightness - Global lightness value for particle colors
+ballRepulsion - Boolean flag to enable particle-particle repulsion
+persistence - Trail persistence value for particle rendering
+
+UTILITY FUNCTIONS
+-----------------
+Various helper functions for menu positioning, collision detection, animation, 
+preset management, canvas drawing, physics calculations, and user interaction.
+
+===========================================
+*/
 
 </script> 
 </body>
