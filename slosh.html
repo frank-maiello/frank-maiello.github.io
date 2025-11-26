@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.7
+		<title>Slosh 2.9
         </title>
         <style>
 			body {font-family: monospace; 
@@ -423,7 +423,9 @@ function setControlState(state) {
     }
     if (state._physicsMenuTime !== undefined) {
         physicsMenuTime = state._physicsMenuTime;
-        physProps.dt = 1 / (Math.floor(Math.exp(((140 - 0.1 * physicsMenuTime) / 10))) + 6);
+        // Map slider to time scale
+        physProps.timeScale = 0.25 + ((physicsMenuTime - 500) / 500) * 1.75;
+        physProps.dt = (1 / (60 * physProps.substeps)) * physProps.timeScale;
     }
     if (state._physicsMenuSpeed !== undefined) {
         physicsMenuSpeed = state._physicsMenuSpeed;
@@ -598,6 +600,9 @@ window.addEventListener('DOMContentLoaded', function() {
         DEFAULT_PRESETS.push(JSON.parse(JSON.stringify(state)));
     }
     setupPresetButtons();
+    
+    // Load default logo image automatically on startup
+    loadDefaultLayoutImage();
 });
 
     //  FPS COUNTER VARIABLES ----------------------------------------------------------------
@@ -605,10 +610,14 @@ window.addEventListener('DOMContentLoaded', function() {
         lastTime: performance.now(),
         frameCount: 0,
         frameTimes: [],
-        maxSamples: 10, // Use 10 frames for more responsive averaging
+        maxSamples: 60, // Use full second of frames for jitter detection
         displayFps: 0,
+        smoothedFps: 60, // Start at 60 fps
         updateCounter: 0,
-        updateInterval: 5 // Update display every 5 frames for faster response
+        updateInterval: 10, // Update display every 10 frames
+        smoothingFactor: 0.1, // Exponential smoothing (0.05 = more damped)
+        jitterThreshold: 5, // FPS variance threshold to trigger yellow
+        recentFpsValues: [] // Track recent smoothed values for jitter detection
     };
 
     // Gummi Bear image for ball rendering (scaled to ball radius)
@@ -728,6 +737,7 @@ window.addEventListener('DOMContentLoaded', function() {
         const BlowerSnapshots = (typeof Blower !== 'undefined' && Array.isArray(Blower)) ? Blower.map(p => ({ p, rx: p.pos.x / oldSimWidth, ry: p.pos.y / oldSimHeight })) : [];
         const hungrySnapshots = (typeof Hungrypuck !== 'undefined' && Array.isArray(Hungrypuck)) ? Hungrypuck.map(p => ({ p, rx: p.pos.x / oldSimWidth, ry: p.pos.y / oldSimHeight })) : [];
         const misterSnapshots = (typeof MisterMister !== 'undefined' && Array.isArray(MisterMister)) ? MisterMister.map(p => ({ p, rx: p.pos.x / oldSimWidth, ry: p.pos.y / oldSimHeight })) : [];
+        const stinkerSnapshot = (typeof Stinker !== 'undefined' && Array.isArray(Stinker) && Stinker.length > 0) ? { rx: Stinker[0].pos.x / oldSimWidth, ry: Stinker[0].pos.y / oldSimHeight } : null;
         
         // Snapshot current relative positions of menus before canvas dimensions change
         let menuSnapshots = {};
@@ -775,6 +785,16 @@ window.addEventListener('DOMContentLoaded', function() {
         puckSnapshots.forEach(s => { s.p.pos.x = s.rx * simWidth; s.p.pos.y = s.ry * simHeight; clampActorPos(s.p); });
         hungrySnapshots.forEach(s => { s.p.pos.x = s.rx * simWidth; s.p.pos.y = s.ry * simHeight; clampActorPos(s.p); });
         misterSnapshots.forEach(s => { s.p.pos.x = s.rx * simWidth; s.p.pos.y = s.ry * simHeight; clampActorPos(s.p); });
+        
+        // Re-apply preserved relative position to stinker (Pepe)
+        // Pepe's position is based on his icon size, not relative to simHeight
+        // Recalculate Y position to keep feet on floor with new cScale
+        if (typeof Stinker !== 'undefined' && Array.isArray(Stinker) && Stinker.length > 0) {
+            const pepeIconRadius = 80;
+            const pepeYPosition = (pepeIconRadius - 8) / cScale;
+            Stinker[0].pos.x = 0.5 * simWidth; // Keep centered horizontally
+            Stinker[0].pos.y = pepeYPosition;
+        }
         
         // Re-apply preserved relative positions to menus using NEW canvas dimensions
         if (canvas.width > 0 && canvas.height > 0) {
@@ -998,8 +1018,19 @@ window.addEventListener('DOMContentLoaded', function() {
     var colorWheelRadius = 0;
     var colorWheelManuallyMoved = false;
     
+    // Worm simulation state
+    var doWorm = false;
+    
+    // Mister modes (fountain/shower)
+    var doFountain = false;
+    var doShower = false;
+    
+    // Startup animation timing
+    var startupTime = 0;
+    var startupRepulsionAnimationActive = true;
+    
     // Physics Menu Setup - draws on main canvas
-    var physicsMenuRepulsionForce = 20;
+    var physicsMenuRepulsionForce = 0;
     var physicsMenuRepulsionDist = 4;
     var physicsMenuRepulsionOn = true;
     var physicsMenuBallRest = 0;
@@ -1083,7 +1114,7 @@ window.addEventListener('DOMContentLoaded', function() {
     
     // ReSpawn menu dimensions (same width as other menus)
     var respawnMenuWidth = 240;
-    var respawnMenuHeight = 340; 
+    var respawnMenuHeight = 380; 
     var respawnMenuCenterX = 0;
     var respawnMenuCenterY = 0;
     
@@ -1091,7 +1122,9 @@ window.addEventListener('DOMContentLoaded', function() {
     var respawnMenuOneShot = false;
     var respawnMenuHungryPuck = false;
     var respawnMenuSpawnType = 'shower'; // 'shower' or 'fountain'
-    var respawnMenuLayoutType = 'cluster'; // 'cluster' or 'array'
+    var respawnMenuLayoutType = 'cluster'; // 'cluster', 'array', or 'image' - will switch to image when loaded
+    var layoutImage = null; // Stores the loaded image
+    var layoutImageData = null; // Stores processed pixel data for particle placement
     var respawnMenuMisterMode = 'idle';
     var respawnMenuMisterModeExpanded = false; // Track if dropdown is expanded
     
@@ -1160,8 +1193,7 @@ window.addEventListener('DOMContentLoaded', function() {
                     y: toysMenuCenterY / canvas.height 
                 }
             };
-            console.log('Current menu positions (copy to defaultMenuPositions):');
-            console.log(JSON.stringify(positions, null, 4));
+
             return positions;
         }
     }
@@ -1228,7 +1260,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var particlesMenuQuantity = 71; // Square root (1-100), actual count = quantity^2
     var particlesMenuSmallRadius = 7;
     var particlesMenuLargeRadius = 13;
-    var particlesMenuRenderType = 'drawDiscs'; // 'drawSpheres', 'drawDiscs', 'drawCircles', 'drawRings', 'drawGummies'
+    var particlesMenuRenderType = 'drawArrows'; // 'drawSpheres', 'drawDiscs', 'drawCircles', 'drawRings', 'drawGummies'
     var particlesMenuRenderTypeExpanded = false; // Track if dropdown is expanded
     var particlesMenuVisible = true;
     var particlesMenuOpacity = 1;
@@ -1496,7 +1528,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Draw red X close button at top-left
         if (mainMenuVisible) {
             const closeButtonSize = 20;
-            const closeButtonX = mainMenuX - 72;
+            const closeButtonX = mainMenuX - 52;
             const closeButtonY = barY + 15;
             
             // Draw circle background
@@ -1520,7 +1552,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Draw submenu hide/show toggle button to the right of close button
         if (mainMenuVisible) {
             const toggleButtonSize = 20;
-            const toggleButtonX = mainMenuX - 43.5;
+            const toggleButtonX = mainMenuX - 23.5;
             const toggleButtonY = barY + 15;
             
             // Draw circle background - bright yellow when menus shown, dim when hidden
@@ -1543,7 +1575,8 @@ window.addEventListener('DOMContentLoaded', function() {
         // Draw green restart button on the right side
         if (mainMenuVisible) {
             const restartButtonSize = 20;
-            const restartButtonX = mainMenuX - 15;
+            const menuWidth = calculateMainMenuWidth();
+            const restartButtonX = mainMenuX + menuWidth + 15;
             const restartButtonY = barY + 15;
             
             // Draw circle background
@@ -1552,10 +1585,26 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.arc(restartButtonX, restartButtonY, restartButtonSize / 2, 0, Math.PI * 2);
             ctx.fill();
 
-            // Draw circle background
+            // Draw dot
             ctx.fillStyle = 'hsl(0, 0%, 0%)';
             ctx.beginPath();
             ctx.arc(restartButtonX, restartButtonY, restartButtonSize / 8, 0, Math.PI * 2);
+            //ctx.fill();
+
+            // draw circular arrow
+            ctx.strokeStyle = 'hsl(0, 0%, 0%)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(restartButtonX, restartButtonY, restartButtonSize / 4, Math.PI * 0.25, Math.PI * 1.75);
+            ctx.stroke();
+            // Draw arrowhead at 2 o'clock position, pointing clockwise
+            const arrowX = restartButtonX + 4;
+            const arrowY = restartButtonY - 2;
+            ctx.beginPath();
+            ctx.moveTo(arrowX - 4, arrowY + 1);      // lower wing
+            ctx.lineTo(arrowX + 3, arrowY + 2);  // tip
+            ctx.lineTo(arrowX, arrowY - 5);      // upper wing
+            ctx.closePath();
             ctx.fill();
         }
         
@@ -3111,6 +3160,8 @@ window.addEventListener('DOMContentLoaded', function() {
             }
         }
         
+        currentY += 25;
+        
         currentY += 40;
         
         // 4. Spawn Type radio buttons
@@ -3293,7 +3344,8 @@ window.addEventListener('DOMContentLoaded', function() {
         currentY += 40; // After Hungry Puck 
         currentY += 25; // After Layout label (to cluster)
         currentY += 25; // After cluster radio (to array)
-        currentY += 40; // After array radio (to spawn type label)
+        currentY += 25; // After array radio (to image)
+        currentY += 40; // After image radio (to spawn type label)
         currentY += 25; // After spawn type label (to shower)
         currentY += 25; // After shower radio (to fountain)
         currentY += 37; // After fountain radio (to dropdown)
@@ -3462,6 +3514,7 @@ window.addEventListener('DOMContentLoaded', function() {
             return 'radio';
         }
         
+        currentY += 25;
         currentY += 40;
         currentY += 25;
         
@@ -3957,7 +4010,7 @@ window.addEventListener('DOMContentLoaded', function() {
                     }
                 } else if (toy.id === 'yinYangButton') {
                     // Cycle through yin-yang states: 0 = off, 1 = normal, -1 = reverse
-                    console.log('[DEBUG] Yin-Yang button clicked, current state:', yinYangState);
+
                     if (yinYangState === 0) {
                         // Turn ON, normal direction
                         yinYangState = 1;
@@ -3968,11 +4021,11 @@ window.addEventListener('DOMContentLoaded', function() {
                         if (orbitToy) orbitToy.checked = false;
                         orbitState = 0;
                         // Initialize both yin-yang orbit pucks
-                        console.log('[DEBUG] Turning ON yin-yang, Puck.length:', Puck.length);
+
                         let found = 0;
                         for (var p = 0; p < Puck.length; p++) {
                             if (Puck[p].yinyang === true || (Puck[p].orbit === true && !Puck[p].yinyang && found === 0)) {
-                                console.log('[DEBUG] Found yin-yang puck at index', p, 'yinyang:', Puck[p].yinyang, 'orbit:', Puck[p].orbit);
+
                                 Puck[p].puckArriving = false;
                                 Puck[p].radius = Puck[p].OGradius;
                                 Puck[p].orbitAngle = found === 0 ? 0 : Math.PI;
@@ -3983,7 +4036,7 @@ window.addEventListener('DOMContentLoaded', function() {
                         }
                         showOrbit = true;
                         showYinYang = true;
-                        console.log('[DEBUG] Set showOrbit and showYinYang to true');
+
                     } else if (yinYangState === 1) {
                         // Reverse direction for both pucks
                         yinYangState = -1;
@@ -4583,6 +4636,8 @@ window.addEventListener('DOMContentLoaded', function() {
             { value: 'drawDiscs', label: 'outlined circles ($$)' },
             { value: 'drawCircles', label: 'plain circles ($)' },
             { value: 'drawRings', label: 'unfilled circles ($)' },
+            { value: 'drawLines', label: 'lines ($)' },
+            { value: 'drawArrows', label: 'arrows ($)' },
             { value: 'drawGummies', label: 'gummies (beta)' }
         ];
         
@@ -4665,7 +4720,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         const dropdownHeight = 24;
         const dropdownWidth = w - 100;  // Adjust for new slider width
-        const renderTypes = ['drawSpheres', 'drawDiscs', 'drawCircles', 'drawRings', 'drawGummies'];
+        const renderTypes = ['drawSpheres', 'drawDiscs', 'drawCircles', 'drawRings', 'drawLines', 'drawArrows', 'drawGummies'];
         
         // If dropdown is expanded, check dropdown options FIRST (before menu bounds)
         // This allows clicking options that extend outside the menu
@@ -4915,7 +4970,10 @@ window.addEventListener('DOMContentLoaded', function() {
                 return 'slider';
             } else if (physicsMenuDraggingControl === 'time') {
                 physicsMenuTime = 500 + percent * (1000 - 500);
-                physProps.dt = 1 / (Math.floor(Math.exp(((140 - 0.1 * physicsMenuTime) / 10))) + 6);
+                // Map slider (500-1000) to time scale (0.25x to 2.0x)
+                // 500 = 0.25x (slow), 750 = 1.0x (normal), 1000 = 2.0x (fast)
+                physProps.timeScale = 0.25 + ((physicsMenuTime - 500) / 500) * 1.75;
+                physProps.dt = (1 / (60 * physProps.substeps)) * physProps.timeScale;
                 return 'slider';
             } else if (physicsMenuDraggingControl === 'speed') {
                 physicsMenuSpeed = 1 + percent * (50 - 1);
@@ -5023,7 +5081,9 @@ window.addEventListener('DOMContentLoaded', function() {
             physicsMenuDraggingControl = 'time';
             const percent = (canvasX - sliderStartX) / sliderWidth;
             physicsMenuTime = 500 + percent * (1000 - 500);
-            physProps.dt = 1 / (Math.floor(Math.exp(((140 - 0.1 * physicsMenuTime) / 10))) + 6);
+            // Map slider (500-1000) to time scale (0.25x to 2.0x)
+            physProps.timeScale = 0.25 + ((physicsMenuTime - 500) / 500) * 1.75;
+            physProps.dt = (1 / (60 * physProps.substeps)) * physProps.timeScale;
             return 'slider';
         }
         
@@ -5150,7 +5210,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Handle render type selection
         if (hitTest.startsWith('renderType_')) {
             const index = parseInt(hitTest.split('_')[1]);
-            const renderTypes = ['drawSpheres', 'drawDiscs', 'drawCircles', 'drawRings', 'drawGummies'];
+            const renderTypes = ['drawSpheres', 'drawDiscs', 'drawCircles', 'drawRings', 'drawLines', 'drawArrows', 'drawGummies'];
             particlesMenuRenderType = renderTypes[index];
             setRenderType(particlesMenuRenderType);
             particlesMenuRenderTypeExpanded = false; // Collapse dropdown after selection
@@ -5382,10 +5442,13 @@ window.addEventListener('DOMContentLoaded', function() {
             doDiscs = false;
             doCircles = false;
             doRings = false;
+            doLines = false;
+            doArrows = false;
+            doGummi = false;
             colorWheelSat = 80;
             ballSaturation = 80;
             colorWheelLight = 55;
-            ballLightness = 45;
+            ballLightness = 55;
             physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 particlesMenuQuantity = 64;
@@ -5399,6 +5462,9 @@ window.addEventListener('DOMContentLoaded', function() {
             doSpheres = false;
             doCircles = false;
             doRings = false;
+            doLines = false;
+            doArrows = false;
+            doGummi = false;
             colorWheelSat = 80;
             ballSaturation = 80;
             colorWheelLight = 40;
@@ -5416,6 +5482,9 @@ window.addEventListener('DOMContentLoaded', function() {
             doDiscs = false;
             doSpheres = false;
             doRings = false;
+            doLines = false;
+            doArrows = false;
+            doGummi = false;
             colorWheelSat = 50;
             ballSaturation = 75;
             colorWheelLight = 45;
@@ -5436,10 +5505,12 @@ window.addEventListener('DOMContentLoaded', function() {
             doCircles = false;
             doDiscs = false;
             doSpheres = false;
+            doLines = false;
+            doArrows = false;
             colorWheelSat = 100;
             ballSaturation = 100;
-            colorWheelLight = 70;
-            ballLightness = 60;
+            colorWheelLight = 65;
+            ballLightness = 65;
             physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 particlesMenuQuantity = 64;
@@ -5450,13 +5521,15 @@ window.addEventListener('DOMContentLoaded', function() {
                 wasGummi = false;
                 makeBalls();
             }
-       } else if (renderType === 'drawGummies') {
+        } else if (renderType === 'drawGummies') {
             doGummi = true;
             doRings = false;
             wasGummi = true;
             doDiscs = false;
             doSpheres = false;
             doCircles = false;
+            doLines = false;
+            doArrows = false;
             colorWheelSat = 100;
             ballSaturation = 100;
             colorWheelLight = 70;
@@ -5468,8 +5541,52 @@ window.addEventListener('DOMContentLoaded', function() {
             physicsMenuRepulsionForce = 10;
             physProps.repulsionForce = 1.0;
             makeBalls();
+        } else if (renderType === 'drawLines') {
+            doCircles = false;
+            doDiscs = false;
+            doSpheres = false;
+            doRings = false;
+            doLines = true;
+            doArrows = false;
+            doGummi = false;
+            colorWheelSat = 50;
+            ballSaturation = 75;
+            colorWheelLight = 60;
+            ballLightness = 60;
+            physProps.repulsionDist = 4;
+            if (wasGummi == true) {
+                particlesMenuQuantity = 64;
+                particlesMenuLargeRadius = 15;
+                particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                wasGummi = false;
+                makeBalls();
+            }
+        } else if (renderType === 'drawArrows') {
+            doCircles = false;
+            doDiscs = false;
+            doSpheres = false;
+            doRings = false;
+            doLines = true;
+            doArrows = true;
+            doGummi = false;
+            colorWheelSat = 50;
+            ballSaturation = 75;
+            colorWheelLight = 45;
+            ballLightness = 55;
+            physProps.repulsionDist = 4;
+            if (wasGummi == true) {
+                particlesMenuQuantity = 64;
+                particlesMenuLargeRadius = 15;
+                particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                wasGummi = false;
+                makeBalls();
+            }
         }
-    };
+    }
 
     // FPS toggle logic removed - now handled in physics menu button
     window.addEventListener('DOMContentLoaded', function() {
@@ -5555,7 +5672,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Check main menu close button (red X at top-left)
         if (mainMenuVisible) {
             const closeButtonSize = 30;
-            const closeButtonX = mainMenuX - 72;
+            const closeButtonX = mainMenuX - 52;
             const closeButtonY = mainMenuPadding + 15;
             const distToClose = Math.sqrt((mX - closeButtonX) ** 2 + (mY - closeButtonY) ** 2);
             
@@ -5566,7 +5683,7 @@ window.addEventListener('DOMContentLoaded', function() {
             
             // Check submenu hide/show toggle button
             const toggleButtonSize = 35;
-            const toggleButtonX = mainMenuX - 43.5;
+            const toggleButtonX = mainMenuX - 23.5;
             const toggleButtonY = mainMenuPadding + 15;
             const distToToggle = Math.sqrt((mX - toggleButtonX) ** 2 + (mY - toggleButtonY) ** 2);
             
@@ -5577,7 +5694,8 @@ window.addEventListener('DOMContentLoaded', function() {
             
             // Check restart button
             const restartButtonSize = 35;
-            const restartButtonX = mainMenuX - 15;
+            const menuWidth = calculateMainMenuWidth();
+            const restartButtonX = mainMenuX + menuWidth + 15;
             const restartButtonY = mainMenuPadding + 15;
             const distToRestart = Math.sqrt((mX - restartButtonX) ** 2 + (mY - restartButtonY) ** 2);
             
@@ -7241,19 +7359,31 @@ window.addEventListener('DOMContentLoaded', function() {
         const mouseX = (event.clientX - rect.left) / cScale;
         const mouseY = (simHeight - (event.clientY - rect.top) / cScale);
         
+        // Calculate minimum dimensions based on button size
+        // Button radius is roughly 0.03, so diameter is 0.06
+        // 5× button diameter = 5 × 0.06 = 0.3
+        const minDimension = 0.3;
+        
         if (Math.abs(initialBoxRotation) < 0.001) {
             // Non-rotated: simple axis-aligned resize
-            const newWidth = Math.max(0.1, Math.min(3.0, mouseX - lockedBoxPosX));
-            const newHeight = Math.max(0.1, Math.min(3.0, lockedBoxPosY - mouseY));
+            const newWidth = mouseX - lockedBoxPosX;
+            const newHeight = lockedBoxPosY - mouseY;
             
-            box.width = newWidth;
-            box.OGwidth = newWidth;
-            box.height = newHeight;
-            box.OGheight = newHeight;
+            // Prevent dimension inversion and enforce minimum size
+            const finalWidth = Math.max(minDimension, Math.min(3.0, Math.abs(newWidth)));
+            const finalHeight = Math.max(minDimension, Math.min(3.0, Math.abs(newHeight)));
+            
+            box.width = finalWidth;
+            box.OGwidth = finalWidth;
+            box.height = finalHeight;
+            box.OGheight = finalHeight;
             
             // Update center position to keep top-left corner fixed
-            box.pos.x = lockedBoxPosX + newWidth / 2;
-            box.pos.y = lockedBoxPosY - newHeight / 2;
+            // Use sign to handle dragging in negative direction
+            const signX = newWidth >= 0 ? 1 : -1;
+            const signY = newHeight >= 0 ? 1 : -1;
+            box.pos.x = lockedBoxPosX + (finalWidth / 2) * signX;
+            box.pos.y = lockedBoxPosY - (finalHeight / 2) * signY;
         } else {
             // Rotated: calculate dimensions along local axes
             const cos = Math.cos(initialBoxRotation);
@@ -7269,9 +7399,9 @@ window.addEventListener('DOMContentLoaded', function() {
             const localWidth = dx * cos + dy * sin;
             const localHeight = -dx * sin + dy * cos;
             
-            // Apply constraints and ensure positive values
-            const newWidth = Math.max(0.1, Math.min(3.0, Math.abs(localWidth)));
-            const newHeight = Math.max(0.1, Math.min(3.0, Math.abs(localHeight)));
+            // Apply constraints, ensure positive values, and enforce minimum size
+            const newWidth = Math.max(minDimension, Math.min(3.0, Math.abs(localWidth)));
+            const newHeight = Math.max(minDimension, Math.min(3.0, Math.abs(localHeight)));
             
             box.width = newWidth;
             box.OGwidth = newWidth;
@@ -7940,11 +8070,6 @@ window.addEventListener('DOMContentLoaded', function() {
     function pause() {
         // Toggle paused state
         physProps.paused = !physProps.paused;
-        // Update the pause button checkbox to reflect the state (in case called programmatically)
-        //var pauseCheckbox = document.querySelector('.checkbox-pause');
-        if (pauseCheckbox) {
-            pauseCheckbox.checked = physProps.paused;
-        }
     }
     function loadPreset(idx) {
         const key = PRESET_KEYS[idx];
@@ -8950,6 +9075,7 @@ window.addEventListener('DOMContentLoaded', function() {
 		gravity : new Vector2(0, 0),
 		substeps: 1,
 		dt : 1 / (60 * 1), // update on change
+		timeScale : 1.0, // time scale multiplier (0.5 = half speed, 2.0 = double speed)
 		worldSize : new Vector2(simWidth, simHeight),
 
         maxSpeed: 0,
@@ -9021,7 +9147,7 @@ window.addEventListener('DOMContentLoaded', function() {
     // Function to update dt when steps change
     function updateSubsteps(newSubsteps) {
         physProps.substeps = newSubsteps;
-        physProps.dt = 1 / (60 * physProps.substeps);
+        physProps.dt = (1 / (60 * physProps.substeps)) * physProps.timeScale;
     }
     
 	//  SETUP SCENE ======================================================
@@ -9050,6 +9176,10 @@ window.addEventListener('DOMContentLoaded', function() {
         showEaters = false;
         mrMode = "";
         blowerState = 1; // 0=off, 1=visible but not simulating, 2=visible and simulating
+        
+        // Initialize mister mode variables from respawn menu
+        doShower = (respawnMenuSpawnType === 'shower');
+        doFountain = (respawnMenuSpawnType === 'fountain');
 
         doCeiling = wallsMenuCeiling;
         doFloor = wallsMenuFloor;
@@ -9307,6 +9437,9 @@ window.addEventListener('DOMContentLoaded', function() {
             this.headingAngle = 0;          // radians, screen-space orientation
             this.headingInitialized = false; // initialize on first valid velocity
             this.artificialMovement = false; // Flag to track when ball is being repositioned artificially
+            // Initialize color properties for all balls (updated in simulate())
+            this.speedHue = physProps.baseColor;
+            this.speedHueRatio = 1.0;
             if (tracerBall == true) {
                 if (doSmallTracer == true) {
                     this.radius = smallBallRadius;
@@ -9321,8 +9454,6 @@ window.addEventListener('DOMContentLoaded', function() {
                 this.trailFirst = 0;
                 this.trailLast = 0;
                 this.tracer = true;
-                this.speedHue = 0;
-                this.speedHueRatio = 1;
                 this.growing = false;
             }
 		}
@@ -9453,9 +9584,9 @@ window.addEventListener('DOMContentLoaded', function() {
         }
         draw() {
             if (doDiscs == true) {
-                const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 50);
-                const satLevel = ballSaturation * this.saturation;
                 drawCircle(cX(this.pos), cY(this.pos), 0.95 * this.radius * cScale);    
+                var lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 50);
+                var satLevel = ballSaturation * this.saturation;
                 if (this.whiteBall == true || this.tracerBall == true) {
                     // reg color
                     c.fillStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
@@ -9463,7 +9594,6 @@ window.addEventListener('DOMContentLoaded', function() {
                     c.strokeStyle = `hsl(0, 0%, ${ballLightness + 50}%)`;
                     c.lineWidth = 0.2 * this.radius * cScale;
                 } else {
-                    
                     // reg color   
                     c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
                     // hi color
@@ -9492,19 +9622,106 @@ window.addEventListener('DOMContentLoaded', function() {
                 shading.addColorStop(0, `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp - 15}%)`);
                 shading.addColorStop(1, `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp + 25}%)`);
                 drawCircle(centerX, centerY, 0.95 * scaledRadius);
-                c.fillStyle = shading;
-                c.fill()
+                if (this.whiteBall == true || this.tracerBall == true) {
+                    c.fillStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                } else {
+                    c.fillStyle = shading;
+                }
+                c.fill();
             } else if (doCircles == true) {
                 const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 65);
                 const satLevel = ballSaturation * this.saturation;
                 drawCircle(cX(this.pos), cY(this.pos), 0.90 *this.radius * cScale);    
-                c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                if (this.whiteBall == true || this.tracerBall == true) {
+                    c.fillStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                } else {
+                    c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                }
                 c.fill();
+            } else if (doLines == true || doArrows == true) {
+                const speed = this.vel.length();
+                if (speed > 1e-6) {
+                    const target = Math.atan2(this.vel.y, this.vel.x); // Simulation coordinates
+                    if (!this.headingInitialized) {
+                        this.headingAngle = target;
+                        this.headingInitialized = true;
+                    } else {
+                        // Smooth with exponential filter using dt-based alpha
+                        const TWO_PI = Math.PI * 2;
+                        let diff = target - this.headingAngle;
+                        // Wrap to [-PI, PI] for shortest rotation path
+                        diff = ((diff + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
+                        const tau = 0.15; // seconds time constant (same as gummi for smooth rotation)
+                        const alpha = 1 - Math.exp(-physProps.dt / Math.max(1e-6, tau));
+                        this.headingAngle += alpha * diff;
+                    }
+                }
+                const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 65);
+                const satLevel = ballSaturation * this.saturation;
+                if (doArrows == true) {
+                    const arrowLength = 2.0 * this.radius * cScale;
+                    const arrowWidth = 1.5 * this.radius * cScale;
+                    const arrowOffset = 0.65 * this.radius * cScale;
+                    c.save();
+                    c.translate(cX(this.pos), cY(this.pos));
+                    c.rotate(-this.headingAngle); // Negative because canvas Y is inverted
+                    c.beginPath();
+                    c.moveTo(arrowLength - arrowOffset, 0);
+                    c.lineTo(-arrowLength - arrowOffset, -arrowWidth / 2);
+                    c.lineTo(-arrowLength - arrowOffset, arrowWidth / 2);
+                    c.closePath();
+                    if (this.whiteBall == true || this.tracerBall == true) {
+                        c.fillStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                    } else {
+                        c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                    }
+                    c.fill();
+                    c.restore();
+                } else if (doLines == true) {
+                    // Update heading angle based on velocity
+                    const speed = this.vel.length();
+                    if (speed > 1e-6) {
+                        const target = Math.atan2(this.vel.y, this.vel.x);
+                        if (!this.headingInitialized) {
+                            this.headingAngle = target;
+                            this.headingInitialized = true;
+                        } else {
+                            // Smooth with exponential filter
+                            const TWO_PI = Math.PI * 2;
+                            let diff = target - this.headingAngle;
+                            // Wrap to [-PI, PI]
+                            diff = ((diff + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
+                            const tau = 0.05;
+                            const alpha = 1 - Math.exp(-physProps.dt / Math.max(1e-6, tau));
+                            this.headingAngle += alpha * diff;
+                        }
+                    }
+                    
+                    const lineLength = 0.9 * this.radius * cScale;
+                    c.save();
+                    c.translate(cX(this.pos), cY(this.pos));
+                    c.rotate(-this.headingAngle); // Negative because canvas Y is inverted
+                    c.beginPath();
+                    c.moveTo(-lineLength, 0);
+                    c.lineTo(lineLength, 0);
+                    if (this.whiteBall == true || this.tracerBall == true) {
+                        c.strokeStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                    } else {
+                        c.strokeStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                    }
+                    c.lineWidth = 0.55 * this.radius * cScale;
+                    c.stroke();
+                    c.restore();
+                }
             } else if (doRings == true) {
                 const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 65);
                 const satLevel = ballSaturation * this.saturation;
                 drawCircle(cX(this.pos), cY(this.pos), 0.80 *this.radius * cScale);    
-                c.strokeStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                if (this.whiteBall == true || this.tracerBall == true) {
+                    c.strokeStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                } else {
+                    c.strokeStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                }
                 c.lineWidth = 0.3 * this.radius * cScale;
                 c.stroke();
             } else if (doGummi == true) {
@@ -9640,6 +9857,124 @@ window.addEventListener('DOMContentLoaded', function() {
             ball.mass = 2 * Math.PI * newRadius * newRadius;
         }
     }
+    
+    // Load and process layout image using FileReader (works from file://)
+    function loadLayoutImageFromFile(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            layoutImage = new Image();
+            layoutImage.onload = function() {
+                try {
+                    processLayoutImage();
+                } catch (err) {
+                    console.warn('Could not process layout image:', err.message);
+                    respawnMenuLayoutType = 'cluster';
+                    layoutImageData = null;
+                }
+            };
+            layoutImage.src = e.target.result; // Use data URL from FileReader
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    // Load default layout image on startup from logo.png
+    function loadDefaultLayoutImage() {
+        layoutImage = new Image();
+        layoutImage.onload = function() {
+            try {
+                processLayoutImage();
+
+            } catch (err) {
+                console.warn('Could not process layout image:', err.message);
+                respawnMenuLayoutType = 'cluster';
+                layoutImageData = null;
+            }
+        };
+        layoutImage.onerror = function(e) {
+            console.warn('Could not load logo from GitHub, using cluster layout. Error:', e);
+            respawnMenuLayoutType = 'cluster';
+            layoutImageData = null;
+        };
+        // Load from GitHub repository (raw content URL)
+        layoutImage.crossOrigin = 'anonymous'; // Enable CORS for GitHub
+        layoutImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/logo.png';
+
+    }
+    
+    // Load layout image from file picker (for manual image selection from menu)
+    function loadLayoutImage() {
+        // Create a file input for user to select image
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.style.display = 'none';
+        
+        input.onchange = function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                loadLayoutImageFromFile(file);
+            }
+        };
+        
+        document.body.appendChild(input);
+        input.click();
+    }
+    
+    function processLayoutImage() {
+        if (!layoutImage) return;
+        
+        // Create offscreen canvas to read pixel data
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = layoutImage.width;
+        tempCanvas.height = layoutImage.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(layoutImage, 0, 0);
+        
+        const imageData = tempCtx.getImageData(0, 0, layoutImage.width, layoutImage.height);
+        const pixels = imageData.data;
+        
+        // Extract positions where alpha > 128 (non-transparent)
+        const positions = [];
+        for (let y = 0; y < layoutImage.height; y++) {
+            for (let x = 0; x < layoutImage.width; x++) {
+                const idx = (y * layoutImage.width + x) * 4;
+                const alpha = pixels[idx + 3];
+                
+                // Check if pixel is not transparent
+                if (alpha > 128) {
+                    positions.push({ x, y });
+                }
+            }
+        }
+        
+        // Calculate scaling to fit 0.9 * simWidth
+        const targetWidth = simWidth * 0.9;
+        const scaleFactor = targetWidth / layoutImage.width;
+        const scaledHeight = layoutImage.height * scaleFactor;
+        
+        // Center the image
+        const offsetX = (simWidth - targetWidth) / 2;
+        const offsetY = (simHeight - scaledHeight) / 2;
+        
+        // Store processed data
+        layoutImageData = {
+            positions: positions,
+            scale: scaleFactor,
+            offsetX: offsetX,
+            offsetY: offsetY,
+            width: layoutImage.width,
+            height: layoutImage.height
+        };
+        
+
+        
+        // Auto-select image layout and regenerate balls
+        respawnMenuLayoutType = 'image';
+        if (typeof makeBalls === 'function') {
+            makeBalls();
+
+        }
+    }
 
     function makeBalls() {
         Balls = [];
@@ -9703,9 +10038,84 @@ window.addEventListener('DOMContentLoaded', function() {
                         }
                     var tracerBall = (j == middleRow && i == middleCol);
                     if (Balls.length < getNumBalls) {
-                        Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius));
+                        var ball = new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius);
+                        
+                        // Initialize heading angle to point away from canvas center
+                        var centerX = simWidth / 2;
+                        var centerY = simHeight / 2;
+                        var dx = pos.x - centerX;
+                        var dy = pos.y - centerY;
+                        ball.headingAngle = Math.atan2(dy, dx);
+                        ball.headingInitialized = true;
+                        
+                        Balls.push(ball);
                     }
                 }
+            }
+        }
+        //  IMAGE LAYOUT - PARTICLES PLACED IN BLACK REGIONS OF IMAGE
+        if (respawnMenuLayoutType === 'image') {
+            if (!layoutImageData) {
+                console.warn('Image layout selected but no image loaded. Please click "Load Image" button. Falling back to cluster layout.');
+                respawnMenuLayoutType = 'cluster';
+            } else {
+                const positions = layoutImageData.positions;
+                const scaleFactor = layoutImageData.scale;
+            const offsetX = layoutImageData.offsetX;
+            const offsetY = layoutImageData.offsetY;
+            
+            // Distribute particles across available positions
+            const positionStep = Math.max(1, Math.floor(positions.length / getNumBalls));
+            let posIndex = 0;
+            
+            for (var q = 0; q < getNumBalls && posIndex < positions.length; q++) {
+                if (smallBallRadius == 0) {
+                    var radius = bigBallRadius;
+                } else {
+                    var radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
+                }
+                
+                var mass = 2 * Math.PI * radius * radius;
+                
+                // Get position from precomputed list and flip Y coordinate
+                const imgPos = positions[posIndex];
+                const imageHeight = layoutImageData.height;
+                var pos = new Vector2(
+                    imgPos.x * scaleFactor + offsetX,
+                    (imageHeight - imgPos.y) * scaleFactor + offsetY
+                );
+                
+                var vel = new Vector2(
+                    (-0.5 + 1.0 * Math.random()) * brakes,
+                    (-0.5 + 1.0 * Math.random()) * brakes
+                );
+                
+                var saturation = 0.5 + 0.5 * Math.random();
+                
+                if (Math.random() * 100 < 5) {
+                    var whiteBall = true;
+                } else {
+                    var whiteBall = false;
+                }
+                
+                var tracerBall = (q === Math.floor(getNumBalls / 2));
+                
+                if (Balls.length < getNumBalls) {
+                    var ball = new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius);
+                    
+                    // Initialize heading angle to point away from canvas center
+                    var centerX = simWidth / 2;
+                    var centerY = simHeight / 2;
+                    var dx = pos.x - centerX;
+                    var dy = pos.y - centerY;
+                    ball.headingAngle = Math.atan2(dy, dx);
+                    ball.headingInitialized = true;
+                    
+                    Balls.push(ball);
+                }
+                
+                posIndex += positionStep;
+            }
             }
         }
         //  ROUND CLUSTER - SINGLE TIGHT SPIRAL
@@ -9762,7 +10172,15 @@ window.addEventListener('DOMContentLoaded', function() {
                 }   
                 var saturation = 0.5 + 0.5 * Math.random();
 
-                Balls.push(new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius));
+                var ball = new BALL(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius);
+                
+                // Initialize heading angle for lines/arrows to point away from center
+                var dx = circleXpos - centerX;
+                var dy = circleYpos - centerY;
+                ball.headingAngle = Math.atan2(dy, dx);
+                ball.headingInitialized = true;
+                
+                Balls.push(ball);
             }   
         }
     }
@@ -12129,24 +12547,48 @@ window.addEventListener('DOMContentLoaded', function() {
     function makeHeart() {
         if (typeof Stinker === 'undefined' || Stinker.length === 0 || !Stinker[0].active) return;
         const stinker = Stinker[0];
+        
+        // Heart spawn configuration
+        const HEART_SPAWN_ANGLE_OFFSET = 0; // Angle offset from hand position (0 = straight from hand)
+        const HEART_SPAWN_SPREAD = 2.0; // Angular spread of heart spray
+        
+        // iconRadius in canvas pixels (from draw function)
+        const iconRadius = 80;
+        // Convert to simulation units
+        const simRadius = iconRadius / cScale;
+        
+        // Hand positions at 8 o'clock and 4 o'clock
+        // In simulation coordinates (Y up), with canvas Y inverted:
+        // 8 o'clock (down-left): angle = -210° = -7π/6 radians = 5π/6 
+        // 4 o'clock (down-right): angle = -150° = -5π/6 radians = 7π/6
+        const handDistance = simRadius * 0.85; // Hands are ~85% of radius from center
+        const yAdjustment = 30 / cScale; // Move up 30 pixels in canvas space
+        
         if (leftHandHeart == false) {
-            var offsetX = -0.2 * stinker.radius;
-            var offsetY = -0.05 * stinker.radius;
+            // Left hand at 8 o'clock (down-left in screen space)
+            // Angle in simulation coords: 330° = 11π/6 (or -30° = -π/6)
+            const angle = -Math.PI / 6;
+            const xAdjustment = -5 / cScale; // Move 5 pixels to the left
+            var offsetX = handDistance * Math.cos(angle) + xAdjustment;
+            var offsetY = handDistance * Math.sin(angle) + yAdjustment;
+            var handAngle = angle;
             leftHandHeart = true;
         } else {
-            var offsetX = 0.5 * stinker.radius;
-            var offsetY = -0.08 * stinker.radius;
+            // Right hand at 4 o'clock (down-right in screen space)
+            // Angle in simulation coords: 210° = 7π/6 (or -150° = -5π/6)
+            const angle = -5 * Math.PI / 6;
+            const xAdjustment = 30 / cScale; // Move 30 pixels to the right
+            var offsetX = handDistance * Math.cos(angle) + xAdjustment;
+            var offsetY = handDistance * Math.sin(angle) + yAdjustment;
+            var handAngle = angle;
             leftHandHeart = false;
         }
+        
         const pos = new Vector2(stinker.pos.x + offsetX, stinker.pos.y + offsetY);
         
-        // Random outward velocity
+        // Random outward velocity from each hand
         const heartSpeed = 1;
-        if (leftHandHeart == true) {
-            var rayAngle = 2.5 * Math.PI + (Math.random() * 0.7 * Math.PI); 
-        } else {
-            var rayAngle = 1.8 * Math.PI + (Math.random() * 0.7 * Math.PI);
-        }
+        var rayAngle = -(handAngle + HEART_SPAWN_ANGLE_OFFSET) + (Math.random() - 0.5) * HEART_SPAWN_SPREAD;
         const vel = new Vector2(heartSpeed * Math.cos(rayAngle), heartSpeed * Math.sin(rayAngle));
         
         Hearts.push(new HEART(pos, vel));
@@ -12183,7 +12625,7 @@ window.addEventListener('DOMContentLoaded', function() {
             this.force = 1;
         }
         draw() {
-            const iconRadius = 60; 
+            const iconRadius = 80; 
             const centerX = this.pos.x * cScale;
             const centerY = (simHeight - this.pos.y) * cScale;
 
@@ -12309,7 +12751,13 @@ window.addEventListener('DOMContentLoaded', function() {
             isStinkerDragging = false;
         });
     }
-    makeStinker(new Vector2(0.5 * simWidth, 0.07 * simHeight));
+    // Position Pepe so his feet are always on the floor
+    // iconRadius = 80 pixels, targetHeight = 160 pixels (iconRadius * 2)
+    // Bottom of image is at centerY + 80 pixels
+    // In sim coordinates: pos.y should equal 80 / cScale (half the image height)
+    const pepeIconRadius = 80;
+    const pepeYPosition = (pepeIconRadius - 8) / cScale;
+    makeStinker(new Vector2(0.5 * simWidth, pepeYPosition));
 
 
     //  MAGNET CONSTRUCTOR ----------------------------------------------------------------
@@ -13863,30 +14311,56 @@ window.addEventListener('DOMContentLoaded', function() {
         const currentTime = performance.now();
         const deltaTime = currentTime - fpsCounter.lastTime;
         
-        // Add this frame time to our rolling window
-        fpsCounter.frameTimes.push(deltaTime);
+        // Calculate instantaneous FPS
+        const instantFps = 1000 / deltaTime;
         
-        // Keep only the last maxSamples frame times
+        // Apply exponential smoothing for damping
+        // smoothedFps = smoothedFps * (1 - alpha) + instantFps * alpha
+        fpsCounter.smoothedFps = fpsCounter.smoothedFps * (1 - fpsCounter.smoothingFactor) + 
+                                 instantFps * fpsCounter.smoothingFactor;
+        
+        // Add to rolling window for jitter detection
+        fpsCounter.frameTimes.push(deltaTime);
         if (fpsCounter.frameTimes.length > fpsCounter.maxSamples) {
             fpsCounter.frameTimes.shift();
         }
         
-        // Update the display only occasionally to prevent flickering
+        // Update the display
         fpsCounter.updateCounter++;
         if (fpsCounter.updateCounter >= fpsCounter.updateInterval) {
             fpsCounter.updateCounter = 0;
             
-            // Calculate average frame time over the rolling window
-            const avgFrameTime = fpsCounter.frameTimes.reduce((sum, time) => sum + time, 0) / fpsCounter.frameTimes.length;
+            // Round for display
+            fpsCounter.displayFps = Math.round(fpsCounter.smoothedFps);
             
-            // Convert to FPS and round to nearest integer
-            fpsCounter.displayFps = Math.round(1000 / avgFrameTime);
+            // Calculate jitter (standard deviation of recent frame times)
+            if (fpsCounter.frameTimes.length >= 30) { // Need at least half second of data
+                const recentFrameTimes = fpsCounter.frameTimes.slice(-30);
+                const avgFrameTime = recentFrameTimes.reduce((sum, time) => sum + time, 0) / recentFrameTimes.length;
+                const variance = recentFrameTimes.reduce((sum, time) => sum + Math.pow(time - avgFrameTime, 2), 0) / recentFrameTimes.length;
+                const stdDev = Math.sqrt(variance);
+                // Convert stdDev to FPS variation
+                const avgFps = 1000 / avgFrameTime;
+                const fpsStdDev = avgFps * (stdDev / avgFrameTime);
+                
+                // Determine color based on performance
+                let color;
+                if (fpsCounter.smoothedFps < 50) {
+                    // Below 50 fps = red
+                    color = 'hsl(0, 100%, 50%)';
+                } else if (fpsStdDev > fpsCounter.jitterThreshold || fpsCounter.smoothedFps < 58) {
+                    // Jittery or dropping below 58 = yellow
+                    color = 'hsl(50, 100%, 50%)';
+                } else {
+                    // Smooth 58+ fps = green
+                    color = 'hsl(120, 100%, 40%)';
+                }
+                
+                fpsElement.style.color = color;
+            }
             
             // Update the display element
-            const fpsElement = document.getElementById('fpsCounter');
-            if (fpsElement) {
-                fpsElement.textContent = `${fpsCounter.displayFps} fps`;
-            }
+            fpsElement.textContent = `${fpsCounter.displayFps} fps`;
         }
         
         fpsCounter.lastTime = currentTime;
@@ -13912,12 +14386,37 @@ window.addEventListener('DOMContentLoaded', function() {
     //  MAIN SEQUENCE ----------------------------------------------------------------------------
 	firstRun = true;
     initColorWheelOffscreenCanvas(); // Initialize offscreen canvas early
-    setupScene();
-    positionFpsCounter(); // Position FPS counter initially
+    startupTime = Date.now(); // Record startup time for animation
+    setupScene(); // Setup scene first so everything initializes
+    // Initialize repulsion force to zero for startup animation
+    physicsMenuRepulsionForce = 0;
+    physProps.repulsionForce = 0;
+    positionFpsCounter();
+    respawnMenuLayoutType = 'image'; // Set to image layout for startup splash
+    // Load logo.png as splash screen - will regenerate particles when loaded
+    loadDefaultLayoutImage();
     
     function update() {
         // Calculate FPS
         updateFPS();
+        
+        // Startup repulsion force animation (ramp from 0 to max over 2 seconds immediately)
+        if (startupRepulsionAnimationActive) {
+            const elapsed = (Date.now() - startupTime) / 1000; // seconds since startup
+            if (elapsed <= 2.0) {
+                // Animate from 0 to 20 over 2 seconds
+                const animProgress = elapsed / 2.0; // 0 to 1 over 2 seconds
+                physicsMenuRepulsionForce = animProgress * 20;
+                physProps.repulsionForce = physicsMenuRepulsionForce / 10;
+            } else {
+                // Animation complete - set to max and stop animating
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                startupRepulsionAnimationActive = false;
+                // Revert respawn layout to cluster after startup
+                respawnMenuLayoutType = 'cluster';
+            }
+        }
         
         // Apply gravity rotation if slider is moved from center
         const gx = physProps.gravity.x;
