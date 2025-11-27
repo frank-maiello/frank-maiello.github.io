@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.9
+		<title>Slosh 2.13
         </title>
         <style>
 			body {font-family: monospace; 
@@ -31,18 +31,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 -ms-user-select: none;
                 user-select: none;
                 -webkit-tap-highlight-color: transparent;
-                }
-            h1 {font-family: verdana;
-                font-size: 12px;
-                text-align: center;
-                color: hsl(0, 0%, 55%);}
-            h2 {font-family: monospace;
-                font-size: 0px;
-                text-align: center;}
-            h3 {font-family: monospace;
-                font-size: 2px;
-                text-align: center;}
-           
+            }
             /* FPS Counter */
             .fps-counter {
                 position: absolute;
@@ -63,106 +52,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             .fps-counter.visible {
                 display: block;
             }
-
-            /* NYC Subway Line Button Styles */
-            .subway-btn {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 36px;
-                height: 36px;
-                border-radius: 50%;
-                text-align: center;
-                vertical-align: middle;
-                font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif;
-                font-weight: bold;
-                font-size: 20px;
-                color: #fff;
-                border: none;
-                box-shadow: 2px 3px 8px rgba(0,0,0,0.25);
-                margin: 0 2px;
-                margin-top: 5px;
-                margin-bottom: 10px;
-                cursor: default;
-                padding: 0;
-                transition: filter 0.2s;
-                text-shadow: 0 1px 2px #0008;
-                background: transparent;
-            }
-            .subway-btn:active, .subway-btn:focus {
-                filter: brightness(0.85);
-                outline: none;
-            }
-            /* Line colors */
-            .subway-a { background: #0039A6; }
-            .subway-c { background: #0039A6; }
-            .subway-j { background: #996633; }
-            .subway-z { background: #EE7624; }
-            .subway-2 { background: #EE352E; }
-            .subway-3 { background: #EE352E; }
-            .subway-4 { background: #00933C; }
-            .subway-5 { background: #00933C; }
-            .subway-j, .subway-z { color: #fff; }
-
-            /* Bright green border for saved preset indicator */
-            .subway-btn-saved {
-                border: 3px solid #39FF14 !important;
-                box-shadow: 0 0 0 2px #39FF14, 2px 3px 8px rgba(0,0,0,0.25);
-            }
-            /* B, D, F, M (Bright Orange) */
-            .subway-b { background: #FF6319; font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif; color: #fff; }
-            .subway-d { background: #FF6319; font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif; color: #fff; }
-            .subway-f { background: #FF6319; font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif; color: #fff; }
-            .subway-m { background: #FF6319; font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif; color: #fff; }
-            /* N, Q, R, W (Yellow) */
-            .subway-n { background: #FFD300; color: #000; font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif; }
-            .subway-q { background: #FFD300; color: #000; font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif; }
-            .subway-r { background: #FFD300; color: #000; font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif; }
-            .subway-w { background: #FFD300; color: #000; font-family: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif; }
-            
-            /* Independent scaling for PATH logo button (preset17Btn) */
-            #preset17Btn > img {
-                margin-left: 8px;
-                width: 2.2em !important;
-                height: 2.2em !important;
-            } 
         </style>
 	</head>
 
 <body> 
     <body style="background: linear-gradient(to bottom, hsl(0, 0%, 0%) 0%, hsl(195, 64%, 8%) 100%); background-attachment: fixed; margin-left: 0px;"> 
-    
     <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-top: 5px; margin-left: 10px; display: block; cursor: default;"></canvas>
     <div id="fpsCounter" class="fps-counter">--</div>
-
-    <!--
-    <span style="white-space: nowrap; margin-left: 10px;">
-    <button id="preset1Btn" class="subway-btn subway-a" title="Long Press to Save">A</button>
-    <button id="preset2Btn" class="subway-btn subway-c" title="Long Press to Save">C</button>
-    <button id="preset3Btn" class="subway-btn subway-j" title="Long Press to Save">J</button>
-    <button id="preset4Btn" class="subway-btn subway-z" title="Long Press to Save">Z</button>
-    <button id="preset5Btn" class="subway-btn subway-2" title="Long Press to Save">2</button>
-    <button id="preset6Btn" class="subway-btn subway-3" title="Long Press to Save">3</button>
-    <button id="preset7Btn" class="subway-btn subway-4" title="Long Press to Save">4</button>
-    <button id="preset8Btn" class="subway-btn subway-5" title="Long Press to Save">5</button>
-    <button id="preset9Btn" class="subway-btn subway-b" title="Long Press to Save">B</button>
-    <button id="preset10Btn" class="subway-btn subway-d" title="Long Press to Save">D</button>
-    <button id="preset11Btn" class="subway-btn subway-f" title="Long Press to Save">F</button>
-    <button id="preset12Btn" class="subway-btn subway-m" title="Long Press to Save">M</button>
-    </span>
-    <span style="white-space: nowrap">
-    <button id="preset13Btn" class="subway-btn subway-n" title="Long Press to Save">N</button>
-    <button id="preset14Btn" class="subway-btn subway-q" title="Long Press to Save">Q</button>
-    <button id="preset15Btn" class="subway-btn subway-r" title="Long Press to Save">R</button>
-    <button id="preset16Btn" class="subway-btn subway-w" title="Long Press to Save">W</button>
-    <button id="preset19Btn" class="subway-btn subway-svg" title="Long Press to Save"><img src="s-bahn-logo.svg" alt="S-Bahn" style="width:1.7em;height:1.7em;vertical-align:middle;"></button>
-    <button id="preset18Btn" class="subway-btn subway-svg" title="Long Press to Save"><img src="u-bahn-logo.svg" alt="U-Bahn" style="width:1.7em;height:1.7em;vertical-align:middle;"></button>
-    <button id="preset17Btn" class="subway-btn subway-svg path-logo-btn" title="Long Press to Save"><img src="path-logo.svg" alt="Path" class="path-logo-img" style="width:1.7em;height:1.7em;vertical-align:middle;"></button>
-    <span style="display:inline-block; vertical-align:top; margin-left:8px; line-height:1;">
-    <span style="font-size:10px; font-style:italic; color:#757575; display:block; text-align:left; line-height:1.1; position:relative; top:1.2em;">
-    long press<br>to save
-    </span></span></span><br>
-    -->
 <script>
 
 // Global layout orientation flag for canvas/menu logic and CORNER calculations
@@ -195,7 +91,8 @@ const PRESET_KEYS = [
     'slosh_preset_16',
     'slosh_preset_17',
     'slosh_preset_18',
-    'slosh_preset_19'
+    'slosh_preset_19',
+    'slosh_preset_20'
 ];
 
 // Default presets: captured at first DOMContentLoaded
@@ -224,20 +121,7 @@ function getControlState() {
             state._cyclePuckPos = {x: cycle.pos.x, y: cycle.pos.y};
         }
     }
-    for (const id of CONTROL_IDS) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        if (el.type === 'checkbox') {
-            state[id] = el.checked;
-        } else if (el.type === 'radio') {
-            // For radio, only save if checked
-            state[id] = el.checked;
-        } else if (el.tagName === 'SELECT') {
-            state[id] = el.value;
-        } else {
-            state[id] = el.value;
-        }
-    }
+    // HTML controls removed - all state is now in canvas menus
     // Save particle quantity (square root of count)
     state.ballsSlider = particlesMenuQuantity;
     
@@ -264,6 +148,7 @@ function getControlState() {
     state._colorWheelLight = colorWheelLight;
     state._colorWheelPersistence = colorWheelPersistence;
     state._colorWheelVelMap = colorWheelVelMap;
+    state._colorWheelWipeLightness = colorWheelWipeLightness;
     state._colorWheelCenterX = colorWheelCenterX;
     state._colorWheelCenterY = colorWheelCenterY;
     // Save physics menu values
@@ -308,21 +193,7 @@ function setControlState(state) {
             cycle.pos.y = state._cyclePuckPos.y;
         }
     }
-    for (const id of CONTROL_IDS) {
-        if (!(id in state)) continue;
-        const el = document.getElementById(id);
-        if (!el) continue;
-        if (el.type === 'checkbox' || el.type === 'radio') {
-            el.checked = !!state[id];
-            el.dispatchEvent(new Event('input', {bubbles:true}));
-        } else if (el.tagName === 'SELECT') {
-            el.value = state[id];
-            el.dispatchEvent(new Event('input', {bubbles:true}));
-        } else {
-            el.value = state[id];
-            el.dispatchEvent(new Event('input', {bubbles:true}));
-        }
-    }
+    // HTML controls removed - all state is now in canvas menus
     // Particle count from preset (square root stored)
     if ('ballsSlider' in state) {
         particlesMenuQuantity = state['ballsSlider'];
@@ -394,6 +265,9 @@ function setControlState(state) {
     if (state._colorWheelVelMap !== undefined) {
         colorWheelVelMap = state._colorWheelVelMap;
         physProps.velColorMap = colorWheelVelMap;
+    }
+    if (state._colorWheelWipeLightness !== undefined) {
+        colorWheelWipeLightness = state._colorWheelWipeLightness;
     }
     if (state._colorWheelCenterX !== undefined) {
         colorWheelCenterX = state._colorWheelCenterX;
@@ -529,59 +403,9 @@ function loadPreset(idx) {
     }
 }
 
-// Button logic: left-click loads, long press (hold 700ms) saves
+// Preset buttons removed - preset functionality now in main menu
 function setupPresetButtons() {
-    for (let i = 0; i < 19; ++i) {
-        const btn = document.getElementById('preset' + (i+1) + 'Btn');
-        if (!btn) continue;
-        let pressTimer = null;
-        let longPressTriggered = false;
-
-        // Helper to clear timer
-        function clearTimer() {
-            if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-            longPressTriggered = false;
-        }
-
-        btn.addEventListener('mousedown', function(e) {
-            if (e.button !== 0) return; // Only left mouse
-            longPressTriggered = false;
-            pressTimer = setTimeout(() => {
-                savePreset(i);
-                btn.classList.add('preset-saved');
-                setTimeout(() => btn.classList.remove('preset-saved'), 400);
-                longPressTriggered = true;
-            }, 700);
-        });
-        btn.addEventListener('mouseup', function(e) {
-            if (pressTimer) {
-                clearTimeout(pressTimer);
-                if (!longPressTriggered && e.button === 0) {
-                    loadPreset(i);
-                }
-            }
-        });
-        btn.addEventListener('mouseleave', clearTimer);
-        btn.addEventListener('touchstart', function(e) {
-            longPressTriggered = false;
-            pressTimer = setTimeout(() => {
-                savePreset(i);
-                btn.classList.add('preset-saved');
-                setTimeout(() => btn.classList.remove('preset-saved'), 400);
-                longPressTriggered = true;
-            }, 700);
-        }, {passive: true});
-        btn.addEventListener('touchend', function(e) {
-            if (pressTimer) {
-                clearTimeout(pressTimer);
-                if (!longPressTriggered) {
-                    loadPreset(i);
-                }
-            }
-        }, {passive: true});
-        btn.addEventListener('touchmove', clearTimer, {passive: true});
-        btn.addEventListener('contextmenu', function(e) { e.preventDefault(); });
-    }
+    // HTML buttons removed - presets now accessed through main menu
 }
 
 // Add a visual feedback style for save
@@ -592,13 +416,7 @@ document.head.appendChild(style);
 
 // On DOMContentLoaded, capture current state as defaults and setup buttons
 window.addEventListener('DOMContentLoaded', function() {
-    // Capture current state for all 19 default presets
-    DEFAULT_PRESETS = [];
-    const state = getControlState();
-    for (let i = 0; i < 19; ++i) {
-        // Deep copy for each slot
-        DEFAULT_PRESETS.push(JSON.parse(JSON.stringify(state)));
-    }
+    // Setup buttons first
     setupPresetButtons();
     
     // Load default logo image automatically on startup
@@ -625,9 +443,13 @@ window.addEventListener('DOMContentLoaded', function() {
     var gummiReady = false;
     var doGummi = false; // fourth ball rendering style
     // Faster response = smaller tau; controls heading smoothing speed (seconds)
-    var gummiHeadingTau = 0.05;
+    var gummiHeadingTau = 0.25;
     // Orientation offset so the TOP of the image leads along the velocity vector
     var gummiHeadingOffset = Math.PI / 2;
+    
+    // Offscreen roket canvas for particle rendering style
+    var offscreenRoketCanvas = document.createElement('canvas');
+    var roketCtx = null;
     
     // Tracer variables for particle tracking
     var doTracer = false;
@@ -647,6 +469,31 @@ window.addEventListener('DOMContentLoaded', function() {
     var pepeReady = false;
     pepeImage.onload = function() { pepeReady = true; };
     pepeImage.src = 'pepe.png';
+
+    var pathLogoImage = new Image();
+    var pathLogoReady = false;
+    pathLogoImage.onload = function() { pathLogoReady = true; };
+    pathLogoImage.src = 'path-logo2.png';
+
+    var sBahnLogoImage = new Image();
+    var sBahnLogoReady = false;
+    sBahnLogoImage.onload = function() { sBahnLogoReady = true; };
+    sBahnLogoImage.src = 's-bahn-logo.svg';
+
+    var uBahnLogoImage = new Image();
+    var uBahnLogoReady = false;
+    uBahnLogoImage.onload = function() { uBahnLogoReady = true; };
+    uBahnLogoImage.src = 'u-bahn-logo.svg';
+
+    var athensMetroLogoImage = new Image();
+    var athensMetroLogoReady = false;
+    athensMetroLogoImage.onload = function() { athensMetroLogoReady = true; };
+    athensMetroLogoImage.src = 'athensmetro-logo.png';
+
+    var isapLogoImage = new Image();
+    var isapLogoReady = false;
+    isapLogoImage.onload = function() { isapLogoReady = true; };
+    isapLogoImage.src = 'isap-logo.png';
 
     //  CANVAS SETUP AND SCALING --------------------------------------------------------------
     canvas = document.getElementById("myCanvas");
@@ -940,12 +787,13 @@ window.addEventListener('DOMContentLoaded', function() {
         {id: 'respawn', label: 'ReSpawn', color: 'hsl(320, 100%, 50%)', checked: false, variable: 'respawnMenuVisible'},
         {id: 'toys', label: 'Toys', color: 'hsl(45, 80%, 50%)', checked: false, variable: 'toysMenuVisible'},
         {id: 'color', label: 'Color', color: '', checked: false, variable: 'colorWheelVisible', multiColor: true},
+        {id: 'presets', label: 'Presets', color: 'hsl(280, 80%, 65%)', checked: false, variable: 'presetsMenuVisible'},
         {id: 'pause', label: 'Play', color: 'hsl(0, 0%, 80%)', checked: false, isPause: true}
     ];
     
     // Calculate main menu width based on items
     function calculateMainMenuWidth() {
-        const itemWidth = 90;
+        const itemWidth = 80;
         const itemSpacing = 10;
         const sidePadding = 15;
         return (mainMenuItems.length * itemWidth) + ((mainMenuItems.length - 1) * itemSpacing) + (sidePadding * 2);
@@ -957,6 +805,10 @@ window.addEventListener('DOMContentLoaded', function() {
     var colorWheelLight = 30;
     var colorWheelPersistence = 12;
     var colorWheelVelMap = 100;
+    var colorWheelWipeLightness = 0;
+    var colorWheelRotationSpeed = 0; // -1 to 1 (CCW to CW), 0 = stopped
+    var colorWheelRotationFastMode = true; // true = normal speed, false = 10% speed
+    var colorMode = 'velocity'; // 'velocity', 'size', or 'direction'
     var colorWheelVisible = false;
     var colorWheelOpacity = 0;
     var colorWheelAnimating = false;
@@ -1028,6 +880,10 @@ window.addEventListener('DOMContentLoaded', function() {
     // Startup animation timing
     var startupTime = 0;
     var startupRepulsionAnimationActive = true;
+    var startupRestartCount = 0; // Number of restarts completed
+    var startupRestartPeriod = 0.18; // Duration of each restart in seconds
+    var startupLastRestartTime = 0; // Time of last restart
+    var startupPauseAtZero = 0.03; // Pause duration at zero force for visible collapse
     
     // Physics Menu Setup - draws on main canvas
     var physicsMenuRepulsionForce = 0;
@@ -1148,6 +1004,32 @@ window.addEventListener('DOMContentLoaded', function() {
     var toysMenuCenterX = 0;
     var toysMenuCenterY = 0;
     
+    // Presets menu variables
+    var presetsMenuVisible = false;
+    var presetsMenuOpacity = 0;
+    var presetsMenuAnimating = false;
+    var presetsMenuTargetOpacity = 0;
+    var presetsMenuDragging = false;
+    var presetsMenuPositionDragging = false;
+    var presetsMenuDragOffsetX = 0;
+    var presetsMenuDragOffsetY = 0;
+    var presetsMenuManuallyMoved = false;
+    
+    // Presets menu items array - subway line style buttons
+    var presetsMenuItems = [];
+    
+    // Presets menu dimensions (in canvas pixels)
+    var presetsMenuWidth = 280;
+    var presetsMenuHeight = 546;
+    var presetsMenuCenterX = 0;
+    var presetsMenuCenterY = 0;
+    
+    // Long press handling for preset reset
+    var presetLongPressTimer = null;
+    var presetLongPressIndex = -1;
+    var presetLongPressTriggered = false;
+    var presetResetConfirmIndex = -1; // -1 means no confirmation dialog
+    
     // Default relative menu positions (as percentages of canvas width/height)
     // Set these values after positioning menus where you want them
     var defaultMenuPositions = {
@@ -1157,7 +1039,8 @@ window.addEventListener('DOMContentLoaded', function() {
         respawn: { x: 0.5718562874251497, y: 0.2897016361886429 },
         walls: { x: 0.5, y: 0.6246390760346487 },
         colorWheel: { x: 0.6491017964071857, y: 0.717516843118383 },
-        toys: { x: 0.7658682634730539, y: 0.352261790182868 }
+        toys: { x: 0.7658682634730539, y: 0.352261790182868 },
+        presets: { x: 0.8, y: 0.5 }
     };
     
     // Function to capture current menu positions as relative coordinates
@@ -1191,6 +1074,10 @@ window.addEventListener('DOMContentLoaded', function() {
                 toys: { 
                     x: toysMenuCenterX / canvas.width, 
                     y: toysMenuCenterY / canvas.height 
+                },
+                presets: { 
+                    x: presetsMenuCenterX / canvas.width, 
+                    y: presetsMenuCenterY / canvas.height 
                 }
             };
 
@@ -1231,11 +1118,15 @@ window.addEventListener('DOMContentLoaded', function() {
                 toysMenuCenterX = defaultMenuPositions.toys.x * canvas.width;
                 toysMenuCenterY = defaultMenuPositions.toys.y * canvas.height;
             }
+            if (defaultMenuPositions.presets && (defaultMenuPositions.presets.x > 0.0 || defaultMenuPositions.presets.y > 0.0)) {
+                presetsMenuCenterX = defaultMenuPositions.presets.x * canvas.width;
+                presetsMenuCenterY = defaultMenuPositions.presets.y * canvas.height;
+            }
         }
     }
 
     // Menu z-order system - menus are drawn in this order (first = bottom, last = top)
-    var menuDrawOrder = ['colorWheel', 'physicsMenu', 'wallsMenu', 'particlesMenu', 'gravityMenu', 'respawnMenu', 'toysMenu'];
+    var menuDrawOrder = ['colorWheel', 'physicsMenu', 'wallsMenu', 'particlesMenu', 'gravityMenu', 'respawnMenu', 'toysMenu', 'presetsMenu'];
     
     // Function to bring menu to front
     function bringMenuToFront(menuName) {
@@ -1260,7 +1151,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var particlesMenuQuantity = 71; // Square root (1-100), actual count = quantity^2
     var particlesMenuSmallRadius = 7;
     var particlesMenuLargeRadius = 13;
-    var particlesMenuRenderType = 'drawArrows'; // 'drawSpheres', 'drawDiscs', 'drawCircles', 'drawRings', 'drawGummies'
+    var particlesMenuRenderType = 'drawArrows'; 
     var particlesMenuRenderTypeExpanded = false; // Track if dropdown is expanded
     var particlesMenuVisible = true;
     var particlesMenuOpacity = 1;
@@ -1492,9 +1383,9 @@ window.addEventListener('DOMContentLoaded', function() {
         const ctx = c;
         const menuWidth = calculateMainMenuWidth();
         const menuHeight = mainMenuHeight;
-        const itemWidth = 90;
+        const itemWidth = 80;
         const itemSpacing = 10;
-        const sidePadding = 20;
+        const sidePadding = 15;
         
         ctx.save();
         ctx.globalAlpha = mainMenuBarAlpha;
@@ -1710,6 +1601,35 @@ window.addEventListener('DOMContentLoaded', function() {
                 ctx.arc(cx, cy, iconSize / 2, 0, Math.PI * 2);
                 ctx.stroke();
             }
+        } else if (item.id === 'presets') {
+            // Draw PATH logo icon from SVG
+            const cx = rectX + width / 2;
+            const cy = iconY - 3;
+            const iconSize = 50;
+            
+            // Apply dimming if not checked
+            if (!isChecked) {
+                ctx.globalAlpha = 0.4;
+            }
+            
+            // Draw the path-logo.svg if loaded
+            if (pathLogoReady && pathLogoImage && pathLogoImage.complete) {
+                ctx.drawImage(pathLogoImage, cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
+            } else {
+                // Fallback: Draw simple PATH text while loading
+                ctx.fillStyle = '#0039A6';
+                ctx.beginPath();
+                ctx.roundRect(cx - 16, cy - 16, 32, 32, 4);
+                ctx.fill();
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 11px "Helvetica Neue", Helvetica, Arial, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('PATH', cx, cy);
+            }
+            
+            ctx.globalAlpha = 1;
+            
         } else if (item.isPause) {
             // Draw pause icon (two vertical bars) and play icon (triangle)
             const barWidth = 6;
@@ -1734,7 +1654,7 @@ window.addEventListener('DOMContentLoaded', function() {
             
             // Draw pause bars (left side)
             ctx.fillStyle = pauseColor;
-            const groupOffset = 12; // Shift entire group left to center it
+            const groupOffset = 15; // Shift entire group left to center it
             ctx.fillRect(cx - groupOffset - barSpacing / 2 - barWidth, cy - barHeight / 2, barWidth, barHeight);
             ctx.fillRect(cx - groupOffset + barSpacing / 2, cy - barHeight / 2, barWidth, barHeight);
             
@@ -1832,7 +1752,8 @@ window.addEventListener('DOMContentLoaded', function() {
                 walls: wallsMenuVisible,
                 respawn: respawnMenuVisible,
                 toys: toysMenuVisible,
-                color: colorWheelVisible
+                color: colorWheelVisible,
+                presets: presetsMenuVisible
             };
             
             // Hide all submenus with fade out animation
@@ -1864,6 +1785,10 @@ window.addEventListener('DOMContentLoaded', function() {
                 colorWheelTargetOpacity = 0;
                 colorWheelAnimating = true;
             }
+            if (presetsMenuVisible) {
+                presetsMenuTargetOpacity = 0;
+                presetsMenuAnimating = true;
+            }
             
             particlesMenuVisible = false;
             physicsMenuVisible = false;
@@ -1872,6 +1797,7 @@ window.addEventListener('DOMContentLoaded', function() {
             respawnMenuVisible = false;
             toysMenuVisible = false;
             colorWheelVisible = false;
+            presetsMenuVisible = false;
         } else {
             // Restore saved states with fade in animation
             if (savedSubmenuStates.particles) {
@@ -1908,6 +1834,11 @@ window.addEventListener('DOMContentLoaded', function() {
                 colorWheelVisible = true;
                 colorWheelTargetOpacity = 1;
                 colorWheelAnimating = true;
+            }
+            if (savedSubmenuStates.presets) {
+                presetsMenuVisible = true;
+                presetsMenuTargetOpacity = 1;
+                presetsMenuAnimating = true;
             }
         }
     }
@@ -1982,11 +1913,11 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.save();
         ctx.globalAlpha = colorWheelOpacity;
         
-        // Draw menu background, border, and close button
+        // Draw menu background, border, and close button - extend bottom for radio buttons
         drawMenuBackground(ctx, centerX, centerY, size, size, {
             topOffset: -38,
-            bottomOffset: 100,
-            rightOffset: 70
+            bottomOffset: 285,  // Extended for radio buttons
+            rightOffset: 73    // Extended to match particles menu width (240px)
         });
         
         // Draw title
@@ -2041,15 +1972,56 @@ window.addEventListener('DOMContentLoaded', function() {
         const markerX = actualWheelCenterX + markerDist * Math.cos(markerAngle);
         const markerY = actualWheelCenterY + markerDist * Math.sin(markerAngle);
         
+        // Draw rotation arc and arrow if rotation is active
+        if (colorWheelRotationSpeed !== 0) {
+            const arcRadius = markerDist;
+            const direction = colorWheelRotationSpeed > 0 ? 1 : -1; // 1 for CW, -1 for CCW
+            const markerAngularSize = 15 / arcRadius; // Angular size of marker in radians (increased to end sooner)
+            // Arc length scales with rotation speed: min 63° at near-zero, max 135° at full speed
+            const speedRatio = Math.abs(colorWheelRotationSpeed); // 0 to 1
+            const minArcLength = Math.PI * 0.35; // 63 degrees minimum
+            const maxArcLength = Math.PI * 1.0; // 135 degrees maximum
+            const arcLength = minArcLength + speedRatio * (maxArcLength - minArcLength);
+            const startAngle = markerAngle + markerAngularSize * direction;
+            const endAngle = startAngle + arcLength * direction;
+            
+            // Draw arc (tail ends before indicator)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(actualWheelCenterX, actualWheelCenterY, arcRadius, startAngle, endAngle, direction < 0);
+            ctx.stroke();
+            
+            // Draw arrowhead at the end of arc (same radius)
+            const arrowAngle = endAngle;
+            const arrowX = actualWheelCenterX + arcRadius * Math.cos(arrowAngle);
+            const arrowY = actualWheelCenterY + arcRadius * Math.sin(arrowAngle);
+            const arrowSize = 7;
+            const arrowDir = arrowAngle + (direction > 0 ? Math.PI / 2 : -Math.PI / 2);
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.beginPath();
+            ctx.moveTo(arrowX, arrowY);
+            ctx.lineTo(arrowX - arrowSize * Math.cos(arrowDir - 0.4), arrowY - arrowSize * Math.sin(arrowDir - 0.4));
+            ctx.lineTo(arrowX - arrowSize * Math.cos(arrowDir + 0.4), arrowY - arrowSize * Math.sin(arrowDir + 0.4));
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        // Draw pulsating ring around marker
+        const pulseTime = performance.now() / 1000; // Convert to seconds
+        const pulseScale = colorWheelRotationSpeed !== 0 ? (1 + Math.sin(pulseTime * 4) * 0.15) : 1; // Pulsate when active
+        const ringRadius = 8 * pulseScale;
+        
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(markerX, markerY, 8, 0, Math.PI * 2);
+        ctx.arc(markerX, markerY, ringRadius, 0, Math.PI * 2);
         ctx.stroke();
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(markerX, markerY, 8, 0, Math.PI * 2);
+        ctx.arc(markerX, markerY, ringRadius, 0, Math.PI * 2);
         ctx.stroke();
         
         // Draw lightness marker
@@ -2113,6 +2085,170 @@ window.addEventListener('DOMContentLoaded', function() {
         ctx.fillRect(persX - 2, persBarY - 3, 4, persBarHeight + 6);
         ctx.strokeStyle = 'black';
         ctx.strokeRect(persX - 2, persBarY - 3, 4, persBarHeight + 6);
+        
+        // Draw rotation speed slider (horizontal bar below persistence)
+        const rotBarX = centerX - radius + 14;
+        const rotBarY = centerY + radius + 94;
+        const rotBarWidth = radius * 2;
+        const rotBarHeight = 20;
+        
+        // Draw rotation bar gradient (blue to white to orange)
+        for (let i = 0; i <= rotBarWidth; i++) {
+            const t = i / rotBarWidth; // 0 to 1
+            if (t < 0.5) {
+                // Blue to white (CCW to stopped)
+                const blend = t * 2; // 0 to 1
+                const hue = 200;
+                const sat = 70 * (1 - blend);
+                const light = 40 + blend * 60;
+                ctx.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
+            } else {
+                // White to orange (stopped to CW)
+                const blend = (t - 0.5) * 2; // 0 to 1
+                const hue = 30;
+                const sat = 70 * blend;
+                const light = 100 - blend * 30;
+                ctx.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
+            }
+            ctx.fillRect(rotBarX + i, rotBarY, 1, rotBarHeight);
+        }
+
+        // Draw center detent marker (neutral position)
+        const rotCenterX = rotBarX + rotBarWidth / 2;
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(rotCenterX, rotBarY - 4);
+        ctx.lineTo(rotCenterX, rotBarY + rotBarHeight + 4);
+        ctx.stroke();
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(rotCenterX, rotBarY - 4);
+        ctx.lineTo(rotCenterX, rotBarY + rotBarHeight + 4);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+        
+        // Draw rotation label
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Rotation', rotBarX + rotBarWidth / 2, rotBarY + rotBarHeight/2);
+      
+        // Draw rotation marker
+        const rotX = rotBarX + ((colorWheelRotationSpeed + 1) / 2) * rotBarWidth; // -1 to 1 -> 0 to 1
+        ctx.fillStyle = 'white';
+        ctx.fillRect(rotX - 2, rotBarY - 3, 4, rotBarHeight + 6);
+        ctx.strokeStyle = 'black';
+        ctx.strokeRect(rotX - 2, rotBarY - 3, 4, rotBarHeight + 6);
+        
+        // Draw text label for fast/slow rotation mode (to the right of slider)
+        const rotLabelX = rotBarX + rotBarWidth + 28;
+        const rotLabelY = rotBarY + rotBarHeight / 2;
+        
+        // Color based on rotation state
+        if (colorWheelRotationSpeed === 0) {
+            ctx.fillStyle = 'gray';
+        } else if (colorWheelRotationFastMode) {
+            ctx.fillStyle = 'hsl(120, 100%, 40%)';
+        } else {
+            ctx.fillStyle = 'red';
+        }
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(colorWheelRotationFastMode ? 'fast' : 'slow', rotLabelX, rotLabelY);
+        
+        // Draw wipe lightness slider (horizontal bar below rotation)
+        const wipeLightBarX = centerX - radius + 14;
+        const wipeLightBarY = centerY + radius + 131;
+        const wipeLightBarWidth = radius * 2;
+        const wipeLightBarHeight = 20;
+        
+        // Draw wipe lightness bar gradient (gray scale)
+        for (let i = 0; i <= wipeLightBarWidth; i++) {
+            const brightness = (i / wipeLightBarWidth) * 100; // 0 to 100
+            ctx.fillStyle = `hsl(0, 0%, ${brightness}%)`;
+            ctx.fillRect(wipeLightBarX + i, wipeLightBarY, 1, wipeLightBarHeight);
+        }
+
+        // Draw wipe lightness label
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Background', wipeLightBarX + wipeLightBarWidth / 2, wipeLightBarY + wipeLightBarHeight/2);
+      
+        // Draw wipe lightness marker
+        const wipeLightX = wipeLightBarX + (colorWheelWipeLightness / 100) * wipeLightBarWidth;
+        ctx.fillStyle = 'white';
+        ctx.fillRect(wipeLightX - 2, wipeLightBarY - 3, 4, wipeLightBarHeight + 6);
+        ctx.strokeStyle = 'black';
+        ctx.strokeRect(wipeLightX - 2, wipeLightBarY - 3, 4, wipeLightBarHeight + 6);
+        
+        // Draw Color by: label
+        ctx.fillStyle = 'hsl(0, 0%, 90%)';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Color by:', centerX - radius + 14, wipeLightBarY + 40);
+        
+        // Draw coloration mode radio buttons
+        const radioStartY = wipeLightBarY + 63;
+        const radioX = centerX - radius + 24;
+        const radioSpacing = 25;
+        
+        // Velocity radio button
+        let currentRadioY = radioStartY;
+        ctx.strokeStyle = colorMode === 'velocity' ? 'hsl(180, 100%, 50%)' : 'hsl(0, 0%, 60%)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(radioX, currentRadioY, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        if (colorMode === 'velocity') {
+            ctx.fillStyle = 'hsl(180, 100%, 50%)';
+            ctx.beginPath();
+            ctx.arc(radioX, currentRadioY, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.fillStyle = 'hsl(0, 0%, 80%)';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Velocity', radioX + 12, currentRadioY);
+        
+        // Size radio button
+        currentRadioY += radioSpacing;
+        ctx.strokeStyle = colorMode === 'size' ? 'hsl(180, 100%, 50%)' : 'hsl(0, 0%, 60%)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(radioX, currentRadioY, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        if (colorMode === 'size') {
+            ctx.fillStyle = 'hsl(180, 100%, 50%)';
+            ctx.beginPath();
+            ctx.arc(radioX, currentRadioY, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.fillStyle = 'hsl(0, 0%, 80%)';
+        ctx.fillText('Size', radioX + 12, currentRadioY);
+        
+        // Direction radio button
+        currentRadioY += radioSpacing;
+        ctx.strokeStyle = colorMode === 'direction' ? 'hsl(180, 100%, 50%)' : 'hsl(0, 0%, 60%)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(radioX, currentRadioY, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        if (colorMode === 'direction') {
+            ctx.fillStyle = 'hsl(180, 100%, 50%)';
+            ctx.beginPath();
+            ctx.arc(radioX, currentRadioY, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.fillStyle = 'hsl(0, 0%, 80%)';
+        ctx.fillText('Direction', radioX + 12, currentRadioY);
     
         ctx.restore();
     }
@@ -3429,7 +3565,6 @@ window.addEventListener('DOMContentLoaded', function() {
         if (distClose <= closeButtonRadius) {
             respawnMenuTargetOpacity = 0;
             respawnMenuAnimating = true;
-            document.getElementById('respawnMenuToggle').checked = false;
             return true;
         }
         
@@ -4195,6 +4330,385 @@ window.addEventListener('DOMContentLoaded', function() {
         return 'drag';
     }
     
+    // ===== PRESETS MENU FUNCTIONS =====
+    
+    function animatePresetsMenuOpacity() {
+        if (!presetsMenuAnimating) return;
+        
+        const fadeInSpeed = 0.1;
+        const fadeOutSpeed = 0.2;
+        const fadeSpeed = presetsMenuTargetOpacity > presetsMenuOpacity ? fadeInSpeed : fadeOutSpeed;
+        const diff = presetsMenuTargetOpacity - presetsMenuOpacity;
+        
+        if (Math.abs(diff) < 0.01) {
+            presetsMenuOpacity = presetsMenuTargetOpacity;
+            presetsMenuAnimating = false;
+            if (presetsMenuOpacity <= 0) {
+                presetsMenuVisible = false;
+            }
+        } else {
+            presetsMenuOpacity += diff * fadeSpeed;
+        }
+    }
+    
+    function drawPresetsMenu() {
+        if (presetsMenuOpacity <= 0) return;
+        
+        const ctx = c;
+        const w = presetsMenuWidth;
+        const h = presetsMenuHeight;
+        const centerX = presetsMenuCenterX;
+        const centerY = presetsMenuCenterY;
+        
+        // Save context state and apply global alpha
+        ctx.save();
+        ctx.globalAlpha = presetsMenuOpacity;
+        
+        // Draw menu background, border, and close button
+        drawMenuBackground(ctx, centerX, centerY, w, h);
+        
+        // Draw title
+        ctx.fillStyle = 'hsl(60, 90%, 60%)';
+        ctx.font = 'bold 20px verdana, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Under Construction', centerX + 12, centerY - h/2 + 12);
+        
+        // Grid layout for preset icons (subway line style)
+        const iconSize = 51;
+        const iconSpacing = 64;
+        const gridCols = 4;
+        const gridRows = 7;
+        const startX = centerX - (gridCols - 1) * iconSpacing / 2;
+        const startY = centerY - h/2 + 60;
+        
+        // Initialize presets menu items if not already done
+        if (presetsMenuItems.length === 0) {
+            // Define the subway line styles for 28 grid slots (22 presets + 6 empty)
+            const subwayLines = [
+                { line: 'A', color: '#0039A6', cssClass: 'subway-a' },
+                { line: 'C', color: '#0039A6', cssClass: 'subway-c' },
+                { line: 'E', color: '#0039A6', cssClass: 'subway-e' },
+                null, // Empty slot
+                
+                { line: 'J', color: '#996633', cssClass: 'subway-j' },
+                { line: 'Z', color: '#EE7624', cssClass: 'subway-z' },
+                null, // Empty slot
+                null, // Empty slot
+
+                { line: 'B', color: '#FF6319', cssClass: 'subway-b' },
+                { line: 'D', color: '#FF6319', cssClass: 'subway-d' },
+                { line: 'F', color: '#FF6319', cssClass: 'subway-f' },
+                { line: 'M', color: '#FF6319', cssClass: 'subway-m' },
+
+                { line: 'N', color: '#FCCC0A', cssClass: 'subway-n' },
+                { line: 'Q', color: '#FCCC0A', cssClass: 'subway-q' },
+                { line: 'R', color: '#FCCC0A', cssClass: 'subway-r' },
+                { line: 'W', color: '#FCCC0A', cssClass: 'subway-w' },
+
+                { line: '2', color: '#EE352E', cssClass: 'subway-2' },
+                { line: '3', color: '#EE352E', cssClass: 'subway-3' },
+                { line: '4', color: '#00933C', cssClass: 'subway-4' },
+                { line: '5', color: '#00933C', cssClass: 'subway-5' },
+
+                { line: 'S', color: '#00933C', cssClass: 'subway-s', image: 's-bahn-logo.svg' },
+                { line: 'U', color: '#005CA9', cssClass: 'subway-u', image: 'u-bahn-logo.svg' },
+                null, // Empty slot
+                { line: 'LU', color: '#000095', cssClass: 'subway-lu', image: 'london-underground-logo.svg' },
+                
+                { line: 'AM', color: '#0066CC', cssClass: 'subway-am', image: 'athensmetro-logo.png' },
+                { line: 'ISAP', color: '#00A550', cssClass: 'subway-isap', image: 'isap-logo.png' },
+                null, // Empty slot
+                null  // Empty slot
+            ];
+            
+            presetsMenuItems = subwayLines.map((preset, idx) => {
+                if (preset === null) return null;
+                return {
+                    id: 'preset' + (idx + 1),
+                    label: preset.line,
+                    color: preset.color,
+                    cssClass: preset.cssClass,
+                    image: preset.image || null,
+                    index: idx
+                };
+            });
+            
+            // Assign preset numbers to non-null entries only (for save/load)
+            let presetNum = 0;
+            presetsMenuItems.forEach(preset => {
+                if (preset) {
+                    preset.presetNumber = presetNum++;
+                }
+            });
+        }
+        
+        // Draw preset icons in grid
+        presetsMenuItems.forEach((preset, index) => {
+            // Skip null entries (empty slots)
+            if (!preset) return;
+            const col = index % gridCols;
+            const row = Math.floor(index / gridCols);
+            const x = startX + col * iconSpacing;
+            const y = startY + row * iconSpacing;
+            
+            // Check if this preset uses an image (S-Bahn, U-Bahn, or London Underground)
+            if (preset.image) {
+                let img, imgReady;
+                if (preset.image === 's-bahn-logo.svg') {
+                    img = sBahnLogoImage;
+                    imgReady = sBahnLogoReady;
+                } else if (preset.image === 'u-bahn-logo.svg') {
+                    img = uBahnLogoImage;
+                    imgReady = uBahnLogoReady;
+                } else if (preset.image === 'athensmetro-logo.png') {
+                    img = athensMetroLogoImage;
+                    imgReady = athensMetroLogoReady;
+                } else if (preset.image === 'isap-logo.png') {
+                    img = isapLogoImage;
+                    imgReady = isapLogoReady;
+                } else if (preset.image === 'london-underground-logo.svg') {
+                    // Draw London Underground roundel (red circle with blue bar)
+                    const radius = iconSize / 2;
+                    
+                    // Red circle
+                    ctx.fillStyle = '#DC241F';
+                    ctx.beginPath();
+                    ctx.arc(x, y, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // White inner circle (hollow center)
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.beginPath();
+                    ctx.arc(x, y, radius * 0.65, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Blue horizontal bar (extends beyond the circle on both sides)
+                    const barHeight = radius * 0.35;
+                    const barWidth = radius * 2.6;
+                    ctx.fillStyle = '#000095';
+                    ctx.fillRect(x - barWidth / 2, y - barHeight / 2, barWidth, barHeight);
+                    
+                    // White text "UNDERGROUND" on the bar
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = 'bold 7px Arial, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('UNDERGROUND', x, y + 1);
+                    
+                    return; // Skip the standard image rendering below
+                }
+                
+                if (imgReady && img && img.complete) {
+                    // Special handling for ISAP logo - preserve oval aspect ratio
+                    if (preset.image === 'isap-logo.png') {
+                        const aspectRatio = img.width / img.height;
+                        const drawWidth = 0.9 * iconSize * aspectRatio;
+                        const drawHeight = 0.9 * iconSize;
+                        ctx.drawImage(img, x - drawWidth/2, y - drawHeight/2, drawWidth, drawHeight);
+                    } else {
+                        // Standard square rendering for other images
+                        ctx.drawImage(img, x - iconSize/2, y - iconSize/2, iconSize, iconSize);
+                    }
+                } else {
+                    // Fallback: draw colored circle with letter while loading
+                    ctx.fillStyle = preset.color;
+                    ctx.beginPath();
+                    ctx.arc(x, y, iconSize/2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = 'bold 26px "Helvetica Neue", Helvetica, Arial, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(preset.label, x, y);
+                }
+            } else {
+                // Draw subway line circle background
+                ctx.fillStyle = preset.color;
+                ctx.beginPath();
+                ctx.arc(x, y, iconSize/2, 0, Math.PI * 2);
+                ctx.fill();
+            
+                // Add subtle border
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            
+                // Draw white text (subway line letter/number)
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 26px "Helvetica Neue", Helvetica, Arial, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(preset.label, x, y);
+            }
+        });
+        
+        // Draw reset confirmation dialog if active
+        if (presetResetConfirmIndex >= 0) {
+            const preset = presetsMenuItems[presetResetConfirmIndex];
+            const dialogWidth = 200;
+            const dialogHeight = 100;
+            const dialogX = centerX;
+            const dialogY = centerY;
+            
+            // Draw dialog background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            ctx.strokeStyle = 'hsl(0, 0%, 60%)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(dialogX - dialogWidth/2, dialogY - dialogHeight/2, dialogWidth, dialogHeight, 8);
+            ctx.fill();
+            ctx.stroke();
+            
+            // Draw dialog text
+            ctx.fillStyle = 'hsl(0, 0%, 90%)';
+            ctx.font = 'bold 14px verdana, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Save New Preset?', dialogX, dialogY - 20);
+            
+            // Draw Yes/No buttons
+            const buttonWidth = 70;
+            const buttonHeight = 30;
+            const buttonY = dialogY + 15;
+            const yesButtonX = dialogX - 40;
+            const noButtonX = dialogX + 40;
+            
+            // Yes button
+            ctx.fillStyle = 'hsl(0, 90%, 60%)';
+            ctx.beginPath();
+            ctx.roundRect(yesButtonX - buttonWidth/2, buttonY - buttonHeight/2, buttonWidth, buttonHeight, 5);
+            ctx.fill();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 12px verdana, sans-serif';
+            ctx.fillText('Yes', yesButtonX, buttonY);
+            
+            // No button
+            ctx.fillStyle = 'hsl(0, 0%, 50%)';
+            ctx.beginPath();
+            ctx.roundRect(noButtonX - buttonWidth/2, buttonY - buttonHeight/2, buttonWidth, buttonHeight, 5);
+            ctx.fill();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText('No', noButtonX, buttonY);
+        }
+        
+        // Restore context state
+        ctx.restore();
+    }
+    
+    function handlePresetsMenuInteraction(canvasX, canvasY) {
+        if (!presetsMenuVisible) return false;
+        
+        const w = presetsMenuWidth;
+        const h = presetsMenuHeight;
+        const centerX = presetsMenuCenterX;
+        const centerY = presetsMenuCenterY;
+        const borderPadding = 8;
+        
+        // Check if click is within presets menu bounds
+        if (canvasX < centerX - w/2 - borderPadding || canvasX > centerX + w/2 + borderPadding ||
+            canvasY < centerY - h/2 - 8 || canvasY > centerY + h/2 + 8) {
+            return false;
+        }
+        
+        // Check if reset confirmation dialog is active
+        if (presetResetConfirmIndex >= 0) {
+            const dialogWidth = 200;
+            const dialogHeight = 100;
+            const dialogX = centerX;
+            const dialogY = centerY;
+            const buttonWidth = 70;
+            const buttonHeight = 30;
+            const buttonY = dialogY + 15;
+            const yesButtonX = dialogX - 40;
+            const noButtonX = dialogX + 40;
+            
+            // Check Yes button
+            if (canvasX >= yesButtonX - buttonWidth/2 && canvasX <= yesButtonX + buttonWidth/2 &&
+                canvasY >= buttonY - buttonHeight/2 && canvasY <= buttonY + buttonHeight/2) {
+                // Save the current state as this preset
+                const idx = presetResetConfirmIndex;
+                savePreset(idx);
+                presetResetConfirmIndex = -1;
+                return 'save';
+            }
+            
+            // Check No button
+            if (canvasX >= noButtonX - buttonWidth/2 && canvasX <= noButtonX + buttonWidth/2 &&
+                canvasY >= buttonY - buttonHeight/2 && canvasY <= buttonY + buttonHeight/2) {
+                presetResetConfirmIndex = -1;
+                return 'cancel';
+            }
+            
+            return 'dialog';
+        }
+        
+        // Check close button
+        const closeButtonX = centerX - w/2 - borderPadding + 20;
+        const closeButtonY = centerY - h/2 - 8 + 20;
+        const closeButtonRadius = 12;
+        const closeDistX = canvasX - closeButtonX;
+        const closeDistY = canvasY - closeButtonY;
+        if (Math.sqrt(closeDistX * closeDistX + closeDistY * closeDistY) < closeButtonRadius) {
+            presetsMenuTargetOpacity = 0;
+            presetsMenuAnimating = true;
+            return 'close';
+        }
+        
+        // Check preset icon clicks
+        const iconSize = 51;
+        const iconSpacing = 64;
+        const gridCols = 4;
+        const startX = centerX - (gridCols - 1) * iconSpacing / 2;
+        const startY = centerY - h/2 + 60;
+        
+        for (let index = 0; index < presetsMenuItems.length; index++) {
+            const preset = presetsMenuItems[index];
+            // Skip null entries (empty slots)
+            if (!preset) continue;
+            
+            const col = index % gridCols;
+            const row = Math.floor(index / gridCols);
+            const x = startX + col * iconSpacing;
+            const y = startY + row * iconSpacing;
+            
+            const dx = canvasX - x;
+            const dy = canvasY - y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < iconSize / 2) {
+                // Start long press timer - use presetNumber for save/load
+                presetLongPressIndex = preset.presetNumber;
+                presetLongPressTriggered = false;
+                presetLongPressTimer = setTimeout(() => {
+                    // Long press detected - show save confirmation
+                    presetResetConfirmIndex = preset.presetNumber;
+                    presetLongPressTriggered = true;
+                }, 700);
+                
+                return 'preset';
+            }
+        }
+        
+        // If not clicking on a preset icon or close button, allow dragging
+        return 'drag';
+    }
+    
+    function handlePresetsMenuRelease(canvasX, canvasY) {
+        // Clear long press timer
+        if (presetLongPressTimer) {
+            clearTimeout(presetLongPressTimer);
+            presetLongPressTimer = null;
+        }
+        
+        // If long press was not triggered, load the preset (short click)
+        if (presetLongPressIndex >= 0 && !presetLongPressTriggered) {
+            loadPreset(presetLongPressIndex);
+        }
+        
+        presetLongPressIndex = -1;
+        presetLongPressTriggered = false;
+    }
+    
     function drawGravityMenu() {
         if (gravityMenuOpacity <= 0) return;
         
@@ -4274,10 +4788,53 @@ window.addEventListener('DOMContentLoaded', function() {
             ctx.stroke();
         }
         
-        // Always draw marker circle in blue
+        // Draw rotation arc and arrow if rotation is active
+        if (gravityRotationSpeed !== 0 && gmag > 0.01) {
+            const markerDist = Math.sqrt((markerX - centerX) ** 2 + (markerY - centerY) ** 2);
+            const markerAngle = Math.atan2(markerY - centerY, markerX - centerX);
+            const arcRadius = markerDist;
+            const direction = gravityRotationSpeed > 0 ? -1 : 1; // Flip: positive gravityRotationSpeed = CW
+            const markerAngularSize = 15 / arcRadius;
+            // Arc length scales with rotation speed: min 63° at near-zero, max 135° at full speed
+            const maxRotationSpeed = 0.02; // radians per frame (from gravity slider max)
+            const speedRatio = Math.min(Math.abs(gravityRotationSpeed) / maxRotationSpeed, 1.0);
+            const minArcLength = Math.PI * 0.35; // 63 degrees minimum
+            const maxArcLength = Math.PI * 1.0; // 135 degrees maximum
+            const arcLength = minArcLength + speedRatio * (maxArcLength - minArcLength);
+            const startAngle = markerAngle + markerAngularSize * direction;
+            const endAngle = startAngle + arcLength * direction;
+            
+            // Draw arc
+            ctx.strokeStyle = 'rgba(135, 206, 250, 0.7)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, arcRadius, startAngle, endAngle, direction < 0);
+            ctx.stroke();
+            
+            // Draw arrowhead
+            const arrowAngle = endAngle;
+            const arrowX = centerX + arcRadius * Math.cos(arrowAngle);
+            const arrowY = centerY + arcRadius * Math.sin(arrowAngle);
+            const arrowSize = 7;
+            const arrowDir = arrowAngle + (direction > 0 ? Math.PI / 2 : -Math.PI / 2);
+            
+            ctx.fillStyle = 'rgba(135, 206, 250, 0.7)';
+            ctx.beginPath();
+            ctx.moveTo(arrowX, arrowY);
+            ctx.lineTo(arrowX - arrowSize * Math.cos(arrowDir - 0.4), arrowY - arrowSize * Math.sin(arrowDir - 0.4));
+            ctx.lineTo(arrowX - arrowSize * Math.cos(arrowDir + 0.4), arrowY - arrowSize * Math.sin(arrowDir + 0.4));
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        // Draw pulsating marker circle
+        const pulseTime = performance.now() / 1000;
+        const pulseScale = gravityRotationSpeed !== 0 ? (1 + Math.sin(pulseTime * 4) * 0.15) : 1;
+        const gravityRingRadius = 6 * pulseScale;
+        
         ctx.fillStyle = 'hsl(220, 80%, 50%)';
         ctx.beginPath();
-        ctx.arc(markerX, markerY, 6, 0, Math.PI * 2);
+        ctx.arc(markerX, markerY, gravityRingRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 1;
@@ -4379,7 +4936,6 @@ window.addEventListener('DOMContentLoaded', function() {
             if (distClose <= closeButtonRadius) {
                 gravityMenuTargetOpacity = 0;
                 gravityMenuAnimating = true;
-                document.getElementById('gravityMenuToggle').checked = false;
                 return true;
             }
         }
@@ -4632,12 +5188,15 @@ window.addEventListener('DOMContentLoaded', function() {
         const dropdownHeight = 24;
         const dropdownWidth = w - 40;  // Equal 20px spacing on both sides
         const renderTypes = [
-            { value: 'drawSpheres', label: 'spheres ($$$)' },
-            { value: 'drawDiscs', label: 'outlined circles ($$)' },
-            { value: 'drawCircles', label: 'plain circles ($)' },
-            { value: 'drawRings', label: 'unfilled circles ($)' },
-            { value: 'drawLines', label: 'lines ($)' },
-            { value: 'drawArrows', label: 'arrows ($)' },
+            { value: 'drawRings', label: 'circles ($)' },
+            { value: 'drawCircles', label: 'simple discs ($)' },
+            { value: 'drawDiscs', label: 'circled discs ($$)' },
+            { value: 'drawSpheres', label: 'spheres ($$)' },
+            { value: 'drawLines', label: 'directional lines ($)' },
+            { value: 'drawEllipses', label: 'grains of rice ($)' },
+            { value: 'drawArrows', label: 'arrows ($$)' },
+            { value: 'drawFancyArrows', label: 'fancy arrows ($$$)' },
+            { value: 'drawRokets', label: 'rokets ($$$)' },
             { value: 'drawGummies', label: 'gummies (beta)' }
         ];
         
@@ -4720,7 +5279,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         const dropdownHeight = 24;
         const dropdownWidth = w - 100;  // Adjust for new slider width
-        const renderTypes = ['drawSpheres', 'drawDiscs', 'drawCircles', 'drawRings', 'drawLines', 'drawArrows', 'drawGummies'];
+        const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawEllipses', 'drawArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
         
         // If dropdown is expanded, check dropdown options FIRST (before menu bounds)
         // This allows clicking options that extend outside the menu
@@ -4828,6 +5387,16 @@ window.addEventListener('DOMContentLoaded', function() {
         const persBarWidth = radius * 2;
         const persBarHeight = 20;
         
+        const rotBarX = centerX - radius + 14;
+        const rotBarY = centerY + radius + 94;
+        const rotBarWidth = radius * 2;
+        const rotBarHeight = 20;
+        
+        const wipeLightBarX = centerX - radius + 14;
+        const wipeLightBarY = centerY + radius + 131;
+        const wipeLightBarWidth = radius * 2;
+        const wipeLightBarHeight = 20;
+        
         const wheelDrawX = centerX - radius - 2 + 12;
         const wheelDrawY = centerY - radius - 2;
         const actualWheelCenterX = wheelDrawX + radius + 2;
@@ -4844,6 +5413,18 @@ window.addEventListener('DOMContentLoaded', function() {
                 const persPos = Math.max(0, Math.min(1, (canvasX - persBarX) / persBarWidth));
                 colorWheelPersistence = Math.round(persPos * 30);
                 persistence = colorWheelPersistence;
+                return 'color';
+            } else if (colorWheelDraggingControl === 'rotation') {
+                let rotPos = Math.max(0, Math.min(1, (canvasX - rotBarX) / rotBarWidth));
+                colorWheelRotationSpeed = rotPos * 2 - 1; // 0 to 1 -> -1 to 1
+                // Snap to center (0) if within detent zone
+                if (Math.abs(colorWheelRotationSpeed) < 0.1) {
+                    colorWheelRotationSpeed = 0;
+                }
+                return 'color';
+            } else if (colorWheelDraggingControl === 'wipeLightness') {
+                const wipeLightPos = Math.max(0, Math.min(1, (canvasX - wipeLightBarX) / wipeLightBarWidth));
+                colorWheelWipeLightness = Math.round(wipeLightPos * 100);
                 return 'color';
             } else if (colorWheelDraggingControl === 'lightness') {
                 const lightPos = Math.max(0, Math.min(1, (canvasY - barY) / barHeight));
@@ -4882,9 +5463,54 @@ window.addEventListener('DOMContentLoaded', function() {
                 return true;
             }
             
+            // Check rotation speed text label (to the right of rotation slider)
+            const rotBarX = centerX - radius + 14;
+            const rotBarY = centerY + radius + 94;
+            const rotBarWidth = radius * 2;
+            const rotBarHeight = 20;
+            const rotLabelX = rotBarX + rotBarWidth + 8;
+            const rotLabelY = rotBarY + rotBarHeight / 2;
+            const labelWidth = 26; // Approximate width for 'fast'/'slow'
+            const labelHeight = 14;
+            
+            if (canvasX >= rotLabelX && canvasX <= rotLabelX + labelWidth &&
+                canvasY >= rotLabelY - labelHeight/2 && canvasY <= rotLabelY + labelHeight/2) {
+                colorWheelRotationFastMode = !colorWheelRotationFastMode;
+                return 'color';
+            }
+            
+            // Check radio buttons for color mode (before bounds check)
+            const wipeLightBarYCheck = centerY + radius + 131;
+            const radioStartYCheck = wipeLightBarYCheck + 63;
+            const radioXCheck = centerX - radius + 24;
+            const radioSpacingCheck = 25;
+            const radioRadiusCheck = 10;
+            
+            // Velocity radio
+            let dxCheck = canvasX - radioXCheck;
+            let dyCheck = canvasY - radioStartYCheck;
+            if (Math.sqrt(dxCheck * dxCheck + dyCheck * dyCheck) <= radioRadiusCheck) {
+                colorMode = 'velocity';
+                return 'color';
+            }
+            
+            // Size radio
+            dyCheck = canvasY - (radioStartYCheck + radioSpacingCheck);
+            if (Math.sqrt(dxCheck * dxCheck + dyCheck * dyCheck) <= radioRadiusCheck) {
+                colorMode = 'size';
+                return 'color';
+            }
+            
+            // Direction radio
+            dyCheck = canvasY - (radioStartYCheck + radioSpacingCheck * 2);
+            if (Math.sqrt(dxCheck * dxCheck + dyCheck * dyCheck) <= radioRadiusCheck) {
+                colorMode = 'direction';
+                return 'color';
+            }
+            
             // Check if within expanded color wheel area
             if (canvasX < centerX - radius - 20 || canvasX > centerX + radius + 55 ||
-                canvasY < centerY - radius - 38 || canvasY > centerY + radius + 88) {
+                canvasY < centerY - radius - 38 || canvasY > centerY + radius + 175) {
                 return false;
             }
         }
@@ -4903,6 +5529,22 @@ window.addEventListener('DOMContentLoaded', function() {
             const persPos = Math.max(0, Math.min(1, (canvasX - persBarX) / persBarWidth));
             colorWheelPersistence = Math.round(persPos * 30);
             persistence = colorWheelPersistence;
+            return 'color';
+        } else if (canvasX >= rotBarX - 5 && canvasX <= rotBarX + rotBarWidth + 5 &&
+            canvasY >= rotBarY - 5 && canvasY <= rotBarY + rotBarHeight + 5) {
+            colorWheelDraggingControl = 'rotation';
+            let rotPos = Math.max(0, Math.min(1, (canvasX - rotBarX) / rotBarWidth));
+            colorWheelRotationSpeed = rotPos * 2 - 1; // 0 to 1 -> -1 to 1
+            // Snap to center (0) if within detent zone
+            if (Math.abs(colorWheelRotationSpeed) < 0.1) {
+                colorWheelRotationSpeed = 0;
+            }
+            return 'color';
+        } else if (canvasX >= wipeLightBarX - 5 && canvasX <= wipeLightBarX + wipeLightBarWidth + 5 &&
+            canvasY >= wipeLightBarY - 5 && canvasY <= wipeLightBarY + wipeLightBarHeight + 5) {
+            colorWheelDraggingControl = 'wipeLightness';
+            const wipeLightPos = Math.max(0, Math.min(1, (canvasX - wipeLightBarX) / wipeLightBarWidth));
+            colorWheelWipeLightness = Math.round(wipeLightPos * 100);
             return 'color';
         } else if (canvasX >= barX - 5 && canvasX <= barX + barWidth + 5 &&
             canvasY >= barY && canvasY <= barY + barHeight) {
@@ -5210,7 +5852,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Handle render type selection
         if (hitTest.startsWith('renderType_')) {
             const index = parseInt(hitTest.split('_')[1]);
-            const renderTypes = ['drawSpheres', 'drawDiscs', 'drawCircles', 'drawRings', 'drawLines', 'drawArrows', 'drawGummies'];
+            const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawEllipses', 'drawArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
             particlesMenuRenderType = renderTypes[index];
             setRenderType(particlesMenuRenderType);
             particlesMenuRenderTypeExpanded = false; // Collapse dropdown after selection
@@ -5405,6 +6047,25 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Mouse move handler for presets menu position dragging
+    function presetsMenuPositionMove(e) {
+        const bounds = canvas.getBoundingClientRect();
+        const mX = e.clientX - bounds.left - canvas.clientLeft;
+        const mY = e.clientY - bounds.top - canvas.clientTop;
+        presetsMenuCenterX = mX - presetsMenuDragOffsetX;
+        presetsMenuCenterY = mY - presetsMenuDragOffsetY;
+    }
+    
+    function touchPresetsMenuPositionMove(e) {
+        if (e.touches.length === 1) {
+            const bounds = canvas.getBoundingClientRect();
+            const mX = e.touches[0].clientX - bounds.left - canvas.clientLeft;
+            const mY = e.touches[0].clientY - bounds.top - canvas.clientTop;
+            presetsMenuCenterX = mX - presetsMenuDragOffsetX;
+            presetsMenuCenterY = mY - presetsMenuDragOffsetY;
+        }
+    }
+    
     // Note: Cluster and array layout controls moved to respawn menu
     // Note: showBumperEntry is now handled by the toys menu
     // Note: All toy controls are now handled by the toys menu system
@@ -5445,15 +6106,20 @@ window.addEventListener('DOMContentLoaded', function() {
             doLines = false;
             doArrows = false;
             doGummi = false;
+            doRokets = false;
+            doEllipses = false;
             colorWheelSat = 80;
             ballSaturation = 80;
             colorWheelLight = 55;
             ballLightness = 55;
-            physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 particlesMenuQuantity = 64;
                 particlesMenuLargeRadius = 15;
                 particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
                 wasGummi = false;
                 makeBalls();
             }
@@ -5465,15 +6131,20 @@ window.addEventListener('DOMContentLoaded', function() {
             doLines = false;
             doArrows = false;
             doGummi = false;
+            doRokets = false;
+            doEllipses = false;
             colorWheelSat = 80;
             ballSaturation = 80;
             colorWheelLight = 40;
             ballLightness = 40;
-            physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 particlesMenuQuantity = 64;
                 particlesMenuLargeRadius = 15;
                 particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
                 wasGummi = false;
                 makeBalls();
             }
@@ -5485,17 +6156,20 @@ window.addEventListener('DOMContentLoaded', function() {
             doLines = false;
             doArrows = false;
             doGummi = false;
+            doRokets = false;
+            doEllipses = false;
             colorWheelSat = 50;
             ballSaturation = 75;
             colorWheelLight = 45;
             ballLightness = 55;
-            physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 particlesMenuQuantity = 64;
                 particlesMenuLargeRadius = 15;
                 particlesMenuSmallRadius = 3;
                 physicsMenuRepulsionForce = 20;
                 physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
                 wasGummi = false;
                 makeBalls();
             }
@@ -5507,17 +6181,20 @@ window.addEventListener('DOMContentLoaded', function() {
             doSpheres = false;
             doLines = false;
             doArrows = false;
+            doRokets = false;
+            doEllipses = false;
             colorWheelSat = 100;
             ballSaturation = 100;
             colorWheelLight = 65;
             ballLightness = 65;
-            physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 particlesMenuQuantity = 64;
                 particlesMenuLargeRadius = 15;
                 particlesMenuSmallRadius = 3;
                 physicsMenuRepulsionForce = 20;
                 physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
                 wasGummi = false;
                 makeBalls();
             }
@@ -5530,11 +6207,14 @@ window.addEventListener('DOMContentLoaded', function() {
             doCircles = false;
             doLines = false;
             doArrows = false;
+            doRokets = false;
+            doEllipses = false;
             colorWheelSat = 100;
             ballSaturation = 100;
             colorWheelLight = 70;
             ballLightness = 70;
             physProps.repulsionDist = 1.5;
+            physicsMenuRepulsionDist = 1.5;
             particlesMenuQuantity = 15;
             particlesMenuLargeRadius = 80;
             particlesMenuSmallRadius = 20;
@@ -5549,21 +6229,49 @@ window.addEventListener('DOMContentLoaded', function() {
             doLines = true;
             doArrows = false;
             doGummi = false;
+            doRokets = false;
+            doEllipses = false;
             colorWheelSat = 50;
             ballSaturation = 75;
             colorWheelLight = 60;
             ballLightness = 60;
-            physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 particlesMenuQuantity = 64;
                 particlesMenuLargeRadius = 15;
                 particlesMenuSmallRadius = 3;
                 physicsMenuRepulsionForce = 20;
                 physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
                 wasGummi = false;
                 makeBalls();
             }
-        } else if (renderType === 'drawArrows') {
+        } else if (renderType === 'drawEllipses') {
+            doCircles = false;
+            doDiscs = false;
+            doSpheres = false;
+            doRings = false;
+            doLines = true;
+            doArrows = false;
+            doGummi = false;
+            doRokets = false;
+            doEllipses = true;
+            colorWheelSat = 50;
+            ballSaturation = 75;
+            colorWheelLight = 60;
+            ballLightness = 60;
+            if (wasGummi == true) {
+                particlesMenuQuantity = 64;
+                particlesMenuLargeRadius = 15;
+                particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
+                wasGummi = false;
+                makeBalls();
+            }
+        } else if (renderType === 'drawArrows' || renderType === 'drawFancyArrows') {
             doCircles = false;
             doDiscs = false;
             doSpheres = false;
@@ -5571,17 +6279,45 @@ window.addEventListener('DOMContentLoaded', function() {
             doLines = true;
             doArrows = true;
             doGummi = false;
+            doRokets = false;
+            doEllipses = false;
             colorWheelSat = 50;
             ballSaturation = 75;
             colorWheelLight = 45;
             ballLightness = 55;
-            physProps.repulsionDist = 4;
             if (wasGummi == true) {
                 particlesMenuQuantity = 64;
                 particlesMenuLargeRadius = 15;
                 particlesMenuSmallRadius = 3;
                 physicsMenuRepulsionForce = 20;
                 physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
+                wasGummi = false;
+                makeBalls();
+            }
+        } else if (renderType === 'drawRokets') {
+            doCircles = false;
+            doDiscs = false;
+            doSpheres = false;
+            doRings = false;
+            doLines = true;
+            doArrows = false;
+            doGummi = false;
+            doRokets = true;
+            doEllipses = false;
+            colorWheelSat = 50;
+            ballSaturation = 75;
+            colorWheelLight = 45;
+            ballLightness = 55;
+            if (wasGummi == true) {
+                particlesMenuQuantity = 64;
+                particlesMenuLargeRadius = 15;
+                particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
                 wasGummi = false;
                 makeBalls();
             }
@@ -5708,7 +6444,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Check main menu items if visible
         if (mainMenuVisible || mainMenuX > -calculateMainMenuWidth()) {
             const menuWidth = calculateMainMenuWidth();
-            const itemWidth = 90;
+            const itemWidth = 80;
             const itemSpacing = 10;
             const sidePadding = 15;
             const barY = mainMenuPadding;
@@ -5950,6 +6686,35 @@ window.addEventListener('DOMContentLoaded', function() {
                                     colorWheelTargetOpacity = 0;
                                     colorWheelAnimating = true;
                                 }
+                            } else if (item.id === 'presets') {
+                                presetsMenuVisible = !currentValue;
+                                if (presetsMenuVisible) {
+                                    // Reset submenu hide state if manually turned on
+                                    if (submenusHidden) submenusHidden = false;
+                                    
+                                    // Use stored position if manually moved, otherwise use default
+                                    if (!presetsMenuManuallyMoved) {
+                                        presetsMenuCenterX = defaultMenuPositions.presets.x * canvas.width;
+                                        presetsMenuCenterY = defaultMenuPositions.presets.y * canvas.height;
+                                        
+                                        // Check if menu would overlap main menu bar
+                                        const menuTopY = presetsMenuCenterY - presetsMenuHeight / 2;
+                                        const mainMenuBottomY = mainMenuPadding + mainMenuHeight;
+                                        
+                                        if (menuTopY < mainMenuBottomY) {
+                                            // Move below main menu with random gap
+                                            const randomGap = 10 + Math.random() * 15; // 10-25px
+                                            presetsMenuCenterY = mainMenuBottomY + randomGap + presetsMenuHeight / 2;
+                                        }
+                                    }
+                                    
+                                    presetsMenuTargetOpacity = 1;
+                                    presetsMenuAnimating = true;
+                                    bringMenuToFront('presetsMenu');
+                                } else {
+                                    presetsMenuTargetOpacity = 0;
+                                    presetsMenuAnimating = true;
+                                }
                             }
                         }
                         return;
@@ -6064,6 +6829,23 @@ window.addEventListener('DOMContentLoaded', function() {
                     toysMenuManuallyMoved = true;
                     document.addEventListener('mousemove', toysMenuPositionMove);
                     document.addEventListener('touchmove', touchToysMenuPositionMove, {passive: false});
+                    return;
+                }
+            } else if (menuName === 'presetsMenu' && presetsMenuVisible) {
+                const handled = handlePresetsMenuInteraction(mX, mY);
+                if (handled === 'preset' || handled === 'close' || handled === 'reset' || handled === 'cancel' || handled === 'dialog') {
+                    globalInteractionLock = true;
+                    bringMenuToFront('presetsMenu');
+                    return;
+                } else if (handled === 'drag') {
+                    globalInteractionLock = true;
+                    bringMenuToFront('presetsMenu');
+                    presetsMenuPositionDragging = true;
+                    presetsMenuDragOffsetX = mX - presetsMenuCenterX;
+                    presetsMenuDragOffsetY = mY - presetsMenuCenterY;
+                    presetsMenuManuallyMoved = true;
+                    document.addEventListener('mousemove', presetsMenuPositionMove);
+                    document.addEventListener('touchmove', touchPresetsMenuPositionMove, {passive: false});
                     return;
                 }
             } else if (menuName === 'particlesMenu' && particlesMenuVisible) {
@@ -6508,7 +7290,6 @@ window.addEventListener('DOMContentLoaded', function() {
             }
             
             if (isInsideBox) {
-                
                 // If oscillating, stop oscillation for all boxes
                 if (doOscillateBoxes || doOscillateBoxesVertical) {
                     doOscillateBoxes = false;
@@ -6626,6 +7407,49 @@ window.addEventListener('DOMContentLoaded', function() {
             }
         }
         
+        // Check sub-puck button distances (4 buttons per puck)
+        let closestSubButtonDist = Infinity;
+        let closestSubButtonIndex = -1;
+        let closestSubButtonNum = -1;
+        let closestCenterButtonDist = Infinity;
+        let closestCenterButtonIndex = -1;
+        
+        for (let i = 0; i < Puck.length; i++) {
+            const puck = Puck[i];
+            if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !puck.yinyang && puck.subPuckVisible) {
+                // Check center direction button
+                if (puck.subPuckCenterButtonPos) {
+                    const dx = mousePos.x - puck.subPuckCenterButtonPos.x;
+                    const dy = mousePos.y - puck.subPuckCenterButtonPos.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < closestCenterButtonDist) {
+                        closestCenterButtonDist = dist;
+                        closestCenterButtonIndex = i;
+                    }
+                }
+                
+                // Check four motion buttons
+                const buttonPositions = [
+                    puck.subPuckButton1Pos,
+                    puck.subPuckButton2Pos,
+                    puck.subPuckButton3Pos,
+                    puck.subPuckButton4Pos
+                ];
+                for (let j = 0; j < buttonPositions.length; j++) {
+                    if (buttonPositions[j]) {
+                        const dx = mousePos.x - buttonPositions[j].x;
+                        const dy = mousePos.y - buttonPositions[j].y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < closestSubButtonDist) {
+                            closestSubButtonDist = dist;
+                            closestSubButtonIndex = i;
+                            closestSubButtonNum = j;
+                        }
+                    }
+                }
+            }
+        }
+        
         // Now check which action to take based on closest match
         // Use scaled detection radius for buttons (0.12 * puck radius for better precision on small pucks)
         const plusButtonRadius = closestPlusIndex >= 0 ? 0.12 * Puck[closestPlusIndex].radius : Infinity;
@@ -6633,8 +7457,49 @@ window.addEventListener('DOMContentLoaded', function() {
         const offButtonRadius = closestOffIndex >= 0 ? 0.12 * Puck[closestOffIndex].radius : Infinity;
         const arrowButtonRadius = closestArrowIndex >= 0 ? 0.15 * Puck[closestArrowIndex].radius : Infinity;
         const gripRadius = closestGripIndex >= 0 ? 0.12 * Puck[closestGripIndex].radius : Infinity;
+        const subButtonRadius = closestSubButtonIndex >= 0 ? 0.12 * Puck[closestSubButtonIndex].radius : Infinity;
+        const centerButtonRadius = closestCenterButtonIndex >= 0 ? 0.12 * Puck[closestCenterButtonIndex].radius : Infinity;
         
-        if (closestPlusDist < plusButtonRadius) {
+        // Check center direction button FIRST (highest priority when sub-puck visible)
+        if (closestCenterButtonDist < centerButtonRadius) {
+            const puck = Puck[closestCenterButtonIndex];
+            
+            // Toggle direction
+            puck.subPuckOrbitClockwise = !puck.subPuckOrbitClockwise;
+            console.log('Direction toggled:', puck.subPuckOrbitClockwise ? 'clockwise' : 'counter-clockwise');
+            
+            normalPuckHandled = true;
+            return;
+        }
+        // Check sub-puck motion buttons SECOND
+        else if (closestSubButtonDist < subButtonRadius) {
+            const puck = Puck[closestSubButtonIndex];
+            const modes = ['circle', 'ellipse', 'horizontal', 'vertical'];
+            const colors = ['red', 'orange', 'yellow', 'green'];
+            const mode = modes[closestSubButtonNum];
+            const color = colors[closestSubButtonNum];
+            
+            console.log('Sub-puck button clicked:', color, mode);
+            
+            // If puck is already in this mode, stop it
+            if (puck.subPuckMotionMode === mode) {
+                puck.subPuckMotionMode = null;
+                puck.subPuckOscillating = false;
+                puck.subPuckCircleOrbit = false;
+                puck.subPuckEllipseOrbit = false;
+                console.log('Stopping motion mode');
+            } else {
+                // Set pending mode and retract sub-puck
+                puck.subPuckPendingMode = mode;
+                puck.subPuckTargetAngle = 0;
+                puck.subPuckAnimating = true;
+                puck.subPuckLastTime = performance.now();
+                console.log('Retracting sub-puck, will activate:', mode);
+            }
+            
+            normalPuckHandled = true;
+            return;
+        } else if (closestPlusDist < plusButtonRadius) {
             duplicateNormalPuck(closestPlusIndex);
             normalPuckHandled = true;
             return;
@@ -6644,13 +7509,7 @@ window.addEventListener('DOMContentLoaded', function() {
             return;
         } else if (closestOffDist < offButtonRadius) {
             // Turn off all normal pucks and update the toys menu puck button
-            const button = document.getElementById('showPuckButton');
-            if (button) {
-                button.checked = false;
-                button.className = 'checkbox-puck';
-                button.title = 'Pucks';
-            }
-            // Also update the toysMenuItems state so the icon is dimmed
+            // Update the toysMenuItems state so the icon is dimmed
             const puckToy = toysMenuItems.find(item => item && item.id === 'showPuckButton');
             if (puckToy) puckToy.checked = false;
             doOscillatePucks = false;
@@ -6665,32 +7524,25 @@ window.addEventListener('DOMContentLoaded', function() {
             normalPuckHandled = true;
             return;
         } else if (closestArrowDist < arrowButtonRadius) {
-            // Toggle oscillation mode
-            doOscillatePucks = !doOscillatePucks;
+            // Toggle sub-puck visibility (REPLACES oscillation functionality)
+            const puck = Puck[closestArrowIndex];
             
-            if (doOscillatePucks) {
-                // Starting oscillation - ensure pucks are visible
-                for (var p = 0; p < Puck.length; p++) {
-                    if (!Puck[p].heartBeat && !Puck[p].cycle && !Puck[p].flying && !Puck[p].orbit && !Puck[p].yinyang) {
-                        if (!Puck[p].OGradius || Puck[p].OGradius <= 0) {
-                            Puck[p].OGradius = 0.3;
-                        }
-                    }
-                }
+            console.log('Sub-puck button clicked! Current angle:', puck.subPuckRotationAngle, 'Visible:', puck.subPuckVisible);
+            
+            if (puck.subPuckVisible) {
+                // Hide sub-puck - rotate back under main puck
+                puck.subPuckTargetAngle = 0;
+                puck.subPuckAnimating = true;
+                puck.subPuckLastTime = performance.now();
+                console.log('Hiding sub-puck, target angle: 0');
             } else {
-                // Stopping oscillation - reset properties
-                for (let i = 0; i < Puck.length; i++) {
-                    const puck = Puck[i];
-                    if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !puck.yinyang) {
-                        puck.oscInit = false;
-                        puck.oscOriginX = undefined;
-                        puck.oscAmplitude = undefined;
-                        puck.oscCenterX = undefined;
-                        puck.oscStartTime = undefined;
-                        puck.oscPhaseOffset = undefined;
-                    }
-                }
+                // Show sub-puck - rotate out from under main puck
+                puck.subPuckTargetAngle = Math.PI;
+                puck.subPuckAnimating = true;
+                puck.subPuckLastTime = performance.now();
+                console.log('Showing sub-puck, target angle: PI');
             }
+            
             normalPuckHandled = true;
             return;
         } else if (closestGripDist < gripRadius) {
@@ -6703,6 +7555,46 @@ window.addEventListener('DOMContentLoaded', function() {
             normalPuckHandled = true;
         } else if (closestBodyIndex >= 0) {
             const puck = Puck[closestBodyIndex];
+            
+            // Check if clicking on speed slider (when sub-puck is visible)
+            if (puck.subPuckVisible && puck.speedSliderBounds) {
+                const slider = puck.speedSliderBounds;
+                if (mousePos.x >= slider.x && mousePos.x <= slider.x + slider.width &&
+                    mousePos.y >= slider.y && mousePos.y <= slider.y + slider.height) {
+                    // Clicked on speed slider - update value and enable dragging
+                    const sliderProgress = (mousePos.x - slider.x) / slider.width;
+                    puck.subPuckAnimSpeed = Math.max(0, Math.min(1, sliderProgress));
+                    
+                    // Enable dragging and lock interactions
+                    globalInteractionLock = true;
+                    window.activeSpeedSliderPuck = closestBodyIndex;
+                    document.addEventListener('mousemove', mousePuckSpeedSliderDrag);
+                    document.addEventListener('touchmove', touchPuckSpeedSliderDrag, {passive: false});
+                    
+                    normalPuckHandled = true;
+                    return;
+                }
+            }
+            
+            // Check if clicking on amplitude slider (when sub-puck is visible)
+            if (puck.subPuckVisible && puck.amplitudeSliderBounds) {
+                const slider = puck.amplitudeSliderBounds;
+                if (mousePos.x >= slider.x && mousePos.x <= slider.x + slider.width &&
+                    mousePos.y >= slider.y && mousePos.y <= slider.y + slider.height) {
+                    // Clicked on amplitude slider - update value and enable dragging
+                    const sliderProgress = (mousePos.x - slider.x) / slider.width;
+                    puck.subPuckAnimAmplitude = Math.max(0, Math.min(1, sliderProgress));
+                    
+                    // Enable dragging and lock interactions
+                    globalInteractionLock = true;
+                    window.activeAmplitudeSliderPuck = closestBodyIndex;
+                    document.addEventListener('mousemove', mousePuckAmplitudeSliderDrag);
+                    document.addEventListener('touchmove', touchPuckAmplitudeSliderDrag, {passive: false});
+                    
+                    normalPuckHandled = true;
+                    return;
+                }
+            }
             
             // If clicking on an oscillating puck, stop oscillation
             if (doOscillatePucks) {
@@ -6720,6 +7612,15 @@ window.addEventListener('DOMContentLoaded', function() {
                         p.oscPhaseOffset = undefined;
                     }
                 }
+                normalPuckHandled = true;
+            } else if (puck.subPuckMotionMode) {
+                // If clicking on puck with active sub-puck motion mode, stop it
+                console.log('Stopping sub-puck motion mode:', puck.subPuckMotionMode);
+                puck.subPuckMotionMode = null;
+                puck.subPuckOscillating = false;
+                puck.subPuckCircleOrbit = false;
+                puck.subPuckEllipseOrbit = false;
+                puck.subPuckOscInit = false;
                 normalPuckHandled = true;
             } else {
                 // Normal drag behavior when not oscillating
@@ -6759,13 +7660,6 @@ window.addEventListener('DOMContentLoaded', function() {
                             blower.active = false;
                             if (typeof blowerState !== 'undefined') blowerState = 0;
                             // Update the toys menu blower icon
-                            var blowerButton = document.getElementById('showBlowerButton');
-                            if (blowerButton) {
-                               blowerButton.checked = false;
-                               blowerButton.className = 'checkbox-blower';
-                               blowerButton.title = 'Blower';
-                               blowerButton.setAttribute('data-state', 0);
-                            }
                             var blowerToy = toysMenuItems && toysMenuItems.find(item => item && item.id === 'showBlowerButton');
                             if (blowerToy) blowerToy.checked = false;
                             e.preventDefault();
@@ -6845,6 +7739,341 @@ window.addEventListener('DOMContentLoaded', function() {
         }
         }}}}}}} // close normalPuckHandled, boxHandled and nested else structure
 
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    //  HELPER FUNCTIONS FOR ROKET  ------------------
+    function rads(theta) {
+        return theta * Math.PI / 180;
+    }
+
+    function offscreenRoketDrawCircle(posX, posY, radius) {
+        roketCtx.beginPath();
+        roketCtx.arc(posX, posY, radius, 0, Math.PI * 2);
+        roketCtx.closePath();
+    }
+
+    function catmullRomSpline(points, tension = 0.5, numSegments = 16) {
+        if (points.length < 2) return points;
+        const result = [];
+        const p0 = points[0];
+        const p1 = points[1 % points.length];
+        const pn = points[points.length - 1];
+        const pn1 = points[points.length - 2];
+        
+        for (let i = 0; i < points.length; i++) {
+            const p0 = points[(i === 0) ? points.length - 1 : i - 1];
+            const p1 = points[i];
+            const p2 = points[(i + 1) % points.length];
+            const p3 = points[(i + 2) % points.length];
+            
+            for (let t = 0; t < 1; t += 1 / numSegments) {
+                const t2 = t * t;
+                const t3 = t2 * t;
+                
+                const x = 0.5 * ((2 * p1.x) +
+                    (-p0.x + p2.x) * t +
+                    (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+                    (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
+                
+                const y = 0.5 * ((2 * p1.y) +
+                    (-p0.y + p2.y) * t +
+                    (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+                    (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+                
+                result.push({ x, y });
+            }
+        }
+        return result;
+    }
+
+    //  DEFINE OFFSCREEN ROKET  ------------------
+    function defineOffscreenRoket(radius) {
+        //  DRAW ROKET TO OFFSCREEN CANVAS  ------------------
+        // radius is expected in simulation units; if not provided, try to
+        // derive it from the existing Roket instance (which stores radius in pixels)
+ 
+        // match the constructor default;
+        radius = Math.max(0.1, Math.min(0.1, 0.0002 * cScale));
+        // size the offscreen canvas to comfortably contain the sprite (pixels)
+        // convert sim-units to pixels with cScale
+        var spriteDiameterPx = Math.max(64, Math.ceil(2 * radius * cScale * 1.6 + 8));
+        offscreenRoketCanvas.width = spriteDiameterPx;
+        offscreenRoketCanvas.height = spriteDiameterPx;
+        roketCtx = offscreenRoketCanvas.getContext('2d');
+
+        // clear and prepare coordinate system: origin at canvas center
+        roketCtx.clearRect(0, 0, offscreenRoketCanvas.width, offscreenRoketCanvas.height);
+        roketCtx.save();
+        roketCtx.translate(offscreenRoketCanvas.width / 2, offscreenRoketCanvas.height / 2);
+
+        var roketVars = {
+            radius: radius,
+            // FUSELAGE -----
+            // 1 bottom center
+            a1cos: Math.cos(rads(0 - 90)),
+            a1sin: Math.sin(rads(0 - 90)),
+            r1: 0,
+            // 2 bottom 
+            a2cos: Math.cos(rads(0 - 90)),
+            a2sin: Math.sin(rads(0 - 90)),
+            r2: 0.07893,
+            al2cos: Math.cos(rads(180 - 90)),
+            al2sin: Math.sin(rads(180 - 90)),
+            rl2: 0.07893,
+            // 6 top fin attach point
+            a6cos: Math.cos(rads(66.6 - 90)),
+            a6sin: Math.sin(rads(66.6 - 90)),
+            r6: 0.2859,
+            al6cos: Math.cos(rads(113.4 - 90)),
+            al6sin: Math.sin(rads(113.4 - 90)),
+            rl6: 0.2859,
+            // 7 mid side tip
+            a7cos: Math.cos(rads(70.1 - 90)),
+            a7sin: Math.sin(rads(70.1 - 90)),
+            r7: 0.4383,
+            al7cos: Math.cos(rads(109.9 - 90)),
+            al7sin: Math.sin(rads(109.9 - 90)),
+            rl7: 0.4383,
+            // 8 mid top
+            a8cos: Math.cos(rads(78.4 - 90)),
+            a8sin: Math.sin(rads(78.4 - 90)),
+            r8: 0.6089,
+            al8cos: Math.cos(rads(101.6 - 90)),
+            al8sin: Math.sin(rads(101.6 - 90)),
+            rl8: 0.6089,
+            // 9 tip
+            a9cos: Math.cos(0),
+            a9sin: Math.sin(0),
+            r9: 0.7630,
+            // 10 nozzle top right
+            a10cos: Math.cos(rads(0 - 90)),
+            a10sin: Math.sin(rads(0 - 90)),
+            r10: 0.03508,
+            //  11 nozzle bottom right
+            a11cos: Math.cos(rads(-45 - 90)),
+            a11sin: Math.sin(rads(-45 - 90)),
+            r11: 0.1,
+            //  12 nozzle bottom left
+            a12cos: Math.cos(rads(225 - 90)),
+            a12sin: Math.sin(rads(225 - 90)),
+            r12: 0.1,
+            // 13 nozzle top left
+            a13cos: Math.cos(rads(180 - 90)),
+            a13sin: Math.sin(rads(180 - 90)),
+            r13: 0.03508,
+            // RIGHT FIN -----
+            // 3 fin tip bottom
+            a3cos: Math.cos(rads(-43.9 - 90)),
+            a3sin: Math.sin(rads(-43.9 - 90)),
+            r3: 0.3287,
+            // 4 fin tip top
+            a4cos: Math.cos(rads(-16.7 - 90)),
+            a4sin: Math.sin(rads(-16.7 - 90)),
+            r4: 0.2747,
+            // 5 fin side
+            a5cos: Math.cos(rads(30.3 - 90)),
+            a5sin: Math.sin(rads(30.3 - 90)),
+            r5: 0.2426,
+            // LEFT FIN
+            // 3l fin tip bottom
+            al3cos: Math.cos(rads(223.9 - 90)),
+            al3sin: Math.sin(rads(223.9 - 90)),
+            rl3: 0.3287,
+            // 4l fin tip top
+            al4cos: Math.cos(rads(196.7 - 90)),
+            al4sin: Math.sin(rads(196.7 - 90)),
+            rl4: 0.2747,
+            // 5l fin side
+            al5cos: Math.cos(rads(139.7 - 90)),
+            al5sin: Math.sin(rads(139.7 - 90)),
+            rl5: 0.2426,
+            // portholes
+            windowCos: Math.cos(0),
+            windowSin: Math.sin(0),
+            rTop: 0.6,
+            rMid: 0.456,
+            rBot: 0.3,
+        }
+        // convert simulation radius -> pixel radius for drawing convenience
+        const rpx = roketVars.radius * cScale;
+
+        //  ANTENNA  ----------
+        roketCtx.beginPath();
+        roketCtx.moveTo(0, 0);
+        roketCtx.lineTo(
+            (1.15 * roketVars.r9 * rpx * Math.cos(0)), 
+            (-1.15 * roketVars.r9 * rpx * Math.sin(0))
+        );
+        roketCtx.strokeStyle = 'hsl(0, 0%, 90%)';
+        roketCtx.lineWidth = 0.015 * rpx;
+        roketCtx.shadowBlur = 10;
+        roketCtx.shadowColor = 'black';
+        roketCtx.stroke();
+
+        // FUSELAGE (smooth Catmull-Rom spline)
+        const pts = [
+            { x: (roketVars.r1 * rpx * roketVars.a1cos), y: (-roketVars.r1 * rpx * roketVars.a1sin) },
+            { x: (roketVars.r2 * rpx * roketVars.a2cos), y: (-roketVars.r2 * rpx * roketVars.a2sin) },
+            { x: (roketVars.r6 * rpx * roketVars.a6cos), y: (-roketVars.r6 * rpx * roketVars.a6sin) },
+            { x: (roketVars.r7 * rpx * roketVars.a7cos), y: (-roketVars.r7 * rpx * roketVars.a7sin) },
+            { x: (roketVars.r8 * rpx * roketVars.a8cos), y: (-roketVars.r8 * rpx * roketVars.a8sin) },
+            { x: (roketVars.r9 * rpx * roketVars.a9cos), y: (-roketVars.r9 * rpx * roketVars.a9sin) },
+            { x: (roketVars.rl8 * rpx * roketVars.al8cos), y: (-roketVars.rl8 * rpx * roketVars.al8sin) },
+            { x: (roketVars.rl7 * rpx * roketVars.al7cos), y: (-roketVars.rl7 * rpx * roketVars.al7sin) },
+            { x: (roketVars.rl6 * rpx * roketVars.al6cos), y: (-roketVars.rl6 * rpx * roketVars.al6sin) },
+            { x: (roketVars.rl2 * rpx * roketVars.al2cos), y: (-roketVars.rl2 * rpx * roketVars.al2sin) }
+        ];
+        const smoothPts = catmullRomSpline(pts, 0.5, 12);
+        roketCtx.beginPath();
+        roketCtx.moveTo(smoothPts[0].x, smoothPts[0].y);
+        for (let i = 1; i < smoothPts.length; i++) {
+            roketCtx.lineTo(smoothPts[i].x, smoothPts[i].y);
+        }
+        roketCtx.closePath();
+        roketCtx.fillStyle = 'hsl(120, 60%, 40%)';
+        roketCtx.shadowBlur = 8;
+        roketCtx.fill();
+        roketCtx.strokeStyle = 'black';
+        roketCtx.lineWidth = 1;
+        roketCtx.stroke();
+
+        //  NOZZLE  ---------
+        roketCtx.beginPath();
+        roketCtx.moveTo((roketVars.radius * roketVars.r10 * roketVars.a10cos) * cScale,
+            (-roketVars.radius * roketVars.r10 * roketVars.a10sin) * cScale);
+        roketCtx.lineTo((roketVars.radius * roketVars.r10 * roketVars.a10cos) * cScale,
+            (-roketVars.radius * roketVars.r10 * roketVars.a10sin) * cScale);
+        roketCtx.lineTo((roketVars.radius * roketVars.r11 * roketVars.a11cos) * cScale,
+            (-roketVars.radius * roketVars.r11 * roketVars.a11sin) * cScale);
+        roketCtx.lineTo((roketVars.radius * roketVars.r12 * roketVars.a12cos) * cScale,
+            (-roketVars.radius * roketVars.r12 * roketVars.a12sin) * cScale);
+        roketCtx.lineTo((roketVars.radius * roketVars.r13 * roketVars.a13cos) * cScale,
+            (-roketVars.radius * roketVars.r13 * roketVars.a13sin) * cScale);
+        roketCtx.stroke();
+        roketCtx.fillStyle = 'hsl(30, 70%, 60%)';
+        roketCtx.fill();
+
+        // RIGHT FIN (smooth)
+        const rightFinPts = [
+            { x: (roketVars.r2 * rpx * roketVars.a2cos), y: (-roketVars.r2 * rpx * roketVars.a2sin) },
+            { x: (roketVars.r3 * rpx * roketVars.a3cos), y: (-roketVars.r3 * rpx * roketVars.a3sin) },
+            { x: (roketVars.r4 * rpx * roketVars.a4cos), y: (-roketVars.r4 * rpx * roketVars.a4sin) },
+            { x: (roketVars.r5 * rpx * roketVars.a5cos), y: (-roketVars.r5 * rpx * roketVars.a5sin) },
+            { x: (roketVars.r6 * rpx * roketVars.a6cos), y: (-roketVars.r6 * rpx * roketVars.a6sin) },
+            { x: (roketVars.r2 * rpx * roketVars.a2cos), y: (-roketVars.r2 * rpx * roketVars.a2sin) }
+        ];
+        const rightFinSmooth = catmullRomSpline(rightFinPts, 0.5, 10);
+        roketCtx.beginPath();
+        roketCtx.moveTo(rightFinSmooth[0].x, rightFinSmooth[0].y);
+        for (let i = 1; i < rightFinSmooth.length; i++) {
+            roketCtx.lineTo(rightFinSmooth[i].x, rightFinSmooth[i].y);
+        }
+        roketCtx.closePath();
+        roketCtx.fillStyle = 'hsl(180, 90%, 44%)';
+        roketCtx.shadowBlur = 5;
+        roketCtx.fill();
+        roketCtx.strokeStyle = 'black';
+        roketCtx.lineWidth = 1;
+        roketCtx.stroke();
+
+        // LEFT FIN (smooth)
+        const leftFinPts = [
+            { x: (roketVars.rl2 * rpx * roketVars.al2cos), y: (-roketVars.rl2 * rpx * roketVars.al2sin) },
+            { x: (roketVars.rl3 * rpx * roketVars.al3cos), y: (-roketVars.rl3 * rpx * roketVars.al3sin) },
+            { x: (roketVars.rl4 * rpx * roketVars.al4cos), y: (-roketVars.rl4 * rpx * roketVars.al4sin) },
+            { x: (roketVars.rl5 * rpx * roketVars.al5cos), y: (-roketVars.rl5 * rpx * roketVars.al5sin) },
+            { x: (roketVars.rl6 * rpx * roketVars.al6cos), y: (-roketVars.rl6 * rpx * roketVars.al6sin) },
+            { x: (roketVars.rl2 * rpx * roketVars.al2cos), y: (-roketVars.rl2 * rpx * roketVars.al2sin) }
+        ];
+        const leftFinSmooth = catmullRomSpline(leftFinPts, 0.5, 10);
+        roketCtx.beginPath();
+        roketCtx.moveTo(leftFinSmooth[0].x, leftFinSmooth[0].y);
+        for (let i = 1; i < leftFinSmooth.length; i++) {
+            roketCtx.lineTo(leftFinSmooth[i].x, leftFinSmooth[i].y);
+        }
+        roketCtx.closePath();
+        roketCtx.fill();
+        roketCtx.shadowBlur = 0;
+        roketCtx.stroke();
+
+        //  WINDOWS  ----------
+        offscreenRoketDrawCircle((roketVars.rTop * rpx * Math.cos(0)),
+            (-roketVars.rTop * rpx * Math.sin(0)),
+            0.04 * rpx
+        );
+        roketCtx.strokeStyle = 'hsl(0, 0%, 90%)';
+        roketCtx.lineWidth = 0.015 * roketVars.radius * cScale;
+        roketCtx.fillStyle = 'black';
+        roketCtx.fill();
+        roketCtx.stroke();
+
+        offscreenRoketDrawCircle((roketVars.rMid * rpx * Math.cos(0)),
+            (-roketVars.rMid * rpx * Math.sin(0)),
+            0.05 * rpx
+        );
+        roketCtx.fill();
+        roketCtx.stroke();
+
+        offscreenRoketDrawCircle((roketVars.rBot * rpx * Math.cos(0)),
+            (-roketVars.rBot * rpx * Math.sin(0)),
+            0.05 * rpx
+        );
+        roketCtx.fill();
+        roketCtx.stroke();
+        
+        // compute and store sprite metadata
+        // tip offset in pixels relative to sprite center
+        try {
+            var tipX_center = (1.15 * roketVars.r9 * rpx * Math.cos(0));
+            var tipY_center = (-1.15 * roketVars.r9 * rpx * Math.sin(0));
+        } catch (e) {
+            var tipX_center = 0;
+            var tipY_center = - (roketVars.radius * cScale);
+        }
+
+        // estimate geometric centroid (pivot) from the fuselage smooth points
+        var avgX = 0, avgY = 0;
+            if (typeof smoothPts !== 'undefined' && smoothPts.length > 0) {
+                for (var i = 0; i < smoothPts.length; i++) {
+                    avgX += smoothPts[i].x;
+                    avgY += smoothPts[i].y;
+                }
+                avgX /= smoothPts.length;
+                avgY /= smoothPts.length;
+            } else {
+                avgX = 0; avgY = 0;
+            }
+
+        // pivot relative to top-left image coordinates
+        var halfW = offscreenRoketCanvas.width / 2;
+        var halfH = offscreenRoketCanvas.height / 2;
+        var pivotImgX = halfW + avgX;
+        var pivotImgY = halfH + avgY;
+
+        // Calculate roket length from nozzle bottom to antenna tip
+        var nozzleBottomY = (roketVars.radius * roketVars.r11 * roketVars.a11sin) * cScale;
+        var antennaTipY = -(1.15 * roketVars.r9 * rpx * Math.sin(0));
+        var roketLength = Math.abs(antennaTipY - nozzleBottomY);
+
+        // expose for runtime drawing
+        window.roketSprite = {
+            canvas: offscreenRoketCanvas,
+            ctx: roketCtx,
+            tipX_center: tipX_center,
+            tipY_center: tipY_center,
+            pivotCenterX: avgX, // relative to sprite center (pixels)
+            pivotCenterY: avgY,
+            pivotImgX: pivotImgX, // relative to image top-left (pixels)
+            pivotImgY: pivotImgY,
+            radius: rpx, // store pixel radius for runtime clarity
+            length: roketLength // total length from nozzle to antenna tip in pixels
+        };
+
+        roketCtx.restore();
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////
+    
     function setNewDir(e) {
         const ev = e || window.event;
         if (!ev) return;
@@ -7145,6 +8374,78 @@ window.addEventListener('DOMContentLoaded', function() {
         puck.pos.y = (simHeight - newY / cScale) - dY;
         puck.vel.subtractVectors(puck.pos, puck.prevPos);
         puck.vel.scale(60);
+    }
+    
+    // Sub-puck speed slider drag handlers
+    function mousePuckSpeedSliderDrag(event) {
+        if (typeof window.activeSpeedSliderPuck === 'undefined' || 
+            window.activeSpeedSliderPuck < 0 || 
+            window.activeSpeedSliderPuck >= Puck.length) return;
+        
+        const puck = Puck[window.activeSpeedSliderPuck];
+        if (!puck || !puck.speedSliderBounds) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const slider = puck.speedSliderBounds;
+        
+        // Calculate progress - allow dragging outside bounds with clamping
+        const sliderProgress = (mouseX / cScale - dX - slider.x) / slider.width;
+        puck.subPuckAnimSpeed = Math.max(0, Math.min(1, sliderProgress));
+    }
+    
+    function touchPuckSpeedSliderDrag(event) {
+        if (typeof window.activeSpeedSliderPuck === 'undefined' || 
+            window.activeSpeedSliderPuck < 0 || 
+            window.activeSpeedSliderPuck >= Puck.length) return;
+        
+        const puck = Puck[window.activeSpeedSliderPuck];
+        if (!puck || !puck.speedSliderBounds || event.touches.length === 0) return;
+        
+        event.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const touch = event.touches[0];
+        const touchX = touch.clientX - rect.left;
+        const slider = puck.speedSliderBounds;
+        
+        const sliderProgress = (touchX / cScale - dX - slider.x) / slider.width;
+        puck.subPuckAnimSpeed = Math.max(0, Math.min(1, sliderProgress));
+    }
+    
+    // Sub-puck amplitude slider drag handlers
+    function mousePuckAmplitudeSliderDrag(event) {
+        if (typeof window.activeAmplitudeSliderPuck === 'undefined' || 
+            window.activeAmplitudeSliderPuck < 0 || 
+            window.activeAmplitudeSliderPuck >= Puck.length) return;
+        
+        const puck = Puck[window.activeAmplitudeSliderPuck];
+        if (!puck || !puck.amplitudeSliderBounds) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const slider = puck.amplitudeSliderBounds;
+        
+        // Calculate progress - allow dragging outside bounds with clamping
+        const sliderProgress = (mouseX / cScale - dX - slider.x) / slider.width;
+        puck.subPuckAnimAmplitude = Math.max(0, Math.min(1, sliderProgress));
+    }
+    
+    function touchPuckAmplitudeSliderDrag(event) {
+        if (typeof window.activeAmplitudeSliderPuck === 'undefined' || 
+            window.activeAmplitudeSliderPuck < 0 || 
+            window.activeAmplitudeSliderPuck >= Puck.length) return;
+        
+        const puck = Puck[window.activeAmplitudeSliderPuck];
+        if (!puck || !puck.amplitudeSliderBounds || event.touches.length === 0) return;
+        
+        event.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const touch = event.touches[0];
+        const touchX = touch.clientX - rect.left;
+        const slider = puck.amplitudeSliderBounds;
+        
+        const sliderProgress = (touchX / cScale - dX - slider.x) / slider.width;
+        puck.subPuckAnimAmplitude = Math.max(0, Math.min(1, sliderProgress));
     }
     
     // Dynamic resize function for any normal puck
@@ -7580,6 +8881,22 @@ window.addEventListener('DOMContentLoaded', function() {
         document.removeEventListener('mousemove', toysMenuPositionMove);
         document.removeEventListener('touchmove', touchToysMenuPositionMove);
         
+        // Clear presets menu dragging and handle preset click/long-press
+        presetsMenuDragging = false;
+        if (presetsMenuPositionDragging) {
+            presetsMenuManuallyMoved = true;
+        }
+        presetsMenuPositionDragging = false;
+        document.removeEventListener('mousemove', presetsMenuPositionMove);
+        document.removeEventListener('touchmove', touchPresetsMenuPositionMove);
+        // Handle preset release (for load on short click)
+        if (presetsMenuVisible) {
+            const bounds = canvas.getBoundingClientRect();
+            const releaseX = (window.event?.clientX || 0) - bounds.left - canvas.clientLeft;
+            const releaseY = (window.event?.clientY || 0) - bounds.top - canvas.clientTop;
+            handlePresetsMenuRelease(releaseX, releaseY);
+        }
+        
         // Clear gravity menu dragging
         gravityMenuDragging = false;
         gravityMenuDraggingControl = null;
@@ -7602,6 +8919,18 @@ window.addEventListener('DOMContentLoaded', function() {
         // Clear dynamic puck interaction indices
         activeDragPuckIndex = -1;
         activeResizePuckIndex = -1;
+        
+        // Clear sub-puck slider dragging
+        if (typeof window.activeSpeedSliderPuck !== 'undefined') {
+            window.activeSpeedSliderPuck = -1;
+        }
+        if (typeof window.activeAmplitudeSliderPuck !== 'undefined') {
+            window.activeAmplitudeSliderPuck = -1;
+        }
+        document.removeEventListener('mousemove', mousePuckSpeedSliderDrag);
+        document.removeEventListener('mousemove', mousePuckAmplitudeSliderDrag);
+        document.removeEventListener('touchmove', touchPuckSpeedSliderDrag);
+        document.removeEventListener('touchmove', touchPuckAmplitudeSliderDrag);
         
         // Clear box interaction
         activeBoxIndex = -1;
@@ -7712,7 +9041,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 } else {
                     blowerState = 1;
                 }
-                document.getElementById('showBlowerButton').setAttribute('data-state', blowerState);
+                // Blower state is now tracked internally, no HTML button to update
                 return;
             }
         }
@@ -8779,17 +10108,21 @@ window.addEventListener('DOMContentLoaded', function() {
                 mrMr.pos.y < 0 || mrMr.pos.y > simHeight) {
                 return;
             }
-            var spawnX = mrMr.pos.x - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.9 * mrMr.radius - 6 * ball.radius));
-            var spawnY = mrMr.pos.y - 0.3 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.7 * mrMr.radius - 4 * ball.radius));
+            var spawnX = mrMr.pos.x - (0.25 * mrMr.radius - ball.radius) + (Math.random() * (0.6 * mrMr.radius - 4 * ball.radius));
+            var spawnY = mrMr.pos.y - 0.45 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.4 * mrMr.radius - 3 * ball.radius));
             ball.pos.x = Math.max(0, Math.min(simWidth, spawnX));
             ball.pos.y = Math.max(0, Math.min(simHeight, spawnY));
             var velX = 0.1 * yeet * Math.cos(mrMr.respawnDir + alpha);
             var velY = 0.1 * yeet * Math.sin(mrMr.respawnDir + alpha);
         } else {
+            ball.wakeUp = 0;
             ball.growing = true;
-            ball.radius = 0.003;
-            var spawnX = mrMr.pos.x - (0.3 * mrMr.radius - ball.radius) + (Math.random() * (0.9 * mrMr.radius - 6 * ball.radius));
-            var spawnY = mrMr.pos.y - 0.60 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.6 * mrMr.radius - 4 * ball.radius));
+            ball.radius = 0.004;
+            ball.headingAngle = mrMr.respawnDir;
+            //var spawnX = mrMr.pos.x - (0.25 * mrMr.radius - ball.radius) + (Math.random() * (0.6 * mrMr.radius - 4 * ball.radius));
+            //var spawnY = mrMr.pos.y - 0.55 * mrMr.radius - (0.35 * mrMr.radius - ball.radius) + (Math.random() * (0.4 * mrMr.radius - 3 * ball.radius));
+            var spawnX = mrMr.pos.x - 0.3 * mrMr.radius + Math.random() * 0.6 * mrMr.radius;
+            var spawnY = mrMr.pos.y - 0.9 * mrMr.radius + Math.random() * 0.4 * mrMr.radius;
             ball.pos.x = Math.max(0, Math.min(simWidth, spawnX));
             ball.pos.y = Math.max(0, Math.min(simHeight, spawnY));
             if (sprinklerSpeed > 0 && (fountainSpinMode == "sweep" || fountainSpinMode == "cw" || fountainSpinMode == "ccw")) {
@@ -9290,7 +10623,13 @@ window.addEventListener('DOMContentLoaded', function() {
         doDiscs = true;
         doCircles = false;
         doGummi = false;
+        doRokets = false;
+        doEllipses = false;
         wasGummi = false;
+    
+        // Ellipse sizing parameters (relative to particle diameter)
+        ellipseLengthScale = 2.0; // Length along major axis (2.0 = 2x diameter)
+        ellipseWidthScale = 0.8;  // Width along minor axis (0.6 = 0.6x diameter)
 
         doOneShot = respawnMenuOneShot;
         yeet = 40; // Default value; will be set by mouse in fountain mode
@@ -9350,6 +10689,9 @@ window.addEventListener('DOMContentLoaded', function() {
         makeHungryPucks();
         makeBoxes();
         makeMisterMister();
+
+        // Initialize offscreen roket sprite for particle rendering
+        defineOffscreenRoket();
 
         setRenderType(particlesMenuRenderType);
         
@@ -9411,7 +10753,7 @@ window.addEventListener('DOMContentLoaded', function() {
     
 
 	//  BALL CONSTRUCTOR  -----------------------------------------------------------------------
-	class BALL {
+    class BALL {
 		constructor(radius, mass, pos, vel, saturation, whiteBall, tracerBall, smallBallRadius, bigBallRadius) {
 			this.radius = radius;
             this.OGradius = radius; // Store original radius for reference
@@ -9420,6 +10762,7 @@ window.addEventListener('DOMContentLoaded', function() {
 			this.vel = vel.clone();
             this.color = 0;
             this.saturation = saturation;
+            this.wakeUp = 1.0;
             this.whiteBall = whiteBall;
             this.immuneToWorm = false;
             this.immunityFramesLeft = 0; 
@@ -9500,9 +10843,11 @@ window.addEventListener('DOMContentLoaded', function() {
         simulate() {
             if (this.growing == true) {
                 this.radius += 0.00025;
+                this.wakeUp = -0.1 + this.radius / this.OGradius;
                 if (this.radius >= this.OGradius) {
                     this.radius = this.OGradius;
                     this.growing = false;
+                    this.wakeUp = 1.0;
                 }
             }
             this.vel.add(physProps.gravity, physProps.dt);
@@ -9512,28 +10857,44 @@ window.addEventListener('DOMContentLoaded', function() {
                 this.vel.y *= (physProps.maxSpeed / physProps.substeps) / speed;
             }
             this.pos.add(this.vel, physProps.dt)
-            this.speedHue = physProps.baseColor + speed * physProps.velColorMap * physProps.substeps;
-            
-            // Validate and clamp speedHue - use max velocity color as fallback
-            if (isNaN(this.speedHue) || !isFinite(this.speedHue) || this.speedHue < 0) {
-                // Fallback: color at maximum velocity
-                this.speedHue = physProps.baseColor + (physProps.maxSpeed / physProps.substeps) * physProps.velColorMap * physProps.substeps;
+
+            if (colorMode == 'velocity') {
+                // SET SPEED HUE RATIO BASED ON SPEED  ----------------------------------------
+                this.speedHueRatio = Math.min(0.8 + 0.2 * speed);
+                if (isNaN(this.speedHueRatio) || !isFinite(this.speedHueRatio)) {
+                    this.speedHueRatio = 1.0;
+                }
+                //  SET COLOR BASED ON SPEED  ------------------------------------------------- 
+                this.speedHue = physProps.baseColor + speed * physProps.velColorMap * physProps.substeps;
+                // Validate and clamp speedHue - use max velocity color as fallback
+                if (isNaN(this.speedHue) || !isFinite(this.speedHue) || this.speedHue < 0) {
+                    // Fallback: color at maximum velocity
+                    this.speedHue = physProps.baseColor + (physProps.maxSpeed / physProps.substeps) * physProps.velColorMap * physProps.substeps;
+                }
+            } else
+            if (colorMode == 'size') {
+                // SET COLOR BASED ON SIZE  -------------------------------------------------
+                const bigBall = 0.001 * particlesMenuLargeRadius;
+                this.speedHue = physProps.baseColor + this.radius/bigBall * 360;
+                if (this.speedHue > physProps.baseColor + 360) {
+                    this.speedHue = physProps.baseColor + 360;
+                }
+            } else 
+            if (colorMode == 'direction') {
+                // SET COLOR BASED ON DIRECTION  ----------------------------------------------
+                //const angle = Math.atan2(this.vel.y, this.vel.x); // radians
+                //const angleDeg = angle * (180 / Math.PI); // convert to degrees
+                this.speedHue = this.headingAngle * (180 / Math.PI); 
+            } else {
+                // STATIC COLOR  -------------------------------------------------------------
+                this.speedHue = physProps.baseColor;
             }
-            
-            if (this.speedHue > physProps.baseColor + 360) {
-                this.speedHue = physProps.baseColor + 360;
-            }
-            
+
             // Ensure speedHue stays within valid range [0, 360)
             while (this.speedHue >= 360) this.speedHue -= 360;
             while (this.speedHue < 0) this.speedHue += 360;
             
-            this.speedHueRatio = Math.min(0.8 + 0.2 * speed);
             
-            // Validate speedHueRatio
-            if (isNaN(this.speedHueRatio) || !isFinite(this.speedHueRatio)) {
-                this.speedHueRatio = 1.0;
-            }
         }
         drawTrace() {
             c.lineCap = 'round';
@@ -9585,7 +10946,7 @@ window.addEventListener('DOMContentLoaded', function() {
         draw() {
             if (doDiscs == true) {
                 drawCircle(cX(this.pos), cY(this.pos), 0.95 * this.radius * cScale);    
-                var lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 50);
+                var lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 50);
                 var satLevel = ballSaturation * this.saturation;
                 if (this.whiteBall == true || this.tracerBall == true) {
                     // reg color
@@ -9603,7 +10964,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 c.fill();
                 c.stroke();
             } else if (doSpheres == true) {
-                const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 55);
+                const lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 55);
                 const satLevel = ballSaturation * this.saturation;
                 // Pre-calculate shine offset constants (avoids per-particle calculations)
                 const scaledRadius = this.radius * cScale;
@@ -9629,7 +10990,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 }
                 c.fill();
             } else if (doCircles == true) {
-                const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 65);
+                const lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 65);
                 const satLevel = ballSaturation * this.saturation;
                 drawCircle(cX(this.pos), cY(this.pos), 0.90 *this.radius * cScale);    
                 if (this.whiteBall == true || this.tracerBall == true) {
@@ -9638,6 +10999,96 @@ window.addEventListener('DOMContentLoaded', function() {
                     c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
                 }
                 c.fill();
+            } else if (doRokets == true) {
+                // Roket sprite rendering (similar to arrows with steering)
+                const speed = this.vel.length();
+                if (speed > 1e-6) {
+                    const target = Math.atan2(this.vel.y, this.vel.x); // Simulation coordinates
+                    if (!this.headingInitialized) {
+                        this.headingAngle = target;
+                        this.headingInitialized = true;
+                    } else {
+                        // Smooth with exponential filter using dt-based alpha
+                        const TWO_PI = Math.PI * 2;
+                        let diff = target - this.headingAngle;
+                        // Wrap to [-PI, PI] for shortest rotation path
+                        diff = ((diff + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
+                        const tau = 0.15; // seconds time constant (same as arrows for smooth rotation)
+                        const alpha = 1 - Math.exp(-physProps.dt / Math.max(1e-6, tau));
+                        this.headingAngle += alpha * diff;
+                    }
+                }
+                
+                // Draw the offscreen roket sprite if available
+                if (window.roketSprite && window.roketSprite.canvas) {
+                    const spriteCanvas = window.roketSprite.canvas;
+                    const pivotImgX = window.roketSprite.pivotImgX;
+                    const pivotImgY = window.roketSprite.pivotImgY;
+                    const spriteBaseRadius = window.roketSprite.radius;
+                    
+                    // Scale roket similar to arrows: base size on particle radius
+                    // Arrows use 2.0 * radius for length, we'll do the same
+                    const targetSize = 2.0 * this.radius * cScale;
+                    const scaleFactor = targetSize / spriteBaseRadius;
+                    
+                    c.save();
+                    c.translate(cX(this.pos), cY(this.pos));
+                    c.rotate(-this.headingAngle); // Negative because canvas Y is inverted
+                    c.scale(scaleFactor, scaleFactor);
+                    
+                    // Draw sprite centered at pivot point
+                    c.drawImage(
+                        spriteCanvas,
+                        -pivotImgX,
+                        -pivotImgY
+                    );
+                    
+                    c.restore();
+                }
+            } else if (doEllipses == true) {
+                // Ellipse rendering with directional steering
+                const speed = this.vel.length();
+                if (speed > 1e-6) {
+                    const target = Math.atan2(this.vel.y, this.vel.x);
+                    if (!this.headingInitialized) {
+                        this.headingAngle = target;
+                        this.headingInitialized = true;
+                    } else {
+                        // Smooth with exponential filter
+                        const TWO_PI = Math.PI * 2;
+                        let diff = target - this.headingAngle;
+                        // Wrap to [-PI, PI]
+                        diff = ((diff + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
+                        const tau = 0.15;
+                        const alpha = 1 - Math.exp(-physProps.dt / Math.max(1e-6, tau));
+                        this.headingAngle += alpha * diff;
+                    }
+                }
+                
+                const lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 65);
+                const satLevel = ballSaturation * this.saturation;
+                
+                // Calculate ellipse dimensions based on particle diameter
+                const particleDiameter = 2 * this.radius * cScale;
+                const ellipseLength = ellipseLengthScale * particleDiameter;
+                const ellipseWidth = ellipseWidthScale * particleDiameter;
+                
+                c.save();
+                c.translate(cX(this.pos), cY(this.pos));
+                c.rotate(-this.headingAngle); // Negative because canvas Y is inverted
+                
+                // Draw ellipse centered at origin
+                c.beginPath();
+                c.ellipse(0, 0, ellipseLength / 2, ellipseWidth / 2, 0, 0, Math.PI * 2);
+                
+                if (this.whiteBall == true || this.tracerBall == true) {
+                    c.fillStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                } else {
+                    c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                }
+                c.fill();
+                
+                c.restore();
             } else if (doLines == true || doArrows == true) {
                 const speed = this.vel.length();
                 if (speed > 1e-6) {
@@ -9656,7 +11107,7 @@ window.addEventListener('DOMContentLoaded', function() {
                         this.headingAngle += alpha * diff;
                     }
                 }
-                const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 65);
+                const lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 65);
                 const satLevel = ballSaturation * this.saturation;
                 if (doArrows == true) {
                     const arrowLength = 2.0 * this.radius * cScale;
@@ -9672,11 +11123,22 @@ window.addEventListener('DOMContentLoaded', function() {
                     c.closePath();
                     if (this.whiteBall == true || this.tracerBall == true) {
                         c.fillStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                        c.fill();
                     } else {
                         c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                        c.fill();
                     }
-                    c.fill();
-                    c.restore();
+                    if (particlesMenuRenderType === 'drawFancyArrows') {
+                        // darker rear portion
+                        c.beginPath();
+                        c.moveTo(-arrowLength * 0.3 - arrowOffset, 0);
+                        c.lineTo(-arrowLength - arrowOffset, -arrowWidth / 2);
+                        c.lineTo(-arrowLength - arrowOffset, arrowWidth / 2);
+                        c.closePath();
+                        c.fillStyle = `hsl(0, 0%, ${colorWheelWipeLightness}%)`;
+                        c.fill();
+                    }
+                    c.restore();   
                 } else if (doLines == true) {
                     // Update heading angle based on velocity
                     const speed = this.vel.length();
@@ -9691,7 +11153,7 @@ window.addEventListener('DOMContentLoaded', function() {
                             let diff = target - this.headingAngle;
                             // Wrap to [-PI, PI]
                             diff = ((diff + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
-                            const tau = 0.05;
+                            const tau = 0.15;
                             const alpha = 1 - Math.exp(-physProps.dt / Math.max(1e-6, tau));
                             this.headingAngle += alpha * diff;
                         }
@@ -9709,12 +11171,12 @@ window.addEventListener('DOMContentLoaded', function() {
                     } else {
                         c.strokeStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
                     }
-                    c.lineWidth = 0.55 * this.radius * cScale;
+                    c.lineWidth = 0.45 * this.radius * cScale;
                     c.stroke();
                     c.restore();
                 }
             } else if (doRings == true) {
-                const lightnessClamp = Math.min(this.speedHueRatio * ballLightness, 65);
+                const lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 65);
                 const satLevel = ballSaturation * this.saturation;
                 drawCircle(cX(this.pos), cY(this.pos), 0.80 *this.radius * cScale);    
                 if (this.whiteBall == true || this.tracerBall == true) {
@@ -11682,6 +13144,28 @@ window.addEventListener('DOMContentLoaded', function() {
             this.moving = false;
             this.puckArriving = true; // Start with arriving animation
             this.radiusRate = 0.0; // dR/dt for pulsing surface velocity
+            
+            // Sub-puck rotation properties
+            this.subPuckVisible = false; // Whether sub-puck is visible
+            this.subPuckRotationAngle = 0; // Current rotation angle (0 = hidden under puck, Math.PI = fully visible)
+            this.subPuckAnimating = false; // Whether sub-puck is currently animating
+            this.subPuckTargetAngle = 0; // Target angle for animation
+            this.subPuckAnimationSpeed = 8.0; // Radians per second
+            
+            // Sub-puck motion modes (from buttons)
+            this.subPuckMotionMode = null; // 'vertical', 'horizontal', 'ellipse', 'circle', or null
+            this.subPuckPendingMode = null; // Mode to activate after sub-puck retracts
+            this.subPuckOscillating = false; // Whether oscillating
+            this.subPuckOscInit = false; // Oscillation initialized
+            this.subPuckOscOriginX = undefined;
+            this.subPuckOscOriginY = undefined;
+            this.subPuckOscAmplitude = undefined;
+            this.subPuckOscStartTime = undefined;
+            this.subPuckCircleOrbit = false; // Circular orbit mode
+            this.subPuckEllipseOrbit = false; // Elliptical orbit mode
+            this.subPuckOrbitAngle = 0; // Current orbit angle
+            this.subPuckOrbitSpeed = 2.0; // Orbit speed (radians per second)
+            this.subPuckOrbitClockwise = true; // Orbit direction (true = clockwise, false = counter-clockwise)
 
             // Flying puck delay properties
             this.flyingIsHiding = false;
@@ -11728,8 +13212,149 @@ window.addEventListener('DOMContentLoaded', function() {
             this.cycResumeAt = this.cycLastTime + 6000; // ms timestamp
         }
         simulate() {
-            // OSCILLATION for normal pucks ---------------------------------
-            if (doOscillatePucks == true && !this.heartBeat && !this.cycle && !this.flying && !this.orbit && !this.yinyang) {
+            // SUB-PUCK ROTATION ANIMATION ---------------------------------
+            if (this.subPuckAnimating && !this.heartBeat && !this.cycle) {
+                const deltaTime = (performance.now() - (this.subPuckLastTime || performance.now())) / 1000;
+                this.subPuckLastTime = performance.now();
+                
+                // Smoothly animate toward target angle
+                const angleDiff = this.subPuckTargetAngle - this.subPuckRotationAngle;
+                const angleStep = this.subPuckAnimationSpeed * deltaTime;
+                
+                if (Math.abs(angleDiff) <= angleStep) {
+                    // Reached target
+                    this.subPuckRotationAngle = this.subPuckTargetAngle;
+                    this.subPuckAnimating = false;
+                    this.subPuckVisible = (this.subPuckTargetAngle > Math.PI / 2);
+                    
+                    // If there's a pending mode and we just retracted, activate it
+                    if (this.subPuckPendingMode && !this.subPuckVisible) {
+                        const mode = this.subPuckPendingMode;
+                        this.subPuckPendingMode = null;
+                        this.subPuckMotionMode = mode;
+                        
+                        console.log('Activating motion mode:', mode);
+                        
+                        // Initialize motion based on mode
+                        if (mode === 'vertical' || mode === 'horizontal') {
+                            this.subPuckOscillating = true;
+                            this.subPuckOscInit = false;
+                        } else if (mode === 'circle') {
+                            this.subPuckCircleOrbit = true;
+                            this.subPuckOrbitAngle = 0;
+                        } else if (mode === 'ellipse') {
+                            this.subPuckEllipseOrbit = true;
+                            this.subPuckOrbitAngle = 0;
+                        }
+                    }
+                } else {
+                    // Continue animating
+                    this.subPuckRotationAngle += Math.sign(angleDiff) * angleStep;
+                }
+            }
+            
+            // SUB-PUCK MOTION MODES ---------------------------------
+            const dt = physProps.dt;
+            const speed = (this.subPuckAnimSpeed || 0.5); // Use speed slider value (0-1), maps to 0-0.2 actual speed
+            const amplitude = (this.subPuckAnimAmplitude || 0.5); // Use amplitude slider value (0-1)
+            
+            // Vertical oscillation (green button)
+            if (this.subPuckOscillating && this.subPuckMotionMode === 'vertical') {
+                if (!this.subPuckOscInit) {
+                    this.subPuckOscOriginY = this.pos.y;
+                    this.subPuckOscStartTime = performance.now();
+                    this.subPuckOscInit = true;
+                }
+                const elapsed = (performance.now() - this.subPuckOscStartTime) / 1000;
+                const frequency = 0.2 + speed * 0.4; // 0.2-0.6 Hz based on speed (max 0.2)
+                const amp = 0.1 * simHeight + amplitude * 0.3 * simHeight; // 10-40% of screen height
+                this.pos.y = this.subPuckOscOriginY + amp * Math.sin(2 * Math.PI * frequency * elapsed);
+                return;
+            }
+            
+            // Horizontal oscillation (yellow button)
+            if (this.subPuckOscillating && this.subPuckMotionMode === 'horizontal') {
+                if (!this.subPuckOscInit) {
+                    this.subPuckOscOriginX = this.pos.x;
+                    this.subPuckOscStartTime = performance.now();
+                    this.subPuckOscInit = true;
+                }
+                const elapsed = (performance.now() - this.subPuckOscStartTime) / 1000;
+                const frequency = 0.2 + speed * 0.4; // 0.2-0.6 Hz based on speed (max 0.2)
+                const amp = 0.1 * simWidth + amplitude * 0.3 * simWidth; // 10-40% of screen width
+                this.pos.x = this.subPuckOscOriginX + amp * Math.sin(2 * Math.PI * frequency * elapsed);
+                return;
+            }
+            
+            // Circular orbit (red button)
+            if (this.subPuckCircleOrbit && this.subPuckMotionMode === 'circle') {
+                const centerX = simWidth / 2;
+                const centerY = simHeight / 2;
+                
+                // Initialize orbit angle based on starting position
+                if (!this.subPuckOscInit) {
+                    const dx = this.pos.x - centerX;
+                    const dy = this.pos.y - centerY;
+                    this.subPuckOrbitAngle = Math.atan2(dy, dx); // Start from current position
+                    this.subPuckOscInit = true;
+                }
+                
+                const orbitRadius = Math.sqrt(
+                    Math.pow(this.pos.x - centerX, 2) + 
+                    Math.pow(this.pos.y - centerY, 2)
+                );
+                
+                const angularSpeed = (0.4 + speed * 1.6) * dt * (this.subPuckOrbitClockwise ? 1 : -1); // Speed based on slider (0.4-2.0, 2x max of oscillation modes)
+                this.subPuckOrbitAngle += angularSpeed;
+                
+                this.pos.x = centerX + orbitRadius * Math.cos(this.subPuckOrbitAngle);
+                this.pos.y = centerY + orbitRadius * Math.sin(this.subPuckOrbitAngle);
+                return;
+            }
+            
+            // Elliptical orbit (orange button)
+            if (this.subPuckEllipseOrbit && this.subPuckMotionMode === 'ellipse') {
+                const centerX = simWidth / 2;
+                const centerY = simHeight / 2;
+                
+                // Initialize orbit angle and ellipse parameters based on starting position
+                if (!this.subPuckOscInit) {
+                    const dx = this.pos.x - centerX;
+                    const dy = this.pos.y - centerY;
+                    
+                    // Calculate ellipse that matches canvas aspect ratio and passes through current position
+                    // For an ellipse: (x/a)^2 + (y/b)^2 = 1, where a/b = simWidth/simHeight
+                    // At current position: (dx/a)^2 + (dy/b)^2 = 1
+                    // We want: a/b = simWidth/simHeight
+                    // So: b = a * simHeight / simWidth
+                    // Substituting: (dx/a)^2 + (dy * simWidth / (a * simHeight))^2 = 1
+                    // Solving for a: a = sqrt(dx^2 + (dy * simWidth / simHeight)^2)
+                    
+                    const aspectRatio = simWidth / simHeight;
+                    this.subPuckOrbitSemiMajorA = Math.sqrt(dx * dx + (dy * aspectRatio) * (dy * aspectRatio));
+                    this.subPuckOrbitSemiMinorB = this.subPuckOrbitSemiMajorA / aspectRatio;
+                    
+                    // Calculate angle that places us exactly at current position on the ellipse
+                    this.subPuckOrbitAngle = Math.atan2(dy / this.subPuckOrbitSemiMinorB, dx / this.subPuckOrbitSemiMajorA);
+                    this.subPuckOscInit = true;
+                    
+                    // Don't update position on first frame - we're already where we should be
+                    return;
+                }
+                
+                const semiMajorA = this.subPuckOrbitSemiMajorA;
+                const semiMinorB = this.subPuckOrbitSemiMinorB;
+                
+                const angularSpeed = (0.4 + speed * 1.6) * dt * (this.subPuckOrbitClockwise ? 1 : -1); // Speed based on slider (0.4-2.0, 2x max of oscillation modes)
+                this.subPuckOrbitAngle += angularSpeed;
+                
+                this.pos.x = centerX + semiMajorA * Math.cos(this.subPuckOrbitAngle);
+                this.pos.y = centerY + semiMinorB * Math.sin(this.subPuckOrbitAngle);
+                return;
+            }
+            
+            // OSCILLATION for normal pucks (TEMPORARILY DISABLED) ---------------------------------
+            if (false && doOscillatePucks == true && !this.heartBeat && !this.cycle && !this.flying && !this.orbit && !this.yinyang) {
                 // If puck is still arriving (growing from 0), let that animation complete first
                 if (this.puckArriving && this.radius < this.OGradius) {
                     // Let the puckArriving animation run (same as default behavior)
@@ -12143,32 +13768,22 @@ window.addEventListener('DOMContentLoaded', function() {
 
             // DRAW NORMAL PUCK  -----------
             if (this.moving == false && this.flying == false && this.orbit == false && this.yinyang == false) {  
-                drawCircle(cX(this.pos), cY(this.pos), 0.985 * this.radius * cScale);
-                const grd = c.createRadialGradient(
-                    cX(this.pos), 
-                    cY(this.pos), 
-                    0, 
-                    cX(this.pos), 
-                    cY(this.pos), 
-                    1.3 *this.radius * cScale);
-                grd.addColorStop(1, `hsla(220, 70%, 30%, ${alphaPercent * 0.4})`);
-                grd.addColorStop(0.5, `hsla(220, 60%, 5%, ${alphaPercent * 0.4})`);
-                c.fillStyle = grd;
-                c.fill();
-
-                c.strokeStyle = `hsla(0, 0%, 60%, ${alphaPercent})`;
-                c.setLineDash([]); // solid line
-                c.lineWidth = 0.005 * cScale;
-                c.stroke();  
-
+                const gripCos = Math.cos(1.75 * Math.PI); // 315 degrees
+                const gripSin = Math.sin(1.75 * Math.PI);
+                const gripDist = this.radius - 0.3 * this.radius;
+                const gripDist2 = this.radius - 0.35 * this.radius;
+                this.gripPos = new Vector2(this.pos.x + gripDist * gripCos, this.pos.y + gripDist * gripSin);
+          
                 // Only draw resize grip and plus/minus buttons for normal pucks (not heartbeat or cycle)
                 if (!this.heartBeat && !this.cycle) {
+
+
                     // Draw resize grip indicator (small green circle) at lower right
-                    const gripCos = Math.cos(1.75 * Math.PI); // 315 degrees
-                    const gripSin = Math.sin(1.75 * Math.PI);
-                    const gripDist = this.radius - 0.3 * this.radius;
-                    const gripDist2 = this.radius - 0.35 * this.radius;
-                    this.gripPos = new Vector2(this.pos.x + gripDist * gripCos, this.pos.y + gripDist * gripSin);
+                    //const gripCos = Math.cos(1.75 * Math.PI); // 315 degrees
+                    //const gripSin = Math.sin(1.75 * Math.PI);
+                    //const gripDist = this.radius - 0.3 * this.radius;
+                    //const gripDist2 = this.radius - 0.35 * this.radius;
+                    //this.gripPos = new Vector2(this.pos.x + gripDist * gripCos, this.pos.y + gripDist * gripSin);
                     
                     // Position buttons on opposite corner (around 135 degrees, upper left)
                     const buttonBaseAngle = 0.75 * Math.PI; // 135 degrees
@@ -12186,31 +13801,313 @@ window.addEventListener('DOMContentLoaded', function() {
                     const offAngle = 1.18 * Math.PI;
                     this.offPos = new Vector2(this.pos.x + gripDist * Math.cos(offAngle), this.pos.y + gripDist * Math.sin(offAngle));
 
-                    //  arrow button 
+                    //  arrow button (now sub-puck toggle)
                     const arrowAngle = 0.25 * Math.PI;
                     this.arrowPos = new Vector2(this.pos.x + gripDist * Math.cos(arrowAngle), this.pos.y + gripDist * Math.sin(arrowAngle));
               
-                    // Draw resize grip indicator
+                    // DRAW SUB-PUCK with rotation animation (BEFORE main puck so it appears underneath)
+                    const subPuckRadius = 0.5 * this.radius;
+                    
+                    // Calculate sub-puck center position based on rotation angle
+                    // Pivot point is the blue button (arrowPos)
+                    // When angle = 0, sub-puck is hidden under main puck (to the left)
+                    // When angle = PI, sub-puck is fully visible (to the right)
+                    const pivotX = this.arrowPos.x;
+                    const pivotY = this.arrowPos.y;
+                    const armLength = subPuckRadius; // Distance from pivot to sub-puck center
+                    
+                    // Start angle: pointing left (PI radians)
+                    // End angle: pointing right (0 radians)
+                    const baseAngle = 1.25 * Math.PI; // Starting position (hidden to the left)
+                    const currentAngle = baseAngle - this.subPuckRotationAngle;
+                    
+                    const subPuckCenterX = pivotX + armLength * Math.cos(currentAngle);
+                    const subPuckCenterY = pivotY + armLength * Math.sin(currentAngle);
+                    
+                    // Draw sub-puck unconditionally for now (debugging)
+                    // Draw sub-puck circle
+                    drawCircle(
+                        subPuckCenterX * cScale,
+                        (simHeight - subPuckCenterY) * cScale,
+                        subPuckRadius * cScale
+                    );
+                    
+                    // Gradient fill for sub-puck
+                    const subGrd = c.createRadialGradient(
+                        subPuckCenterX * cScale,
+                        (simHeight - subPuckCenterY) * cScale,
+                        0,
+                        subPuckCenterX * cScale,
+                        (simHeight - subPuckCenterY) * cScale,
+                        subPuckRadius * cScale
+                    );
+                    subGrd.addColorStop(0, `hsla(180, 70%, 0%, ${alphaPercent - 0.2})`);
+                    subGrd.addColorStop(0.4, `hsla(180, 70%, 10%, ${alphaPercent - 0.2})`);
+                    
+                    subGrd.addColorStop(1, `hsla(180, 60%, 30%, ${alphaPercent - 0.2})`);
+                    c.fillStyle = subGrd;
+                    c.fill();
+                    
+                    c.strokeStyle = `hsla(180, 0%, 80%, ${alphaPercent - 0.2})`;
+                    c.lineWidth = 0.02 * this.radius * cScale;
+                    c.stroke();
+                    
+                    // DRAW FOUR BUTTONS on sub-puck in symmetric arc opposite pivot
+                    const buttonRadius = 0.08 * this.radius;
+                    const buttonDistFromCenter = 0.7 * subPuckRadius; // Close to inside edge of sub-puck
+                    
+                    // Calculate base angle pointing away from pivot (opposite direction)
+                    // Buttons on opposite side means same direction as pivot connection
+                    const subPuckButtonBaseAngle = currentAngle; // Same side as pivot (opposite from previous)
+                    
+                    // Four buttons arranged in an arc, evenly spaced along the inside edge
+                    const arcSpread = 3; // Total arc width in radians (about 90 degrees)
+                    const buttonAngles = [
+                        subPuckButtonBaseAngle - arcSpread / 2,           // Top button
+                        subPuckButtonBaseAngle - arcSpread / 6,           // Upper middle button  
+                        subPuckButtonBaseAngle + arcSpread / 6,           // Lower middle button
+                        subPuckButtonBaseAngle + arcSpread / 2            // Bottom button
+                    ];
+                    
+                    // Store button positions for hit detection
+                    this.subPuckButton1Pos = new Vector2(
+                        subPuckCenterX + buttonDistFromCenter * Math.cos(buttonAngles[0]),
+                        subPuckCenterY + buttonDistFromCenter * Math.sin(buttonAngles[0])
+                    );
+                    this.subPuckButton2Pos = new Vector2(
+                        subPuckCenterX + buttonDistFromCenter * Math.cos(buttonAngles[1]),
+                        subPuckCenterY + buttonDistFromCenter * Math.sin(buttonAngles[1])
+                    );
+                    this.subPuckButton3Pos = new Vector2(
+                        subPuckCenterX + buttonDistFromCenter * Math.cos(buttonAngles[2]),
+                        subPuckCenterY + buttonDistFromCenter * Math.sin(buttonAngles[2])
+                    );
+                    this.subPuckButton4Pos = new Vector2(
+                        subPuckCenterX + buttonDistFromCenter * Math.cos(buttonAngles[3]),
+                        subPuckCenterY + buttonDistFromCenter * Math.sin(buttonAngles[3])
+                    );
+                    
+                    // Draw each button
+                    const buttonColors = ['red', 'orange', 'yellow', 'green'];
+                    const buttonPositions = [
+                        this.subPuckButton1Pos,
+                        this.subPuckButton2Pos,
+                        this.subPuckButton3Pos,
+                        this.subPuckButton4Pos
+                    ];
+                    
+                    for (let i = 0; i < 4; i++) {
+                        drawCircle(
+                            buttonPositions[i].x * cScale,
+                            (simHeight - buttonPositions[i].y) * cScale,
+                            buttonRadius * cScale
+                        );
+                        c.fillStyle = buttonColors[i];
+                        c.fill();
+                        c.strokeStyle = 'black';
+                        c.lineWidth = 0.01 * this.radius * cScale;
+                        c.stroke();
+                    }
+                    
+                    // DRAW CENTER DIRECTION BUTTON
+                    const centerButtonRadius = 0.12 * this.radius;
+                    this.subPuckCenterButtonPos = new Vector2(subPuckCenterX, subPuckCenterY);
+                    
+                    // Draw Unicode circular arrow symbol
+                    c.fillStyle = 'white';
+                    c.font = `${0.3 * this.radius * cScale}px Arial`;
+                    c.textAlign = 'center';
+                    c.textBaseline = 'middle';
+                    const arrowSymbol = this.subPuckOrbitClockwise ? '\u21BA' : '\u21BB';
+                    c.fillText(
+                        arrowSymbol,
+                        subPuckCenterX * cScale,
+                        (simHeight - subPuckCenterY) * cScale
+                    );
+              
+                    // DRAW MAIN PUCK  ----------
+                    drawCircle(cX(this.pos), cY(this.pos), 0.985 * this.radius * cScale);
+                    const grd = c.createRadialGradient(
+                        cX(this.pos), 
+                        cY(this.pos), 
+                        0, 
+                        cX(this.pos), 
+                        cY(this.pos), 
+                        1.3 *this.radius * cScale);
+                    grd.addColorStop(1, `hsla(220, 70%, 30%, ${alphaPercent - 0.08})`);
+                    grd.addColorStop(0.5, `hsla(220, 60%, 5%, ${alphaPercent - 0.08})`);
+                    c.fillStyle = grd;
+                    c.fill();
+
+                    c.strokeStyle = `hsla(0, 0%, 60%, ${alphaPercent})`;
+                    c.setLineDash([]); // solid line
+                    c.lineWidth = 0.005 * cScale;
+                    c.stroke();  
+
+                    // Draw sub-puck toggle button (AFTER sub-puck so button is on top)
                     drawCircle(
                         this.arrowPos.x * cScale,
                         (simHeight - this.arrowPos.y) * cScale,
                         0.1 * this.radius * cScale);
-                    c.fillStyle = 'blue';
+                    c.fillStyle = this.subPuckVisible ? 'cyan' : 'hsl(180, 50%, 40%)'; // Cyan when visible, dim cyan when hidden
                     c.fill();
+                    
+                    // DRAW SPEED SLIDER when sub-puck is visible
+                    if (this.subPuckVisible) {
+                        // Initialize slider values if not set
+                        if (this.subPuckAnimSpeed === undefined) {
+                            this.subPuckAnimSpeed = 0.5; // Default to middle (0 to 1 range)
+                        }
+                        if (this.subPuckAnimAmplitude === undefined) {
+                            this.subPuckAnimAmplitude = 0.5; // Default to middle (0 to 1 range)
+                        }
+                        
+                        // Slider dimensions (horizontal bars centered on puck)
+                        const sliderWidth = 1.2 * this.radius;
+                        const sliderHeight = 0.12 * this.radius;
+                        const sliderSpacing = 0.26 * this.radius; // Space between sliders
+                        
+                        // SPEED SLIDER (top slider) - moved down by a full slider height
+                        const speedSliderY = this.pos.y + 0.2 * this.radius - sliderHeight;
+                        const speedSliderX = this.pos.x - sliderWidth / 2;
+                        
+                        // Store slider bounds for hit detection
+                        this.speedSliderBounds = {
+                            x: speedSliderX,
+                            y: speedSliderY,
+                            width: sliderWidth,
+                            height: sliderHeight
+                        };
+                        
+                        // Draw speed slider track with gradient (slow to fast: blue to cyan to yellow)
+                        const sliderSteps = 100;
+                        for (let i = 0; i <= sliderSteps; i++) {
+                            const t = i / sliderSteps;
+                            let hue, sat, light;
+                            if (t < 0.5) {
+                                // Blue to cyan (slow to medium)
+                                const blend = t * 2;
+                                hue = 200 + blend * 20; // 200 (blue) to 180 (cyan)
+                                sat = 70;
+                                light = 40 + blend * 20;
+                            } else {
+                                // Cyan to yellow (medium to fast)
+                                const blend = (t - 0.5) * 2;
+                                hue = 180 - blend * 120; // 180 (cyan) to 60 (yellow)
+                                sat = 70 + blend * 10;
+                                light = 60 + blend * 30;
+                            }
+                            c.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
+                            c.fillRect(
+                                (speedSliderX + (i / sliderSteps) * sliderWidth) * cScale,
+                                (simHeight - speedSliderY - sliderHeight) * cScale,
+                                (sliderWidth / sliderSteps) * cScale,
+                                sliderHeight * cScale
+                            );
+                        }
+                        
+                        // Draw speed slider outline
+                        c.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                        c.lineWidth = 0.01 * this.radius * cScale;
+                        c.strokeRect(
+                            speedSliderX * cScale,
+                            (simHeight - speedSliderY - sliderHeight) * cScale,
+                            sliderWidth * cScale,
+                            sliderHeight * cScale
+                        );
+                        
+                        // Draw speed slider position indicator (vertical white line)
+                        const speedIndicatorX = speedSliderX + this.subPuckAnimSpeed * sliderWidth;
+                        c.strokeStyle = 'white';
+                        c.lineWidth = 0.02 * this.radius * cScale;
+                        c.beginPath();
+                        c.moveTo(speedIndicatorX * cScale, (simHeight - speedSliderY - sliderHeight) * cScale);
+                        c.lineTo(speedIndicatorX * cScale, (simHeight - speedSliderY) * cScale);
+                        c.stroke();
+                        
+                        // Draw SPEED label above slider
+                        c.fillStyle = 'white';
+                        c.font = `${0.08 * this.radius * cScale}px Arial`;
+                        c.textAlign = 'center';
+                        c.fillText(
+                            'SPEED',
+                            this.pos.x * cScale,
+                            (simHeight - speedSliderY - sliderHeight - 0.09 * this.radius) * cScale
+                        );
+                        
+                        // AMPLITUDE SLIDER (bottom slider)
+                        const ampSliderY = speedSliderY - sliderSpacing;
+                        const ampSliderX = this.pos.x - sliderWidth / 2;
+                        
+                        // Store amplitude slider bounds for hit detection
+                        this.amplitudeSliderBounds = {
+                            x: ampSliderX,
+                            y: ampSliderY,
+                            width: sliderWidth,
+                            height: sliderHeight
+                        };
+                        
+                        // Draw amplitude slider track with gradient (small to large: green to orange to red)
+                        for (let i = 0; i <= sliderSteps; i++) {
+                            const t = i / sliderSteps;
+                            let hue, sat, light;
+                            if (t < 0.5) {
+                                // Green to orange (small to medium)
+                                const blend = t * 2;
+                                hue = 120 - blend * 80; // 120 (green) to 40 (orange)
+                                sat = 70;
+                                light = 40 + blend * 20;
+                            } else {
+                                // Orange to red (medium to large)
+                                const blend = (t - 0.5) * 2;
+                                hue = 40 - blend * 40; // 40 (orange) to 0 (red)
+                                sat = 70 + blend * 10;
+                                light = 60 + blend * 10;
+                            }
+                            c.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
+                            c.fillRect(
+                                (ampSliderX + (i / sliderSteps) * sliderWidth) * cScale,
+                                (simHeight - ampSliderY - sliderHeight) * cScale,
+                                (sliderWidth / sliderSteps) * cScale,
+                                sliderHeight * cScale
+                            );
+                        }
+                        
+                        // Draw amplitude slider outline
+                        c.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                        c.lineWidth = 0.01 * this.radius * cScale;
+                        c.strokeRect(
+                            ampSliderX * cScale,
+                            (simHeight - ampSliderY - sliderHeight) * cScale,
+                            sliderWidth * cScale,
+                            sliderHeight * cScale
+                        );
+                        
+                        // Draw amplitude slider position indicator
+                        const ampIndicatorX = ampSliderX + this.subPuckAnimAmplitude * sliderWidth;
+                        c.strokeStyle = 'white';
+                        c.lineWidth = 0.02 * this.radius * cScale;
+                        c.beginPath();
+                        c.moveTo(ampIndicatorX * cScale, (simHeight - ampSliderY - sliderHeight) * cScale);
+                        c.lineTo(ampIndicatorX * cScale, (simHeight - ampSliderY) * cScale);
+                        c.stroke();
+                        
+                        // Draw AMPLITUDE label below slider
+                        c.fillStyle = 'white';
+                        c.font = `${0.08 * this.radius * cScale}px verdana`;
+                        c.textAlign = 'center';
+                        c.fillText(
+                            'AMPLITUDE',
+                            this.pos.x * cScale,
+                            (simHeight - ampSliderY + sliderHeight + 0.01 * this.radius) * cScale
+                        );
+                    }
 
                 //  resize arrow buttons ----------
                 //  arrow button 
                     const resizeAngle = 0.82 * Math.PI;
                     this.arrowPos = new Vector2(this.pos.x + gripDist * Math.cos(arrowAngle), this.pos.y + gripDist * Math.sin(arrowAngle));
               
-                    // Draw resize grip indicator
-                    drawCircle(
-                        this.gripPos.x * cScale,
-                        (simHeight - this.gripPos.y) * cScale,
-                        0.1 * this.radius * cScale);
-                    c.fillStyle = 'green';
-                    //c.fill();
-                    
                     // Draw arrow pointing out
                     drawArrow(
                             this.gripPos.x,
@@ -12228,7 +14125,6 @@ window.addEventListener('DOMContentLoaded', function() {
                         0.1 * this.radius * cScale);
                     c.fillStyle = 'hsl(320, 100%, 30%)'; 
                     c.fill();
-                    
                     c.strokeStyle = 'black';
                     //c.stroke();
                     c.lineWidth = 0.02 * this.radius * cScale;
@@ -12244,7 +14140,6 @@ window.addEventListener('DOMContentLoaded', function() {
                     // Count normal pucks to determine if this is the last one
                     const normalPuckCount = Puck.filter(p => !p.heartBeat && !p.cycle && !p.flying && !p.orbit).length;
                     const isLastNormalPuck = normalPuckCount === 1;
-                    
                     drawCircle(
                         cX(this.minusPos), 
                         cY(this.minusPos), 
@@ -12276,6 +14171,9 @@ window.addEventListener('DOMContentLoaded', function() {
                     c.moveTo(cX(this.offPos) + 0.04 * this.radius * cScale, cY(this.offPos) - 0.04 * this.radius * cScale);
                     c.lineTo(cX(this.offPos) - 0.04 * this.radius * cScale, cY(this.offPos) + 0.04 * this.radius * cScale);
                     c.stroke();
+
+                    
+
                 }
 
             // MOVING NORMAL PUCK ----------
@@ -13169,36 +15067,45 @@ window.addEventListener('DOMContentLoaded', function() {
             drawCircle(
                 gripX, 
                 gripY, 
-                0.12 * this.radius * cScale);
-            c.fillStyle = 'green';
+                0.15 * this.radius * cScale);
+            c.fillStyle = 'hsl(120, 100%, 40%)';
             c.fill();
 
             // Draw yellow off button (only when not in auto-rotate mode)
             if (blowerState === 1) {
-                const offX = (this.pos.x + Math.cos(Math.PI + this.blowerAngle) * 1.0 * this.radius) * cScale;
-                const offY = (simHeight - this.pos.y - Math.sin(Math.PI + this.blowerAngle) * 1.0 * this.radius) * cScale;
+                const offX = (this.pos.x + Math.cos(Math.PI + this.blowerAngle) * 0.95 * this.radius) * cScale;
+                const offY = (simHeight - this.pos.y - Math.sin(Math.PI + this.blowerAngle) * 0.95 * this.radius) * cScale;
                 const offX2 = (this.pos.x + Math.cos(Math.PI + this.blowerAngle) * 1.35 * this.radius) * cScale;
                 const offY2 = (simHeight - this.pos.y - Math.sin(Math.PI + this.blowerAngle) * 1.35 * this.radius) * cScale;
                 drawCircle(
                     offX, 
                     offY, 
-                    0.1 * this.radius * cScale);
+                    0.15 * this.radius * cScale);
                 // Dim button when blower is inactive
                 if (blowerActive) {
-                    //c.fillStyle = 'rgba(255, 165, 0, 0.3)';
-                    c.fillStyle = 'hsl(40, 100%, 50%)';
+                    c.fillStyle = 'hsl(60, 100%, 45%)';
                 } else {
                     c.fillStyle = 'hsl(60, 30%, 30%)';
                 }
                 c.fill();
             
                 // Draw off button
+                const offRad = this.radius * cScale;
                 drawCircle(
                     offX2, 
                     offY2, 
-                    0.1 * this.radius * cScale);
-                c.fillStyle = 'hsl(0, 90%, 40%)'; // Dim dark red
+                    0.15 * offRad);
+                c.fillStyle = 'rgba(160, 0, 0, 0.6)'; // Dim dark red
                 c.fill();
+                c.strokeStyle = 'black'; // Dim  X
+                c.lineWidth = 0.02 * this.radius * cScale;
+                // Draw X symbol
+                c.beginPath();
+                c.moveTo(offX2 - 0.08 * offRad, offY2 - 0.08 * offRad);
+                c.lineTo(offX2 + 0.08 * offRad, offY2 + 0.08 * offRad);
+                c.moveTo(offX2 + 0.08 * offRad, offY2 - 0.08 * offRad);
+                c.lineTo(offX2 - 0.08 * offRad, offY2 + 0.08 * offRad);
+                c.stroke();
             
             }
 
@@ -13522,22 +15429,24 @@ window.addEventListener('DOMContentLoaded', function() {
                 cY(this.pos) + 0.45 * 0.15 * cScale, 
                 0.45 * 0.15 * cScale, 
                 0.35 * 0.15 * cScale, 
-                0, 
+                0.5 * Math.PI - this.respawnDir, 
                 0, 
                 2 * Math.PI, false);
                 c.fillStyle = `black`;
             } else {
-                c.fillStyle = `hsl(200, 80%, ${40 - eyeLight / 3}%)`;
+                c.fillStyle = 'black';
+                //c.fillStyle = `hsl(200, 80%, ${40 - eyeLight / 3}%)`;
                 c.lineWidth = 0.05 * 0.2 * cScale;
                 c.beginPath();
                 c.ellipse(
-                cX(this.pos), 
-                cY(this.pos) + 0.7 * 0.15 * cScale, 
-                0.45 * 0.15 * cScale, 
-                0.35 * 0.15 * cScale, 
-                0, 
-                0, 
-                2 * Math.PI, false);
+                    cX(this.pos), 
+                    cY(this.pos) + 0.7 * 0.15 * cScale, 
+                    0.45 * 0.15 * cScale, 
+                    0.35 * 0.15 * cScale, 
+                    0.5 * Math.PI - this.respawnDir, 
+                    0, 
+                    2 * Math.PI, false
+                );
             }
             
             c.fill();
@@ -13673,7 +15582,11 @@ window.addEventListener('DOMContentLoaded', function() {
                             (puck.cycle && showCycle) ||
                             (puck.orbit && showOrbit) ||
                             (puck.puckArriving && !puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit) ||
-                            (doOscillatePucks && !puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !puck.yinyang);
+                            (doOscillatePucks && !puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !puck.yinyang) ||
+                            (puck.subPuckAnimating) || // Sub-puck rotation animation
+                            (puck.subPuckOscillating) || // Sub-puck oscillation modes
+                            (puck.subPuckCircleOrbit) || // Sub-puck circular orbit
+                            (puck.subPuckEllipseOrbit); // Sub-puck elliptical orbit
             if (shouldSim) puck.simulate();
         }
 
@@ -13985,8 +15898,8 @@ window.addEventListener('DOMContentLoaded', function() {
 
     //  DRAW EVERYTHING -----------------------------------------------------------------
 	function drawEverything() {
-        wipeOpacity = Math.pow(2.718, persistence / -10);
-        c.fillStyle = `hsla(0, 0%, 0%, ${wipeOpacity})`;
+        const wipeOpacity = Math.pow(2.718, persistence / -10);
+        c.fillStyle = `hsla(0, 0%, ${colorWheelWipeLightness}%, ${wipeOpacity})`;
         c.fillRect(0, 0, canvas.width, canvas.height);
 
         // Ensure the corner/mask gradient tracks the viewport each frame
@@ -14290,6 +16203,10 @@ window.addEventListener('DOMContentLoaded', function() {
                     animateToysMenuOpacity();
                     drawToysMenu();
                     break;
+                case 'presetsMenu':
+                    animatePresetsMenuOpacity();
+                    drawPresetsMenu();
+                    break;
             }
         }
         
@@ -14403,18 +16320,52 @@ window.addEventListener('DOMContentLoaded', function() {
         // Startup repulsion force animation (ramp from 0 to max over 2 seconds immediately)
         if (startupRepulsionAnimationActive) {
             const elapsed = (Date.now() - startupTime) / 1000; // seconds since startup
-            if (elapsed <= 2.0) {
-                // Animate from 0 to 20 over 2 seconds
-                const animProgress = elapsed / 2.0; // 0 to 1 over 2 seconds
-                physicsMenuRepulsionForce = animProgress * 20;
-                physProps.repulsionForce = physicsMenuRepulsionForce / 10;
+            
+            // Check if we should do a restart (3 restarts total at 0.2s intervals)
+            if (startupRestartCount < 3 && elapsed >= (startupRestartCount + 1) * startupRestartPeriod) {
+                // Restart animation - reset force to 0
+                startupRestartCount++;
+                startupLastRestartTime = elapsed;
+                physicsMenuRepulsionForce = 0;
+                physProps.repulsionForce = 0;
+                console.log('RESTART #' + startupRestartCount + ' at ' + elapsed.toFixed(3) + 's');
+            }
+            
+            // Calculate progress within current restart cycle
+            const timeSinceLastRestart = elapsed - startupLastRestartTime;
+            
+            if (startupRestartCount < 3) {
+                // Pause at zero with STRONG ATTRACTION to pull particles back quickly
+                if (timeSinceLastRestart < startupPauseAtZero) {
+                    physicsMenuRepulsionForce = -80; // Negative = attraction
+                    physProps.repulsionForce = -8.0;
+                } else {
+                    const animTime = timeSinceLastRestart - startupPauseAtZero;
+                    const animDuration = startupRestartPeriod - startupPauseAtZero;
+                    const cycleProgress = Math.min(animTime / animDuration, 1.0);
+                    // Use higher force (30) for more dramatic restarts
+                    physicsMenuRepulsionForce = cycleProgress * 30;
+                    physProps.repulsionForce = physicsMenuRepulsionForce / 10;
+                }
             } else {
-                // Animation complete - set to max and stop animating
-                physicsMenuRepulsionForce = 20;
-                physProps.repulsionForce = 2.0;
-                startupRepulsionAnimationActive = false;
-                // Revert respawn layout to cluster after startup
-                respawnMenuLayoutType = 'cluster';
+                // After 3 restarts (0.54s total), continue to 2-second mark
+                const totalRestartTime = 3 * startupRestartPeriod; // 0.54 seconds
+                const remainingTime = 2.0 - totalRestartTime; // 1.46 seconds
+                const timeSinceRestarts = elapsed - totalRestartTime;
+                
+                if (timeSinceRestarts <= remainingTime) {
+                    const finalAnimProgress = timeSinceRestarts / remainingTime;
+                    physicsMenuRepulsionForce = finalAnimProgress * 20;
+                    physProps.repulsionForce = physicsMenuRepulsionForce / 10;
+                } else {
+                    // Animation complete - set to max and stop animating
+                    physicsMenuRepulsionForce = 20;
+                    physProps.repulsionForce = 2.0;
+                    startupRepulsionAnimationActive = false;
+                    console.log('Startup animation complete at ' + elapsed.toFixed(3) + 's');
+                    // Revert respawn layout to cluster after startup
+                    respawnMenuLayoutType = 'cluster';
+                }
             }
         }
         
@@ -14432,6 +16383,16 @@ window.addEventListener('DOMContentLoaded', function() {
             physProps.gravity.y = Math.sin(newAngle) * gmag;
         }
         
+        // Apply color wheel rotation if slider is moved from center
+        if (colorWheelRotationSpeed !== 0) {
+            // Rotate the hue value (0-360 degrees)
+            const speedMultiplier = colorWheelRotationFastMode ? 1.0 : 0.1;
+            colorWheelHue += colorWheelRotationSpeed * 2 * speedMultiplier; // 2 degrees per frame at max speed (or 0.2 in slow mode)
+            if (colorWheelHue >= 360) colorWheelHue -= 360;
+            if (colorWheelHue < 0) colorWheelHue += 360;
+            physProps.baseColor = colorWheelHue;
+        }
+        
         // Run multiple simulation substeps per frame
         for (let substep = 0; substep < physProps.substeps; substep++) {
             simulate();
@@ -14441,6 +16402,17 @@ window.addEventListener('DOMContentLoaded', function() {
     }
     
     update();
+    
+    // Capture default presets after startup animation completes
+    setTimeout(function() {
+        DEFAULT_PRESETS = [];
+        const state = getControlState();
+        const stateJSON = JSON.stringify(state); // Stringify once
+        for (let i = 0; i < 22; ++i) {
+            // Parse the same JSON string for each slot (now 22 presets with 7th row)
+            DEFAULT_PRESETS.push(JSON.parse(stateJSON));
+        }
+    }, 2500); // Wait for 2.5 seconds (after 2 second animation completes)
 
 /*
 ===========================================
