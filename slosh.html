@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.16
+		<title>Slosh 2.17
         </title>
         <style>
 			body {font-family: monospace; 
@@ -12465,13 +12465,17 @@ window.addEventListener('DOMContentLoaded', function() {
     class MAGICSET {
         constructor(){
             this.active = false;
-            this.wandPos = new Vector2(0.458 * simWidth * cScale, 0.78 * simHeight * cScale);
+            this.wandPos = new Vector2(0.5 * simWidth * cScale - 50 , simHeight * cScale - 150);
             this.wandLength = 0.3 * cScale;
             this.wandWidth = 0.008 * cScale;
             this.wandColor = 'white';
-            this.hatPos = new Vector2(0.6 * simWidth * cScale, 0.8 * simHeight * cScale);
+            this.hatPos = new Vector2(0.5 * simWidth * cScale + 100, simHeight * cScale - 60);
             this.hatSize = 1;
             this.hatColor = 'cyan';
+
+            //const pepeIconRadius = 80;
+            //const pepeYPosition = (pepeIconRadius - 8) / cScale;
+            //const pepeXPosition = 0.5 * simWidth;
             
             // Magic state tracking
             this.hatSwarmActive = false;
@@ -12559,10 +12563,20 @@ window.addEventListener('DOMContentLoaded', function() {
             // draw upside-down tophat
             c.save();
             c.translate(this.hatPos.x, this.hatPos.y);
-            c.fillStyle = this.hatColor;
-            c.beginPath();
             const hatWidth = this.hatSize * 50;
             const hatHeight = this.hatSize * 70;
+            
+            // Create gradient for hat body to emphasize cylindrical shape (light from above-left)
+            // Gradient goes horizontally across the cylinder
+            const bodyGradient = c.createLinearGradient(-0.7 * hatWidth, 0, 0.7 * hatWidth, 0);
+            bodyGradient.addColorStop(0, 'hsl(180, 0%, 15%)'); // Dark on left edge
+            bodyGradient.addColorStop(0.35, 'hsl(180, 0%, 70%)'); // Bright highlight on left side
+            bodyGradient.addColorStop(0.5, 'hsl(180, 0%, 70%)'); // Mid cyan at center
+            bodyGradient.addColorStop(0.9, 'hsl(180, 0%, 15%)'); // Deep shadow on right side
+            bodyGradient.addColorStop(1, 'hsl(180, 0%, 10%)'); // Very dark on right edge
+            
+            c.fillStyle = bodyGradient;
+            c.beginPath();
             
             // Draw hat body with convex sides (bulging outward)
             c.moveTo(-0.5 * hatWidth, 0);
@@ -12573,10 +12587,10 @@ window.addEventListener('DOMContentLoaded', function() {
                 -0.7 * hatWidth, hatHeight           // end point at top left
             );
             
-            // Top - curved arc using bezier (bulging upward/outward - convex)
+            // Top - curved arc using bezier (bulging upward/outward - more curved)
             c.bezierCurveTo(
-                -0.3 * hatWidth, hatHeight + hatWidth * 0.12,  // control point 1 (above for upward bulge)
-                0.3 * hatWidth, hatHeight + hatWidth * 0.12,   // control point 2 (above for upward bulge)
+                -0.3 * hatWidth, hatHeight + hatWidth * 0.25,  // control point 1 (more height for tighter curve)
+                0.3 * hatWidth, hatHeight + hatWidth * 0.25,   // control point 2 (more height for tighter curve)
                 0.7 * hatWidth, hatHeight                       // end point at top right
             );
             
@@ -12587,60 +12601,67 @@ window.addEventListener('DOMContentLoaded', function() {
             );
             c.closePath();
             c.fill();
-            c.strokeStyle = 'black';
-            c.lineWidth = 0.005 * cScale;
+            c.strokeStyle = 'hsl(0, 0%, 0%)';
+            c.lineWidth = 0.0035 * cScale;
             c.lineCap = 'round';
             c.stroke();
 
-            // draw hat band
+            // Draw hat band as filled shape with gradient around the cylindrical body
+            c.save();
+            
+            // Create gradient for band (horizontal, matching cylindrical shading)
+            const bandGradient = c.createLinearGradient(-0.5 * hatWidth, 0, 0.5 * hatWidth, 0);
+            bandGradient.addColorStop(0, 'hsl(0, 90%, 30%)'); // Gray on left edge
+            bandGradient.addColorStop(0.35, 'hsl(0, 90%, 60%)'); // Bright highlight on left
+            bandGradient.addColorStop(0.5, 'hsl(0, 90%, 40%)'); // Light gray center
+            bandGradient.addColorStop(0.9, 'hsl(0, 90%, 20%)'); // Darker on right
+            bandGradient.addColorStop(1, 'hsl(0, 90%, 10%)'); // Dark on right edge
+            
+            // Draw band as curved shape following the cylinder contour
+            const bandTopY = 0.1 * hatHeight;
+            const bandBottomY = 0.3 * hatHeight;
+            const bandMidY = (bandTopY + bandBottomY) / 2;
+            
             c.beginPath();
-            c.ellipse(
-                0, 
-                0.2 * hatHeight, 
-                hatWidth, 
-                0.4 * hatWidth, 
-                0, 
-                0.67 *Math.PI, 
-                0.33 * Math.PI,
-                true);
+            // Top edge - curved downward (bulging down)
+            c.moveTo(-0.5 * hatWidth, bandTopY);
+            c.quadraticCurveTo(0, bandTopY + 0.1 * hatHeight, 0.5 * hatWidth, bandTopY);
+            // Right side
+            c.lineTo(0.5 * hatWidth, bandBottomY);
+            // Bottom edge - curved downward (bulging down)
+            c.quadraticCurveTo(0, bandBottomY + 0.1 * hatHeight, -0.5 * hatWidth, bandBottomY);
+            c.closePath();
+            c.fillStyle = bandGradient;
+            c.fill();
+            
+            // Stroke top edge of band
+            c.beginPath();
+            c.moveTo(-0.5 * hatWidth, bandTopY);
+            c.quadraticCurveTo(0, bandTopY + 0.1 * hatHeight, 0.5 * hatWidth, bandTopY);
             c.strokeStyle = 'white';
-            c.lineWidth = 0.04 * cScale;
-            c.lineCap = 'butt';
-            c.stroke();
-
-            // draw hat band bottom edge
-            c.beginPath();
-            c.ellipse(
-                0, 
-                0.3 * hatHeight, 
-                hatWidth, 
-                0.4 * hatWidth, 
-                0, 
-                0.68 *Math.PI, 
-                0.32 * Math.PI,
-                true);
-            c.strokeStyle = 'black';
             c.lineWidth = 0.006 * cScale;
             c.lineCap = 'butt';
-            c.stroke();
+            //c.stroke();
 
-            // draw hat band bottom edge
+            // Stroke bottom edge of band
             c.beginPath();
-            c.ellipse(
-                0, 
-                0.1 * hatHeight, 
-                hatWidth, 
-                0.4 * hatWidth, 
-                0, 
-                0.68 *Math.PI, 
-                0.32 * Math.PI,
-                true);
-            c.strokeStyle = 'black';
+            c.moveTo(-0.5 * hatWidth, bandBottomY);
+            c.quadraticCurveTo(0, bandBottomY + 0.1 * hatHeight, 0.5 * hatWidth, bandBottomY);
+            c.strokeStyle = 'white';
             c.lineWidth = 0.006 * cScale;
             c.lineCap = 'butt';
-            c.stroke();
+            //c.stroke();
+            
+            c.restore();
 
+            // Create gradient for hat brim (light from above-left, radial for elliptical shape)
+            const brimGradient = c.createRadialGradient(-0.3 * hatWidth, -0.1 * hatWidth, 0, 0, 0, hatWidth);
+            brimGradient.addColorStop(0, 'hsl(180, 0%, 65%)'); // Lighter on top-left
+            brimGradient.addColorStop(0.5, 'hsl(180, 0%, 45%)'); // Mid cyan
+            brimGradient.addColorStop(1, 'hsl(180, 0%, 20%)'); // Dark at edges
+            
             // fill hat brim
+            c.fillStyle = brimGradient;
             c.beginPath();
             c.ellipse(
                 0, 
@@ -12679,6 +12700,7 @@ window.addEventListener('DOMContentLoaded', function() {
             c.strokeStyle = 'black';
             c.lineWidth = 0.005 * cScale;
             c.stroke();
+
             // draw head hole
             c.fillStyle = 'black';
             c.beginPath();
@@ -12703,7 +12725,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 Math.PI, 
                 2 * Math.PI,
                 false);
-            c.strokeStyle = 'white';
+            c.strokeStyle = 'hsl(0, 0%, 70%)';
             c.lineWidth = 0.01 * cScale;
             c.stroke();
             // draw black head hole rim
@@ -13437,13 +13459,13 @@ window.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                     
-                    const lineLength = 0.9 * this.radius * cScale;
+                    const lineLength = 4 * this.radius * cScale;
                     c.save();
                     c.translate(cX(this.pos), cY(this.pos));
                     c.rotate(-this.headingAngle); // Negative because canvas Y is inverted
                     c.beginPath();
                     c.moveTo(-lineLength, 0);
-                    c.lineTo(lineLength, 0);
+                    c.lineTo(0, 0);
                     if (this.whiteBall == true || this.tracerBall == true) {
                         c.strokeStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
                     } else {
@@ -16186,21 +16208,38 @@ window.addEventListener('DOMContentLoaded', function() {
             const resizeLocalPos = rotatePoint(this.width/2 - btnDistance, -this.height/2 + btnDistance);
             this.resizePos = resizeLocalPos;
             
-            // Draw arrow at resize grip - calculate angle from box center to resize position in LOCAL space
-            // This ensures the arrow always points towards the actual corner regardless of aspect ratio
-            const localAngle = Math.atan2(-this.height/2 + btnDistance, this.width/2 - btnDistance);
-            // Convert from standard angle (0=right) to drawArrow angle (0=up) by subtracting π/2
-            const arrowRadius = 3.0 * btnRadius;
+            // Draw triangle of dots at resize grip (rotates with box)
+            c.save();
+            c.translate(cX(this.resizePos), cY(this.resizePos));
+            c.rotate(-this.rotation); // Rotate with the box
             
-            // Arrow rotates with the box
-            drawArrow(
-                this.resizePos.x,
-                simHeight - this.resizePos.y,
-                localAngle - Math.PI / 2 + this.rotation,
-                arrowRadius, 
-            )
-            c.fillStyle = 'green';
+            const dotSize = 0.3 * btnRadius * cScale;
+            const spacing = 0.9 * btnRadius * cScale;
+            c.fillStyle = 'rgba(0, 200, 0, 0.8)';
+            
+            // Triangle pointing to bottom-right corner, shifted right for symmetry
+            const rightShift = spacing;
+            
+            // Row 1 (left): 3 dots
+            for (let i = 0; i < 3; i++) {
+                c.beginPath();
+                c.arc(rightShift - i * spacing, spacing, dotSize, 0, Math.PI * 2);
+                c.fill();
+            }
+            
+            // Row 2 (middle): 2 dots
+            for (let i = 0; i < 2; i++) {
+                c.beginPath();
+                c.arc(rightShift - i * spacing, 0, dotSize, 0, Math.PI * 2);
+                c.fill();
+            }
+            
+            // Row 3 (right): 1 dot
+            c.beginPath();
+            c.arc(rightShift, -spacing, dotSize, 0, Math.PI * 2);
             c.fill();
+            
+            c.restore();
             
             // Rotate button (yellow) - positioned at bottom-left corner where close button used to be
             const rotateLocalPos = rotatePoint(-this.width/2 + btnDistance, -this.height/2 + btnDistance);
@@ -16944,17 +16983,16 @@ window.addEventListener('DOMContentLoaded', function() {
                     // Position buttons on opposite corner (around 135 degrees, upper left)
                     const buttonBaseAngle = 0.75 * Math.PI; // 135 degrees
                     
+                    //  plus button
+                    const plusAngle = 0.6 * Math.PI;
+                    this.plusPos = new Vector2(this.pos.x + gripDist * Math.cos(plusAngle), this.pos.y + gripDist * Math.sin(plusAngle));
+                   
                     //  minus button
-                    //const minusAngle = buttonBaseAngle + (25 * Math.PI / 180);
-                    const minusAngle = 0.82 * Math.PI;
+                    const minusAngle = 0.75 * Math.PI;
                     this.minusPos = new Vector2(this.pos.x + gripDist * Math.cos(minusAngle), this.pos.y + gripDist * Math.sin(minusAngle));
                     
-                    //  plus button
-                    const plusAngle = 0.68 * Math.PI;
-                    this.plusPos = new Vector2(this.pos.x + gripDist * Math.cos(plusAngle), this.pos.y + gripDist * Math.sin(plusAngle));
-                    
                     //  off button 
-                    const offAngle = 1.18 * Math.PI;
+                    const offAngle = 0.9 * Math.PI;
                     this.offPos = new Vector2(this.pos.x + gripDist * Math.cos(offAngle), this.pos.y + gripDist * Math.sin(offAngle));
 
                     //  arrow button (now sub-puck toggle)
@@ -17626,19 +17664,29 @@ window.addEventListener('DOMContentLoaded', function() {
                         c.globalAlpha = 1.0;
                     }
 
-                //  resize arrow buttons ----------
-                //  arrow button 
-                    const resizeAngle = 0.82 * Math.PI;
-                    this.arrowPos = new Vector2(this.pos.x + gripDist * Math.cos(arrowAngle), this.pos.y + gripDist * Math.sin(arrowAngle));
-              
-                    // Draw arrow pointing out
-                    drawArrow(
-                            this.gripPos.x,
-                            simHeight - this.gripPos.y,
-                            1.25 * Math.PI,
-                            0.2 * this.radius, 
-                        )
-                    c.fillStyle = 'green';
+                //  resize triangle grip ----------
+                    // Draw triangle of dots pointing down and right
+                    const dotSize = 0.03 * this.radius * cScale;
+                    const spacing = 0.07 * this.radius * cScale;
+                    c.fillStyle = 'rgba(0, 200, 0, 0.8)';
+                    
+                    // Row 1 (top-right): 3 dots
+                    for (let i = 0; i < 3; i++) {
+                        c.beginPath();
+                        c.arc(cX(this.gripPos) - i * spacing, cY(this.gripPos) + spacing, dotSize, 0, Math.PI * 2);
+                        c.fill();
+                    }
+                    
+                    // Row 2 (middle): 2 dots
+                    for (let i = 0; i < 2; i++) {
+                        c.beginPath();
+                        c.arc(cX(this.gripPos) - i * spacing, cY(this.gripPos), dotSize, 0, Math.PI * 2);
+                        c.fill();
+                    }
+                    
+                    // Row 3 (top-right): 1 dot
+                    c.beginPath();
+                    c.arc(cX(this.gripPos), cY(this.gripPos) - spacing, dotSize, 0, Math.PI * 2);
                     c.fill();
 
                     // Draw plus button  ----------
@@ -18180,7 +18228,8 @@ window.addEventListener('DOMContentLoaded', function() {
     // In sim coordinates: pos.y should equal 80 / cScale (half the image height)
     const pepeIconRadius = 80;
     const pepeYPosition = (pepeIconRadius - 8) / cScale;
-    makeStinker(new Vector2(0.5 * simWidth, pepeYPosition));
+    const pepeXPosition = 0.5 * simWidth;
+    makeStinker(new Vector2(pepeXPosition, pepeYPosition));
 
 
     //  MAGNET CONSTRUCTOR ----------------------------------------------------------------
@@ -18558,7 +18607,7 @@ window.addEventListener('DOMContentLoaded', function() {
             this.radius = radius;
             this.OGradius = radius; // Remember original size
             this.pos = pos.clone();
-            this.blowerAngle = 0.65 * Math.PI;
+            this.blowerAngle = 0.8 * Math.PI;
             this.force = 100;
 		}
         get left() {
@@ -19060,7 +19109,7 @@ window.addEventListener('DOMContentLoaded', function() {
         Hungrypuck.push (new HUNGRYPUCK(0.15, new Vector2(0.3 * simWidth, -0.1 * 0.15), hungryPuckVel, `hsl(0, 50%, 50%)`));
     }
     
-    //  DEFINE BOXES  ----------------------------------------------------------
+    //  MAKE BOXES  ----------------------------------------------------------
     function makeBoxes() {
         Box = [];
         const boxColor = `hsla(40, 50%, 45%, 65%)`;
