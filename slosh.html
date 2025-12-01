@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.19
+		<title>Slosh 2.20
         </title>
         <style>
 			body {font-family: monospace; 
@@ -6922,15 +6922,32 @@ window.addEventListener('DOMContentLoaded', function() {
         const hatHeight = magic.hatSize * 70;
         
         // Check wand click (star tip or wand shaft only)
-        const wandRotationAngle = 0.4 * Math.PI;
+        const baseAngle = 0.4 * Math.PI;
+        
+        // Calculate additional rotation from animation
+        let additionalRotation = 0;
+        if (magic.wandAnimationActive && magic.wandBasePos) {
+            const animProgress = (Date.now() - magic.wandAnimationStartTime) / 4000;
+            if (animProgress < 1.0) {
+                const direction = magic.wandAnimationDirection || 1;
+                const t = animProgress;
+                const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                additionalRotation = eased * 12 * Math.PI * direction;
+            }
+        }
+        
+        const wandRotationAngle = baseAngle + additionalRotation;
         
         // Calculate star center position
-        const localStarX = -0.1 * magic.wandLength;
-        const localStarY = 0;
-        const rotatedX = localStarX * Math.cos(wandRotationAngle) - localStarY * Math.sin(wandRotationAngle);
-        const rotatedY = localStarX * Math.sin(wandRotationAngle) + localStarY * Math.cos(wandRotationAngle);
-        const starCenterX = magic.wandPos.x + rotatedX;
-        const starCenterY = magic.wandPos.y + rotatedY;
+        const starOffset = magic.wandLength * 0.9;
+        const localStarX = starOffset * Math.cos(baseAngle);
+        const localStarY = starOffset * Math.sin(baseAngle);
+        // Apply additional rotation around star tip
+        const finalLocalStarX = localStarX * Math.cos(additionalRotation) - localStarY * Math.sin(additionalRotation);
+        const finalLocalStarY = localStarX * Math.sin(additionalRotation) + localStarY * Math.cos(additionalRotation);
+        
+        const starCenterX = magic.wandPos.x + finalLocalStarX;
+        const starCenterY = magic.wandPos.y + finalLocalStarY;
         
         // Check if clicking on star (circular area around star center)
         const starDx = mX - starCenterX;
@@ -10740,21 +10757,35 @@ window.addEventListener('DOMContentLoaded', function() {
         const hatHeight = magic.hatSize * 70;
         
         // Check wand click (star tip or wand shaft only)
-        const wandRotationAngle = 0.4 * Math.PI;
+        const baseAngle = 0.4 * Math.PI;
+        
+        // Calculate additional rotation from animation
+        let additionalRotation = 0;
+        if (magic.wandAnimationActive && magic.wandBasePos) {
+            const animProgress = (Date.now() - magic.wandAnimationStartTime) / 4000;
+            if (animProgress < 1.0) {
+                const direction = magic.wandAnimationDirection || 1;
+                const t = animProgress;
+                const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                additionalRotation = eased * 12 * Math.PI * direction;
+            }
+        }
+        
+        const wandRotationAngle = baseAngle + additionalRotation;
         
         // Calculate star center position
-        const localStarX = -0.1 * magic.wandLength;
-        const localStarY = 0;
-        const rotatedX = localStarX * Math.cos(wandRotationAngle) - localStarY * Math.sin(wandRotationAngle);
-        const rotatedY = localStarX * Math.sin(wandRotationAngle) + localStarY * Math.cos(wandRotationAngle);
-        const starCenterX = magic.wandPos.x + rotatedX;
-        const starCenterY = magic.wandPos.y + rotatedY;
+        // After all transforms, star ends up at NEGATIVE offset from wandPos along rotation angle
+        // Because: translate to +0.9, rotate, translate back, draw shaft 0 to wandLength, then translate -0.1
+        // Final star position is at -0.1 * wandLength from the origin in rotated space
+        const starLocalOffset = -0.1 * magic.wandLength;
+        const starCenterX = magic.wandPos.x + starLocalOffset * Math.cos(baseAngle);
+        const starCenterY = magic.wandPos.y + starLocalOffset * Math.sin(baseAngle);
         
         // Check if clicking on star (circular area around star center)
         const starDx = mX - starCenterX;
         const starDy = mY - starCenterY;
         const starDist = Math.sqrt(starDx * starDx + starDy * starDy);
-        const starRadius = magic.wandLength * 0.25; // Star grab radius
+        const starRadius = magic.wandLength * 0.3; // Star grab radius (increased)
         
         // Check if clicking on wand shaft (rectangular area along wand)
         const wandDx = mX - magic.wandPos.x;
@@ -12659,6 +12690,11 @@ window.addEventListener('DOMContentLoaded', function() {
             this.rabbitHeight = 0; // 0 to 1, controls how far rabbit ears are extended
             this.rabbitAnimating = false;
             this.rabbitAnimationSpeed = 0.02; // Speed of rabbit animation
+            
+            // Wand sparkle animation properties
+            this.wandAnimationActive = false;
+            this.wandAnimationStartTime = 0;
+            this.wandBasePos = null; // Store original position
         }
         draw(beforeOrAfter) {
             //if(this.active == false) return;
@@ -12675,51 +12711,135 @@ window.addEventListener('DOMContentLoaded', function() {
             
             // Draw wand only in 'after' pass (always on top)
             if (beforeOrAfter === 'after') {
+                // Update wand animation if active
+                let wandOffsetX = 0;
+                let wandOffsetY = 0;
+                let additionalRotation = 0;
+                
+                if (this.wandAnimationActive && this.wandBasePos) {
+                    const animProgress = (Date.now() - this.wandAnimationStartTime) / 4000; // 4 second animation
+                    const direction = this.wandAnimationDirection || 1; // Default upward if not set
+                    
+                    if (animProgress >= 1.0) {
+                        // Animation complete - keep wand at final position
+                        this.wandAnimationActive = false;
+                        // Final position: 2 radii in the animation direction
+                        this.wandPos.x = this.wandBasePos.x;
+                        this.wandPos.y = this.wandBasePos.y - direction * 2 * this.wandLength;
+                    } else {
+                        // Smooth easing function (ease-in-out)
+                        const t = animProgress;
+                        const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                        
+                        // 6 full rotations during animation (12π radians)
+                        // Clockwise when going up, counterclockwise when going down
+                        additionalRotation = eased * 12 * Math.PI * direction;
+                        
+                        // Parabolic arc for handle end: bulge to the left
+                        // Parabola opens to the left with vertex offset
+                        const verticalProgress = eased; // 0 to 1
+                        
+                        // Parabolic horizontal offset: peaks at middle of animation
+                        // Using formula: x = -amplitude * (4 * t * (1 - t))
+                        // This creates a parabola that's 0 at t=0 and t=1, peaks at t=0.5
+                        const parabolicAmplitude = this.wandLength * 0.8; // bulge amount to the left
+                        wandOffsetX = -parabolicAmplitude * 4 * verticalProgress * (1 - verticalProgress);
+                        
+                        // Vertical movement: 2 radii in the animation direction
+                        wandOffsetY = -direction * 2 * this.wandLength * verticalProgress;
+                        
+                        // Update handle position
+                        this.wandPos.x = this.wandBasePos.x + wandOffsetX;
+                        this.wandPos.y = this.wandBasePos.y + wandOffsetY;
+                    }
+                }
+                
                 c.save();
                 c.translate(this.wandPos.x, this.wandPos.y);
                 // rotate 30 degrees ccw from vertical
-                const wandRotationAngle = 0.4 * Math.PI
-                c.rotate(wandRotationAngle);
+                const baseAngle = 0.4 * Math.PI;
+                const wandRotationAngle = baseAngle + additionalRotation;
+                c.rotate(baseAngle);
+                // Move to star tip to use it as rotation center
+                const starOffset = this.wandLength * 0.9;
+                c.translate(starOffset, 0);
+                // Apply additional animation rotation around star tip
+                c.rotate(additionalRotation);
+                // Move back to draw wand from origin
+                c.translate(-starOffset, 0);
 
+            // draw wand shaft background
+            c.fillStyle = 'hsl(0, 0%, 0%)';
+            c.fillRect(0, -2 * this.wandWidth / 2, this.wandLength, 2 * this.wandWidth);
             // draw wand shaft
-            c.fillStyle = this.wandColor;
-            //c.save();
+            c.fillStyle = 'red';
             c.fillRect(0, -this.wandWidth / 2, this.wandLength, this.wandWidth);
+            
             c.translate(-0.1 * this.wandLength, 0);
             //c.restore();
             
-            // draw star tip
-            c.fillStyle = this.wandColor;
-            c.beginPath();
+            // Draw each black outline for star points
+            c.lineWidth = 0.02 * cScale;
             for (let i = 0; i < 5; i++) {
-                const angle = (i * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * wandRotationAngle);
+                const angle = (i * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * (0.4 * Math.PI));
                 const x = Math.cos(angle) * this.wandLength * 0.2;
                 const y = Math.sin(angle) * this.wandLength * 0.2;
-                c.lineTo(x, y);
                 const innerAngle = (angle + Math.PI / 5);
                 const innerX = Math.cos(innerAngle) * this.wandLength * 0.1;
                 const innerY = Math.sin(innerAngle) * this.wandLength * 0.1;
+                
+                // Next outer point
+                const nextAngle = ((i + 1) * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * (0.4 * Math.PI));
+                const nextX = Math.cos(nextAngle) * this.wandLength * 0.2;
+                const nextY = Math.sin(nextAngle) * this.wandLength * 0.2;
+                
+                // Draw one point as a separate path
+                c.beginPath();
+                c.moveTo(x, y);
                 c.lineTo(innerX, innerY);
-            }   
-            c.closePath(); 
-            c.strokeStyle = 'white';
-            c.lineWidth = 0.005 * cScale;
-            c.stroke();      
-            //c.fill();
+                c.lineTo(nextX, nextY);
+                c.strokeStyle = `hsla(0, 0%, 0%, 0.3)`;
+                c.stroke();
+            }
+
+            // Draw each star point with different colors
+            c.lineWidth = 0.007 * cScale;
+            for (let i = 0; i < 5; i++) {
+                const angle = (i * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * (0.4 * Math.PI));
+                const x = Math.cos(angle) * this.wandLength * 0.2;
+                const y = Math.sin(angle) * this.wandLength * 0.2;
+                const innerAngle = (angle + Math.PI / 5);
+                const innerX = Math.cos(innerAngle) * this.wandLength * 0.1;
+                const innerY = Math.sin(innerAngle) * this.wandLength * 0.1;
+                
+                // Next outer point
+                const nextAngle = ((i + 1) * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * (0.4 * Math.PI));
+                const nextX = Math.cos(nextAngle) * this.wandLength * 0.2;
+                const nextY = Math.sin(nextAngle) * this.wandLength * 0.2;
+                
+                // Draw one point as a separate path
+                c.beginPath();
+                c.moveTo(x, y);
+                c.lineTo(innerX, innerY);
+                c.lineTo(nextX, nextY);
+                c.strokeStyle = `hsl(${45 * (i / 5)}, 100%, 50%)`;
+                
+                c.stroke();
+            }
             
-            // generate sparkles for one second when wand is ready to dispense
-            // ramp up sparkle effect from 0 to full over first 0.5 seconds
-            // ramp down sparkle effect over last 0.5 seconds
+            
+            // Generate sparkles when particles are available
             if (this.particlesToDispense.length > 0 && !this.wandDispensingActive) {
                 const sparkleProgress = (Date.now() - this.wandDispensingStartTime) / 1000;
+                const isAnimating = sparkleProgress <= 4.0;
                 
-                // Only show sparkles for 1 second
-                if (sparkleProgress <= 4.0) {
+                if (isAnimating) {
+                    // Animation mode: full sparkles with ramp up/down
                     let sparkleAlpha = 1;
-                    if (sparkleProgress < 2) {
+                    if (sparkleProgress < 0.5) {
                         sparkleAlpha = sparkleProgress / 0.5;
-                    } else if (sparkleProgress > 0.5) {
-                        sparkleAlpha = 4 - (sparkleProgress - 0.5) / 0.5;
+                    } else if (sparkleProgress > 3.5) {
+                        sparkleAlpha = (4.0 - sparkleProgress) / 0.5;
                     }
                     
                     for (let i = 0; i < 30; i++) {
@@ -12731,6 +12851,21 @@ window.addEventListener('DOMContentLoaded', function() {
                         c.beginPath();
                         c.arc(sparkleX, sparkleY, 2, 0, Math.PI * 2);
                         c.fill();
+                    }
+                } else {
+                    // Idle mode: reduced sparkles after animation completes
+                    // Lower rate: only spawn sparkles ~20% of frames
+                    if (Math.random() < 0.2) {
+                        for (let i = 0; i < 5; i++) {
+                            const sparkleAngle = Math.random() * Math.PI * 2;
+                            const sparkleRadius = Math.random() * this.wandLength * 0.6;
+                            const sparkleX = Math.cos(sparkleAngle) * sparkleRadius;
+                            const sparkleY = Math.sin(sparkleAngle) * sparkleRadius;
+                            c.fillStyle = `hsla(${Math.random() * 360}, 100%, 70%, ${Math.random() * 0.3 + 0.2})`;
+                            c.beginPath();
+                            c.arc(sparkleX, sparkleY, 2, 0, Math.PI * 2);
+                            c.fill();
+                        }
                     }
                 }
             }
@@ -13142,6 +13277,11 @@ window.addEventListener('DOMContentLoaded', function() {
                     this.particlesToDispense = [...this.collectedParticles];
                     this.dispensingIndex = 0;
                     this.wandDispensingStartTime = Date.now(); // Start sparkle timer
+                    this.wandAnimationActive = true;
+                    this.wandAnimationStartTime = Date.now();
+                    this.wandBasePos = new Vector2(this.wandPos.x, this.wandPos.y);
+                    // Determine animation direction based on wand position
+                    this.wandAnimationDirection = this.wandPos.y < (canvas.height / 2) ? -1 : 1; // -1 = downward, 1 = upward
                     // Restore original tau value
                     if (this.savedTau !== null) {
                         physProps.tau = this.savedTau;
@@ -20630,306 +20770,306 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }, 2500); // Wait for 2.5 seconds (after 2 second animation completes)
 
-/*
-===========================================
-VARIABLES AND CONSTANTS REFERENCE
-===========================================
+    /*
+    ===========================================
+    VARIABLES AND CONSTANTS REFERENCE
+    ===========================================
 
-LAYOUT AND CANVAS
------------------
-screenVertical - Boolean flag indicating if canvas is in vertical (portrait) orientation
-canvas - The main HTML canvas element
-c - 2D rendering context for the canvas
-cScale - Scaling factor for converting simulation units to canvas pixels
-simWidth - Width of simulation world in simulation units
-simHeight - Height of simulation world in simulation units
-simMinWidth - Minimum world width in simulation units (used for scaling)
-topMargin - Top margin for canvas rendering
-bottomMargin - Bottom margin for canvas rendering
-cornerFillGradient - Gradient used to fill canvas corners/masks to match page background
+    LAYOUT AND CANVAS
+    -----------------
+    screenVertical - Boolean flag indicating if canvas is in vertical (portrait) orientation
+    canvas - The main HTML canvas element
+    c - 2D rendering context for the canvas
+    cScale - Scaling factor for converting simulation units to canvas pixels
+    simWidth - Width of simulation world in simulation units
+    simHeight - Height of simulation world in simulation units
+    simMinWidth - Minimum world width in simulation units (used for scaling)
+    topMargin - Top margin for canvas rendering
+    bottomMargin - Bottom margin for canvas rendering
+    cornerFillGradient - Gradient used to fill canvas corners/masks to match page background
 
-BUMPER CONFIGURATION
---------------------
-bumperRows - Number of rows of bumpers (default: 3)
-bumperRadius - Radius of bumper objects (default: 0.040)
+    BUMPER CONFIGURATION
+    --------------------
+    bumperRows - Number of rows of bumpers (default: 3)
+    bumperRadius - Radius of bumper objects (default: 0.040)
 
-FOUNTAIN AND SPAWN STATES
---------------------------
-fountainState - Current state of fountain (0=off, 1=normal, 2=sweep, 3=cw, 4=ccw)
-doShower - Boolean flag for shower particle spawning mode
-doFountain - Boolean flag for fountain particle spawning mode
+    FOUNTAIN AND SPAWN STATES
+    --------------------------
+    fountainState - Current state of fountain (0=off, 1=normal, 2=sweep, 3=cw, 4=ccw)
+    doShower - Boolean flag for shower particle spawning mode
+    doFountain - Boolean flag for fountain particle spawning mode
 
-PRESET MANAGEMENT
------------------
-PRESET_KEYS - Array of localStorage/cookie keys for saving presets (19 presets)
-DEFAULT_PRESETS - Array storing default preset configurations
-CONTROL_IDS - Array of HTML element IDs to save/restore in presets
+    PRESET MANAGEMENT
+    -----------------
+    PRESET_KEYS - Array of localStorage/cookie keys for saving presets (19 presets)
+    DEFAULT_PRESETS - Array storing default preset configurations
+    CONTROL_IDS - Array of HTML element IDs to save/restore in presets
 
-FPS COUNTER
------------
-fpsCounter - Object containing FPS tracking data (lastTime, frameCount, frameTimes, etc.)
-fpsCounter.maxSamples - Number of frame samples to average (default: 10)
-fpsCounter.updateInterval - How often to update FPS display (every 5 frames)
+    FPS COUNTER
+    -----------
+    fpsCounter - Object containing FPS tracking data (lastTime, frameCount, frameTimes, etc.)
+    fpsCounter.maxSamples - Number of frame samples to average (default: 10)
+    fpsCounter.updateInterval - How often to update FPS display (every 5 frames)
 
-IMAGE ASSETS
-------------
-gummiImage - Image object for gummy bear particle rendering
-gummiReady - Boolean flag indicating if gummy bear image is loaded
-doGummi - Boolean flag to enable gummy bear rendering style
-gummiHeadingTau - Smoothing speed for gummy bear orientation (default: 0.05 seconds)
-gummiHeadingOffset - Orientation offset for gummy bear image (Math.PI/2 radians)
-aeolusImage - Image object for Aeolus character
-aeolusReady - Boolean flag indicating if Aeolus image is loaded
-pepeImage - Image object for Pepe character
-pepeReady - Boolean flag indicating if Pepe image is loaded
+    IMAGE ASSETS
+    ------------
+    gummiImage - Image object for gummy bear particle rendering
+    gummiReady - Boolean flag indicating if gummy bear image is loaded
+    doGummi - Boolean flag to enable gummy bear rendering style
+    gummiHeadingTau - Smoothing speed for gummy bear orientation (default: 0.05 seconds)
+    gummiHeadingOffset - Orientation offset for gummy bear image (Math.PI/2 radians)
+    aeolusImage - Image object for Aeolus character
+    aeolusReady - Boolean flag indicating if Aeolus image is loaded
+    pepeImage - Image object for Pepe character
+    pepeReady - Boolean flag indicating if Pepe image is loaded
 
-TRACER SYSTEM
--------------
-doTracer - Boolean flag to enable particle tracking
-doSmallTracer - Boolean flag for small tracer size
-doMediumTracer - Boolean flag for medium tracer size
-doBigTracer - Boolean flag for big tracer size
+    TRACER SYSTEM
+    -------------
+    doTracer - Boolean flag to enable particle tracking
+    doSmallTracer - Boolean flag for small tracer size
+    doMediumTracer - Boolean flag for medium tracer size
+    doBigTracer - Boolean flag for big tracer size
 
-MAIN MENU SYSTEM
-----------------
-mainMenuVisible - Boolean flag for main menu visibility
-mainMenuAnimating - Boolean flag indicating menu is animating
-mainMenuX - Current X position of main menu (animates from off-screen)
-mainMenuTargetX - Target X position for menu animation
-mainMenuSlideSpeed - Pixels per frame for slide animation (default: 60)
-mainMenuPadding - Pixels from top edge (default: 20)
-mainMenuCornerRadius - Corner radius for rounded menu (default: 10)
-mainMenuHeight - Height of main menu bar (default: 75)
-mainMenuBarAlpha - Transparency of main menu bar (default: 0.85)
-mainMenuVelocity - Current velocity for spring animation
-mainMenuUsingSpring - Boolean flag for spring vs. slide animation
-mainMenuSpringStrength - Spring force coefficient (default: 0.3)
-mainMenuSpringDamping - Damping factor 0-1, lower = more bouncy (default: 0.65)
-ellipsisSize - Size of ellipsis button (default: 40)
-ellipsisMargin - Margin for ellipsis button (default: 10)
-pauseButtonBlinkTimer - Timer for pause button blink effect
-pauseButtonBlinkCycle - Total cycle time for blink (default: 1.8 seconds)
-pauseButtonDimDuration - Duration of dim phase in blink (default: 0.3 seconds)
-submenusHidden - Boolean flag indicating if submenus are hidden
-savedSubmenuStates - Object storing which menus were visible before hiding
-mainMenuItems - Array of menu item objects with properties (id, label, color, variable)
+    MAIN MENU SYSTEM
+    ----------------
+    mainMenuVisible - Boolean flag for main menu visibility
+    mainMenuAnimating - Boolean flag indicating menu is animating
+    mainMenuX - Current X position of main menu (animates from off-screen)
+    mainMenuTargetX - Target X position for menu animation
+    mainMenuSlideSpeed - Pixels per frame for slide animation (default: 60)
+    mainMenuPadding - Pixels from top edge (default: 20)
+    mainMenuCornerRadius - Corner radius for rounded menu (default: 10)
+    mainMenuHeight - Height of main menu bar (default: 75)
+    mainMenuBarAlpha - Transparency of main menu bar (default: 0.85)
+    mainMenuVelocity - Current velocity for spring animation
+    mainMenuUsingSpring - Boolean flag for spring vs. slide animation
+    mainMenuSpringStrength - Spring force coefficient (default: 0.3)
+    mainMenuSpringDamping - Damping factor 0-1, lower = more bouncy (default: 0.65)
+    ellipsisSize - Size of ellipsis button (default: 40)
+    ellipsisMargin - Margin for ellipsis button (default: 10)
+    pauseButtonBlinkTimer - Timer for pause button blink effect
+    pauseButtonBlinkCycle - Total cycle time for blink (default: 1.8 seconds)
+    pauseButtonDimDuration - Duration of dim phase in blink (default: 0.3 seconds)
+    submenusHidden - Boolean flag indicating if submenus are hidden
+    savedSubmenuStates - Object storing which menus were visible before hiding
+    mainMenuItems - Array of menu item objects with properties (id, label, color, variable)
 
-COLOR WHEEL MENU
-----------------
-colorWheelHue - Current hue value (0-360, default: 180)
-colorWheelSat - Current saturation value (0-100, default: 70)
-colorWheelLight - Current lightness value (0-100, default: 30)
-colorWheelPersistence - Trail persistence value (0-30, default: 12)
-colorWheelVelMap - Velocity color mapping sensitivity (0-500, default: 100)
-colorWheelVisible - Boolean flag for color wheel menu visibility
-colorWheelOpacity - Current opacity for fade animation (0-1)
-colorWheelAnimating - Boolean flag indicating menu is animating
-colorWheelTargetOpacity - Target opacity for animation
-colorWheelDragging - Boolean flag for dragging state
-colorWheelDraggingControl - String tracking which control is being dragged
-colorWheelPositionDragging - Boolean flag for position dragging
-colorWheelDragOffsetX - X offset for drag operations
-colorWheelDragOffsetY - Y offset for drag operations
-colorWheelIconCanvas - Cached canvas for color wheel icon in main menu
-colorWheelIconCtx - Rendering context for icon canvas
-colorWheelOffscreenCanvas - Offscreen canvas for full color wheel rendering
-colorWheelOffscreenCtx - Rendering context for offscreen canvas
-colorWheelNeedsRedraw - Boolean flag indicating wheel needs redrawing
-colorWheelSize - Size of color wheel in pixels (default: 167)
-colorWheelCenterX - X position of color wheel center
-colorWheelCenterY - Y position of color wheel center
-colorWheelRadius - Radius of color wheel
-colorWheelManuallyMoved - Boolean flag indicating user has moved menu
+    COLOR WHEEL MENU
+    ----------------
+    colorWheelHue - Current hue value (0-360, default: 180)
+    colorWheelSat - Current saturation value (0-100, default: 70)
+    colorWheelLight - Current lightness value (0-100, default: 30)
+    colorWheelPersistence - Trail persistence value (0-30, default: 12)
+    colorWheelVelMap - Velocity color mapping sensitivity (0-500, default: 100)
+    colorWheelVisible - Boolean flag for color wheel menu visibility
+    colorWheelOpacity - Current opacity for fade animation (0-1)
+    colorWheelAnimating - Boolean flag indicating menu is animating
+    colorWheelTargetOpacity - Target opacity for animation
+    colorWheelDragging - Boolean flag for dragging state
+    colorWheelDraggingControl - String tracking which control is being dragged
+    colorWheelPositionDragging - Boolean flag for position dragging
+    colorWheelDragOffsetX - X offset for drag operations
+    colorWheelDragOffsetY - Y offset for drag operations
+    colorWheelIconCanvas - Cached canvas for color wheel icon in main menu
+    colorWheelIconCtx - Rendering context for icon canvas
+    colorWheelOffscreenCanvas - Offscreen canvas for full color wheel rendering
+    colorWheelOffscreenCtx - Rendering context for offscreen canvas
+    colorWheelNeedsRedraw - Boolean flag indicating wheel needs redrawing
+    colorWheelSize - Size of color wheel in pixels (default: 167)
+    colorWheelCenterX - X position of color wheel center
+    colorWheelCenterY - Y position of color wheel center
+    colorWheelRadius - Radius of color wheel
+    colorWheelManuallyMoved - Boolean flag indicating user has moved menu
 
-PHYSICS MENU
-------------
-physicsMenuRepulsionForce - Force of particle repulsion (1-20, default: 20)
-physicsMenuRepulsionDist - Distance for repulsion (0-10, default: 4)
-physicsMenuRepulsionOn - Boolean flag to enable repulsion
-physicsMenuBallRest - Ball restitution/rest value (0-100, default: 0)
-physicsMenuBounceOn - Boolean flag to enable bounce
-physicsMenuTime - Time step value (500-1000, default: 1000)
-physicsMenuSpeed - Speed limit value (1-50, default: 20)
-physicsMenuSubsteps - Number of physics substeps per frame (1-4, default: 1)
-physicsMenuFpsOn - Boolean flag to show FPS counter
-physicsMenuVisible - Boolean flag for physics menu visibility
-physicsMenuOpacity - Current opacity for fade animation (0-1)
-physicsMenuAnimating - Boolean flag indicating menu is animating
-physicsMenuTargetOpacity - Target opacity for animation
-physicsMenuDragging - Boolean flag for dragging state
-physicsMenuDraggingControl - String tracking which slider is being dragged
-physicsMenuPositionDragging - Boolean flag for position dragging
-physicsMenuDragOffsetX - X offset for drag operations
-physicsMenuDragOffsetY - Y offset for drag operations
-physicsMenuManuallyMoved - Boolean flag indicating user has moved menu
-physicsMenuWidth - Width of physics menu (default: 240)
-physicsMenuHeight - Height of physics menu (default: 250)
-physicsMenuCenterX - X position of physics menu center
-physicsMenuCenterY - Y position of physics menu center
+    PHYSICS MENU
+    ------------
+    physicsMenuRepulsionForce - Force of particle repulsion (1-20, default: 20)
+    physicsMenuRepulsionDist - Distance for repulsion (0-10, default: 4)
+    physicsMenuRepulsionOn - Boolean flag to enable repulsion
+    physicsMenuBallRest - Ball restitution/rest value (0-100, default: 0)
+    physicsMenuBounceOn - Boolean flag to enable bounce
+    physicsMenuTime - Time step value (500-1000, default: 1000)
+    physicsMenuSpeed - Speed limit value (1-50, default: 20)
+    physicsMenuSubsteps - Number of physics substeps per frame (1-4, default: 1)
+    physicsMenuFpsOn - Boolean flag to show FPS counter
+    physicsMenuVisible - Boolean flag for physics menu visibility
+    physicsMenuOpacity - Current opacity for fade animation (0-1)
+    physicsMenuAnimating - Boolean flag indicating menu is animating
+    physicsMenuTargetOpacity - Target opacity for animation
+    physicsMenuDragging - Boolean flag for dragging state
+    physicsMenuDraggingControl - String tracking which slider is being dragged
+    physicsMenuPositionDragging - Boolean flag for position dragging
+    physicsMenuDragOffsetX - X offset for drag operations
+    physicsMenuDragOffsetY - Y offset for drag operations
+    physicsMenuManuallyMoved - Boolean flag indicating user has moved menu
+    physicsMenuWidth - Width of physics menu (default: 240)
+    physicsMenuHeight - Height of physics menu (default: 250)
+    physicsMenuCenterX - X position of physics menu center
+    physicsMenuCenterY - Y position of physics menu center
 
-GRAVITY MENU
-------------
-gravityMenuX - X position of gravity menu
-gravityMenuY - Y position of gravity menu
-gravityMenuRadius - Radius of circular gravity menu (default: 80)
-gravityMenuVisible - Boolean flag for gravity menu visibility
-gravityMenuOpacity - Current opacity for fade animation (0-1)
-gravityMenuAnimating - Boolean flag indicating menu is animating
-gravityMenuTargetOpacity - Target opacity for animation
-gravityMenuDragging - Boolean flag for dragging state
-gravityMenuDraggingControl - String tracking which control is being dragged
-gravityMenuPositionDragging - Boolean flag for position dragging
-gravityMenuDragOffsetX - X offset for drag operations
-gravityMenuDragOffsetY - Y offset for drag operations
-gravityMenuManuallyMoved - Boolean flag indicating user has moved menu
-gravityRotationSlider - Rotation slider value (0-1, 0.5 = no rotation)
-gravityRotationSpeed - Current rotation speed in radians per frame
-gravityRotationSliderDragging - Boolean flag for slider dragging state
+    GRAVITY MENU
+    ------------
+    gravityMenuX - X position of gravity menu
+    gravityMenuY - Y position of gravity menu
+    gravityMenuRadius - Radius of circular gravity menu (default: 80)
+    gravityMenuVisible - Boolean flag for gravity menu visibility
+    gravityMenuOpacity - Current opacity for fade animation (0-1)
+    gravityMenuAnimating - Boolean flag indicating menu is animating
+    gravityMenuTargetOpacity - Target opacity for animation
+    gravityMenuDragging - Boolean flag for dragging state
+    gravityMenuDraggingControl - String tracking which control is being dragged
+    gravityMenuPositionDragging - Boolean flag for position dragging
+    gravityMenuDragOffsetX - X offset for drag operations
+    gravityMenuDragOffsetY - Y offset for drag operations
+    gravityMenuManuallyMoved - Boolean flag indicating user has moved menu
+    gravityRotationSlider - Rotation slider value (0-1, 0.5 = no rotation)
+    gravityRotationSpeed - Current rotation speed in radians per frame
+    gravityRotationSliderDragging - Boolean flag for slider dragging state
 
-WALLS MENU
-----------
-wallsMenuVisible - Boolean flag for walls menu visibility
-wallsMenuOpacity - Current opacity for fade animation (0-1)
-wallsMenuAnimating - Boolean flag indicating menu is animating
-wallsMenuTargetOpacity - Target opacity for animation
-wallsMenuDragging - Boolean flag for dragging state
-wallsMenuDraggingControl - String tracking which slider is being dragged
-wallsMenuPositionDragging - Boolean flag for position dragging
-wallsMenuDragOffsetX - X offset for drag operations
-wallsMenuDragOffsetY - Y offset for drag operations
-wallsMenuManuallyMoved - Boolean flag indicating user has moved menu
-wallsMenuWidth - Width of walls menu (default: 240)
-wallsMenuHeight - Height of walls menu (default: 258)
-wallsMenuCenterX - X position of walls menu center
-wallsMenuCenterY - Y position of walls menu center
-wallsMenuCornerRadius - Corner radius for walls (0-150)
-wallsMenuLeftWall - Boolean flag to enable left wall
-wallsMenuRightWall - Boolean flag to enable right wall
-wallsMenuCeiling - Boolean flag to enable ceiling
-wallsMenuFloor - Boolean flag to enable floor
+    WALLS MENU
+    ----------
+    wallsMenuVisible - Boolean flag for walls menu visibility
+    wallsMenuOpacity - Current opacity for fade animation (0-1)
+    wallsMenuAnimating - Boolean flag indicating menu is animating
+    wallsMenuTargetOpacity - Target opacity for animation
+    wallsMenuDragging - Boolean flag for dragging state
+    wallsMenuDraggingControl - String tracking which slider is being dragged
+    wallsMenuPositionDragging - Boolean flag for position dragging
+    wallsMenuDragOffsetX - X offset for drag operations
+    wallsMenuDragOffsetY - Y offset for drag operations
+    wallsMenuManuallyMoved - Boolean flag indicating user has moved menu
+    wallsMenuWidth - Width of walls menu (default: 240)
+    wallsMenuHeight - Height of walls menu (default: 258)
+    wallsMenuCenterX - X position of walls menu center
+    wallsMenuCenterY - Y position of walls menu center
+    wallsMenuCornerRadius - Corner radius for walls (0-150)
+    wallsMenuLeftWall - Boolean flag to enable left wall
+    wallsMenuRightWall - Boolean flag to enable right wall
+    wallsMenuCeiling - Boolean flag to enable ceiling
+    wallsMenuFloor - Boolean flag to enable floor
 
-WALL STATE (GLOBAL)
--------------------
-doLeftWall - Global boolean flag for left wall state
-doRightWall - Global boolean flag for right wall state
-doCeiling - Global boolean flag for ceiling state
-doFloor - Global boolean flag for floor state
-cornerRad - Global corner radius value (default: 100)
-Corners - Array of corner objects for physics simulation
+    WALL STATE (GLOBAL)
+    -------------------
+    doLeftWall - Global boolean flag for left wall state
+    doRightWall - Global boolean flag for right wall state
+    doCeiling - Global boolean flag for ceiling state
+    doFloor - Global boolean flag for floor state
+    cornerRad - Global corner radius value (default: 100)
+    Corners - Array of corner objects for physics simulation
 
-RESPAWN MENU
-------------
-respawnMenuVisible - Boolean flag for respawn menu visibility
-respawnMenuOpacity - Current opacity for fade animation (0-1)
-respawnMenuAnimating - Boolean flag indicating menu is animating
-respawnMenuTargetOpacity - Target opacity for animation
-respawnMenuDragging - Boolean flag for dragging state
-respawnMenuPositionDragging - Boolean flag for position dragging
-respawnMenuDragOffsetX - X offset for drag operations
-respawnMenuDragOffsetY - Y offset for drag operations
-respawnMenuManuallyMoved - Boolean flag indicating user has moved menu
-respawnMenuWidth - Width of respawn menu (default: 240)
-respawnMenuHeight - Height of respawn menu (default: 340)
-respawnMenuCenterX - X position of respawn menu center
-respawnMenuCenterY - Y position of respawn menu center
-respawnMenuOneShot - Boolean flag for one-shot spawn mode
-respawnMenuHungryPuck - Boolean flag to enable hungry puck
-respawnMenuSpawnType - String indicating spawn type ('shower' or 'fountain')
-respawnMenuLayoutType - String indicating layout type ('cluster' or 'array')
-respawnMenuMisterMode - String indicating mister mode ('idle', 'active', etc.)
-respawnMenuMisterModeExpanded - Boolean flag for dropdown expanded state
+    RESPAWN MENU
+    ------------
+    respawnMenuVisible - Boolean flag for respawn menu visibility
+    respawnMenuOpacity - Current opacity for fade animation (0-1)
+    respawnMenuAnimating - Boolean flag indicating menu is animating
+    respawnMenuTargetOpacity - Target opacity for animation
+    respawnMenuDragging - Boolean flag for dragging state
+    respawnMenuPositionDragging - Boolean flag for position dragging
+    respawnMenuDragOffsetX - X offset for drag operations
+    respawnMenuDragOffsetY - Y offset for drag operations
+    respawnMenuManuallyMoved - Boolean flag indicating user has moved menu
+    respawnMenuWidth - Width of respawn menu (default: 240)
+    respawnMenuHeight - Height of respawn menu (default: 340)
+    respawnMenuCenterX - X position of respawn menu center
+    respawnMenuCenterY - Y position of respawn menu center
+    respawnMenuOneShot - Boolean flag for one-shot spawn mode
+    respawnMenuHungryPuck - Boolean flag to enable hungry puck
+    respawnMenuSpawnType - String indicating spawn type ('shower' or 'fountain')
+    respawnMenuLayoutType - String indicating layout type ('cluster' or 'array')
+    respawnMenuMisterMode - String indicating mister mode ('idle', 'active', etc.)
+    respawnMenuMisterModeExpanded - Boolean flag for dropdown expanded state
 
-TOYS MENU
----------
-toysMenuVisible - Boolean flag for toys menu visibility
-toysMenuOpacity - Current opacity for fade animation (0-1)
-toysMenuAnimating - Boolean flag indicating menu is animating
-toysMenuTargetOpacity - Target opacity for animation
-toysMenuDragging - Boolean flag for dragging state
-toysMenuPositionDragging - Boolean flag for position dragging
-toysMenuDragOffsetX - X offset for drag operations
-toysMenuDragOffsetY - Y offset for drag operations
-toysMenuManuallyMoved - Boolean flag indicating user has moved menu
-toysMenuItems - Array of toy menu item objects
-toysMenuWidth - Width of toys menu (default: 280)
-toysMenuHeight - Height of toys menu (default: 418)
-toysMenuCenterX - X position of toys menu center
-toysMenuCenterY - Y position of toys menu center
+    TOYS MENU
+    ---------
+    toysMenuVisible - Boolean flag for toys menu visibility
+    toysMenuOpacity - Current opacity for fade animation (0-1)
+    toysMenuAnimating - Boolean flag indicating menu is animating
+    toysMenuTargetOpacity - Target opacity for animation
+    toysMenuDragging - Boolean flag for dragging state
+    toysMenuPositionDragging - Boolean flag for position dragging
+    toysMenuDragOffsetX - X offset for drag operations
+    toysMenuDragOffsetY - Y offset for drag operations
+    toysMenuManuallyMoved - Boolean flag indicating user has moved menu
+    toysMenuItems - Array of toy menu item objects
+    toysMenuWidth - Width of toys menu (default: 280)
+    toysMenuHeight - Height of toys menu (default: 418)
+    toysMenuCenterX - X position of toys menu center
+    toysMenuCenterY - Y position of toys menu center
 
-PARTICLES MENU
---------------
-particlesMenuQuantity - Square root of particle count (1-100, default: 71)
-particlesMenuSmallRadius - Minimum particle radius (default: 7)
-particlesMenuLargeRadius - Maximum particle radius (default: 13)
-particlesMenuRenderType - String indicating render style (drawSpheres, drawDiscs, etc.)
-particlesMenuRenderTypeExpanded - Boolean flag for dropdown expanded state
-particlesMenuVisible - Boolean flag for particles menu visibility
-particlesMenuOpacity - Current opacity for fade animation (0-1, default: 1)
-particlesMenuAnimating - Boolean flag indicating menu is animating
-particlesMenuTargetOpacity - Target opacity for animation
-particlesMenuDragging - Boolean flag for dragging state
-particlesMenuDraggingControl - String tracking which slider is being dragged
-particlesMenuPositionDragging - Boolean flag for position dragging
-particlesMenuDragOffsetX - X offset for drag operations
-particlesMenuDragOffsetY - Y offset for drag operations
-particlesMenuManuallyMoved - Boolean flag indicating user has moved menu
-particlesMenuWidth - Width of particles menu (default: 240)
-particlesMenuHeight - Height of particles menu (default: 220)
-particlesMenuCenterX - X position of particles menu center
-particlesMenuCenterY - Y position of particles menu center
+    PARTICLES MENU
+    --------------
+    particlesMenuQuantity - Square root of particle count (1-100, default: 71)
+    particlesMenuSmallRadius - Minimum particle radius (default: 7)
+    particlesMenuLargeRadius - Maximum particle radius (default: 13)
+    particlesMenuRenderType - String indicating render style (drawSpheres, drawDiscs, etc.)
+    particlesMenuRenderTypeExpanded - Boolean flag for dropdown expanded state
+    particlesMenuVisible - Boolean flag for particles menu visibility
+    particlesMenuOpacity - Current opacity for fade animation (0-1, default: 1)
+    particlesMenuAnimating - Boolean flag indicating menu is animating
+    particlesMenuTargetOpacity - Target opacity for animation
+    particlesMenuDragging - Boolean flag for dragging state
+    particlesMenuDraggingControl - String tracking which slider is being dragged
+    particlesMenuPositionDragging - Boolean flag for position dragging
+    particlesMenuDragOffsetX - X offset for drag operations
+    particlesMenuDragOffsetY - Y offset for drag operations
+    particlesMenuManuallyMoved - Boolean flag indicating user has moved menu
+    particlesMenuWidth - Width of particles menu (default: 240)
+    particlesMenuHeight - Height of particles menu (default: 220)
+    particlesMenuCenterX - X position of particles menu center
+    particlesMenuCenterY - Y position of particles menu center
 
-MENU POSITIONING
-----------------
-defaultMenuPositions - Object containing default relative positions for all menus
-menuDrawOrder - Array defining z-order for menu drawing (first = bottom, last = top)
+    MENU POSITIONING
+    ----------------
+    defaultMenuPositions - Object containing default relative positions for all menus
+    menuDrawOrder - Array defining z-order for menu drawing (first = bottom, last = top)
 
-INTERACTION
------------
-globalInteractionLock - Boolean flag to prevent multiple simultaneous interactions
-heartResumeDelayMs - Delay before heartbeat resumes after interaction (default: 1500ms)
+    INTERACTION
+    -----------
+    globalInteractionLock - Boolean flag to prevent multiple simultaneous interactions
+    heartResumeDelayMs - Delay before heartbeat resumes after interaction (default: 1500ms)
 
-RESIZE HANDLING
----------------
-_resizeDebounce - Timeout handle for debouncing resize events
+    RESIZE HANDLING
+    ---------------
+    _resizeDebounce - Timeout handle for debouncing resize events
 
-PHYSICS PROPERTIES (physProps object)
---------------------------------------
-paused - Boolean flag for simulation pause state
-dt - Time step for physics calculations
-maxSpeed - Maximum speed limit for particles
-repulsionForce - Force coefficient for particle repulsion
-repulsionDist - Distance threshold for repulsion calculations
-ballRest - Restitution coefficient for particle bouncing
-baseColor - Base hue value for particle colors
-velColorMap - Velocity-to-color mapping sensitivity
-worldSize - Object containing simulation world dimensions {x, y}
-gravity - Object containing gravity vector {x, y}
-substeps - Number of physics substeps per frame
+    PHYSICS PROPERTIES (physProps object)
+    --------------------------------------
+    paused - Boolean flag for simulation pause state
+    dt - Time step for physics calculations
+    maxSpeed - Maximum speed limit for particles
+    repulsionForce - Force coefficient for particle repulsion
+    repulsionDist - Distance threshold for repulsion calculations
+    ballRest - Restitution coefficient for particle bouncing
+    baseColor - Base hue value for particle colors
+    velColorMap - Velocity-to-color mapping sensitivity
+    worldSize - Object containing simulation world dimensions {x, y}
+    gravity - Object containing gravity vector {x, y}
+    substeps - Number of physics substeps per frame
 
-PARTICLE ARRAYS
----------------
-Ball - Array of particle objects
-Puck - Array of puck objects (interactive circular objects)
-Blower - Array of blower objects (wind sources)
-Hungrypuck - Array of hungry puck objects (particle consumers)
-MisterMister - Array of mister objects (particle sprayers)
-Bumper - Array of bumper objects (fixed obstacles)
-Worm - Array of worm segment objects (chain-like structure)
+    PARTICLE ARRAYS
+    ---------------
+    Ball - Array of particle objects
+    Puck - Array of puck objects (interactive circular objects)
+    Blower - Array of blower objects (wind sources)
+    Hungrypuck - Array of hungry puck objects (particle consumers)
+    MisterMister - Array of mister objects (particle sprayers)
+    Bumper - Array of bumper objects (fixed obstacles)
+    Worm - Array of worm segment objects (chain-like structure)
 
-PARTICLE PROPERTIES
--------------------
-ballSaturation - Global saturation value for particle colors
-ballLightness - Global lightness value for particle colors
-ballRepulsion - Boolean flag to enable particle-particle repulsion
-persistence - Trail persistence value for particle rendering
+    PARTICLE PROPERTIES
+    -------------------
+    ballSaturation - Global saturation value for particle colors
+    ballLightness - Global lightness value for particle colors
+    ballRepulsion - Boolean flag to enable particle-particle repulsion
+    persistence - Trail persistence value for particle rendering
 
-UTILITY FUNCTIONS
------------------
-Various helper functions for menu positioning, collision detection, animation, 
-preset management, canvas drawing, physics calculations, and user interaction.
+    UTILITY FUNCTIONS
+    -----------------
+    Various helper functions for menu positioning, collision detection, animation, 
+    preset management, canvas drawing, physics calculations, and user interaction.
 
-===========================================
-*/
+    ===========================================
+    */
 
 </script> 
 </body>
