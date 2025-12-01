@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.20
+		<title>Slosh 2.21
         </title>
         <style>
 			body {font-family: monospace; 
@@ -12686,8 +12686,8 @@ window.addEventListener('DOMContentLoaded', function() {
             this.magnetStartTime = 0; // When the vacuum started
             
             // Rabbit animation
-            this.rabbitVisible = false;
-            this.rabbitHeight = 0; // 0 to 1, controls how far rabbit ears are extended
+            this.rabbitVisible = true;
+            this.rabbitHeight = 1; // 0 to 1, controls how far rabbit ears are extended
             this.rabbitAnimating = false;
             this.rabbitAnimationSpeed = 0.02; // Speed of rabbit animation
             
@@ -12887,222 +12887,298 @@ window.addEventListener('DOMContentLoaded', function() {
             const hatWidth = this.hatSize * 50;
             const hatHeight = this.hatSize * 70;
             
-            // Create gradient for hat body to emphasize cylindrical shape (light from above-left)
-            // Gradient goes horizontally across the cylinder
+            // STEP 1: Draw hat body first
             const bodyGradient = c.createLinearGradient(-0.7 * hatWidth, 0, 0.7 * hatWidth, 0);
-            bodyGradient.addColorStop(0, 'hsl(180, 0%, 15%)'); // Dark on left edge
-            bodyGradient.addColorStop(0.35, 'hsl(180, 0%, 70%)'); // Bright highlight on left side
-            bodyGradient.addColorStop(0.5, 'hsl(180, 0%, 70%)'); // Mid cyan at center
-            bodyGradient.addColorStop(0.9, 'hsl(180, 0%, 15%)'); // Deep shadow on right side
-            bodyGradient.addColorStop(1, 'hsl(180, 0%, 10%)'); // Very dark on right edge
+            bodyGradient.addColorStop(0, 'hsl(180, 0%, 15%)');
+            bodyGradient.addColorStop(0.35, 'hsl(180, 0%, 70%)');
+            bodyGradient.addColorStop(0.5, 'hsl(180, 0%, 70%)');
+            bodyGradient.addColorStop(0.9, 'hsl(180, 0%, 15%)');
+            bodyGradient.addColorStop(1, 'hsl(180, 0%, 10%)');
             
             c.fillStyle = bodyGradient;
             c.beginPath();
-            
-            // Draw hat body with convex sides (bulging outward)
-            c.moveTo(-0.5 * hatWidth, 0);
-            
-            // Left side - convex curve (control point inside to bulge outward)
-            c.quadraticCurveTo(
-                -0.5 * hatWidth, hatHeight * 0.5,   // control point (inside the line for outward bulge)
-                -0.7 * hatWidth, hatHeight           // end point at top left
-            );
-            
-            // Top - curved arc using bezier (bulging upward/outward - more curved)
-            c.bezierCurveTo(
-                -0.3 * hatWidth, hatHeight + hatWidth * 0.25,  // control point 1 (more height for tighter curve)
-                0.3 * hatWidth, hatHeight + hatWidth * 0.25,   // control point 2 (more height for tighter curve)
-                0.7 * hatWidth, hatHeight                       // end point at top right
-            );
-            
-            // Right side - convex curve (control point inside to bulge outward)
-            c.quadraticCurveTo(
-                0.5 * hatWidth, hatHeight * 0.5,    // control point (inside the line for outward bulge)
-                0.5 * hatWidth, 0                    // end point (back to bottom right)
-            );
-            c.closePath();
+            c.moveTo(-0.58 * hatWidth, 0);
+            c.quadraticCurveTo(-0.58 * hatWidth, hatHeight * 0.5, -0.7 * hatWidth, hatHeight);
+            c.bezierCurveTo(-0.3 * hatWidth, hatHeight + hatWidth * 0.25, 0.3 * hatWidth, hatHeight + hatWidth * 0.25, 0.7 * hatWidth, hatHeight);
+            c.quadraticCurveTo(0.58 * hatWidth, hatHeight * 0.5, 0.58 * hatWidth, 0);
+            // Bulge the top edge downward (positive Y) so it's hidden by the brim
+            c.quadraticCurveTo(0, hatHeight * 0.2, -0.58 * hatWidth, 0);
             c.fill();
+            
+            // Stroke only the sides, not the top edge - match the curved top
+            c.beginPath();
+            c.moveTo(-0.58 * hatWidth, 0);
+            c.quadraticCurveTo(-0.58 * hatWidth, hatHeight * 0.5, -0.7 * hatWidth, hatHeight);
             c.strokeStyle = 'hsl(0, 0%, 0%)';
             c.lineWidth = 0.0035 * cScale;
             c.lineCap = 'round';
             c.stroke();
-
-            // Draw hat band as filled shape with gradient around the cylindrical body
-            c.save();
-            
-            // Create gradient for band (horizontal, matching cylindrical shading)
-            const bandGradient = c.createLinearGradient(-0.5 * hatWidth, 0, 0.5 * hatWidth, 0);
-            bandGradient.addColorStop(0, 'hsl(0, 90%, 30%)'); // Gray on left edge
-            bandGradient.addColorStop(0.35, 'hsl(0, 90%, 60%)'); // Bright highlight on left
-            bandGradient.addColorStop(0.5, 'hsl(0, 90%, 40%)'); // Light gray center
-            bandGradient.addColorStop(0.9, 'hsl(0, 90%, 20%)'); // Darker on right
-            bandGradient.addColorStop(1, 'hsl(0, 90%, 10%)'); // Dark on right edge
-            
-            // Draw band as curved shape following the cylinder contour
-            const bandTopY = 0.1 * hatHeight;
-            const bandBottomY = 0.3 * hatHeight;
-            const bandMidY = (bandTopY + bandBottomY) / 2;
             
             c.beginPath();
-            // Top edge - curved downward (bulging down)
-            c.moveTo(-0.5 * hatWidth, bandTopY);
-            c.quadraticCurveTo(0, bandTopY + 0.1 * hatHeight, 0.5 * hatWidth, bandTopY);
-            // Right side
-            c.lineTo(0.5 * hatWidth, bandBottomY);
-            // Bottom edge - curved downward (bulging down)
-            c.quadraticCurveTo(0, bandBottomY + 0.1 * hatHeight, -0.5 * hatWidth, bandBottomY);
-            c.closePath();
-            c.fillStyle = bandGradient;
-            c.fill();
-            
-            // Stroke top edge of band
-            c.beginPath();
-            c.moveTo(-0.5 * hatWidth, bandTopY);
-            c.quadraticCurveTo(0, bandTopY + 0.1 * hatHeight, 0.5 * hatWidth, bandTopY);
-            c.strokeStyle = 'white';
-            c.lineWidth = 0.006 * cScale;
-            c.lineCap = 'butt';
-            //c.stroke();
-
-            // Stroke bottom edge of band
-            c.beginPath();
-            c.moveTo(-0.5 * hatWidth, bandBottomY);
-            c.quadraticCurveTo(0, bandBottomY + 0.1 * hatHeight, 0.5 * hatWidth, bandBottomY);
-            c.strokeStyle = 'white';
-            c.lineWidth = 0.006 * cScale;
-            c.lineCap = 'butt';
-            //c.stroke();
-            
-            c.restore();
-
-            // Create gradient for hat brim (light from above-left, radial for elliptical shape)
-            const brimGradient = c.createRadialGradient(-0.3 * hatWidth, -0.1 * hatWidth, 0, 0, 0, hatWidth);
-            brimGradient.addColorStop(0, 'hsl(180, 0%, 65%)'); // Lighter on top-left
-            brimGradient.addColorStop(0.5, 'hsl(180, 0%, 45%)'); // Mid cyan
-            brimGradient.addColorStop(1, 'hsl(180, 0%, 20%)'); // Dark at edges
-            
-            // fill hat brim
-            c.fillStyle = brimGradient;
-            c.beginPath();
-            c.ellipse(
-                0, 
-                0, 
-                hatWidth, 
-                0.3 * hatWidth, 
-                0, 
-                0, 
-                2 * Math.PI);
-            c.fill();
-            // draw hat brim front edge
-            c.beginPath();
-            c.ellipse(
-                0, 
-                0, 
-                hatWidth, 
-                0.3 * hatWidth, 
-                0, 
-                Math.PI, 
-                2 * Math.PI,
-                true);
-            c.strokeStyle = 'black';
-            c.lineWidth = 0.01 * cScale;
+            c.moveTo(0.7 * hatWidth, hatHeight);
+            c.quadraticCurveTo(0.58 * hatWidth, hatHeight * 0.5, 0.58 * hatWidth, 0);
             c.stroke();
-            // draw hat brim rear edge
+            
             c.beginPath();
-            c.ellipse(
-                0, 
-                0, 
-                hatWidth, 
-                0.3 * hatWidth, 
-                0, 
-                Math.PI, 
-                2 * Math.PI,
-                false);
+            c.moveTo(-0.7 * hatWidth, hatHeight);
+            c.bezierCurveTo(-0.3 * hatWidth, hatHeight + hatWidth * 0.25, 0.3 * hatWidth, hatHeight + hatWidth * 0.25, 0.7 * hatWidth, hatHeight);
+            c.stroke();
+
+            // STEP 2: Draw REAR half of brim (bottom arc π to 2π, since positive Y is down)
+            const brimGradient = c.createRadialGradient(-0.3 * hatWidth, -0.1 * hatWidth, 0, 0, 0, hatWidth);
+            brimGradient.addColorStop(0, 'hsl(180, 0%, 65%)');
+            brimGradient.addColorStop(0.5, 'hsl(180, 0%, 45%)');
+            brimGradient.addColorStop(1, 'hsl(180, 0%, 20%)');
+            
+            c.save();
+            // Create clipping region that excludes the hole
+            c.beginPath();
+            c.rect(-hatWidth * 2, -hatHeight * 2, hatWidth * 4, hatHeight * 4);
+            c.ellipse(0, -hatHeight * 0.03, hatWidth * 0.7, 0.12 * hatHeight, 0, 0, 2 * Math.PI, true);
+            c.clip();
+            
+            c.beginPath();
+            c.ellipse(0, 0, hatWidth, 0.3 * hatWidth, 0, Math.PI, 2 * Math.PI);
+            c.lineTo(-hatWidth, 0);
+            c.closePath();
+            c.fillStyle = brimGradient;
+            c.fill();
+            c.restore();
+            
+            // draw thin rear brim edge
+            c.beginPath();
+            c.ellipse(0, 0, hatWidth, 0.3 * hatWidth, 0, Math.PI, 2 * Math.PI, false); // bottom arc
             c.strokeStyle = 'black';
             c.lineWidth = 0.005 * cScale;
             c.stroke();
 
-            // draw head hole
+            // STEP 5: Draw black hole fill (larger to cover brim lineTo)
             c.fillStyle = 'black';
             c.beginPath();
-            c.ellipse(
-                0, 
-                -hatHeight * 0.03, 
-                0.6 * hatWidth, 
-                0.1 * hatHeight, 
-                0, 
-                0, 
-                2 * Math.PI);
+            c.ellipse(0, -hatHeight * 0.03, hatWidth * 0.7, 0.12 * hatHeight, 0, 0, 2 * Math.PI);
             c.fill();
-            // draw white inside head hole rim
-            c.strokeStyle = 'white';
+
+            // Draw front half of hole rim (top arc 0 to π)
             c.beginPath();
-            c.ellipse(
-                0, 
-                -hatHeight * 0.03, 
-                0.6 * hatWidth, 
-                0.1 * hatHeight, 
-                0, 
-                Math.PI, 
-                2 * Math.PI,
-                false);
-            c.strokeStyle = 'hsl(0, 0%, 70%)';
-            c.lineWidth = 0.01 * cScale;
+            c.ellipse(0, -hatHeight * 0.0, hatWidth * 0.7, 0.12 * hatHeight, 0, 0, 2 * Math.PI);
+            c.strokeStyle = 'hsl(0, 0%, 55%)';
+            c.lineWidth = 0.008 * cScale;
             c.stroke();
-            // draw black head hole rim
-            c.strokeStyle = 'white';
-            c.beginPath();
-            c.ellipse(
-                0, 
-                -hatHeight * 0.04, 
-                0.6 * hatWidth, 
-                0.1 * hatHeight, 
-                0, 
-                0, 
-                2 * Math.PI,
-                false);
+
+            // STEP 5: Draw black hole fill (larger to cover brim lineTo)
             c.strokeStyle = 'black';
-            c.lineWidth = 0.003 * cScale;
+            c.beginPath();
+            c.ellipse(0, -hatHeight * 0.03, hatWidth * 0.71, 0.12 * hatHeight, 0, 0, 2 * Math.PI);
+            c.lineWidth = 0.002 * cScale;
             c.stroke();
             
-            
-            // Draw rabbit ears if visible
+            // STEP 6: Draw bunny (after hole, before band)
             if (this.rabbitHeight > 0) {
-                const earHeight = hatHeight * 0.8 * this.rabbitHeight;
-                const earWidth = hatWidth * 0.15;
-                const earSpacing = hatWidth * 0.2;
+                const maxEarHeight = hatHeight * 1.2;
+                const earHeight = maxEarHeight;
+                const headRadius = hatWidth * 0.48;
+                const earWidth = hatWidth * 0.12;
+                const earSpacing = hatWidth * 0.15;
                 
-                // Left ear
-                c.fillStyle = 'rgba(255, 200, 220, 0.9)';
-                c.beginPath();
-                c.ellipse(
-                    -earSpacing,
-                    -hatHeight * 0.01 - earHeight / 2,
-                    earWidth,
-                    earHeight / 2,
-                    0, 0, Math.PI * 2
-                );
-                c.fill();
-                c.strokeStyle = 'rgba(255, 150, 180, 0.9)';
-                c.lineWidth = 2;
-                c.stroke();
+                const holeY = -hatHeight * 0.03;
+                const bunnyTravelDistance = headRadius * 2.5 + earHeight + hatHeight * 0.03;
+                const headY = holeY + bunnyTravelDistance * (1 - this.rabbitHeight * 0.97);
                 
-                // Right ear
-                c.fillStyle = 'rgba(255, 200, 220, 0.9)';
+                const earBottomY = headY - headRadius * 0.3;
+                const earTopY = earBottomY - earHeight;
+                const earCenterY = (earBottomY + earTopY) / 2;
+                
+                const leftEarGradient = c.createLinearGradient(0, earTopY, 0, earBottomY);
+                leftEarGradient.addColorStop(0, 'hsl(75, 85%, 78%)');
+                leftEarGradient.addColorStop(0.5, 'hsl(85, 75%, 70%)');
+                leftEarGradient.addColorStop(1, 'hsl(95, 70%, 62%)');
+                
+                c.fillStyle = leftEarGradient;
                 c.beginPath();
-                c.ellipse(
-                    earSpacing,
-                    -hatHeight * 0.01 - earHeight / 2,
-                    earWidth,
-                    earHeight / 2,
-                    0, 0, Math.PI * 2
-                );
+                const leftEarX = -earSpacing * 2.0;
+                const leftEarW = earWidth * 1.5;
+                const leftEarH = earHeight / 2;
+                c.save();
+                c.translate(leftEarX, earCenterY);
+                c.rotate(-0.18);
+                // Create teardrop shape - rounded tip at top, wider at bottom
+                c.moveTo(0, -leftEarH);
+                c.bezierCurveTo(leftEarW * 0.6, -leftEarH, leftEarW * 0.85, -leftEarH * 0.6, leftEarW * 0.9, -leftEarH * 0.2);
+                c.bezierCurveTo(leftEarW, leftEarH * 0.3, leftEarW * 0.7, leftEarH * 0.85, 0, leftEarH);
+                c.bezierCurveTo(-leftEarW * 0.7, leftEarH * 0.85, -leftEarW, leftEarH * 0.3, -leftEarW * 0.9, -leftEarH * 0.2);
+                c.bezierCurveTo(-leftEarW * 0.85, -leftEarH * 0.6, -leftEarW * 0.6, -leftEarH, 0, -leftEarH);
+                c.closePath();
                 c.fill();
-                c.strokeStyle = 'rgba(255, 150, 180, 0.9)';
-                c.lineWidth = 2;
+                c.strokeStyle = 'hsl(110, 50%, 48%)';
+                c.lineWidth = 0.003 * cScale;
                 c.stroke();
+                c.restore();
+                
+                c.fillStyle = 'hsl(50, 75%, 85%)';
+                c.beginPath();
+                const leftInnerW = earWidth * 0.75;
+                const leftInnerH = earHeight / 2 * 0.7;
+                c.save();
+                c.translate(leftEarX, earCenterY);
+                c.rotate(-0.18);
+                c.moveTo(0, -leftInnerH);
+                c.bezierCurveTo(leftInnerW * 0.6, -leftInnerH, leftInnerW * 0.85, -leftInnerH * 0.6, leftInnerW * 0.9, -leftInnerH * 0.2);
+                c.bezierCurveTo(leftInnerW, leftInnerH * 0.3, leftInnerW * 0.7, leftInnerH * 0.85, 0, leftInnerH);
+                c.bezierCurveTo(-leftInnerW * 0.7, leftInnerH * 0.85, -leftInnerW, leftInnerH * 0.3, -leftInnerW * 0.9, -leftInnerH * 0.2);
+                c.bezierCurveTo(-leftInnerW * 0.85, -leftInnerH * 0.6, -leftInnerW * 0.6, -leftInnerH, 0, -leftInnerH);
+                c.closePath();
+                c.fill();
+                c.restore();
+                
+                const rightEarGradient = c.createLinearGradient(0, earTopY, 0, earBottomY);
+                rightEarGradient.addColorStop(0, 'hsl(75, 85%, 78%)');
+                rightEarGradient.addColorStop(0.5, 'hsl(85, 75%, 70%)');
+                rightEarGradient.addColorStop(1, 'hsl(95, 70%, 62%)');
+                
+                c.fillStyle = rightEarGradient;
+                c.beginPath();
+                const rightEarX = earSpacing * 2.0;
+                const rightEarW = earWidth * 1.5;
+                const rightEarH = earHeight / 2;
+                c.save();
+                c.translate(rightEarX, earCenterY);
+                c.rotate(0.18);
+                // Create teardrop shape - rounded tip at top, wider at bottom
+                c.moveTo(0, -rightEarH);
+                c.bezierCurveTo(rightEarW * 0.6, -rightEarH, rightEarW * 0.85, -rightEarH * 0.6, rightEarW * 0.9, -rightEarH * 0.2);
+                c.bezierCurveTo(rightEarW, rightEarH * 0.3, rightEarW * 0.7, rightEarH * 0.85, 0, rightEarH);
+                c.bezierCurveTo(-rightEarW * 0.7, rightEarH * 0.85, -rightEarW, rightEarH * 0.3, -rightEarW * 0.9, -rightEarH * 0.2);
+                c.bezierCurveTo(-rightEarW * 0.85, -rightEarH * 0.6, -rightEarW * 0.6, -rightEarH, 0, -rightEarH);
+                c.closePath();
+                c.fill();
+                c.strokeStyle = 'hsl(110, 50%, 48%)';
+                c.lineWidth = 0.003 * cScale;
+                c.stroke();
+                c.restore();
+                
+                c.fillStyle = 'hsl(50, 75%, 85%)';
+                c.beginPath();
+                const rightInnerW = earWidth * 0.75;
+                const rightInnerH = earHeight / 2 * 0.7;
+                c.save();
+                c.translate(rightEarX, earCenterY);
+                c.rotate(0.18);
+                c.moveTo(0, -rightInnerH);
+                c.bezierCurveTo(rightInnerW * 0.6, -rightInnerH, rightInnerW * 0.85, -rightInnerH * 0.6, rightInnerW * 0.9, -rightInnerH * 0.2);
+                c.bezierCurveTo(rightInnerW, rightInnerH * 0.3, rightInnerW * 0.7, rightInnerH * 0.85, 0, rightInnerH);
+                c.bezierCurveTo(-rightInnerW * 0.7, rightInnerH * 0.85, -rightInnerW, rightInnerH * 0.3, -rightInnerW * 0.9, -rightInnerH * 0.2);
+                c.bezierCurveTo(-rightInnerW * 0.85, -rightInnerH * 0.6, -rightInnerW * 0.6, -rightInnerH, 0, -rightInnerH);
+                c.closePath();
+                c.fill();
+                c.restore();
+                
+                const headGradient = c.createRadialGradient(-headRadius * 0.3, headY - headRadius * 0.3, 0, 0, headY, headRadius);
+                headGradient.addColorStop(0, 'hsl(75, 80%, 75%)');
+                headGradient.addColorStop(0.7, 'hsl(95, 70%, 65%)');
+                headGradient.addColorStop(1, 'hsl(110, 60%, 55%)');
+                
+                c.fillStyle = headGradient;
+                c.beginPath();
+                c.arc(0, headY, headRadius, 0, Math.PI * 2);
+                c.fill();
+                
+                const eyeY = headY - headRadius * 0.22;
+                const eyeSpacing = headRadius * 0.4;
+                const eyeWidth = headRadius * 0.2;
+                const eyeHeight = headRadius * 0.35;
+                const pupilWidth = headRadius * 0.1014;
+                const pupilHeight = headRadius * 0.2028;
+                const eyeAngle = 0.15;
+                const pupilOffsetY = headRadius * 0.05;
+                const pupilOffsetX = headRadius * 0.02;
+                
+                c.fillStyle = 'white';
+                c.beginPath();
+                c.ellipse(-eyeSpacing, eyeY, eyeWidth, eyeHeight, -eyeAngle, 0, Math.PI * 2);
+                c.fill();
+                
+                c.fillStyle = 'hsl(210, 60%, 30%)';
+                c.beginPath();
+                c.ellipse(-eyeSpacing + pupilOffsetX, eyeY + pupilOffsetY, pupilWidth, pupilHeight, -eyeAngle, 0, Math.PI * 2);
+                c.fill();
+                
+                c.fillStyle = 'white';
+                c.beginPath();
+                c.arc(-eyeSpacing + pupilOffsetX - pupilWidth * 0.3, eyeY + pupilOffsetY - pupilHeight * 0.6, headRadius * 0.04, 0, Math.PI * 2);
+                c.fill();
+                
+                c.fillStyle = 'white';
+                c.beginPath();
+                c.ellipse(eyeSpacing, eyeY, eyeWidth, eyeHeight, eyeAngle, 0, Math.PI * 2);
+                c.fill();
+                
+                c.fillStyle = 'hsl(210, 60%, 30%)';
+                c.beginPath();
+                c.ellipse(eyeSpacing - pupilOffsetX, eyeY + pupilOffsetY, pupilWidth, pupilHeight, eyeAngle, 0, Math.PI * 2);
+                c.fill();
+                
+                c.fillStyle = 'white';
+                c.beginPath();
+                c.arc(eyeSpacing - pupilOffsetX + pupilWidth * 0.3, eyeY + pupilOffsetY - pupilHeight * 0.6, headRadius * 0.04, 0, Math.PI * 2);
+                c.fill();
             }
             
+            // Redraw hat body on top to occlude bunny below brim
+            c.fillStyle = bodyGradient;
+            c.beginPath();
+            c.moveTo(-0.58 * hatWidth, 0.1 * hatHeight);
+            c.quadraticCurveTo(-0.58 * hatWidth, hatHeight * 0.5, -0.7 * hatWidth, hatHeight);
+            c.bezierCurveTo(-0.3 * hatWidth, hatHeight + hatWidth * 0.25, 0.3 * hatWidth, hatHeight + hatWidth * 0.25, 0.7 * hatWidth, hatHeight);
+            c.quadraticCurveTo(0.58 * hatWidth, hatHeight * 0.5, 0.58 * hatWidth, 0.1 * hatHeight);
+            // Bulge more downward (positive Y) so brim covers it better
+            c.quadraticCurveTo(0, hatHeight * 0.4, -0.58 * hatWidth, 0.1 * hatHeight);
+            c.fill();
+            
+            // STEP 7: Draw hat band (over bunny)
+            c.save();
+            const bandGradient = c.createLinearGradient(-0.58 * hatWidth, 0, 0.58 * hatWidth, 0);
+            bandGradient.addColorStop(0, 'hsl(0, 90%, 30%)');
+            bandGradient.addColorStop(0.35, 'hsl(0, 90%, 60%)');
+            bandGradient.addColorStop(0.5, 'hsl(0, 90%, 40%)');
+            bandGradient.addColorStop(0.9, 'hsl(0, 90%, 20%)');
+            bandGradient.addColorStop(1, 'hsl(0, 90%, 10%)');
+            
+            const bandTopY = 0.1 * hatHeight;
+            const bandBottomY = 0.3 * hatHeight;
+            
+            c.beginPath();
+            c.moveTo(-0.58 * hatWidth, bandTopY);
+            c.quadraticCurveTo(0, bandTopY + 0.1 * hatHeight, 0.58 * hatWidth, bandTopY);
+            c.lineTo(0.58 * hatWidth, bandBottomY);
+            c.quadraticCurveTo(0, bandBottomY + 0.1 * hatHeight, -0.58 * hatWidth, bandBottomY);
+            c.closePath();
+            c.fillStyle = bandGradient;
+            c.fill();
+            c.restore();
+
+            // STEP 8: Draw FRONT half of brim (top arc 0 to π)
+            c.save();
+            // Create clipping region that excludes the hole
+            c.beginPath();
+            c.rect(-hatWidth * 2, -hatHeight * 2, hatWidth * 4, hatHeight * 4);
+            c.ellipse(0, -hatHeight * 0.03, hatWidth * 0.7, 0.12 * hatHeight, 0, 0, 2 * Math.PI, true);
+            c.clip();
+            
+            c.beginPath();
+            c.ellipse(0, 0, hatWidth, 0.3 * hatWidth, 0, 0, Math.PI);
+            c.lineTo(-hatWidth, 0);
+            c.closePath();
+            c.fillStyle = brimGradient;
+            c.fill();
+            c.restore();
+            
+            // draw thick front brim edge
+            c.beginPath();
+            c.ellipse(0, 0, hatWidth, 0.3 * hatWidth, 0, Math.PI, 2 * Math.PI, true); // bottom to top, drawing front edge
+            c.strokeStyle = 'black';
+            c.lineWidth = 0.01 * cScale;
+            c.stroke();
+
             c.restore();
         }
         
