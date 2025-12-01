@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.17
+		<title>Slosh 2.19
         </title>
         <style>
 			body {font-family: monospace; 
@@ -448,6 +448,7 @@ window.addEventListener('DOMContentLoaded', function() {
     var gummiImage = new Image();
     var gummiReady = false;
     var doGummi = false; // fourth ball rendering style
+    var doArcs = false; // bent arc rendering style
     // Faster response = smaller tau; controls heading smoothing speed (seconds)
     var gummiHeadingTau = 0.0;
     // Orientation offset so the TOP of the image leads along the velocity vector
@@ -2647,7 +2648,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // 6. Tau (Heading Smoothing) slider
         // Determine if tau is relevant (only for gummi bears and rokets) 
-        const tauRelevant = doGummi || doRokets || doArrows || doEllipses || doLines;
+        const tauRelevant = doGummi || doRokets || doArrows || doEllipses || doLines || doArcs;
         const tauOpacity = tauRelevant ? 1.0 : 0.0;
         
         ctx.save();
@@ -3961,8 +3962,9 @@ window.addEventListener('DOMContentLoaded', function() {
                 { id: 'showBlowerButton', icon: '', image: 'aeolus.png', checked: blowerState > 0, color: 'hsl(190, 85%, 55%)' },
                 { id: 'showImploderButton', icon: '\u{1F9F2}', checked: typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active, color: 'hsl(320, 85%, 55%)' },
                 { id: 'showStinkerButton', icon: '', image: 'pepe-face.png', checked: typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active, color: 'hsl(120, 85%, 55%)' },
-                null,  // Empty slot
+                { id: 'showCycloneButton', icon: '', unchecked: typeof Cyclone !== 'undefined' && Cyclone.length > 0 && Cyclone[0].active, color: 'hsl(180, 85%, 55%)', customDraw: true },
                 { id: 'showMagicSetButton', icon: '', checked: typeof MagicSet !== 'undefined' && MagicSet.length > 0, color: 'hsl(280, 85%, 65%)', customDraw: true },
+                null,  // Empty slot
                 null  // Empty slot
             ];
         }
@@ -4002,7 +4004,48 @@ window.addEventListener('DOMContentLoaded', function() {
             }
             
             // Draw icon
-            if (toy.customDraw && toy.id === 'showMagicSetButton') {
+            if (toy.customDraw && toy.id === 'showCycloneButton') {
+                // Draw custom spiral cyclone icon
+                ctx.save();
+                ctx.translate(x, y);
+                
+                const spiralScale = 1;
+                const baseColor = toy.checked ? 'hsl(180, 85%, 55%)' : 'hsl(180, 45%, 30%)';
+                const time = Date.now() / 1000;
+                const rotation = -time * 2; // Counter-clockwise rotation
+                
+                ctx.rotate(rotation);
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                
+                // Draw 3 spiral arms
+                const numArms = 3;
+                for (let i = 0; i < numArms; i++) {
+                    const angle = (i / numArms) * Math.PI * 2;
+                    ctx.beginPath();
+                    ctx.strokeStyle = baseColor;
+                    for (let t = 0; t <= 1; t += 0.1) {
+                        const r = 20 * spiralScale * (1 - t * 0.7);
+                        const a = angle - t * Math.PI * 1.5; // Spiral counter-clockwise
+                        const px = Math.cos(a) * r;
+                        const py = Math.sin(a) * r;
+                        if (t === 0) {
+                            ctx.moveTo(px, py);
+                        } else {
+                            ctx.lineTo(px, py);
+                        }
+                    }
+                    ctx.stroke();
+                }
+                
+                // Draw center circle
+                ctx.fillStyle = baseColor;
+                ctx.beginPath();
+                ctx.arc(0, 0, 3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            } else if (toy.customDraw && toy.id === 'showMagicSetButton') {
                 // Draw top hat icon using same code as MAGICSET
                 ctx.save();
                 ctx.translate(x, y - iconSize * 0.25);
@@ -4560,6 +4603,16 @@ window.addEventListener('DOMContentLoaded', function() {
                     } else {
                         if (typeof Stinker !== 'undefined' && Stinker.length > 0) {
                             Stinker[0].active = false;
+                        }
+                    }
+                } else if (toy.id === 'showCycloneButton') {
+                    if (toy.checked) {
+                        if (typeof Cyclone !== 'undefined' && Cyclone.length > 0) {
+                            Cyclone[0].active = true;
+                        }
+                    } else {
+                        if (typeof Cyclone !== 'undefined' && Cyclone.length > 0) {
+                            Cyclone[0].active = false;
                         }
                     }
                 } else if (toy.id === 'flyingPuckButton') {
@@ -5519,6 +5572,7 @@ window.addEventListener('DOMContentLoaded', function() {
             { value: 'drawDiscs', label: 'circled discs' },
             { value: 'drawSpheres', label: 'spheres' },
             { value: 'drawLines', label: 'directional lines' },
+            { value: 'drawArcs', label: 'bendy lines' },
             { value: 'drawEllipses', label: 'grains of rice' },
             { value: 'drawLinedEllipses', label: 'lined grains of rice' },
             { value: 'drawArrows', label: 'arrows' },
@@ -5607,7 +5661,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         const dropdownHeight = 24;
         const dropdownWidth = w - 100;  // Adjust for new slider width
-        const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawEllipses', 'drawLinedEllipses', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
+        const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawArcs', 'drawEllipses', 'drawLinedEllipses', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
         
         // If dropdown is expanded, check dropdown options FIRST (before menu bounds)
         // This allows clicking options that extend outside the menu
@@ -6242,7 +6296,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Handle render type selection
         if (hitTest.startsWith('renderType_')) {
             const index = parseInt(hitTest.split('_')[1]);
-            const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawEllipses', 'drawLinedEllipses', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
+            const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawArcs', 'drawEllipses', 'drawLinedEllipses', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
             particlesMenuRenderType = renderTypes[index];
             setRenderType(particlesMenuRenderType);
             particlesMenuRenderTypeExpanded = false; // Collapse dropdown after selection
@@ -6507,6 +6561,7 @@ window.addEventListener('DOMContentLoaded', function() {
             doRings = false;
             doLines = false;
             doArrows = false;
+            doArcs = false;
             doGummi = false;
             doRokets = false;
             doEllipses = false;
@@ -6533,6 +6588,7 @@ window.addEventListener('DOMContentLoaded', function() {
             doRings = false;
             doLines = false;
             doArrows = false;
+            doArcs = false;
             doGummi = false;
             doRokets = false;
             doEllipses = false;
@@ -6558,6 +6614,7 @@ window.addEventListener('DOMContentLoaded', function() {
             doRings = false;
             doLines = false;
             doArrows = false;
+            doArcs = false;
             doGummi = false;
             doRokets = false;
             doEllipses = false;
@@ -6584,6 +6641,7 @@ window.addEventListener('DOMContentLoaded', function() {
             doSpheres = false;
             doLines = false;
             doArrows = false;
+            doArcs = false;
             doRokets = false;
             doEllipses = false;
             colorWheelSat = 100;
@@ -6610,6 +6668,7 @@ window.addEventListener('DOMContentLoaded', function() {
             doCircles = false;
             doLines = false;
             doArrows = false;
+            doArcs = false;
             doRokets = false;
             doEllipses = false;
             colorWheelSat = 100;
@@ -6631,6 +6690,33 @@ window.addEventListener('DOMContentLoaded', function() {
             doRings = false;
             doLines = true;
             doArrows = false;
+            doArcs = false;
+            doGummi = false;
+            doRokets = false;
+            doEllipses = false;
+            colorWheelSat = 50;
+            ballSaturation = 75;
+            colorWheelLight = 60;
+            ballLightness = 60;
+            if (wasGummi == true) {
+                particlesMenuQuantity = 64;
+                particlesMenuLargeRadius = 15;
+                particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
+                wasGummi = false;
+                makeBalls();
+            }
+        } else if (renderType === 'drawArcs') {
+            doCircles = false;
+            doDiscs = false;
+            doSpheres = false;
+            doRings = false;
+            doLines = false;
+            doArrows = false;
+            doArcs = true;
             doGummi = false;
             doRokets = false;
             doEllipses = false;
@@ -6656,6 +6742,7 @@ window.addEventListener('DOMContentLoaded', function() {
             doRings = false;
             doLines = true;
             doArrows = false;
+            doArcs = false;
             doGummi = false;
             doRokets = false;
             doEllipses = true;
@@ -6681,6 +6768,7 @@ window.addEventListener('DOMContentLoaded', function() {
             doRings = false;
             doLines = true;
             doArrows = false;
+            doArcs = false;
             doGummi = false;
             doRokets = false;
             doEllipses = true;
@@ -6706,6 +6794,7 @@ window.addEventListener('DOMContentLoaded', function() {
             doRings = false;
             doLines = true;
             doArrows = true;
+            doArcs = false;
             doGummi = false;
             doRokets = false;
             doEllipses = false;
@@ -6735,6 +6824,7 @@ window.addEventListener('DOMContentLoaded', function() {
             doRings = false;
             doLines = true;
             doArrows = false;
+            doArcs = false;
             doGummi = false;
             doRokets = true;
             doEllipses = false;
@@ -6910,6 +7000,9 @@ window.addEventListener('DOMContentLoaded', function() {
                 magic.funnelProgress = {};
                 magic.magnetForce = 0; // Reset force to ramp up
                 magic.magnetStartTime = Date.now();
+                // Save current tau and set to 0 during collection
+                magic.savedTau = physProps.tau;
+                physProps.tau = 0.0;
             }
             
             return true;
@@ -6981,30 +7074,33 @@ window.addEventListener('DOMContentLoaded', function() {
         mX = e.clientX - bounds.left - canvas.clientLeft;
         mY = e.clientY - bounds.top - canvas.clientTop;
         
-        // Check for corner resize - always available at indicator position (30x30px) OR entire corner fill area
-        const indicatorHitSize = 30; // Match the resize indicator area
-        const inIndicatorArea = mX < indicatorHitSize && mY > canvas.height - indicatorHitSize;
+        // Check for corner resize grips - two indicators only (not entire corner areas)
+        const indicatorHitSize = 30; // Size of each grip indicator
+        const inLeftIndicator = mX < indicatorHitSize && mY > canvas.height - indicatorHitSize;
         
-        // Check if in the actual corner fill area (for dragging)
-        let inCornerFillArea = false;
-        if (Corners && Corners.length >= 3) {
+        // Check right indicator at 7:30 position on bottom-left corner
+        let inRightIndicator = false;
+        if (Corners && Corners.length > 0) {
             const bottomLeftCorner = Corners.find(c => c.corner === 'southwest');
             if (bottomLeftCorner) {
-                // Corner fill areas are drawn in canvas space, so check directly in canvas coordinates
-                // Southwest corner is at bottom-left: (0, simHeight * cScale) in canvas coords
-                const cornerCanvasY = simHeight * cScale; // Bottom of canvas in corner's position
+                // Use the visual arc center position
+                const arcCenterX = (bottomLeftCorner.pos.x + bottomLeftCorner.radius) * cScale;
+                const arcCenterY = (bottomLeftCorner.pos.y - bottomLeftCorner.radius) * cScale;
                 const cornerRadius = bottomLeftCorner.radius * cScale;
-                const cornerCanvasX = bottomLeftCorner.pos.x * cScale;
                 
-                // Check if mouse is within the corner fill area
-                // For southwest: from left edge to corner's right extent, from top of corner area to bottom
-                inCornerFillArea = mX >= 0 && mX <= cornerCanvasX + cornerRadius && 
-                                   mY >= cornerCanvasY - cornerRadius && mY <= canvas.height;
+                // 7:30 position = 225°
+                const angle = 5 * Math.PI / 4;
+                const gripDistance = cornerRadius + 15;
+                const gripX = arcCenterX + Math.cos(angle) * gripDistance;
+                const gripY = arcCenterY - Math.sin(angle) * gripDistance;
+                
+                inRightIndicator = mX > gripX - indicatorHitSize && mX < gripX + indicatorHitSize &&
+                                   mY > gripY - indicatorHitSize && mY < gripY + indicatorHitSize;
             }
         }
         
-        // Start corner drag if in corner fill area OR indicator area (left-click)
-        if (inCornerFillArea || inIndicatorArea) {
+        // Start corner drag if in either indicator area (left-click)
+        if (inLeftIndicator || inRightIndicator) {
             const currentRadius = (wallsMenuCornerRadius !== undefined) ? wallsMenuCornerRadius : 100;
             window.cornerRadiusDragging = true;
             window.cornerDragStartX = e.clientX;
@@ -9454,8 +9550,30 @@ window.addEventListener('DOMContentLoaded', function() {
         const dragDeltaX = event.clientX - window.cornerDragStartX;
         const simDragDelta = dragDeltaX / cScale; // Convert pixels to simulation units
         
-        const stage1Sensitivity = 100 / (simWidth * 0.1);
-        let newRadius = window.cornerDragStartRadius + simDragDelta * stage1Sensitivity;
+        const phase1Sensitivity = 100 / (simWidth * 0.1);
+        const cornerRadius = (screenVertical == true) ? 0.5 * simWidth : 0.5 * simHeight;
+        const maximumShift = 0.5 * simWidth - cornerRadius;
+        const phase2Sensitivity = (50 / maximumShift);
+        
+        let newRadius;
+        
+        if (window.cornerDragStartRadius < 100) {
+            // Started in phase 1
+            let testRadius = window.cornerDragStartRadius + simDragDelta * phase1Sensitivity;
+            
+            if (testRadius < 100) {
+                // Still in phase 1
+                newRadius = testRadius;
+            } else {
+                // Transitioned into phase 2
+                const dragToReach100 = (100 - window.cornerDragStartRadius) / phase1Sensitivity;
+                const remainingDrag = simDragDelta - dragToReach100;
+                newRadius = 100 + remainingDrag * phase2Sensitivity;
+            }
+        } else {
+            // Started in phase 2, stay in phase 2
+            newRadius = window.cornerDragStartRadius + simDragDelta * phase2Sensitivity;
+        }
         
         // Clamp final value to 0-150
         newRadius = Math.max(0, Math.min(150, newRadius));
@@ -9478,8 +9596,30 @@ window.addEventListener('DOMContentLoaded', function() {
         const dragDeltaX = touch.clientX - window.cornerDragStartX;
         const simDragDelta = dragDeltaX / cScale;
         
-        const stage1Sensitivity = 100 / (simWidth * 0.1);
-        let newRadius = window.cornerDragStartRadius + simDragDelta * stage1Sensitivity;
+        const phase1Sensitivity = 100 / (simWidth * 0.1);
+        const cornerRadius = (screenVertical == true) ? 0.5 * simWidth : 0.5 * simHeight;
+        const maximumShift = 0.5 * simWidth - cornerRadius;
+        const phase2Sensitivity = (50 / maximumShift) * 0.35;
+        
+        let newRadius;
+        
+        if (window.cornerDragStartRadius < 100) {
+            // Started in phase 1
+            let testRadius = window.cornerDragStartRadius + simDragDelta * phase1Sensitivity;
+            
+            if (testRadius < 100) {
+                // Still in phase 1
+                newRadius = testRadius;
+            } else {
+                // Transitioned into phase 2
+                const dragToReach100 = (100 - window.cornerDragStartRadius) / phase1Sensitivity;
+                const remainingDrag = simDragDelta - dragToReach100;
+                newRadius = 100 + remainingDrag * phase2Sensitivity;
+            }
+        } else {
+            // Started in phase 2, stay in phase 2
+            newRadius = window.cornerDragStartRadius + simDragDelta * phase2Sensitivity;
+        }
         
         newRadius = Math.max(0, Math.min(150, newRadius));
         
@@ -10669,6 +10809,9 @@ window.addEventListener('DOMContentLoaded', function() {
                         MagicSet[0].funnelProgress = {};
                         MagicSet[0].magnetForce = 0; // Reset force to ramp up
                         MagicSet[0].magnetStartTime = Date.now();
+                        // Save current tau and set to 0 during collection
+                        MagicSet[0].savedTau = physProps.tau;
+                        physProps.tau = 0.0;
                     }
                 }, 500);
             } else if (!magic.hatSwarmActive && Balls.length > 0) {
@@ -10678,6 +10821,9 @@ window.addEventListener('DOMContentLoaded', function() {
                 magic.funnelProgress = {};
                 magic.magnetForce = 0; // Reset force to ramp up
                 magic.magnetStartTime = Date.now();
+                // Save current tau and set to 0 during collection
+                magic.savedTau = physProps.tau;
+                physProps.tau = 0.0;
             }
             
             return true;
@@ -12465,17 +12611,30 @@ window.addEventListener('DOMContentLoaded', function() {
     class MAGICSET {
         constructor(){
             this.active = false;
-            this.wandPos = new Vector2(0.5 * simWidth * cScale - 50 , simHeight * cScale - 150);
+            
+            // Position wand and hat relative to Pepe in simulation coordinates
+            const pepeIconRadius = 80;
+            const pepeYPosition = (pepeIconRadius - 8) / cScale;
+            const pepeXPosition = 0.5 * simWidth;
+            
+            // Wand offset from Pepe (in simulation units)
+            const wandOffsetX = -50 / cScale; // negative = left
+            const wandOffsetY = 70 / cScale; // negative = down
+            const wandXSim = pepeXPosition + wandOffsetX;
+            const wandYSim = pepeYPosition + wandOffsetY;
+            this.wandPos = new Vector2(wandXSim * cScale, (simHeight - wandYSim) * cScale);
             this.wandLength = 0.3 * cScale;
             this.wandWidth = 0.008 * cScale;
             this.wandColor = 'white';
-            this.hatPos = new Vector2(0.5 * simWidth * cScale + 100, simHeight * cScale - 60);
+            
+            // Hat offset from Pepe (in simulation units)
+            const hatOffsetX = 102  / cScale; // positive = right
+            const hatOffsetY = -2 / cScale; // negative = down
+            const hatXSim = pepeXPosition + hatOffsetX;
+            const hatYSim = pepeYPosition + hatOffsetY;
+            this.hatPos = new Vector2(hatXSim * cScale, (simHeight - hatYSim) * cScale);
             this.hatSize = 1;
             this.hatColor = 'cyan';
-
-            //const pepeIconRadius = 80;
-            //const pepeYPosition = (pepeIconRadius - 8) / cScale;
-            //const pepeXPosition = 0.5 * simWidth;
             
             // Magic state tracking
             this.hatSwarmActive = false;
@@ -12487,6 +12646,7 @@ window.addEventListener('DOMContentLoaded', function() {
             this.dispensingIndex = 0;
             this.lastDispenseTime = 0;
             this.dispenseRate = 5; // milliseconds between particle releases
+            this.savedTau = null; // Store original tau value during collection
             
             // Magnet-like vacuum force
             this.magnetForce = 0; // Current force (ramps from 0 to max)
@@ -12500,7 +12660,7 @@ window.addEventListener('DOMContentLoaded', function() {
             this.rabbitAnimating = false;
             this.rabbitAnimationSpeed = 0.02; // Speed of rabbit animation
         }
-        draw(){
+        draw(beforeOrAfter) {
             //if(this.active == false) return;
             // Update rabbit animation
             if (this.rabbitAnimating) {
@@ -12513,11 +12673,13 @@ window.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            c.save();
-            c.translate(this.wandPos.x, this.wandPos.y);
-            // rotate 30 degrees ccw from vertical
-            const wandRotationAngle = 0.4 * Math.PI
-            c.rotate(wandRotationAngle);
+            // Draw wand only in 'after' pass (always on top)
+            if (beforeOrAfter === 'after') {
+                c.save();
+                c.translate(this.wandPos.x, this.wandPos.y);
+                // rotate 30 degrees ccw from vertical
+                const wandRotationAngle = 0.4 * Math.PI
+                c.rotate(wandRotationAngle);
 
             // draw wand shaft
             c.fillStyle = this.wandColor;
@@ -12545,20 +12707,44 @@ window.addEventListener('DOMContentLoaded', function() {
             c.stroke();      
             //c.fill();
             
-            // Add sparkles when wand is dispensing
-            if (this.wandDispensingActive) {
-                for (let i = 0; i < 3; i++) {
-                    const sparkleAngle = Math.random() * Math.PI * 2;
-                    const sparkleRadius = Math.random() * this.wandLength * 0.3;
-                    const sparkleX = Math.cos(sparkleAngle) * sparkleRadius;
-                    const sparkleY = Math.sin(sparkleAngle) * sparkleRadius;
-                    c.fillStyle = `hsla(${Math.random() * 360}, 100%, 70%, ${Math.random() * 0.5 + 0.3})`;
-                    c.beginPath();
-                    c.arc(sparkleX, sparkleY, 2, 0, Math.PI * 2);
-                    c.fill();
+            // generate sparkles for one second when wand is ready to dispense
+            // ramp up sparkle effect from 0 to full over first 0.5 seconds
+            // ramp down sparkle effect over last 0.5 seconds
+            if (this.particlesToDispense.length > 0 && !this.wandDispensingActive) {
+                const sparkleProgress = (Date.now() - this.wandDispensingStartTime) / 1000;
+                
+                // Only show sparkles for 1 second
+                if (sparkleProgress <= 4.0) {
+                    let sparkleAlpha = 1;
+                    if (sparkleProgress < 2) {
+                        sparkleAlpha = sparkleProgress / 0.5;
+                    } else if (sparkleProgress > 0.5) {
+                        sparkleAlpha = 4 - (sparkleProgress - 0.5) / 0.5;
+                    }
+                    
+                    for (let i = 0; i < 30; i++) {
+                        const sparkleAngle = Math.random() * Math.PI * 2;
+                        const sparkleRadius = Math.random() * this.wandLength * 0.6;
+                        const sparkleX = Math.cos(sparkleAngle) * sparkleRadius;
+                        const sparkleY = Math.sin(sparkleAngle) * sparkleRadius;
+                        c.fillStyle = `hsla(${Math.random() * 360}, 100%, 70%, ${(Math.random() * 0.5 + 0.5) * sparkleAlpha})`;
+                        c.beginPath();
+                        c.arc(sparkleX, sparkleY, 2, 0, Math.PI * 2);
+                        c.fill();
+                    }
                 }
             }
+
             c.restore();
+            }
+            
+            // Draw hat only when not swarming (in 'after' pass) or when swarming (in 'before' pass)
+            const shouldDrawHat = (beforeOrAfter === 'before' && this.hatSwarmActive) || 
+                                  (beforeOrAfter === 'after' && !this.hatSwarmActive);
+            
+            if (!shouldDrawHat) {
+                return;
+            }
 
             // draw upside-down tophat
             c.save();
@@ -12798,8 +12984,8 @@ window.addEventListener('DOMContentLoaded', function() {
             
             // Hat opening position (in canvas space)
             const hatOpeningCanvasX = this.hatPos.x;
-            const hatOpeningCanvasY = this.hatPos.y - hatHeight * 0.01; // Inside the head hole
-            const hatOpeningRadius = 0.08; // Narrow opening in sim units
+            const hatOpeningCanvasY = this.hatPos.y + hatHeight * 0.02; // Inside the head hole
+            const hatOpeningRadius = 0.06; // Narrow opening in sim units - particles collected when very close
             
             // Convert to simulation space
             const hatOpeningX = hatOpeningCanvasX / cScale;
@@ -12940,11 +13126,28 @@ window.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Check if all particles collected
-            if (Balls.length === 0 && this.collectedParticles.length > 0) {
-                this.hatSwarmActive = false;
-                this.particlesToDispense = [...this.collectedParticles];
-                this.dispensingIndex = 0;
+            // Check if all particles collected (only deactivate when truly empty)
+            if (this.collectedParticles.length > 0) {
+                // Count balls that are still in the magic swarm
+                let ballsInSwarm = 0;
+                for (let i = 0; i < Balls.length; i++) {
+                    if (Balls[i].inMagicSwarm) {
+                        ballsInSwarm++;
+                    }
+                }
+                
+                // Only deactivate if no balls remain in the swarm
+                if (ballsInSwarm === 0) {
+                    this.hatSwarmActive = false;
+                    this.particlesToDispense = [...this.collectedParticles];
+                    this.dispensingIndex = 0;
+                    this.wandDispensingStartTime = Date.now(); // Start sparkle timer
+                    // Restore original tau value
+                    if (this.savedTau !== null) {
+                        physProps.tau = this.savedTau;
+                        this.savedTau = null;
+                    }
+                }
             }
             
             // If magic swarm is not active, clear the flag from all balls
@@ -12963,7 +13166,10 @@ window.addEventListener('DOMContentLoaded', function() {
             const now = Date.now();
             if (now - this.lastDispenseTime < this.dispenseRate) return;
             
-            if (this.dispensingIndex < this.particlesToDispense.length) {
+            // Calculate max particles allowed from menu settings
+            const maxParticles = particlesMenuQuantity * particlesMenuQuantity;
+            
+            if (this.dispensingIndex < this.particlesToDispense.length && Balls.length < maxParticles) {
                 const particleData = this.particlesToDispense[this.dispensingIndex];
                 
                 // Calculate star center position in canvas space
@@ -12985,29 +13191,59 @@ window.addEventListener('DOMContentLoaded', function() {
                 const tipX = tipCanvasX / cScale;
                 const tipY = simHeight - (tipCanvasY / cScale);
                 
-                // Spawn particles in area around star (twice the star's outer radius)
-                const starRadius = this.wandLength * 0.2; // star's outer radius in canvas space
-                const spawnRadius = (starRadius * 2) / cScale; // twice the star radius in sim space
-                const randomAngle = Math.random() * Math.PI * 2;
-                const randomDist = Math.random() * spawnRadius;
-                const spawnX = tipX + Math.cos(randomAngle) * randomDist;
-                const spawnY = tipY + Math.sin(randomAngle) * randomDist;
+                // Use current particle menu settings
+                const smallBallRadius = 0.001 * particlesMenuSmallRadius;
+                const bigBallRadius = 0.001 * particlesMenuLargeRadius;
                 
-                // Create new ball at spawn position
-                const newBall = new BALL(
-                    particleData.radius,
-                    particleData.mass,
-                    new Vector2(spawnX, spawnY),
-                    new Vector2((Math.random() - 0.5) * 0.1, (Math.random() - 0.5) * 0.1),
-                    particleData.saturation,
-                    particleData.whiteBall,
-                    false,
-                    particleData.radius,
-                    particleData.radius,
-                    particleData.hueIndex
-                );
-                newBall.color = particleData.color;
-                Balls.push(newBall);
+                // Spawn particles from a point that rotates around the star twice per second
+                const starRadius = this.wandLength * 0.2; // star's outer radius in canvas space
+                const spawnRadius = (starRadius * 1.5) / cScale; // spawn distance from star center in sim space
+                const rotationSpeed = 2 * Math.PI * 2; // 2 rotations per second (radians per second)
+                const rotationAngle = (now / 1000) * rotationSpeed; // Current rotation angle based on time
+                const spawnSpeed = 0.9; // Adjust this value to control particle ejection speed
+                
+                // Create three particles spaced 120 degrees apart (but only if under max)
+                for (let i = 0; i < 3 && Balls.length < maxParticles; i++) {
+                    const angle = rotationAngle + (i * 2 * Math.PI / 3); // 120 degrees apart
+                    const spawnX = tipX + Math.cos(angle) * spawnRadius;
+                    const spawnY = tipY + Math.sin(angle) * spawnRadius;
+                    
+                    // Calculate velocity pointing away from star center
+                    const directionX = spawnX - tipX;
+                    const directionY = spawnY - tipY;
+                    const distance = Math.sqrt(directionX * directionX + directionY * directionY);
+                    const normalizedDirX = directionX / distance;
+                    const normalizedDirY = directionY / distance;
+                    
+                    // Calculate radius from current menu settings
+                    let radius;
+                    if (smallBallRadius == 0) {
+                        radius = bigBallRadius;
+                    } else {
+                        radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
+                    }
+                    const mass = 2 * Math.PI * radius * radius;
+                    
+                    // Use saturation and color from collected particle
+                    const saturation = particleData.saturation;
+                    const whiteBall = particleData.whiteBall;
+                    const hueIndex = particleData.hueIndex;
+                    
+                    const newBall = new BALL(
+                        radius,
+                        mass,
+                        new Vector2(spawnX, spawnY),
+                        new Vector2(normalizedDirX * spawnSpeed, normalizedDirY * spawnSpeed),
+                        saturation,
+                        whiteBall,
+                        false,
+                        smallBallRadius,
+                        bigBallRadius,
+                        hueIndex
+                    );
+                    newBall.color = particleData.color;
+                    Balls.push(newBall);
+                }
                 
                 this.dispensingIndex++;
                 this.lastDispenseTime = now;
@@ -13475,6 +13711,72 @@ window.addEventListener('DOMContentLoaded', function() {
                     c.stroke();
                     c.restore();
                 }
+            } else if (doArcs == true) {
+                // Bent arcs that curve based on steering direction
+                const speed = this.vel.length();
+                if (speed > 1e-6) {
+                    const target = Math.atan2(this.vel.y, this.vel.x);
+                    if (!this.headingInitialized) {
+                        this.headingAngle = target;
+                        this.headingInitialized = true;
+                    } else {
+                        // Smooth with exponential filter
+                        const TWO_PI = Math.PI * 2;
+                        let diff = target - this.headingAngle;
+                        // Wrap to [-PI, PI]
+                        diff = ((diff + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
+                        const alpha = 1 - Math.exp(-physProps.dt / Math.max(1e-6, physProps.tau));
+                        this.headingAngle += alpha * diff;
+                    }
+                }
+                
+                const lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 65);
+                const satLevel = ballSaturation * this.saturation;
+                
+                // Calculate curvature based on change in heading (steering rate)
+                // Store previous heading for comparison
+                if (typeof this.prevHeadingAngle === 'undefined') {
+                    this.prevHeadingAngle = this.headingAngle;
+                }
+                const headingChange = this.headingAngle - this.prevHeadingAngle;
+                this.prevHeadingAngle = this.headingAngle;
+                
+                //  SET LINE LENGTH --------------------
+                const arcLength = 10 * this.radius * cScale;
+                
+                c.save();
+                c.translate(cX(this.pos), cY(this.pos));
+                c.rotate(-this.headingAngle); // Negative because canvas Y is inverted
+                
+                if (this.whiteBall == true || this.tracerBall == true) {
+                    c.strokeStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                } else {
+                    c.strokeStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                }
+                c.lineWidth = 0.5 * this.radius * cScale;
+                
+                // Draw arc that bends based on heading change
+                const curvature = headingChange * 15; // Amplify the bending effect
+                
+                if (Math.abs(curvature) > 0.05) {
+                    // Significant curvature - draw an arc from center forward
+                    const radius = arcLength / Math.abs(curvature);
+                    const centerY = curvature > 0 ? -radius : radius;
+                    
+                    c.beginPath();
+                    const startAngle = curvature > 0 ? Math.PI / 2 : -Math.PI / 2;
+                    const endAngle = startAngle - curvature;
+                    c.arc(0, centerY, radius, startAngle, endAngle, curvature > 0);
+                    c.stroke();
+                } else {
+                    // Nearly straight - draw a line pointing forward
+                    c.beginPath();
+                    c.moveTo(0, 0);
+                    c.lineTo(arcLength, 0);
+                    c.stroke();
+                }
+                
+                c.restore();
             } else if (doRings == true) {
                 const lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 65);
                 const satLevel = ballSaturation * this.saturation;
@@ -14753,10 +15055,9 @@ window.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Calculate lateral movement based on slider position (100-150)
-                var cornerSeparation = simWidth - 2 * corner.radius;
-                var cornerClosureRatio = (cornerRad - 100) / 50; // Corrected for 0-50 range in Stage 2
+                var cornerClosureRatio = (cornerRad - 100) / 50; // 0 to 1 in Stage 2
                 var maximumShift = 0.5 * simWidth - corner.radius;
-                var shiftAmount = Math.min(maximumShift, cornerSeparation * cornerClosureRatio);
+                var shiftAmount = maximumShift * cornerClosureRatio; // Linear movement
                 
                 // Move corners horizontally inward only
                 if (cornerClosureRatio > 0) {
@@ -17229,8 +17530,8 @@ window.addEventListener('DOMContentLoaded', function() {
                         
                         c.stroke();
                         // green dashed orbit ellipse
-                        c.strokeStyle = 'hsl(80, 80%, 50%)';
-                        c.lineWidth = 0.008 * cScale;
+                        c.strokeStyle = 'hsla(80, 80%, 50%, 0.7)';
+                        c.lineWidth = 0.006 * cScale;
                         c.setLineDash([10, 5, 2, 5]);
                         c.lineCap = 'round';
                         c.stroke();
@@ -17238,16 +17539,16 @@ window.addEventListener('DOMContentLoaded', function() {
                         c.lineCap = 'butt';
 
                         // Draw yellow center circle for orbit center
-                        const centerDotRadius = 0.04;
+                        const centerDotRadius = 0.05;
                         c.beginPath();
-                        c.arc(centerX * cScale, (simHeight - centerY) * cScale, centerDotRadius * cScale, 0, 2 * Math.PI);
+                        c.arc(centerX * cScale, (simHeight - centerY) * cScale, 0.5 * centerDotRadius * cScale, 0, 2 * Math.PI);
                         // semi-transparent black orbit circle background trace
                         c.fillStyle = 'hsla(0, 0%, 0%, 0.4)';
                         c.fill();
                         // yellow center circle
-                        c.strokeStyle = 'yellow';
+                        c.strokeStyle = 'hsla(60, 100%, 50%, 0.7)';
                         c.lineWidth = 0.04 * cScale;
-                        c.setLineDash([5, 6]);
+                        c.setLineDash([6, 4]);
                         c.stroke();
                         c.setLineDash([]);
 
@@ -17369,8 +17670,8 @@ window.addEventListener('DOMContentLoaded', function() {
                         c.lineWidth = 0.02  * cScale;
                         c.stroke();
                         // green dashed orbit ellipse
-                        c.strokeStyle = 'hsl(120, 80%, 50%)';
-                        c.lineWidth = 0.008  * cScale;
+                        c.strokeStyle = 'hsla(120, 80%, 50%, 0.7)';
+                        c.lineWidth = 0.006  * cScale;
                         c.setLineDash([10, 5, 2, 5, 2, 5]);
                         c.lineCap = 'round';
                         c.stroke();
@@ -17404,7 +17705,7 @@ window.addEventListener('DOMContentLoaded', function() {
                         const bottomY = centerY + bottomLocalX * sinRot + bottomLocalY * cosRot;
                         
                         // Draw yellow dashed cirlces at the 4 endpoints
-                        const handleSize = 0.03;
+                        const handleSize = 0.05;
                         
                         //  DRAW ELLIPSE HANDLES  ----------
                         c.strokeStyle = 'hsl(60, 100%, 60%)'; // Bright yellow
@@ -17412,28 +17713,28 @@ window.addEventListener('DOMContentLoaded', function() {
                         c.setLineDash([4, 3]);
                         // Right (major axis +) - circle
                         c.beginPath();
-                        c.arc(rightX * cScale, (simHeight - rightY) * cScale, handleSize * cScale, 0, 2 * Math.PI);
+                        c.arc(rightX * cScale, (simHeight - rightY) * cScale, 0.3 * handleSize * cScale, 0, 2 * Math.PI);
                             // semi-transparent black orbit circle background trace
                             c.fillStyle = 'hsla(0, 0%, 0%, 0.4)';
                             c.fill();
                         c.stroke();
                         // Left (major axis -) - circ
                         c.beginPath();
-                        c.arc(leftX * cScale, (simHeight - leftY) * cScale, handleSize * cScale, 0, 2 * Math.PI);
+                        c.arc(leftX * cScale, (simHeight - leftY) * cScale, 0.3 * handleSize * cScale, 0, 2 * Math.PI);
                             // semi-transparent black orbit circle background trace
                             c.fillStyle = 'hsla(0, 0%, 0%, 0.4)';
                             c.fill();
                         c.stroke();
                         // Top (minor axis +) - circle
                         c.beginPath();
-                        c.arc(topX * cScale, (simHeight - topY) * cScale, handleSize * cScale, 0, 2 * Math.PI);
+                        c.arc(topX * cScale, (simHeight - topY) * cScale, 0.3 * handleSize * cScale, 0, 2 * Math.PI);
                             // semi-transparent black orbit circle background trace
                             c.fillStyle = 'hsla(0, 0%, 0%, 0.4)';
                             c.fill();
                         c.stroke();
                         // Bottom (minor axis -) - circle
                         c.beginPath();  
-                        c.arc(bottomX * cScale, (simHeight - bottomY) * cScale, handleSize * cScale, 0, 2 * Math.PI);
+                        c.arc(bottomX * cScale, (simHeight - bottomY) * cScale, 0.3 * handleSize * cScale, 0, 2 * Math.PI);
                             // semi-transparent black orbit circle background trace
                             c.fillStyle = 'hsla(0, 0%, 0%, 0.4)';
                             c.fill();
@@ -18230,6 +18531,260 @@ window.addEventListener('DOMContentLoaded', function() {
     const pepeYPosition = (pepeIconRadius - 8) / cScale;
     const pepeXPosition = 0.5 * simWidth;
     makeStinker(new Vector2(pepeXPosition, pepeYPosition));
+
+
+    //  CYCLONE CONSTRUCTOR ----------------------------------------------------------------
+    class CYCLONE {
+        constructor(pos) {
+            this.radius = 0.2;
+            this.pos = pos.clone();
+            this.force = 3; // Swirl strength
+            this.active = false;
+            this.isBeingUsed = false; // Track if cyclone is actively swirling particles
+            this.rotationAngle = 0; // Current rotation angle
+            this.lastTime = null; // Track time for continuous rotation
+        }
+        draw() {
+            // Draw cyclone as a spinning vortex icon
+            const iconRadius = 52.5; // 1.5x larger (was 35)
+            const centerX = this.pos.x * cScale;
+            const centerY = (simHeight - this.pos.y) * cScale;
+            const currentTime = Date.now() / 1000;
+            
+            // Update rotation angle when being used
+            if (this.isBeingUsed) {
+                if (this.lastTime !== null) {
+                    const deltaTime = currentTime - this.lastTime;
+                    this.rotationAngle -= deltaTime * 10; // Counter-clockwise rotation
+                }
+                this.lastTime = currentTime;
+            } else {
+                this.lastTime = null; // Reset when not being used
+            }
+            
+            const baseRotation = this.rotationAngle;
+
+            c.save();
+            c.translate(centerX, centerY);
+
+            // Draw dark radial gradient underneath
+            const gradient = c.createRadialGradient(0, 0, 0, 0, 0, iconRadius * 1.2);
+            gradient.addColorStop(0.0, 'rgba(0, 0, 0, 0.9)');
+            gradient.addColorStop(0.7, 'rgba(0, 0, 0, 0.2)');
+            gradient.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
+            c.fillStyle = gradient;
+            c.beginPath();
+            c.arc(0, 0, iconRadius * 3.0, 0, Math.PI * 2);
+            c.fill();
+
+            // Draw spiral arms - cyan, bright when active, dim when inactive
+            const lightness = this.active ? 65 : 35;
+            c.lineCap = 'round';
+            const numArms = 3;
+            for (let i = 0; i < numArms; i++) {
+                const angle = (i / numArms) * Math.PI * 2 + baseRotation; // Add rotation here
+                
+                // Draw spiral arm as individual segments to allow tapering
+                let prevX = null;
+                let prevY = null;
+                for (let t = 0; t <= 1; t += 0.05) {
+                    const r = iconRadius * (1 - t * 0.7);
+                    const a = angle - t * Math.PI * 1.5;
+                    const x = Math.cos(a) * r;
+                    const y = Math.sin(a) * r;
+                    
+                    if (prevX !== null) {
+                        // Draw segment with tapering width
+                        
+                        c.beginPath();
+                        c.moveTo(prevX, prevY);
+                        c.lineTo(x, y);
+                        c.strokeStyle = `hsla(0, 0%, 0%, 0.7)`;
+                        c.lineWidth = 16 * (1 - t * 0.7); // Start at 6, taper down
+                        c.stroke();
+                        c.strokeStyle = `hsl(180, 85%, ${lightness - i * 5}%)`;
+                        c.lineWidth = 6 * (1 - t * 0.7); // Start at 6, taper down
+                        c.stroke();
+
+                    }
+                    
+                    prevX = x;
+                    prevY = y;
+                }
+            }
+
+            // Draw center circle
+            c.fillStyle = `hsl(180, 85%, ${lightness + 10}%)`;
+            c.beginPath();
+            c.arc(0, 0, 6, 0, Math.PI * 2);
+            c.fill();
+
+            c.restore();
+        }
+    }
+
+    function makeCyclone(pos) {
+        Cyclone = [];
+        var obj = new CYCLONE(pos);
+        obj.active = false;
+        Cyclone.push(obj);
+
+        // Mouse/touch controls for dragging cyclone
+        var isCycloneDragging = false;
+        var cycloneDragOffset = {x: 0, y: 0};
+        let cycloneHoldTimer = null;
+
+        canvas.addEventListener('mousedown', function(e) {
+            if (globalInteractionLock) return;
+            
+            if (typeof Cyclone !== 'undefined' && Cyclone.length > 0) {
+                if (!Cyclone[0].active) return;
+                
+                var cyclone = Cyclone[0];
+                var mouseX = e.offsetX / cScale;
+                var mouseY = (simHeight - e.offsetY / cScale);
+                var dx = mouseX - cyclone.pos.x;
+                var dy = mouseY - cyclone.pos.y;
+                const cycloneRadius = 60 / cScale;
+                const distFromCenter = Math.sqrt(dx*dx + dy*dy);
+                
+                if (distFromCenter < cycloneRadius) {
+                    globalInteractionLock = true;
+                    isCycloneDragging = true;
+                    cycloneDragOffset.x = dx;
+                    cycloneDragOffset.y = dy;
+                    Cyclone[0].isBeingUsed = true;
+                    cycloneHoldTimer = setInterval(swirl, 50);
+                }
+            }
+        });
+
+        canvas.addEventListener('mouseup', function(e) {
+            if (cycloneHoldTimer) {
+                clearInterval(cycloneHoldTimer);
+                cycloneHoldTimer = null;
+            }
+            if (typeof Cyclone !== 'undefined' && Cyclone.length > 0) {
+                Cyclone[0].isBeingUsed = false;
+            }
+            isCycloneDragging = false;
+            globalInteractionLock = false;
+        });
+
+        canvas.addEventListener('mouseleave', function(e) {
+            if (cycloneHoldTimer) {
+                clearInterval(cycloneHoldTimer);
+                cycloneHoldTimer = null;
+            }
+            if (typeof Cyclone !== 'undefined' && Cyclone.length > 0) {
+                Cyclone[0].isBeingUsed = false;
+            }
+            isCycloneDragging = false;
+            globalInteractionLock = false;
+        });
+
+        canvas.addEventListener('mousemove', function(e) {
+            if (isCycloneDragging && typeof Cyclone !== 'undefined' && Cyclone.length > 0) {
+                var mouseX = e.offsetX / cScale;
+                var mouseY = (simHeight - e.offsetY / cScale);
+                Cyclone[0].pos.x = mouseX - cycloneDragOffset.x;
+                Cyclone[0].pos.y = mouseY - cycloneDragOffset.y;
+            }
+        });
+
+        // Touch controls
+        canvas.addEventListener('touchstart', function(e) {
+            if (globalInteractionLock) return;
+            
+            if (typeof Cyclone !== 'undefined' && Cyclone.length > 0 && Cyclone[0].active) {
+                var touch = e.touches[0];
+                var rect = canvas.getBoundingClientRect();
+                var mouseX = (touch.clientX - rect.left) / cScale;
+                var mouseY = (simHeight - (touch.clientY - rect.top) / cScale);
+                
+                var dx = mouseX - Cyclone[0].pos.x;
+                var dy = mouseY - Cyclone[0].pos.y;
+                const cycloneRadius = 60 / cScale;
+                const distFromCenter = Math.sqrt(dx*dx + dy*dy);
+                
+                if (distFromCenter < cycloneRadius) {
+                    globalInteractionLock = true;
+                    isCycloneDragging = true;
+                    cycloneDragOffset.x = dx;
+                    cycloneDragOffset.y = dy;
+                    Cyclone[0].isBeingUsed = true;
+                    cycloneHoldTimer = setInterval(swirl, 50);
+                }
+            }
+        });
+
+        canvas.addEventListener('touchend', function(e) {
+            if (cycloneHoldTimer) {
+                clearInterval(cycloneHoldTimer);
+                cycloneHoldTimer = null;
+            }
+            if (typeof Cyclone !== 'undefined' && Cyclone.length > 0) {
+                Cyclone[0].isBeingUsed = false;
+            }
+            isCycloneDragging = false;
+            globalInteractionLock = false;
+        });
+
+        canvas.addEventListener('touchmove', function(e) {
+            if (isCycloneDragging && typeof Cyclone !== 'undefined' && Cyclone.length > 0) {
+                var touch = e.touches[0];
+                var rect = canvas.getBoundingClientRect();
+                var mouseX = (touch.clientX - rect.left) / cScale;
+                var mouseY = (simHeight - (touch.clientY - rect.top) / cScale);
+                Cyclone[0].pos.x = mouseX - cycloneDragOffset.x;
+                Cyclone[0].pos.y = mouseY - cycloneDragOffset.y;
+            }
+        });
+    }
+
+    function swirl() {
+        const swirlForce = Cyclone[0] ? (Cyclone[0].force) : 3;
+        const baseSpeed = swirlForce * physProps.dt;
+        let centerX, centerY;
+        
+        if (typeof Cyclone !== 'undefined' && Cyclone.length > 0 && Cyclone[0].active) {
+            centerX = Cyclone[0].pos.x;
+            centerY = Cyclone[0].pos.y;
+        } else {
+            centerX = 0.5 * simWidth;
+            centerY = 0.5 * simHeight;
+        }
+        
+        for (let i = Balls.length - 1; i >= 0; i--) {
+            var ball = Balls[i];
+            var dx = ball.pos.x - centerX;
+            var dy = ball.pos.y - centerY;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < 0.01) continue; // Skip if too close to center
+            
+            // Stronger effect when closer (inverse distance)
+            var influence = 1 / Math.max(dist, 0.1);
+            
+            // Radial component (stronger inward pull to keep particles contained)
+            var radialStrength = -2.0 * baseSpeed * influence;
+            var radialX = (dx / dist) * radialStrength;
+            var radialY = (dy / dist) * radialStrength;
+            
+            // Tangential component (swirl perpendicular to radius)
+            var tangentialStrength = baseSpeed * influence;
+            var tangentialX = -(dy / dist) * tangentialStrength;
+            var tangentialY = (dx / dist) * tangentialStrength;
+            
+            // Apply combined force
+            ball.vel.x += radialX + tangentialX;
+            ball.vel.y += radialY + tangentialY;
+        }
+    }
+
+    const cycloneXPosition = 0.5 * simWidth;
+    const cycloneYPosition = 0.5 * simHeight;
+    makeCyclone(new Vector2(cycloneXPosition, cycloneYPosition));
 
 
     //  MAGNET CONSTRUCTOR ----------------------------------------------------------------
@@ -19535,14 +20090,14 @@ window.addEventListener('DOMContentLoaded', function() {
             c.setLineDash([0, 0]);
         }
         */
-        //  DRAW WORM ---------------------------------------------------------------------
-        if (doWorm == true && mrMode == "worm") {
-             WormProps.SpaceWorm.draw()
-        }
         // DRAW MR. MISTER --------------------------------------------------------------
         if (doFountain == true) {
             MrMr = MisterMister[0];
             MrMr.draw();
+        }
+        //  DRAW MAGIC SET HERE WHEN IT'S COLLECTING PARTICLES ONLY ---------------------------------------------------------------------
+        if (MagicSet[0] && MagicSet[0].hatSwarmActive) {
+            MagicSet[0].draw('before'); // Only draw hat, not wand
         }
         //  DRAW BALLS-------------------------------------------------------------------
         for (i = 0; i < Balls.length; i++) {
@@ -19552,14 +20107,12 @@ window.addEventListener('DOMContentLoaded', function() {
             }
             ball.draw();
 		}
-        
         //  DRAW BOXES ----------------------------------------------------------------
         if (showBoxes && Array.isArray(Box)) {
             for (let b = 0; b < Box.length; b++) {
                 Box[b].draw();
             }
         }
-        
         //  DRAW WORM ---------------------------------------------------------------------
         if (doWorm == true && mrMode != "worm") {
              WormProps.SpaceWorm.draw()
@@ -19571,29 +20124,33 @@ window.addEventListener('DOMContentLoaded', function() {
             bumpers.draw();
             }
         }
+        //  DRAW STINKER ----------------------------------
+        if (typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active) {
+            Stinker[0].draw();
+        }
+        //  DRAW MAGIC SET HERE NORMALLY AND WHEN DISPENSING ---------------------------------------------------------------------
+        if (MagicSet[0]) {
+            MagicSet[0].draw('after'); // Draw full magic set (wand always, hat only when not swarming)
+        }
         //  DRAW BLOWER  ---------------------------------------------------------------     
         if (blowerState >= 1 && blowerState <= 3) {
             var blower = Blower[0];
             blower.draw();
         }
-
+        //  DRAW MAGNET  ---------------------------------------------------------------
         if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active) {
             Magnet[0].draw();
         }
-
-        
-        // Draw stinker ----------------------------------
-        if (typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active) {
-            Stinker[0].draw();
+        //  DRAW CYCLONE ----------------------------------
+        if (typeof Cyclone !== 'undefined' && Cyclone.length > 0 && Cyclone[0].active) {
+            Cyclone[0].draw();
         }
-
-        // Draw hearts ---------------------------------------------------------------
+        //  DRAW HEARTS ---------------------------------------------------------------
         if (typeof Hearts !== 'undefined' && Hearts.length > 0) {
             for (let i = 0; i < Hearts.length; i++) {
                 Hearts[i].draw();
             }
         }
-        
         //  DRAW HUNGRY PUCKS ---------------------------------------------------------------     
         if (showEaters == true) {
             // draw first hungry puck
@@ -19604,7 +20161,6 @@ window.addEventListener('DOMContentLoaded', function() {
             var hungryPuck = Hungrypuck[1];
             hungryPuck.draw2();
         }
-
         //  DRAW PUCKS ----------------------------------------------------------------         
         for (p=0; p < Puck.length; p++) { 
             var puck = Puck[p];
@@ -19618,13 +20174,7 @@ window.addEventListener('DOMContentLoaded', function() {
             if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
             puck.draw(p); // Pass index to draw function
         }
-
-        //  DRAW MAGIC SET  ---------------------------------------------------------------------
-        if (MagicSet[0]) {
-            MagicSet[0].draw();
-        }
-
-
+        
         //  DRAW CORNERS  ---------------------------------------------------------------------
         for (var v = 0; v < Corners.length; v++) {
             corner = Corners[v];
@@ -19816,14 +20366,14 @@ window.addEventListener('DOMContentLoaded', function() {
 
     //  RESIZE INDICATOR DRAWING FUNCTION ----------------------------------------------------
     function drawResizeIndicator() {
-        // Draw a triangle of dots in the bottom-left corner of the canvas
-        const dotSize = 2;
+        // Draw corner resize grips: one in bottom-left (inside), one in bottom-right (outside play area)
+        const dotSize = 3;
         const spacing = 6;
         const offset = 10; // Distance from corner edges
         
-        c.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        c.fillStyle = 'rgba(255, 255, 255, 0.7)';
         
-        // Draw 3 rows of dots forming a triangle
+        // LEFT GRIP (bottom-left corner) - triangle pointing up-right
         // Row 1 (bottom): 3 dots
         for (let i = 0; i < 3; i++) {
             c.beginPath();
@@ -19842,6 +20392,47 @@ window.addEventListener('DOMContentLoaded', function() {
         c.beginPath();
         c.arc(offset, canvas.height - offset - spacing * 2, dotSize, 0, Math.PI * 2);
         c.fill();
+        
+        // RIGHT GRIP (follows bottom-left corner at 7:30 position, just outside play area)
+        if (typeof Corners !== 'undefined' && Corners && Corners.length > 0) {
+            const bottomLeftCorner = Corners.find(corner => corner.corner === 'southwest');
+            if (bottomLeftCorner) {
+                // The southwest corner visual arc center is at (pos.x + radius, pos.y - radius) in sim coords
+                const arcCenterX = (bottomLeftCorner.pos.x + bottomLeftCorner.radius) * cScale;
+                const arcCenterY = (bottomLeftCorner.pos.y - bottomLeftCorner.radius) * cScale;
+                const cornerRadius = bottomLeftCorner.radius * cScale;
+                
+                // 7:30 position in canvas coords (down-left from arc center)
+                // 7:30 = 225° = down and to the left
+                const angle = 5 * Math.PI / 4; // 225° in standard coords
+                const gripDistance = cornerRadius + offset + 5;
+                const gripX = arcCenterX + Math.cos(angle) * gripDistance;
+                const gripY = arcCenterY - Math.sin(angle) * gripDistance; // Subtract because canvas Y is inverted
+                
+                // Make grip visible with white color
+                c.fillStyle = 'hsla(0, 0%, 100%, 0.4)';
+                
+                // Triangle rotated 180° from down-right - pointing up-left
+                // Row 1 (left): 3 dots
+                for (let i = 0; i < 3; i++) {
+                    c.beginPath();
+                    c.arc(gripX, gripY - i * spacing, dotSize, 0, Math.PI * 2);
+                    c.fill();
+                }
+                
+                // Row 2 (middle): 2 dots
+                for (let i = 0; i < 2; i++) {
+                    c.beginPath();
+                    c.arc(gripX + spacing, gripY - i * spacing, dotSize, 0, Math.PI * 2);
+                    c.fill();
+                }
+                
+                // Row 3 (right): 1 dot
+                c.beginPath();
+                c.arc(gripX + spacing * 2, gripY, dotSize, 0, Math.PI * 2);
+                c.fill();
+            }
+        }
     }
 
     //  FPS CALCULATION FUNCTION -------------------------------------------------------------
