@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.21
+		<title>Slosh 2.22
         </title>
         <style>
 			body {font-family: monospace; 
@@ -12974,6 +12974,12 @@ window.addEventListener('DOMContentLoaded', function() {
             
             // STEP 6: Draw bunny (after hole, before band)
             if (this.rabbitHeight > 0) {
+                // Create clipping mask to hide bunny below halfway point of hat body
+                c.save();
+                c.beginPath();
+                c.rect(-hatWidth * 2, -hatHeight * 2, hatWidth * 4, hatHeight * 2.5); // Only show top half of hat
+                c.clip();
+                
                 const maxEarHeight = hatHeight * 1.2;
                 const earHeight = maxEarHeight;
                 const headRadius = hatWidth * 0.48;
@@ -13121,6 +13127,8 @@ window.addEventListener('DOMContentLoaded', function() {
                 c.beginPath();
                 c.arc(eyeSpacing - pupilOffsetX + pupilWidth * 0.3, eyeY + pupilOffsetY - pupilHeight * 0.6, headRadius * 0.04, 0, Math.PI * 2);
                 c.fill();
+                
+                c.restore(); // End bunny clipping mask
             }
             
             // Redraw hat body on top to occlude bunny below brim
@@ -18932,7 +18940,7 @@ window.addEventListener('DOMContentLoaded', function() {
                     cycloneHoldTimer = setInterval(swirl, 50);
                 }
             }
-        });
+        }, {passive: false});
 
         canvas.addEventListener('touchend', function(e) {
             if (cycloneHoldTimer) {
@@ -18955,7 +18963,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 Cyclone[0].pos.x = mouseX - cycloneDragOffset.x;
                 Cyclone[0].pos.y = mouseY - cycloneDragOffset.y;
             }
-        });
+        }, {passive: false});
     }
 
     function swirl() {
