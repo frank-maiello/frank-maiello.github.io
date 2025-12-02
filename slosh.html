@@ -11,501 +11,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.22
+		<title>Slosh 2.24
         </title>
-        <style>
-			body {font-family: monospace; 
-                font-size: 14px;
-                color: hsl(0, 0%, 60%);
-                text-align: center;
-                text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-                margin: 0;
-                padding-left: 10px;
-                padding-right: 10px;
-                padding-top: 10px;
-                /* Touch optimization */
-                -webkit-touch-callout: none;
-                -webkit-user-select: none;
-                -khtml-user-select: none;
-                -moz-user-select: none;
-                -ms-user-select: none;
-                user-select: none;
-                -webkit-tap-highlight-color: transparent;
-            }
-            /* FPS Counter */
-            .fps-counter {
-                position: absolute;
-                display: none; /* Hidden by default */
-                /* No fixed right/top/left/bottom here; set by JS for canvas-relative positioning */
-                white-space: nowrap;
-                text-align: right;
-                font-family: monospace;
-                font-size: 14px;
-                color: hsl(170, 75%, 50%);
-                background: hsla(0, 0%, 0%, 0.7);
-                padding: 4px 8px;
-                border-radius: 4px;
-                text-shadow: 1px 1px 2px hsl(0, 0%, 0%);
-                z-index: 1000;
-                pointer-events: none;
-            }
-            .fps-counter.visible {
-                display: block;
-            }
-        </style>
 	</head>
 
 <body> 
     <body style="background: linear-gradient(to bottom, hsl(0, 0%, 0%) 0%, hsl(195, 64%, 8%) 100%); background-attachment: fixed; margin-left: 0px;"> 
     <canvas id="myCanvas" style="border:0px solid hsl(0, 0%, 50%); margin-top: 5px; margin-left: 10px; display: block; cursor: default;"></canvas>
-    <div id="fpsCounter" class="fps-counter">--</div>
 <script>
-
-// Global layout orientation flag for canvas/menu logic and CORNER calculations
-var screenVertical = false;
-
-// Bumper configuration (previously controlled by sliders, now by mouse wheel)
-var bumperRows = 3;  // Default: 3 rows
-var bumperRadius = 0.040;  // Default: 40/1000 = 0.040
-
-// Fountain state cycling (0-4)
-var fountainState = 0; // 0=off, 1=normal, 2=sweep, 3=cw, 4=ccw
-
-// --- PRESET SAVE/LOAD LOGIC ---
-const PRESET_KEYS = [
-    'slosh_preset_1',
-    'slosh_preset_2',
-    'slosh_preset_3',
-    'slosh_preset_4',
-    'slosh_preset_5',
-    'slosh_preset_6',
-    'slosh_preset_7',
-    'slosh_preset_8',
-    'slosh_preset_9',
-    'slosh_preset_10',
-    'slosh_preset_11',
-    'slosh_preset_12',
-    'slosh_preset_13',
-    'slosh_preset_14',
-    'slosh_preset_15',
-    'slosh_preset_16',
-    'slosh_preset_17',
-    'slosh_preset_18',
-    'slosh_preset_19',
-    'slosh_preset_20'
-];
-
-// Default presets: captured at first DOMContentLoaded
-let DEFAULT_PRESETS = null;
-
-// List of all control IDs to save/restore
-const CONTROL_IDS = [
-    // Checkboxes (spawn controls now handled by ReSpawn menu)
-    'showPuckButton','flyingPuckButton','orbitButton','yinYangButton','showCyclePuckButton','showHeartButton','wormButton','showBumperEntry','showBlowerButton','doTracerButton',
-    // Tracer radios
-    'smallTracerButton','mediumTracerButton','bigTracerButton',
-    // Pause
-    'x'
-];
-
-function getControlState() {
-    const state = {};
-    // Save Heartbeat puck position (first Puck with .heartBeat === true)
-    if (typeof Puck !== 'undefined' && Array.isArray(Puck)) {
-        const heart = Puck.find(p => p && p.heartBeat === true);
-        if (heart && heart.pos) {
-            state._heartPuckPos = {x: heart.pos.x, y: heart.pos.y};
-        }
-        const cycle = Puck.find(p => p && p.cycle === true);
-        if (cycle && cycle.pos) {
-            state._cyclePuckPos = {x: cycle.pos.x, y: cycle.pos.y};
-        }
-    }
-    // HTML controls removed - all state is now in canvas menus
-    // Save particle quantity (square root of count)
-    state.ballsSlider = particlesMenuQuantity;
-    
-    // --- Save positions of all movable pucks ---
-    // Save Puck positions (array of {x, y})
-    if (typeof Puck !== 'undefined' && Array.isArray(Puck)) {
-        state._puckPositions = Puck.map(p => p && p.pos ? {x: p.pos.x, y: p.pos.y} : null);
-    }
-    // Save Blower positions (array of {x, y})
-    if (typeof Blower !== 'undefined' && Array.isArray(Blower)) {
-        state._blowerPositions = Blower.map(p => p && p.pos ? {x: p.pos.x, y: p.pos.y} : null);
-    }
-    // Save Hungrypuck positions (array of {x, y})
-    if (typeof Hungrypuck !== 'undefined' && Array.isArray(Hungrypuck)) {
-        state._hungrypuckPositions = Hungrypuck.map(p => p && p.pos ? {x: p.pos.x, y: p.pos.y} : null);
-    }
-    // Save MisterMister positions (array of {x, y})
-    if (typeof MisterMister !== 'undefined' && Array.isArray(MisterMister)) {
-        state._misterPositions = MisterMister.map(p => p && p.pos ? {x: p.pos.x, y: p.pos.y} : null);
-    }
-    // Save color wheel values
-    state._colorWheelHue = colorWheelHue;
-    state._colorWheelSat = colorWheelSat;
-    state._colorWheelLight = colorWheelLight;
-    state._colorWheelPersistence = colorWheelPersistence;
-    state._colorWheelVelMap = colorWheelVelMap;
-    state._colorWheelWipeLightness = colorWheelWipeLightness;
-    state._colorWheelCenterX = colorWheelCenterX;
-    state._colorWheelCenterY = colorWheelCenterY;
-    // Save physics menu values
-    state._physicsMenuRepulsionForce = physicsMenuRepulsionForce;
-    state._physicsMenuRepulsionDist = physicsMenuRepulsionDist;
-    state._physicsMenuRepulsionOn = physicsMenuRepulsionOn;
-    state._physicsMenuBallRest = physicsMenuBallRest;
-    state._physicsMenuBounceOn = physicsMenuBounceOn;
-    state._physicsMenuTime = physicsMenuTime;
-    state._physicsMenuSpeed = physicsMenuSpeed;
-    state._physicsMenuTau = physicsMenuTau;
-    state._physicsMenuCenterX = physicsMenuCenterX;
-    state._physicsMenuCenterY = physicsMenuCenterY;
-    state._physicsMenuSubsteps = physicsMenuSubsteps;
-    state._physicsMenuFpsOn = physicsMenuFpsOn;
-    
-    // Save walls menu values
-    state._wallsMenuCornerRadius = wallsMenuCornerRadius;
-    state._wallsMenuLeftWall = wallsMenuLeftWall;
-    state._wallsMenuRightWall = wallsMenuRightWall;
-    state._wallsMenuCeiling = wallsMenuCeiling;
-    state._wallsMenuFloor = wallsMenuFloor;
-    state._wallsMenuCenterX = wallsMenuCenterX;
-    state._wallsMenuCenterY = wallsMenuCenterY;
-    
-    return state;
-}
-
-function setControlState(state) {
-    // Restore Heartbeat puck position
-    if (state._heartPuckPos && typeof Puck !== 'undefined' && Array.isArray(Puck)) {
-        const heart = Puck.find(p => p && p.heartBeat === true);
-        if (heart && heart.pos) {
-            heart.pos.x = state._heartPuckPos.x;
-            heart.pos.y = state._heartPuckPos.y;
-        }
-    }
-    // Restore Cycle puck position
-    if (state._cyclePuckPos && typeof Puck !== 'undefined' && Array.isArray(Puck)) {
-        const cycle = Puck.find(p => p && p.cycle === true);
-        if (cycle && cycle.pos) {
-            cycle.pos.x = state._cyclePuckPos.x;
-            cycle.pos.y = state._cyclePuckPos.y;
-        }
-    }
-    // HTML controls removed - all state is now in canvas menus
-    // Particle count from preset (square root stored)
-    if ('ballsSlider' in state) {
-        particlesMenuQuantity = state['ballsSlider'];
-        adjustParticleCount(particlesMenuQuantity * particlesMenuQuantity);
-    }
-    if (typeof makeBalls === 'function') makeBalls();
-    // --- Ensure shower/fountain simulation state matches respawn menu after preset load ---
-    // Note: shower/fountain state is now controlled by respawnMenuSpawnType in the ReSpawn menu
-    // The doShower and doFountain variables are set automatically based on respawnMenuSpawnType
-    
-    // --- Restore positions of all movable pucks if present in state ---
-    // Restore Puck positions
-    if (state._puckPositions && typeof Puck !== 'undefined' && Array.isArray(Puck)) {
-        for (let i = 0; i < state._puckPositions.length && i < Puck.length; ++i) {
-            const pos = state._puckPositions[i];
-            if (pos && Puck[i] && Puck[i].pos) {
-                Puck[i].pos.x = pos.x;
-                Puck[i].pos.y = pos.y;
-            }
-        }
-    }
-    // Restore Blower positions
-    if (state._blowerPositions && typeof Blower !== 'undefined' && Array.isArray(Blower)) {
-        for (let i = 0; i < state._blowerPositions.length && i < Blower.length; ++i) {
-            const pos = state._blowerPositions[i];
-            if (pos && Blower[i] && Blower[i].pos) {
-                Blower[i].pos.x = pos.x;
-                Blower[i].pos.y = pos.y;
-            }
-        }
-    }
-    // Restore Hungrypuck positions
-    if (state._hungrypuckPositions && typeof Hungrypuck !== 'undefined' && Array.isArray(Hungrypuck)) {
-        for (let i = 0; i < state._hungrypuckPositions.length && i < Hungrypuck.length; ++i) {
-            const pos = state._hungrypuckPositions[i];
-            if (pos && Hungrypuck[i] && Hungrypuck[i].pos) {
-                Hungrypuck[i].pos.x = pos.x;
-                Hungrypuck[i].pos.y = pos.y;
-            }
-        }
-    }
-    // Restore MisterMister positions
-    if (state._misterPositions && typeof MisterMister !== 'undefined' && Array.isArray(MisterMister)) {
-        for (let i = 0; i < state._misterPositions.length && i < MisterMister.length; ++i) {
-            const pos = state._misterPositions[i];
-            if (pos && MisterMister[i] && MisterMister[i].pos) {
-                MisterMister[i].pos.x = pos.x;
-                MisterMister[i].pos.y = pos.y;
-            }
-        }
-    }
-    // Restore color wheel values
-    if (state._colorWheelHue !== undefined) {
-        colorWheelHue = state._colorWheelHue;
-        physProps.baseColor = colorWheelHue;
-    }
-    if (state._colorWheelSat !== undefined) {
-        colorWheelSat = state._colorWheelSat;
-        ballSaturation = colorWheelSat;
-    }
-    if (state._colorWheelLight !== undefined) {
-        colorWheelLight = state._colorWheelLight;
-        ballLightness = colorWheelLight;
-    }
-    if (state._colorWheelPersistence !== undefined) {
-        colorWheelPersistence = state._colorWheelPersistence;
-        persistence = colorWheelPersistence;
-    }
-    if (state._colorWheelVelMap !== undefined) {
-        colorWheelVelMap = state._colorWheelVelMap;
-        physProps.velColorMap = colorWheelVelMap;
-    }
-    if (state._colorWheelWipeLightness !== undefined) {
-        colorWheelWipeLightness = state._colorWheelWipeLightness;
-    }
-    if (state._colorWheelCenterX !== undefined) {
-        colorWheelCenterX = state._colorWheelCenterX;
-    }
-    if (state._colorWheelCenterY !== undefined) {
-        colorWheelCenterY = state._colorWheelCenterY;
-    }
-    // Restore physics menu values
-    if (state._physicsMenuRepulsionForce !== undefined) {
-        physicsMenuRepulsionForce = state._physicsMenuRepulsionForce;
-        physProps.repulsionForce = physicsMenuRepulsionForce / 10;
-    }
-    if (state._physicsMenuRepulsionDist !== undefined) {
-        physicsMenuRepulsionDist = state._physicsMenuRepulsionDist;
-        physProps.repulsionDist = physicsMenuRepulsionDist;
-    }
-    if (state._physicsMenuRepulsionOn !== undefined) {
-        physicsMenuRepulsionOn = state._physicsMenuRepulsionOn;
-        ballRepulsion = physicsMenuRepulsionOn;
-    }
-    if (state._physicsMenuBallRest !== undefined) {
-        physicsMenuBallRest = state._physicsMenuBallRest;
-        physProps.ballRest = physicsMenuBallRest / 100;
-    }
-    if (state._physicsMenuBounceOn !== undefined) {
-        physicsMenuBounceOn = state._physicsMenuBounceOn;
-    }
-    if (state._physicsMenuTime !== undefined) {
-        physicsMenuTime = state._physicsMenuTime;
-        // Map slider to time scale
-        physProps.timeScale = 0.25 + ((physicsMenuTime - 500) / 500) * 1.75;
-        physProps.dt = (1 / (60 * physProps.substeps)) * physProps.timeScale;
-    }
-    if (state._physicsMenuSpeed !== undefined) {
-        physicsMenuSpeed = state._physicsMenuSpeed;
-        physProps.maxSpeed = 0.1 * physicsMenuSpeed;
-    }
-    if (state._physicsMenuTau !== undefined) {
-        physicsMenuTau = state._physicsMenuTau;
-        physProps.tau = physicsMenuTau;
-        gummiHeadingTau = physProps.tau;
-    }
-    if (state._physicsMenuCenterX !== undefined) {
-        physicsMenuCenterX = state._physicsMenuCenterX;
-    }
-    if (state._physicsMenuCenterY !== undefined) {
-        physicsMenuCenterY = state._physicsMenuCenterY;
-    }
-    if (state._physicsMenuSubsteps !== undefined) {
-        physicsMenuSubsteps = state._physicsMenuSubsteps;
-        updateSubsteps(physicsMenuSubsteps);
-    }
-    if (state._physicsMenuFpsOn !== undefined) {
-        physicsMenuFpsOn = state._physicsMenuFpsOn;
-        if (physicsMenuFpsOn) {
-            startFPSCounter();
-        } else {
-            stopFPSCounter();
-        }
-    }
-    
-    // Restore walls menu values
-    if (state._wallsMenuCornerRadius !== undefined) {
-        wallsMenuCornerRadius = state._wallsMenuCornerRadius;
-        cornerRad = wallsMenuCornerRadius;
-    }
-    if (state._wallsMenuLeftWall !== undefined) {
-        wallsMenuLeftWall = state._wallsMenuLeftWall;
-        doLeftWall = wallsMenuLeftWall;
-    }
-    if (state._wallsMenuRightWall !== undefined) {
-        wallsMenuRightWall = state._wallsMenuRightWall;
-        doRightWall = wallsMenuRightWall;
-    }
-    if (state._wallsMenuCeiling !== undefined) {
-        wallsMenuCeiling = state._wallsMenuCeiling;
-        doCeiling = wallsMenuCeiling;
-    }
-    if (state._wallsMenuFloor !== undefined) {
-        wallsMenuFloor = state._wallsMenuFloor;
-        doFloor = wallsMenuFloor;
-    }
-    if (state._wallsMenuCenterX !== undefined) {
-        wallsMenuCenterX = state._wallsMenuCenterX;
-    }
-    if (state._wallsMenuCenterY !== undefined) {
-        wallsMenuCenterY = state._wallsMenuCenterY;
-    }
-}
-
-function savePreset(idx) {
-    const state = getControlState();
-    try {
-        localStorage.setItem(PRESET_KEYS[idx], JSON.stringify(state));
-    } catch (e) {
-        // Fallback to cookies if localStorage fails
-        const cookieStr = PRESET_KEYS[idx] + '=' + encodeURIComponent(JSON.stringify(state)) + ';path=/;max-age=31536000';
-        document.cookie = cookieStr;
-        setTimeout(() => {
-            const cookies = document.cookie;
-            if (!cookies.includes(PRESET_KEYS[idx])) {
-                alert('Warning: Preset could not be saved. Your browser may be blocking cookies and localStorage.');
-            }
-        }, 100);
-    }
-}
-
-function loadPreset(idx) {
-    const key = PRESET_KEYS[idx];
-    let val = null;
-    // Try localStorage first
-    try {
-        val = localStorage.getItem(key);
-    } catch (e) {
-        val = null;
-    }
-    // Fallback to cookies if not found
-    if (!val) {
-        const cookies = document.cookie.split(';');
-        for (const c of cookies) {
-            const trimmed = c.trim();
-            if (trimmed.startsWith(key + '=')) {
-                val = trimmed.substring(key.length + 1);
-                try {
-                    val = decodeURIComponent(val);
-                } catch (e) {}
-                break;
-            }
-        }
-    }
-    if (val) {
-        try {
-            const state = JSON.parse(val);
-            setControlState(state);
-        } catch (e) { alert('Failed to load preset: ' + e); }
-    } else {
-        alert('No preset saved in this slot.');
-    }
-}
-
-// Preset buttons removed - preset functionality now in main menu
-function setupPresetButtons() {
-    // HTML buttons removed - presets now accessed through main menu
-}
-
-// Add a visual feedback style for save
-const style = document.createElement('style');
-style.textContent = `.preset-saved { box-shadow: 0 0 0 3px hsl(108, 80%, 70%) !important; }`;
-document.head.appendChild(style);
-
-
-// On DOMContentLoaded, capture current state as defaults and setup buttons
-window.addEventListener('DOMContentLoaded', function() {
-    // Setup buttons first
-    setupPresetButtons();
-    
-    // Load default logo image automatically on startup
-    loadDefaultLayoutImage();
-});
-
-    //  FPS COUNTER VARIABLES ----------------------------------------------------------------
-    let fpsCounter = {
-        lastTime: performance.now(),
-        frameCount: 0,
-        frameTimes: [],
-        maxSamples: 60, // Use full second of frames for jitter detection
-        displayFps: 0,
-        smoothedFps: 60, // Start at 60 fps
-        updateCounter: 0,
-        updateInterval: 10, // Update display every 10 frames
-        smoothingFactor: 0.1, // Exponential smoothing (0.05 = more damped)
-        jitterThreshold: 5, // FPS variance threshold to trigger yellow
-        recentFpsValues: [] // Track recent smoothed values for jitter detection
-    };
-
-    // Gummi Bear image for ball rendering (scaled to ball radius)
-    var gummiImage = new Image();
-    var gummiReady = false;
-    var doGummi = false; // fourth ball rendering style
-    var doArcs = false; // bent arc rendering style
-    // Faster response = smaller tau; controls heading smoothing speed (seconds)
-    var gummiHeadingTau = 0.0;
-    // Orientation offset so the TOP of the image leads along the velocity vector
-    var gummiHeadingOffset = Math.PI / 2;
-    
-    // Offscreen roket canvas for particle rendering style
-    var offscreenRoketCanvas = document.createElement('canvas');
-    var roketCtx = null;
-    
-    // Tracer variables for particle tracking
-    var doTracer = false;
-    var doSmallTracer = false;
-    var doMediumTracer = false;
-    var doBigTracer = false;
-    gummiImage.onload = function() { gummiReady = true; };
-    // Image file is in the same folder
-    gummiImage.src = 'gummibear_bw.png';
-
-    var aeolusImage = new Image();
-    var aeolusReady = false;
-    aeolusImage.onload = function() { aeolusReady = true; };
-    aeolusImage.src = 'aeolus.png';
-
-    var pepeImage = new Image();
-    var pepeReady = false;
-    pepeImage.onload = function() { pepeReady = true; };
-    pepeImage.src = 'pepe.png';
-
-    var pepeFaceImage = new Image();
-    var pepeFaceReady = false;
-    pepeFaceImage.onload = function() { pepeFaceReady = true; };
-    pepeFaceImage.src = 'pepe-face.png';
-
-    var pathLogoImage = new Image();
-    var pathLogoReady = false;
-    pathLogoImage.onload = function() { pathLogoReady = true; };
-    pathLogoImage.src = 'path-logo2.png';
-
-    var sBahnLogoImage = new Image();
-    var sBahnLogoReady = false;
-    sBahnLogoImage.onload = function() { sBahnLogoReady = true; };
-    sBahnLogoImage.src = 's-bahn-logo.svg';
-
-    var uBahnLogoImage = new Image();
-    var uBahnLogoReady = false;
-    uBahnLogoImage.onload = function() { uBahnLogoReady = true; };
-    uBahnLogoImage.src = 'u-bahn-logo.svg';
-
-    var athensMetroLogoImage = new Image();
-    var athensMetroLogoReady = false;
-    athensMetroLogoImage.onload = function() { athensMetroLogoReady = true; };
-    athensMetroLogoImage.src = 'athensmetro-logo.png';
-
-    var isapLogoImage = new Image();
-    var isapLogoReady = false;
-    isapLogoImage.onload = function() { isapLogoReady = true; };
-    isapLogoImage.src = 'isap-logo.png';
 
     //  CANVAS SETUP AND SCALING --------------------------------------------------------------
     canvas = document.getElementById("myCanvas");
@@ -705,13 +218,457 @@ window.addEventListener('DOMContentLoaded', function() {
         if (_resizeDebounce) clearTimeout(_resizeDebounce);
         _resizeDebounce = setTimeout(() => {
             handleResizeRestart();
-            positionFpsCounter(); // Reposition FPS counter after resize
         }, 150); // debounce to avoid rapid churn
     });
+
+    // Global layout orientation flag for canvas/menu logic and CORNER calculations
+    var screenVertical = false;
+
+    // List of all control IDs to save/restore
+    const CONTROL_IDS = [
+        // Checkboxes (spawn controls now handled by ReSpawn menu)
+        'showPuckButton','flyingPuckButton','orbitButton','yinYangButton',
+        'showCyclePuckButton','showHeartButton','wormButton','showBumperEntry',
+        'showBlowerButton','doTracerButton',
+        // Tracer radios
+        'smallTracerButton','mediumTracerButton','bigTracerButton',
+        // Pause
+        'x'
+    ];
+
+    function getControlState() {
+        const state = {};
+        // Save Heartbeat puck position (first Puck with .heartBeat === true)
+        if (typeof Puck !== 'undefined' && Array.isArray(Puck)) {
+            const heart = Puck.find(p => p && p.heartBeat === true);
+            if (heart && heart.pos) {
+                state._heartPuckPos = {x: heart.pos.x, y: heart.pos.y};
+            }
+            const cycle = Puck.find(p => p && p.cycle === true);
+            if (cycle && cycle.pos) {
+                state._cyclePuckPos = {x: cycle.pos.x, y: cycle.pos.y};
+            }
+        }
+        // HTML controls removed - all state is now in canvas menus
+        // Save particle quantity (square root of count)
+        state.ballsSlider = particlesMenuQuantity;
+        
+        // --- Save positions of all movable pucks ---
+        // Save Puck positions (array of {x, y})
+        if (typeof Puck !== 'undefined' && Array.isArray(Puck)) {
+            state._puckPositions = Puck.map(p => p && p.pos ? {x: p.pos.x, y: p.pos.y} : null);
+        }
+        // Save Blower positions (array of {x, y})
+        if (typeof Blower !== 'undefined' && Array.isArray(Blower)) {
+            state._blowerPositions = Blower.map(p => p && p.pos ? {x: p.pos.x, y: p.pos.y} : null);
+        }
+        // Save Hungrypuck positions (array of {x, y})
+        if (typeof Hungrypuck !== 'undefined' && Array.isArray(Hungrypuck)) {
+            state._hungrypuckPositions = Hungrypuck.map(p => p && p.pos ? {x: p.pos.x, y: p.pos.y} : null);
+        }
+        // Save MisterMister positions (array of {x, y})
+        if (typeof MisterMister !== 'undefined' && Array.isArray(MisterMister)) {
+            state._misterPositions = MisterMister.map(p => p && p.pos ? {x: p.pos.x, y: p.pos.y} : null);
+        }
+        // Save color wheel values
+        state._colorWheelHue = colorWheelHue;
+        state._colorWheelSat = colorWheelSat;
+        state._colorWheelLight = colorWheelLight;
+        state._colorWheelPersistence = colorWheelPersistence;
+        state._colorWheelVelMap = colorWheelVelMap;
+        state._colorWheelWipeLightness = colorWheelWipeLightness;
+        state._colorWheelCenterX = colorWheelCenterX;
+        state._colorWheelCenterY = colorWheelCenterY;
+        // Save physics menu values
+        state._physicsMenuRepulsionForce = physicsMenuRepulsionForce;
+        state._physicsMenuRepulsionDist = physicsMenuRepulsionDist;
+        state._physicsMenuRepulsionOn = physicsMenuRepulsionOn;
+        state._physicsMenuBallRest = physicsMenuBallRest;
+        state._physicsMenuBounceOn = physicsMenuBounceOn;
+        state._physicsMenuTime = physicsMenuTime;
+        state._physicsMenuSpeed = physicsMenuSpeed;
+        state._physicsMenuTau = physicsMenuTau;
+        state._physicsMenuCenterX = physicsMenuCenterX;
+        state._physicsMenuCenterY = physicsMenuCenterY;
+        state._physicsMenuSubsteps = physicsMenuSubsteps;
+        state._physicsMenuFpsOn = physicsMenuFpsOn;
+        
+        // Save walls menu values
+        state._wallsMenuCornerRadius = wallsMenuCornerRadius;
+        state._wallsMenuLeftWall = wallsMenuLeftWall;
+        state._wallsMenuRightWall = wallsMenuRightWall;
+        state._wallsMenuCeiling = wallsMenuCeiling;
+        state._wallsMenuFloor = wallsMenuFloor;
+        state._wallsMenuCenterX = wallsMenuCenterX;
+        state._wallsMenuCenterY = wallsMenuCenterY;
+        
+        return state;
+    }
+
+    function setControlState(state) {
+        // Restore Heartbeat puck position
+        if (state._heartPuckPos && typeof Puck !== 'undefined' && Array.isArray(Puck)) {
+            const heart = Puck.find(p => p && p.heartBeat === true);
+            if (heart && heart.pos) {
+                heart.pos.x = state._heartPuckPos.x;
+                heart.pos.y = state._heartPuckPos.y;
+            }
+        }
+        // Restore Cycle puck position
+        if (state._cyclePuckPos && typeof Puck !== 'undefined' && Array.isArray(Puck)) {
+            const cycle = Puck.find(p => p && p.cycle === true);
+            if (cycle && cycle.pos) {
+                cycle.pos.x = state._cyclePuckPos.x;
+                cycle.pos.y = state._cyclePuckPos.y;
+            }
+        }
+        // HTML controls removed - all state is now in canvas menus
+        // Particle count from preset (square root stored)
+        if ('ballsSlider' in state) {
+            particlesMenuQuantity = state['ballsSlider'];
+            adjustParticleCount(particlesMenuQuantity * particlesMenuQuantity);
+        }
+        if (typeof makeBalls === 'function') makeBalls();
+        // --- Ensure shower/fountain simulation state matches respawn menu after preset load ---
+        // Note: shower/fountain state is now controlled by respawnMenuSpawnType in the ReSpawn menu
+        // The doShower and doFountain variables are set automatically based on respawnMenuSpawnType
+        
+        // --- Restore positions of all movable pucks if present in state ---
+        // Restore Puck positions
+        if (state._puckPositions && typeof Puck !== 'undefined' && Array.isArray(Puck)) {
+            for (let i = 0; i < state._puckPositions.length && i < Puck.length; ++i) {
+                const pos = state._puckPositions[i];
+                if (pos && Puck[i] && Puck[i].pos) {
+                    Puck[i].pos.x = pos.x;
+                    Puck[i].pos.y = pos.y;
+                }
+            }
+        }
+        // Restore Blower positions
+        if (state._blowerPositions && typeof Blower !== 'undefined' && Array.isArray(Blower)) {
+            for (let i = 0; i < state._blowerPositions.length && i < Blower.length; ++i) {
+                const pos = state._blowerPositions[i];
+                if (pos && Blower[i] && Blower[i].pos) {
+                    Blower[i].pos.x = pos.x;
+                    Blower[i].pos.y = pos.y;
+                }
+            }
+        }
+        // Restore Hungrypuck positions
+        if (state._hungrypuckPositions && typeof Hungrypuck !== 'undefined' && Array.isArray(Hungrypuck)) {
+            for (let i = 0; i < state._hungrypuckPositions.length && i < Hungrypuck.length; ++i) {
+                const pos = state._hungrypuckPositions[i];
+                if (pos && Hungrypuck[i] && Hungrypuck[i].pos) {
+                    Hungrypuck[i].pos.x = pos.x;
+                    Hungrypuck[i].pos.y = pos.y;
+                }
+            }
+        }
+        // Restore MisterMister positions
+        if (state._misterPositions && typeof MisterMister !== 'undefined' && Array.isArray(MisterMister)) {
+            for (let i = 0; i < state._misterPositions.length && i < MisterMister.length; ++i) {
+                const pos = state._misterPositions[i];
+                if (pos && MisterMister[i] && MisterMister[i].pos) {
+                    MisterMister[i].pos.x = pos.x;
+                    MisterMister[i].pos.y = pos.y;
+                }
+            }
+        }
+        // Restore color wheel values
+        if (state._colorWheelHue !== undefined) {
+            colorWheelHue = state._colorWheelHue;
+            physProps.baseColor = colorWheelHue;
+        }
+        if (state._colorWheelSat !== undefined) {
+            colorWheelSat = state._colorWheelSat;
+            ballSaturation = colorWheelSat;
+        }
+        if (state._colorWheelLight !== undefined) {
+            colorWheelLight = state._colorWheelLight;
+            ballLightness = colorWheelLight;
+        }
+        if (state._colorWheelPersistence !== undefined) {
+            colorWheelPersistence = state._colorWheelPersistence;
+            persistence = colorWheelPersistence;
+        }
+        if (state._colorWheelVelMap !== undefined) {
+            colorWheelVelMap = state._colorWheelVelMap;
+            physProps.velColorMap = colorWheelVelMap;
+        }
+        if (state._colorWheelWipeLightness !== undefined) {
+            colorWheelWipeLightness = state._colorWheelWipeLightness;
+        }
+        if (state._colorWheelCenterX !== undefined) {
+            colorWheelCenterX = state._colorWheelCenterX;
+        }
+        if (state._colorWheelCenterY !== undefined) {
+            colorWheelCenterY = state._colorWheelCenterY;
+        }
+        // Restore physics menu values
+        if (state._physicsMenuRepulsionForce !== undefined) {
+            physicsMenuRepulsionForce = state._physicsMenuRepulsionForce;
+            physProps.repulsionForce = physicsMenuRepulsionForce / 10;
+        }
+        if (state._physicsMenuRepulsionDist !== undefined) {
+            physicsMenuRepulsionDist = state._physicsMenuRepulsionDist;
+            physProps.repulsionDist = physicsMenuRepulsionDist;
+        }
+        if (state._physicsMenuRepulsionOn !== undefined) {
+            physicsMenuRepulsionOn = state._physicsMenuRepulsionOn;
+            ballRepulsion = physicsMenuRepulsionOn;
+        }
+        if (state._physicsMenuBallRest !== undefined) {
+            physicsMenuBallRest = state._physicsMenuBallRest;
+            physProps.ballRest = physicsMenuBallRest / 100;
+        }
+        if (state._physicsMenuBounceOn !== undefined) {
+            physicsMenuBounceOn = state._physicsMenuBounceOn;
+        }
+        if (state._physicsMenuTime !== undefined) {
+            physicsMenuTime = state._physicsMenuTime;
+            // Map slider to time scale
+            physProps.timeScale = 0.25 + ((physicsMenuTime - 500) / 500) * 1.75;
+            physProps.dt = (1 / (60 * physProps.substeps)) * physProps.timeScale;
+        }
+        if (state._physicsMenuSpeed !== undefined) {
+            physicsMenuSpeed = state._physicsMenuSpeed;
+            physProps.maxSpeed = 0.1 * physicsMenuSpeed;
+        }
+        if (state._physicsMenuTau !== undefined) {
+            physicsMenuTau = state._physicsMenuTau;
+            physProps.tau = physicsMenuTau;
+            gummiHeadingTau = physProps.tau;
+        }
+        if (state._physicsMenuCenterX !== undefined) {
+            physicsMenuCenterX = state._physicsMenuCenterX;
+        }
+        if (state._physicsMenuCenterY !== undefined) {
+            physicsMenuCenterY = state._physicsMenuCenterY;
+        }
+        if (state._physicsMenuSubsteps !== undefined) {
+            physicsMenuSubsteps = state._physicsMenuSubsteps;
+            updateSubsteps(physicsMenuSubsteps);
+        }
+        if (state._physicsMenuFpsOn !== undefined) {
+            physicsMenuFpsOn = state._physicsMenuFpsOn;
+            if (physicsMenuFpsOn) {
+                startFPSCounter();
+            } else {
+                stopFPSCounter();
+            }
+        }
+        
+        // Restore walls menu values
+        if (state._wallsMenuCornerRadius !== undefined) {
+            wallsMenuCornerRadius = state._wallsMenuCornerRadius;
+            cornerRad = wallsMenuCornerRadius;
+        }
+        if (state._wallsMenuLeftWall !== undefined) {
+            wallsMenuLeftWall = state._wallsMenuLeftWall;
+            doLeftWall = wallsMenuLeftWall;
+        }
+        if (state._wallsMenuRightWall !== undefined) {
+            wallsMenuRightWall = state._wallsMenuRightWall;
+            doRightWall = wallsMenuRightWall;
+        }
+        if (state._wallsMenuCeiling !== undefined) {
+            wallsMenuCeiling = state._wallsMenuCeiling;
+            doCeiling = wallsMenuCeiling;
+        }
+        if (state._wallsMenuFloor !== undefined) {
+            wallsMenuFloor = state._wallsMenuFloor;
+            doFloor = wallsMenuFloor;
+        }
+        if (state._wallsMenuCenterX !== undefined) {
+            wallsMenuCenterX = state._wallsMenuCenterX;
+        }
+        if (state._wallsMenuCenterY !== undefined) {
+            wallsMenuCenterY = state._wallsMenuCenterY;
+        }
+    }
+
+    // --- PRESET SAVE/LOAD LOGIC ---
+    const PRESET_KEYS = [
+        'slosh_preset_1',
+        'slosh_preset_2',
+        'slosh_preset_3',
+        'slosh_preset_4',
+        'slosh_preset_5',
+        'slosh_preset_6',
+        'slosh_preset_7',
+        'slosh_preset_8',
+        'slosh_preset_9',
+        'slosh_preset_10',
+        'slosh_preset_11',
+        'slosh_preset_12',
+        'slosh_preset_13',
+        'slosh_preset_14',
+        'slosh_preset_15',
+        'slosh_preset_16',
+        'slosh_preset_17',
+        'slosh_preset_18',
+        'slosh_preset_19',
+        'slosh_preset_20'
+    ];
+
+    // Default presets: captured at first DOMContentLoaded
+    let DEFAULT_PRESETS = null;
+
+    function savePreset(idx) {
+        const state = getControlState();
+        try {
+            localStorage.setItem(PRESET_KEYS[idx], JSON.stringify(state));
+        } catch (e) {
+            // Fallback to cookies if localStorage fails
+            const cookieStr = PRESET_KEYS[idx] + '=' + encodeURIComponent(JSON.stringify(state)) + ';path=/;max-age=31536000';
+            document.cookie = cookieStr;
+            setTimeout(() => {
+                const cookies = document.cookie;
+                if (!cookies.includes(PRESET_KEYS[idx])) {
+                    alert('Warning: Preset could not be saved. Your browser may be blocking cookies and localStorage.');
+                }
+            }, 100);
+        }
+    }
+
+    function loadPreset(idx) {
+        const key = PRESET_KEYS[idx];
+        let val = null;
+        // Try localStorage first
+        try {
+            val = localStorage.getItem(key);
+        } catch (e) {
+            val = null;
+        }
+        // Fallback to cookies if not found
+        if (!val) {
+            const cookies = document.cookie.split(';');
+            for (const c of cookies) {
+                const trimmed = c.trim();
+                if (trimmed.startsWith(key + '=')) {
+                    val = trimmed.substring(key.length + 1);
+                    try {
+                        val = decodeURIComponent(val);
+                    } catch (e) {}
+                    break;
+                }
+            }
+        }
+        if (val) {
+            try {
+                const state = JSON.parse(val);
+                setControlState(state);
+            } catch (e) { alert('Failed to load preset: ' + e); }
+        } else {
+            alert('No preset saved in this slot.');
+        }
+    }
+
+    // Preset buttons removed - preset functionality now in main menu
+    function setupPresetButtons() {
+        // HTML buttons removed - presets now accessed through main menu
+    }
+
+    // Add a visual feedback style for save
+    const style = document.createElement('style');
+    style.textContent = `.preset-saved { box-shadow: 0 0 0 3px hsl(108, 80%, 70%) !important; }`;
+    document.head.appendChild(style);
+
+
+    // On DOMContentLoaded, capture current state as defaults and setup buttons
+    window.addEventListener('DOMContentLoaded', function() {
+        // Setup buttons first
+        setupPresetButtons();
+        
+        // Load default logo image automatically on startup
+        loadDefaultLayoutImage();
+    });
+
+    //  FPS COUNTER VARIABLES ----------------------------------------------------------------
+    let fpsCounter = {
+        lastTime: performance.now(),
+        frameCount: 0,
+        frameTimes: [],
+        maxSamples: 60, // Use full second of frames for jitter detection
+        displayFps: 0,
+        smoothedFps: 60, // Start at 60 fps
+        updateCounter: 0,
+        updateInterval: 10, // Update display every 10 frames
+        smoothingFactor: 0.1, // Exponential smoothing (0.05 = more damped)
+        jitterThreshold: 5, // FPS variance threshold to trigger yellow
+        recentFpsValues: [], // Track recent smoothed values for jitter detection
+        color: 'hsl(120, 100%, 40%)' // Default green color
+    };
+
+    // Gummi Bear image for ball rendering (scaled to ball radius)
+    var gummiImage = new Image();
+    var gummiReady = false;
+    var doGummi = false; // fourth ball rendering style
+    var doArcs = false; // bent arc rendering style
+    // Faster response = smaller tau; controls heading smoothing speed (seconds)
+    var gummiHeadingTau = 0.0;
+    // Orientation offset so the TOP of the image leads along the velocity vector
+    var gummiHeadingOffset = Math.PI / 2;
+    
+    // Offscreen roket canvas for particle rendering style
+    var offscreenRoketCanvas = document.createElement('canvas');
+    var roketCtx = null;
+    
+    // Tracer variables for particle tracking
+    var doTracer = false;
+    var doSmallTracer = false;
+    var doMediumTracer = false;
+    var doBigTracer = false;
+    gummiImage.onload = function() { gummiReady = true; };
+    // Image file is in the same folder
+    gummiImage.src = 'gummibear_bw.png';
+
+    var aeolusImage = new Image();
+    var aeolusReady = false;
+    aeolusImage.onload = function() { aeolusReady = true; };
+    aeolusImage.src = 'aeolus.png';
+
+    var pepeImage = new Image();
+    var pepeReady = false;
+    pepeImage.onload = function() { pepeReady = true; };
+    pepeImage.src = 'pepe.png';
+
+    var pepeFaceImage = new Image();
+    var pepeFaceReady = false;
+    pepeFaceImage.onload = function() { pepeFaceReady = true; };
+    pepeFaceImage.src = 'pepe-face.png';
+
+    var pathLogoImage = new Image();
+    var pathLogoReady = false;
+    pathLogoImage.onload = function() { pathLogoReady = true; };
+    pathLogoImage.src = 'path-logo2.png';
+
+    var sBahnLogoImage = new Image();
+    var sBahnLogoReady = false;
+    sBahnLogoImage.onload = function() { sBahnLogoReady = true; };
+    sBahnLogoImage.src = 's-bahn-logo.svg';
+
+    var uBahnLogoImage = new Image();
+    var uBahnLogoReady = false;
+    uBahnLogoImage.onload = function() { uBahnLogoReady = true; };
+    uBahnLogoImage.src = 'u-bahn-logo.svg';
+
+    var athensMetroLogoImage = new Image();
+    var athensMetroLogoReady = false;
+    athensMetroLogoImage.onload = function() { athensMetroLogoReady = true; };
+    athensMetroLogoImage.src = 'athensmetro-logo.png';
+
+    var isapLogoImage = new Image();
+    var isapLogoReady = false;
+    isapLogoImage.onload = function() { isapLogoReady = true; };
+    isapLogoImage.src = 'isap-logo.png';
+
+    
     // Gradient used to fill canvas corners/masks to match page background
     let cornerFillGradient = null;
     // Tunables
     const heartResumeDelayMs = 1500; // Pause after release/toggle before heartbeat resumes
+    
     function updateCornerFillGradient() {
         // Align the canvas gradient with the page's background gradient (to bottom)
         // using viewport-relative coordinates so the transition is seamless.
@@ -724,6 +681,7 @@ window.addEventListener('DOMContentLoaded', function() {
         g.addColorStop(1.0, 'hsl(195, 64%, 8%)');
         cornerFillGradient = g;
     }
+
     // Initialize gradient now
     updateCornerFillGradient();
     // Keep it updated on scroll (viewport relative) for a fixed page background
@@ -1056,14 +1014,14 @@ window.addEventListener('DOMContentLoaded', function() {
     // Default relative menu positions (as percentages of canvas width/height)
     // Set these values after positioning menus where you want them
     var defaultMenuPositions = {
-        physics: { x: 0.3347305389221557, y: 0.49340285815231294 },
-        particles: { x: 0.22237619002832038, y: 0.3068240625649903 },
-        gravity: { x: 0.41377245508982036, y: 0.2829643888354187 },
-        respawn: { x: 0.5718562874251497, y: 0.2897016361886429 },
+        particles: { x: 0.22237619002832038, y: 0.30 },
+        physics: { x: 0.30, y: 0.52 },
+        gravity: { x: 0.38, y: 0.4 },
+        respawn: { x: 0.53, y: 0.4 },
         walls: { x: 0.5, y: 0.6246390760346487 },
-        colorWheel: { x: 0.6491017964071857, y: 0.717516843118383 },
-        toys: { x: 0.7658682634730539, y: 0.352261790182868 },
-        presets: { x: 0.8, y: 0.5 }
+        colorWheel: { x: 0.62, y: 0.50 },
+        toys: { x: 0.7, y: 0.45 },
+        presets: { x: 0.85, y: 0.4 }
     };
     
     // Function to capture current menu positions as relative coordinates
@@ -2735,7 +2693,7 @@ window.addEventListener('DOMContentLoaded', function() {
         
         // Draw FPS text (brighter when on)
         ctx.fillStyle = physicsMenuFpsOn ? 'hsl(170, 75%, 70%)' : 'hsl(0, 0%, 50%)';
-        ctx.font = 'bold 14px monospace';
+        ctx.font = 'bold 12px monospace';
         ctx.textAlign = 'center';
         ctx.fillText('FPS', fpsButtonX + fpsButtonWidth/2, fpsButtonY + 1);
         
@@ -3962,7 +3920,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 { id: 'showBlowerButton', icon: '', image: 'aeolus.png', checked: blowerState > 0, color: 'hsl(190, 85%, 55%)' },
                 { id: 'showImploderButton', icon: '\u{1F9F2}', checked: typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active, color: 'hsl(320, 85%, 55%)' },
                 { id: 'showStinkerButton', icon: '', image: 'pepe-face.png', checked: typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active, color: 'hsl(120, 85%, 55%)' },
-                { id: 'showCycloneButton', icon: '', unchecked: typeof Cyclone !== 'undefined' && Cyclone.length > 0 && Cyclone[0].active, color: 'hsl(180, 85%, 55%)', customDraw: true },
+                { id: 'showCycloneButton', icon: '', checked: typeof Cyclone === 'undefined' || Cyclone.length === 0 || Cyclone[0].active, color: 'hsl(180, 85%, 55%)', customDraw: true },
                 { id: 'showMagicSetButton', icon: '', checked: typeof MagicSet !== 'undefined' && MagicSet.length > 0, color: 'hsl(280, 85%, 65%)', customDraw: true },
                 null,  // Empty slot
                 null  // Empty slot
@@ -6846,10 +6804,7 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // FPS toggle logic removed - now handled in physics menu button
-    window.addEventListener('DOMContentLoaded', function() {
-        // FPS counter initialization moved to physics menu handling
-    });
+    
     //  end get world properties from sliders ----------
 
     //  MOUSE STUFF AND TOUCH STUFF  -------------------------------------------------------------------
@@ -6965,7 +6920,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Perpendicular distance from wand axis
         const perpDist = Math.abs(wandDx * (-wandAxisY) + wandDy * wandAxisX);
         const shaftWidth = magic.wandWidth * 10; // Grab width around shaft
-        const isOnShaft = projectionDist >= 0 && projectionDist <= magic.wandLength * 0.9 && perpDist < shaftWidth;
+        const isOnShaft = projectionDist >= -0.05 * magic.wandLength && projectionDist <= magic.wandLength * 1.05 && perpDist < shaftWidth;
         
         if (starDist < starRadius || isOnShaft) {
             // Start wand dragging and dispensing
@@ -10797,7 +10752,7 @@ window.addEventListener('DOMContentLoaded', function() {
         // Perpendicular distance from wand axis
         const perpDist = Math.abs(wandDx * (-wandAxisY) + wandDy * wandAxisX);
         const shaftWidth = magic.wandWidth * 10; // Grab width around shaft
-        const isOnShaft = projectionDist >= 0 && projectionDist <= magic.wandLength * 0.9 && perpDist < shaftWidth;
+        const isOnShaft = projectionDist >= -0.05 * magic.wandLength && projectionDist <= magic.wandLength * 1.05 && perpDist < shaftWidth;
         
         if (starDist < starRadius || isOnShaft) {
             // Start wand dragging and dispensing
@@ -12278,33 +12233,15 @@ window.addEventListener('DOMContentLoaded', function() {
         }
 
     function startFPSCounter() {
-        const fpsElement = document.getElementById('fpsCounter');
-        if (fpsElement) {
-            fpsElement.classList.add('visible');
-            // Set proper initial content to ensure correct width calculation
-            fpsElement.textContent = '60 fps';
-            // Force reflow to ensure element dimensions are calculated
-            fpsElement.offsetHeight;
-            // Position after element has proper content and dimensions
-            requestAnimationFrame(() => {
-                positionFpsCounter();
-            });
-        }
+        // FPS counter now drawn directly on canvas
     }
     
     function stopFPSCounter() {
-        const fpsElement = document.getElementById('fpsCounter');
-        if (fpsElement) {
-            fpsElement.classList.remove('visible');
-        }
+        // FPS counter now drawn directly on canvas
     }
     
     function toggleFPS() {
-        if (physicsMenuFpsOn) {
-            startFPSCounter();
-        } else {
-            stopFPSCounter();
-        }
+        // FPS counter now drawn directly on canvas
     }
 
 
@@ -12544,6 +12481,13 @@ window.addEventListener('DOMContentLoaded', function() {
         sprinklerSpeed = 0.0001 * 15;
         respawnDir = 0;
 
+        // Bumper configuration (previously controlled by sliders, now by mouse wheel)
+        bumperRows = 3;  // Default: 3 rows
+        bumperRadius = 0.040;  // Default: 40/1000 = 0.040
+
+        // Fountain state cycling (0-4)
+        fountainState = 0; // 0=off, 1=normal, 2=sweep, 3=cw, 4=ccw
+
        
 
         // Direction state for orbit and yin-yang (1 = normal, -1 = reverse)
@@ -12602,10 +12546,9 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Splode timing (ms): delay between each ball's impulse
-    const SPL0DE_DELAY_MS = 1; // tune this to control pacing
     // Apply outward impulse to all balls with a small staggered delay per index
     function delayedSplode() {
+        const SPL0DE_DELAY_MS = 1; // tune this to control pacing
         const cx = 0.5 * simWidth;
         const cy = 0.5 * simHeight;
         // Base impulse magnitude (scaled like before)
@@ -12768,13 +12711,22 @@ window.addEventListener('DOMContentLoaded', function() {
                 // Move back to draw wand from origin
                 c.translate(-starOffset, 0);
 
-            // draw wand shaft background
+            // draw black wand shaft background
             c.fillStyle = 'hsl(0, 0%, 0%)';
             c.fillRect(0, -2 * this.wandWidth / 2, this.wandLength, 2 * this.wandWidth);
-            // draw wand shaft
+            // DRAW BLACK END BACKGROUND
+            c.beginPath();
+            c.arc(this.wandLength, -this.wandWidth * 0.0, this.wandWidth * 2.0, 0, Math.PI * 2);
+            c.fill();
+
+            // draw red wand shaft
             c.fillStyle = 'red';
             c.fillRect(0, -this.wandWidth / 2, this.wandLength, this.wandWidth);
-            
+            // DRAW red END
+            c.beginPath();
+            c.arc(this.wandLength, -this.wandWidth * 0.0, this.wandWidth * 1.5, 0, Math.PI * 2);
+            c.fillStyle = 'red';
+            c.fill();
             c.translate(-0.1 * this.wandLength, 0);
             //c.restore();
             
@@ -12869,7 +12821,6 @@ window.addEventListener('DOMContentLoaded', function() {
                     }
                 }
             }
-
             c.restore();
             }
             
@@ -12948,8 +12899,8 @@ window.addEventListener('DOMContentLoaded', function() {
             // draw thin rear brim edge
             c.beginPath();
             c.ellipse(0, 0, hatWidth, 0.3 * hatWidth, 0, Math.PI, 2 * Math.PI, false); // bottom arc
-            c.strokeStyle = 'black';
-            c.lineWidth = 0.005 * cScale;
+            c.strokeStyle = 'hsl(0, 0%, 10%)';
+            c.lineWidth = 0.003 * cScale;
             c.stroke();
 
             // STEP 5: Draw black hole fill (larger to cover brim lineTo)
@@ -12958,14 +12909,16 @@ window.addEventListener('DOMContentLoaded', function() {
             c.ellipse(0, -hatHeight * 0.03, hatWidth * 0.7, 0.12 * hatHeight, 0, 0, 2 * Math.PI);
             c.fill();
 
-            // Draw front half of hole rim (top arc 0 to π)
+            // Draw rear half of inside hole rim (top arc 0 to π)
             c.beginPath();
             c.ellipse(0, -hatHeight * 0.0, hatWidth * 0.7, 0.12 * hatHeight, 0, 0, 2 * Math.PI);
-            c.strokeStyle = 'hsl(0, 0%, 55%)';
-            c.lineWidth = 0.008 * cScale;
+            //c.strokeStyle = 'hsl(0, 0%, 45%)';
+            c.strokeStyle = 'hsl(0, 0%, 26%)';
+            //c.strokeStyle = 'hsl(0, 80%, 35%)';
+            c.lineWidth = 0.012 * cScale;
             c.stroke();
 
-            // STEP 5: Draw black hole fill (larger to cover brim lineTo)
+            // STEP 5: Draw black hole trace (larger to cover brim lineTo)
             c.strokeStyle = 'black';
             c.beginPath();
             c.ellipse(0, -hatHeight * 0.03, hatWidth * 0.71, 0.12 * hatHeight, 0, 0, 2 * Math.PI);
@@ -12994,11 +12947,11 @@ window.addEventListener('DOMContentLoaded', function() {
                 const earTopY = earBottomY - earHeight;
                 const earCenterY = (earBottomY + earTopY) / 2;
                 
+                // Draw left ear
                 const leftEarGradient = c.createLinearGradient(0, earTopY, 0, earBottomY);
                 leftEarGradient.addColorStop(0, 'hsl(75, 85%, 78%)');
                 leftEarGradient.addColorStop(0.5, 'hsl(85, 75%, 70%)');
                 leftEarGradient.addColorStop(1, 'hsl(95, 70%, 62%)');
-                
                 c.fillStyle = leftEarGradient;
                 c.beginPath();
                 const leftEarX = -earSpacing * 2.0;
@@ -13020,6 +12973,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 c.stroke();
                 c.restore();
                 
+                // Draw left inner ear
                 c.fillStyle = 'hsl(50, 75%, 85%)';
                 c.beginPath();
                 const leftInnerW = earWidth * 0.75;
@@ -13036,11 +12990,11 @@ window.addEventListener('DOMContentLoaded', function() {
                 c.fill();
                 c.restore();
                 
+                // Draw right ear
                 const rightEarGradient = c.createLinearGradient(0, earTopY, 0, earBottomY);
                 rightEarGradient.addColorStop(0, 'hsl(75, 85%, 78%)');
                 rightEarGradient.addColorStop(0.5, 'hsl(85, 75%, 70%)');
                 rightEarGradient.addColorStop(1, 'hsl(95, 70%, 62%)');
-                
                 c.fillStyle = rightEarGradient;
                 c.beginPath();
                 const rightEarX = earSpacing * 2.0;
@@ -13062,6 +13016,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 c.stroke();
                 c.restore();
                 
+                // Draw right inner ear
                 c.fillStyle = 'hsl(50, 75%, 85%)';
                 c.beginPath();
                 const rightInnerW = earWidth * 0.75;
@@ -13172,6 +13127,7 @@ window.addEventListener('DOMContentLoaded', function() {
             c.ellipse(0, -hatHeight * 0.03, hatWidth * 0.7, 0.12 * hatHeight, 0, 0, 2 * Math.PI, true);
             c.clip();
             
+            //  Draw front brim
             c.beginPath();
             c.ellipse(0, 0, hatWidth, 0.3 * hatWidth, 0, 0, Math.PI);
             c.lineTo(-hatWidth, 0);
@@ -13179,12 +13135,19 @@ window.addEventListener('DOMContentLoaded', function() {
             c.fillStyle = brimGradient;
             c.fill();
             c.restore();
-            
+ 
+            // STEP 5: Draw front thin black hole trace (larger to cover brim lineTo)
+            c.strokeStyle = 'black';
+            c.beginPath();
+            c.ellipse(0, -hatHeight * 0.03, hatWidth * 0.71, 0.12 * hatHeight, 0, Math.PI, 2 * Math.PI, true);
+            c.lineWidth = 0.003 * cScale;
+            c.stroke();
+
             // draw thick front brim edge
             c.beginPath();
             c.ellipse(0, 0, hatWidth, 0.3 * hatWidth, 0, Math.PI, 2 * Math.PI, true); // bottom to top, drawing front edge
-            c.strokeStyle = 'black';
-            c.lineWidth = 0.01 * cScale;
+            c.strokeStyle = 'hsl(0, 0%, 20%)';
+            c.lineWidth = 0.005 * cScale;
             c.stroke();
 
             c.restore();
@@ -18763,7 +18726,7 @@ window.addEventListener('DOMContentLoaded', function() {
             this.radius = 0.2;
             this.pos = pos.clone();
             this.force = 3; // Swirl strength
-            this.active = false;
+            this.active = true;
             this.isBeingUsed = false; // Track if cyclone is actively swirling particles
             this.rotationAngle = 0; // Current rotation angle
             this.lastTime = null; // Track time for continuous rotation
@@ -18801,44 +18764,39 @@ window.addEventListener('DOMContentLoaded', function() {
             c.arc(0, 0, iconRadius * 3.0, 0, Math.PI * 2);
             c.fill();
 
-            // Draw spiral arms - cyan, bright when active, dim when inactive
+            // Draw spiral arms 
             const lightness = this.active ? 65 : 35;
             c.lineCap = 'round';
             const numArms = 3;
             for (let i = 0; i < numArms; i++) {
-                const angle = (i / numArms) * Math.PI * 2 + baseRotation; // Add rotation here
-                
+                const angle = (i / numArms) * Math.PI * 2 + 1.5 * baseRotation; // Add rotation here
                 // Draw spiral arm as individual segments to allow tapering
                 let prevX = null;
                 let prevY = null;
                 for (let t = 0; t <= 1; t += 0.05) {
-                    const r = iconRadius * (1 - t * 0.7);
+                    const r = 1.2 * iconRadius * (1 - t * 0.7);
                     const a = angle - t * Math.PI * 1.5;
                     const x = Math.cos(a) * r;
                     const y = Math.sin(a) * r;
-                    
                     if (prevX !== null) {
                         // Draw segment with tapering width
-                        
                         c.beginPath();
                         c.moveTo(prevX, prevY);
                         c.lineTo(x, y);
-                        c.strokeStyle = `hsla(0, 0%, 0%, 0.7)`;
-                        c.lineWidth = 16 * (1 - t * 0.7); // Start at 6, taper down
+                        c.strokeStyle = `hsla(0, 0%, 0%, 0.55)`;
+                        c.lineWidth = 18 * (1 - t * 0.7); // Start at 6, taper down
                         c.stroke();
-                        c.strokeStyle = `hsl(180, 85%, ${lightness - i * 5}%)`;
-                        c.lineWidth = 6 * (1 - t * 0.7); // Start at 6, taper down
+                        c.strokeStyle = `hsl(60, 85%, ${lightness - i * 5}%)`;   `hsla(0, 0%, 0%, 0.7)`;
+                        c.lineWidth = 8 * (1 - t * 0.7); // Start at 6, taper down
                         c.stroke();
-
                     }
-                    
                     prevX = x;
                     prevY = y;
                 }
             }
 
             // Draw center circle
-            c.fillStyle = `hsl(180, 85%, ${lightness + 10}%)`;
+            c.fillStyle = `hsl(60, 85%, ${lightness + 10}%)`;
             c.beginPath();
             c.arc(0, 0, 6, 0, Math.PI * 2);
             c.fill();
@@ -18850,7 +18808,7 @@ window.addEventListener('DOMContentLoaded', function() {
     function makeCyclone(pos) {
         Cyclone = [];
         var obj = new CYCLONE(pos);
-        obj.active = false;
+        obj.active = true;
         Cyclone.push(obj);
 
         // Mouse/touch controls for dragging cyclone
@@ -19005,10 +18963,9 @@ window.addEventListener('DOMContentLoaded', function() {
             ball.vel.y += radialY + tangentialY;
         }
     }
-
-    const cycloneXPosition = 0.5 * simWidth;
-    const cycloneYPosition = 0.5 * simHeight;
-    makeCyclone(new Vector2(cycloneXPosition, cycloneYPosition));
+    
+    // MAKE CYCLONE  --------------------------------------------------------------------------
+    makeCyclone(new Vector2(0.75 * simWidth, 0.7 * simHeight));
 
 
     //  MAGNET CONSTRUCTOR ----------------------------------------------------------------
@@ -20657,13 +20614,44 @@ window.addEventListener('DOMContentLoaded', function() {
                 c.fill();
             }
         }
+        
+        // Draw FPS counter if enabled
+        if (physicsMenuFpsOn && fpsCounter.displayFps > 0) {
+            const padding = 10;
+            const fontSize = 14;
+            const text = `${fpsCounter.displayFps} fps`;
+            
+            c.font = `${fontSize}px monospace`;
+            c.textBaseline = 'bottom';
+            c.textAlign = 'center';
+            
+            // Measure text width
+            const textMetrics = c.measureText(text);
+            const textWidth = textMetrics.width;
+            const textHeight = fontSize;
+            
+            // Background rectangle
+            const bgPadding = 5;
+            const bgX = canvas.width - textWidth - padding - bgPadding * 2;
+            const bgY = canvas.height - textHeight - padding - bgPadding;
+            const bgWidth = textWidth + bgPadding * 2.5;
+            const bgHeight = textHeight + bgPadding * 2;
+            
+            c.fillStyle = 'hsla(0, 0%, 0%, 0.7)';
+            c.beginPath();
+            c.roundRect(bgX, bgY, bgWidth, bgHeight, 5);
+            c.fill();
+            
+            // Text
+            c.fillStyle = fpsCounter.color || 'hsl(120, 100%, 40%)';
+            c.fillText(text, canvas.width - 0.6 * bgWidth, canvas.height - padding);
+        }
     }
 
     //  FPS CALCULATION FUNCTION -------------------------------------------------------------
     function updateFPS() {
-        // Only calculate FPS if the counter is visible
-        const fpsElement = document.getElementById('fpsCounter');
-        if (!fpsElement || !fpsElement.classList.contains('visible')) {
+        // Only calculate FPS if the counter is enabled
+        if (!physicsMenuFpsOn) {
             return;
         }
         
@@ -20674,7 +20662,6 @@ window.addEventListener('DOMContentLoaded', function() {
         const instantFps = 1000 / deltaTime;
         
         // Apply exponential smoothing for damping
-        // smoothedFps = smoothedFps * (1 - alpha) + instantFps * alpha
         fpsCounter.smoothedFps = fpsCounter.smoothedFps * (1 - fpsCounter.smoothingFactor) + 
                                  instantFps * fpsCounter.smoothingFactor;
         
@@ -20684,7 +20671,7 @@ window.addEventListener('DOMContentLoaded', function() {
             fpsCounter.frameTimes.shift();
         }
         
-        // Update the display
+        // Update the display values
         fpsCounter.updateCounter++;
         if (fpsCounter.updateCounter >= fpsCounter.updateInterval) {
             fpsCounter.updateCounter = 0;
@@ -20692,55 +20679,30 @@ window.addEventListener('DOMContentLoaded', function() {
             // Round for display
             fpsCounter.displayFps = Math.round(fpsCounter.smoothedFps);
             
-            // Calculate jitter (standard deviation of recent frame times)
-            if (fpsCounter.frameTimes.length >= 30) { // Need at least half second of data
+            // Calculate jitter and determine color
+            if (fpsCounter.frameTimes.length >= 30) {
                 const recentFrameTimes = fpsCounter.frameTimes.slice(-30);
                 const avgFrameTime = recentFrameTimes.reduce((sum, time) => sum + time, 0) / recentFrameTimes.length;
                 const variance = recentFrameTimes.reduce((sum, time) => sum + Math.pow(time - avgFrameTime, 2), 0) / recentFrameTimes.length;
                 const stdDev = Math.sqrt(variance);
-                // Convert stdDev to FPS variation
                 const avgFps = 1000 / avgFrameTime;
                 const fpsStdDev = avgFps * (stdDev / avgFrameTime);
                 
                 // Determine color based on performance
-                let color;
                 if (fpsCounter.smoothedFps < 50) {
-                    // Below 50 fps = red
-                    color = 'hsl(0, 100%, 50%)';
+                    fpsCounter.color = 'hsl(0, 100%, 50%)';
                 } else if (fpsStdDev > fpsCounter.jitterThreshold || fpsCounter.smoothedFps < 58) {
-                    // Jittery or dropping below 58 = yellow
-                    color = 'hsl(50, 100%, 50%)';
+                    fpsCounter.color = 'hsl(50, 100%, 50%)';
                 } else {
-                    // Smooth 58+ fps = green
-                    color = 'hsl(120, 100%, 40%)';
+                    fpsCounter.color = 'hsl(120, 100%, 40%)';
                 }
-                
-                fpsElement.style.color = color;
             }
-            
-            // Update the display element
-            fpsElement.textContent = `${fpsCounter.displayFps} fps`;
         }
         
         fpsCounter.lastTime = currentTime;
     }
 
-    //  POSITION FPS COUNTER FUNCTION --------------------------------------------------------
-    function positionFpsCounter() {
-        const canvas = document.getElementById('myCanvas');
-        const fpsElement = document.getElementById('fpsCounter');
-        if (canvas && fpsElement) {
-            const canvasRect = canvas.getBoundingClientRect();
-            // Ensure width is auto and no wrapping
-            fpsElement.style.width = 'auto';
-            fpsElement.style.whiteSpace = 'nowrap';
-            // Position so right edge is 10px from canvas right
-            const right = canvasRect.right + window.scrollX;
-            const bottom = canvasRect.bottom + window.scrollY;
-            fpsElement.style.left = (right - fpsElement.offsetWidth - 10) + 'px';
-            fpsElement.style.top = (bottom - fpsElement.offsetHeight - 10) + 'px';
-        }
-    }
+
 
     //  MAIN SEQUENCE ----------------------------------------------------------------------------
 	firstRun = true;
@@ -20750,7 +20712,6 @@ window.addEventListener('DOMContentLoaded', function() {
     // Initialize repulsion force to zero for startup animation
     physicsMenuRepulsionForce = 0;
     physProps.repulsionForce = 0;
-    positionFpsCounter();
     respawnMenuLayoutType = 'image'; // Set to image layout for startup splash
     // Load logo.png as splash screen - will regenerate particles when loaded
     loadDefaultLayoutImage();
@@ -20840,7 +20801,6 @@ window.addEventListener('DOMContentLoaded', function() {
         drawEverything();
         requestAnimationFrame(update);
     }
-    
     update();
     
     // Capture default presets after startup animation completes
@@ -20859,10 +20819,27 @@ window.addEventListener('DOMContentLoaded', function() {
     VARIABLES AND CONSTANTS REFERENCE
     ===========================================
 
+    CLASSES
+    -------
+    Vector2 - 2D vector class with math operations (add, subtract, scale, length, normalize)
+    BALL - Particle class with physics properties (pos, vel, radius, mass, color, etc.)
+    CORNER - Corner collision objects for rounded wall corners
+    WORM - Segmented worm creature with wave motion and particle interaction
+    BOX - Rectangular container objects that can hold and oscillate particles
+    PUCK - Interactive circular objects (oscillating, orbit, cycle, flying, heartbeat)
+    HEART - Heart-shaped puck that spawns particles when dragged
+    STINKER - Particle destroyer object (touch to remove particles)
+    CYCLONE - Spinning vortex that attracts and spins particles
+    MAGNET - Magnetic attractor that pulls particles toward it
+    BLOWER - Wind source that pushes particles in a direction
+    HUNGRYPUCK - Particle consumer that absorbs nearby particles
+    MISTERMISTER - Particle sprayer (shower/fountain modes)
+    MAGICSET - Magic hat and wand with particle collection/dispensing and rabbit animation
+
     LAYOUT AND CANVAS
     -----------------
     screenVertical - Boolean flag indicating if canvas is in vertical (portrait) orientation
-    canvas - The main HTML canvas element
+    canvas - The main HTML canvas element (id='myCanvas')
     c - 2D rendering context for the canvas
     cScale - Scaling factor for converting simulation units to canvas pixels
     simWidth - Width of simulation world in simulation units
@@ -20872,47 +20849,84 @@ window.addEventListener('DOMContentLoaded', function() {
     bottomMargin - Bottom margin for canvas rendering
     cornerFillGradient - Gradient used to fill canvas corners/masks to match page background
 
-    BUMPER CONFIGURATION
-    --------------------
-    bumperRows - Number of rows of bumpers (default: 3)
-    bumperRadius - Radius of bumper objects (default: 0.040)
-
-    FOUNTAIN AND SPAWN STATES
-    --------------------------
-    fountainState - Current state of fountain (0=off, 1=normal, 2=sweep, 3=cw, 4=ccw)
-    doShower - Boolean flag for shower particle spawning mode
-    doFountain - Boolean flag for fountain particle spawning mode
-
     PRESET MANAGEMENT
     -----------------
-    PRESET_KEYS - Array of localStorage/cookie keys for saving presets (19 presets)
-    DEFAULT_PRESETS - Array storing default preset configurations
-    CONTROL_IDS - Array of HTML element IDs to save/restore in presets
+    PRESET_KEYS - Array of localStorage keys for saving 22 presets
+    DEFAULT_PRESETS - Array storing default preset configurations (captured after startup)
+    CONTROL_IDS - Array of state variable names to save/restore in presets
+    presetLongPressTimer - Timer for long-press preset reset detection
+    presetLongPressIndex - Index of preset being long-pressed
+    presetLongPressTriggered - Boolean flag indicating long-press detected
+    presetResetConfirmIndex - Index of preset showing reset confirmation (-1 = none)
 
     FPS COUNTER
     -----------
-    fpsCounter - Object containing FPS tracking data (lastTime, frameCount, frameTimes, etc.)
-    fpsCounter.maxSamples - Number of frame samples to average (default: 10)
-    fpsCounter.updateInterval - How often to update FPS display (every 5 frames)
+    fpsCounter - Object containing FPS tracking data:
+      .lastTime - Last timestamp for FPS calculation
+      .frameCount - Current frame count
+      .frameTimes - Array of recent frame times for jitter detection
+      .maxSamples - Number of frame samples to track (default: 60)
+      .displayFps - Rounded FPS value for display
+      .smoothedFps - Exponentially smoothed FPS (default: 60)
+      .smoothingFactor - Smoothing coefficient (default: 0.1)
+      .updateCounter - Counter for display update throttling
+      .updateInterval - Frames between display updates (default: 10)
+      .jitterThreshold - FPS variance threshold for yellow indicator (default: 5)
+      .recentFpsValues - Recent smoothed values for jitter calculation
+      .color - Display color (green/yellow/red based on performance)
 
     IMAGE ASSETS
     ------------
     gummiImage - Image object for gummy bear particle rendering
     gummiReady - Boolean flag indicating if gummy bear image is loaded
     doGummi - Boolean flag to enable gummy bear rendering style
-    gummiHeadingTau - Smoothing speed for gummy bear orientation (default: 0.05 seconds)
+    gummiHeadingTau - Smoothing speed for gummy bear orientation (default: 0.0)
     gummiHeadingOffset - Orientation offset for gummy bear image (Math.PI/2 radians)
     aeolusImage - Image object for Aeolus character
     aeolusReady - Boolean flag indicating if Aeolus image is loaded
     pepeImage - Image object for Pepe character
     pepeReady - Boolean flag indicating if Pepe image is loaded
+    pepeFaceImage - Image object for Pepe face rendering
+    pepeFaceReady - Boolean flag indicating if Pepe face image is loaded
+    pathLogoImage - Image object for PATH train logo
+    pathLogoReady - Boolean flag indicating if PATH logo is loaded
+    sBahnLogoImage - Image object for S-Bahn logo
+    sBahnLogoReady - Boolean flag indicating if S-Bahn logo is loaded
+    uBahnLogoImage - Image object for U-Bahn logo
+    uBahnLogoReady - Boolean flag indicating if U-Bahn logo is loaded
+    athensMetroLogoImage - Image object for Athens Metro logo
+    athensMetroLogoReady - Boolean flag indicating if Athens Metro logo is loaded
+    isapLogoImage - Image object for ISAP logo
+    isapLogoReady - Boolean flag indicating if ISAP logo is loaded
+    layoutImage - Loaded image for particle layout spawning
+    layoutImageData - Processed pixel data for image-based particle placement
+    offscreenRoketCanvas - Offscreen canvas for roket sprite rendering
+    roketCtx - Rendering context for offscreen roket canvas
 
-    TRACER SYSTEM
-    -------------
-    doTracer - Boolean flag to enable particle tracking
+    PARTICLE RENDERING
+    ------------------
+    doTracer - Boolean flag to enable particle tracking trails
     doSmallTracer - Boolean flag for small tracer size
     doMediumTracer - Boolean flag for medium tracer size
     doBigTracer - Boolean flag for big tracer size
+    doSpheres - Boolean flag for sphere rendering style
+    doDiscs - Boolean flag for disc rendering style
+    doCircles - Boolean flag for circle outline rendering style
+    doGummi - Boolean flag for gummy bear rendering style
+    doRokets - Boolean flag for roket sprite rendering style
+    doEllipses - Boolean flag for ellipse rendering style
+    doArcs - Boolean flag for bent arc rendering style
+    ellipseLengthScale - Length scaling for ellipse rendering (default: 2.0)
+    ellipseWidthScale - Width scaling for ellipse rendering (default: 0.8)
+
+    STARTUP ANIMATION
+    -----------------
+    startupTime - Timestamp of application startup
+    startupRepulsionAnimationActive - Boolean flag for startup repulsion animation
+    startupRestartCount - Number of restarts completed during startup (0-2)
+    startupRestartPeriod - Duration of each restart cycle (default: 0.3 seconds)
+    startupLastRestartTime - Time of last restart during startup
+    startupPauseAtZero - Pause duration at zero force for visible collapse (default: 0.1s)
 
     MAIN MENU SYSTEM
     ----------------
@@ -20945,6 +20959,11 @@ window.addEventListener('DOMContentLoaded', function() {
     colorWheelLight - Current lightness value (0-100, default: 30)
     colorWheelPersistence - Trail persistence value (0-30, default: 12)
     colorWheelVelMap - Velocity color mapping sensitivity (0-500, default: 100)
+    colorWheelWipeLightness - Lightness value for trail wipe (0-100, default: 0)
+    colorWheelRotationSpeed - Hue rotation speed (-1 to 1, 0 = stopped)
+    colorWheelRotationFastMode - Boolean flag for rotation speed mode (true = full, false = 10%)
+    colorMode - String indicating color mapping mode ('velocity', 'size', or 'direction')
+    multiHueMode - String indicating multi-hue mode ('single', 'pairs', 'trios', or 'quads')
     colorWheelVisible - Boolean flag for color wheel menu visibility
     colorWheelOpacity - Current opacity for fade animation (0-1)
     colorWheelAnimating - Boolean flag indicating menu is animating
@@ -20974,8 +20993,9 @@ window.addEventListener('DOMContentLoaded', function() {
     physicsMenuBounceOn - Boolean flag to enable bounce
     physicsMenuTime - Time step value (500-1000, default: 1000)
     physicsMenuSpeed - Speed limit value (1-50, default: 20)
+    physicsMenuTau - Gummi heading tau value (0.05-1, default: 0.3)
     physicsMenuSubsteps - Number of physics substeps per frame (1-4, default: 1)
-    physicsMenuFpsOn - Boolean flag to show FPS counter
+    physicsMenuFpsOn - Boolean flag to show FPS counter (drawn on canvas)
     physicsMenuVisible - Boolean flag for physics menu visibility
     physicsMenuOpacity - Current opacity for fade animation (0-1)
     physicsMenuAnimating - Boolean flag indicating menu is animating
@@ -20987,7 +21007,7 @@ window.addEventListener('DOMContentLoaded', function() {
     physicsMenuDragOffsetY - Y offset for drag operations
     physicsMenuManuallyMoved - Boolean flag indicating user has moved menu
     physicsMenuWidth - Width of physics menu (default: 240)
-    physicsMenuHeight - Height of physics menu (default: 250)
+    physicsMenuHeight - Height of physics menu (default: 285)
     physicsMenuCenterX - X position of physics menu center
     physicsMenuCenterY - Y position of physics menu center
 
@@ -21001,7 +21021,7 @@ window.addEventListener('DOMContentLoaded', function() {
     gravityMenuAnimating - Boolean flag indicating menu is animating
     gravityMenuTargetOpacity - Target opacity for animation
     gravityMenuDragging - Boolean flag for dragging state
-    gravityMenuDraggingControl - String tracking which control is being dragged
+    gravityMenuDraggingControl - String tracking which control is being dragged ('rotation' or 'gravity')
     gravityMenuPositionDragging - Boolean flag for position dragging
     gravityMenuDragOffsetX - X offset for drag operations
     gravityMenuDragOffsetY - Y offset for drag operations
@@ -21026,7 +21046,7 @@ window.addEventListener('DOMContentLoaded', function() {
     wallsMenuHeight - Height of walls menu (default: 258)
     wallsMenuCenterX - X position of walls menu center
     wallsMenuCenterY - Y position of walls menu center
-    wallsMenuCornerRadius - Corner radius for walls (0-150)
+    wallsMenuCornerRadius - Corner radius for walls (0-150, default: 50)
     wallsMenuLeftWall - Boolean flag to enable left wall
     wallsMenuRightWall - Boolean flag to enable right wall
     wallsMenuCeiling - Boolean flag to enable ceiling
@@ -21038,8 +21058,8 @@ window.addEventListener('DOMContentLoaded', function() {
     doRightWall - Global boolean flag for right wall state
     doCeiling - Global boolean flag for ceiling state
     doFloor - Global boolean flag for floor state
-    cornerRad - Global corner radius value (default: 100)
-    Corners - Array of corner objects for physics simulation
+    cornerRad - Global corner radius value (default: 50)
+    Corners - Array of CORNER objects for physics simulation
 
     RESPAWN MENU
     ------------
@@ -21053,14 +21073,14 @@ window.addEventListener('DOMContentLoaded', function() {
     respawnMenuDragOffsetY - Y offset for drag operations
     respawnMenuManuallyMoved - Boolean flag indicating user has moved menu
     respawnMenuWidth - Width of respawn menu (default: 240)
-    respawnMenuHeight - Height of respawn menu (default: 340)
+    respawnMenuHeight - Height of respawn menu (default: 380)
     respawnMenuCenterX - X position of respawn menu center
     respawnMenuCenterY - Y position of respawn menu center
     respawnMenuOneShot - Boolean flag for one-shot spawn mode
     respawnMenuHungryPuck - Boolean flag to enable hungry puck
     respawnMenuSpawnType - String indicating spawn type ('shower' or 'fountain')
-    respawnMenuLayoutType - String indicating layout type ('cluster' or 'array')
-    respawnMenuMisterMode - String indicating mister mode ('idle', 'active', etc.)
+    respawnMenuLayoutType - String indicating layout type ('cluster', 'array', or 'image')
+    respawnMenuMisterMode - String indicating mister mode ('idle', 'sweep', 'cw', 'ccw')
     respawnMenuMisterModeExpanded - Boolean flag for dropdown expanded state
 
     TOYS MENU
@@ -21074,20 +21094,37 @@ window.addEventListener('DOMContentLoaded', function() {
     toysMenuDragOffsetX - X offset for drag operations
     toysMenuDragOffsetY - Y offset for drag operations
     toysMenuManuallyMoved - Boolean flag indicating user has moved menu
-    toysMenuItems - Array of toy menu item objects
+    toysMenuItems - Array of toy menu item objects (bumpers, pucks, boxes, etc.)
     toysMenuWidth - Width of toys menu (default: 280)
     toysMenuHeight - Height of toys menu (default: 418)
     toysMenuCenterX - X position of toys menu center
     toysMenuCenterY - Y position of toys menu center
+
+    PRESETS MENU
+    ------------
+    presetsMenuVisible - Boolean flag for presets menu visibility
+    presetsMenuOpacity - Current opacity for fade animation (0-1)
+    presetsMenuAnimating - Boolean flag indicating menu is animating
+    presetsMenuTargetOpacity - Target opacity for animation
+    presetsMenuDragging - Boolean flag for dragging state
+    presetsMenuPositionDragging - Boolean flag for position dragging
+    presetsMenuDragOffsetX - X offset for drag operations
+    presetsMenuDragOffsetY - Y offset for drag operations
+    presetsMenuManuallyMoved - Boolean flag indicating user has moved menu
+    presetsMenuItems - Array of preset button objects (subway line style)
+    presetsMenuWidth - Width of presets menu (default: 280)
+    presetsMenuHeight - Height of presets menu (default: 546)
+    presetsMenuCenterX - X position of presets menu center
+    presetsMenuCenterY - Y position of presets menu center
 
     PARTICLES MENU
     --------------
     particlesMenuQuantity - Square root of particle count (1-100, default: 71)
     particlesMenuSmallRadius - Minimum particle radius (default: 7)
     particlesMenuLargeRadius - Maximum particle radius (default: 13)
-    particlesMenuRenderType - String indicating render style (drawSpheres, drawDiscs, etc.)
+    particlesMenuRenderType - String indicating render style ('drawArrows', 'drawSpheres', etc.)
     particlesMenuRenderTypeExpanded - Boolean flag for dropdown expanded state
-    particlesMenuVisible - Boolean flag for particles menu visibility
+    particlesMenuVisible - Boolean flag for particles menu visibility (default: true)
     particlesMenuOpacity - Current opacity for fade animation (0-1, default: 1)
     particlesMenuAnimating - Boolean flag indicating menu is animating
     particlesMenuTargetOpacity - Target opacity for animation
@@ -21104,9 +21141,9 @@ window.addEventListener('DOMContentLoaded', function() {
 
     MENU POSITIONING
     ----------------
-    defaultMenuPositions - Object containing default relative positions for all menus
+    defaultMenuPositions - Object containing default relative positions (0-1) for all menus
     menuDrawOrder - Array defining z-order for menu drawing (first = bottom, last = top)
-
+    
     INTERACTION
     -----------
     globalInteractionLock - Boolean flag to prevent multiple simultaneous interactions
@@ -21114,43 +21151,405 @@ window.addEventListener('DOMContentLoaded', function() {
 
     RESIZE HANDLING
     ---------------
-    _resizeDebounce - Timeout handle for debouncing resize events
+    _resizeDebounce - Timeout handle for debouncing resize events (150ms)
 
     PHYSICS PROPERTIES (physProps object)
     --------------------------------------
-    paused - Boolean flag for simulation pause state
-    dt - Time step for physics calculations
-    maxSpeed - Maximum speed limit for particles
-    repulsionForce - Force coefficient for particle repulsion
-    repulsionDist - Distance threshold for repulsion calculations
-    ballRest - Restitution coefficient for particle bouncing
-    baseColor - Base hue value for particle colors
-    velColorMap - Velocity-to-color mapping sensitivity
-    worldSize - Object containing simulation world dimensions {x, y}
-    gravity - Object containing gravity vector {x, y}
-    substeps - Number of physics substeps per frame
+    physProps.paused - Boolean flag for simulation pause state
+    physProps.dt - Time step for physics calculations (1/60 per substep)
+    physProps.maxSpeed - Maximum speed limit for particles
+    physProps.repulsionForce - Force coefficient for particle repulsion
+    physProps.repulsionDist - Distance threshold for repulsion calculations
+    physProps.ballRest - Restitution coefficient for particle bouncing
+    physProps.baseColor - Base hue value for particle colors
+    physProps.velColorMap - Velocity-to-color mapping sensitivity
+    physProps.worldSize - Vector2 containing simulation world dimensions
+    physProps.gravity - Vector2 containing gravity acceleration
+    physProps.substeps - Number of physics substeps per frame (1-4)
+    physProps.tau - Gummi heading smoothing time constant
+
+    WORM PROPERTIES (WormProps object)
+    -----------------------------------
+    WormProps.gravity - Vector2 for worm-specific gravity
+    WormProps.dt - Time step for worm physics
+    WormProps.wormSubSteps - Number of worm simulation substeps
+    WormProps.paused - Boolean flag for worm simulation pause
+    WormProps.phase - Current wave phase for worm motion
+    WormProps.wormRestitution - Worm's coefficient of restitution
+    WormProps.wiggleActive - Boolean flag indicating worm is wiggling
+    WormProps.wiggleFrame - Current frame of wiggle animation
+    WormProps.startRadius - Radius at worm head
+    WormProps.endRadius - Radius at worm tail
+    WormProps.numNodes - Number of segments in worm
+    WormProps.advanceSpeed - Speed of worm forward motion
+    WormProps.waveAmplitudeRatio - Wave amplitude as fraction of canvas height
+    WormProps.wavePhaseIncrement - Temporal frequency of wave
+    WormProps.waveNodeLag - Spatial wave number (phase lag per node)
+    WormProps.waveNudge - Strength of wave target nudging (0-1)
+    WormProps.thrustCoeff - Lateral motion to forward thrust conversion
+    WormProps.minJointAngle - Minimum allowed interior joint angle
+    WormProps.isHiding - Boolean flag for worm hiding state
+    WormProps.hideStartTime - Timestamp when worm started hiding
+    WormProps.hideDelay - Duration of hide delay (default: 5000ms)
 
     PARTICLE ARRAYS
     ---------------
-    Ball - Array of particle objects
-    Puck - Array of puck objects (interactive circular objects)
-    Blower - Array of blower objects (wind sources)
-    Hungrypuck - Array of hungry puck objects (particle consumers)
-    MisterMister - Array of mister objects (particle sprayers)
+    Balls - Array of BALL objects (main particles)
+    Puck - Array of PUCK objects (interactive circular objects)
+    Box - Array of BOX objects (rectangular containers)
+    Blower - Array of BLOWER objects (wind sources)
+    Hungrypuck - Array of HUNGRYPUCK objects (particle consumers)
+    MisterMister - Array of MISTERMISTER objects (particle sprayers)
     Bumper - Array of bumper objects (fixed obstacles)
-    Worm - Array of worm segment objects (chain-like structure)
+    Worm - Array of WORM segment objects (chain-like structure)
+    Hearts - Array of HEART objects (heart-shaped pucks)
+    Stinkers - Array of STINKER objects (particle destroyers)
+    Cyclones - Array of CYCLONE objects (spinning vortices)
+    Magnets - Array of MAGNET objects (magnetic attractors)
+    MagicSet - MAGICSET instance (magic hat and wand)
 
-    PARTICLE PROPERTIES
-    -------------------
+    PARTICLE PROPERTIES (GLOBAL)
+    -----------------------------
     ballSaturation - Global saturation value for particle colors
     ballLightness - Global lightness value for particle colors
     ballRepulsion - Boolean flag to enable particle-particle repulsion
-    persistence - Trail persistence value for particle rendering
+    persistence - Trail persistence value for particle rendering (0-30)
 
-    UTILITY FUNCTIONS
+    TOY STATES
+    ----------
+    showBumpers - Boolean flag to display bumpers
+    showPucks - Boolean flag to display pucks
+    showBoxes - Boolean flag to display boxes
+    showHeart - Boolean flag to display heart puck
+    showCycle - Boolean flag to display cycle puck
+    showOrbit - Boolean flag to display orbit puck
+    showYinYang - Boolean flag to display yin-yang formation
+    doFlyingPuck - Boolean flag for flying puck state 1
+    doFlyingPuck2 - Boolean flag for flying puck state 2
+    doOscillatePucks - Boolean flag to enable puck oscillation
+    doOscillateBoxes - Boolean flag to enable box oscillation
+    doOscillateBoxesVertical - Boolean flag for vertical box oscillation
+    wormState - Integer for worm rendering mode (0=off, 1=spheres, 2=curves)
+    wormRenderMode - String for worm rendering ('spheres' or 'curves')
+    doWorm - Boolean flag derived from wormState
+    blowerState - Integer for blower state (0=off, 1=visible, 2=active)
+    showEaters - Boolean flag for hungry pucks (from respawnMenuHungryPuck)
+    mrMode - String for mister mode state (from respawnMenuMisterMode)
+    doShower - Boolean flag for shower spawn mode
+    doFountain - Boolean flag for fountain spawn mode
+    orbitDirection - Integer for orbit rotation direction (1=normal, -1=reverse)
+    yinYangDirection - Integer for yin-yang rotation (1=normal, -1=reverse)
+
+    SPAWN/FOUNTAIN PROPERTIES
+    -------------------------
+    fountainState - Current fountain state (0=off, 1=normal, 2=sweep, 3=cw, 4=ccw)
+    fountainSpinMode - String for fountain spin mode
+    sprinklerSpeed - Speed of fountain rotation
+    respawnDir - Current direction of fountain
+    yeet - Fountain particle launch speed (default: 40)
+    dumpShift - Shower horizontal position offset (0 = center)
+    dumpSqueeze - Shower width (0-1, default: 0.4)
+    customShowerPos - Custom shower position set by mouse clicks
+    isDoubleTapDrag - Boolean flag for shower width adjustment mode
+    dragStartX - Starting X position for shower drag
+    dragStartY - Starting Y position for shower drag
+    initialDumpSqueeze - Initial shower width at drag start
+    isMisterSpeedDrag - Boolean flag for mister speed adjustment
+    misterDragStartX - Starting X for mister speed drag
+    initialMisterSpeed - Initial mister speed at drag start
+    misterSpeed - Current mister speed multiplier (0.1-2.0, default: 1.0)
+
+    IMPLODE/CONTINUOUS ACTIONS
+    --------------------------
+    implodeInterval - Interval handle for continuous implode
+    imploderHoldTimer - Timer for imploder hold detection
+    stinkerHoldTimer - Timer for stinker hold detection
+    heartSpawnTimer - Timer for heart particle spawning
+
+    FUNCTION SUMMARY
+    ================
+
+    INITIALIZATION & SETUP
+    ----------------------
+    layoutCanvasAndMenu() - Set canvas dimensions and scale based on viewport
+    handleResizeRestart() - Handle canvas resize with restart confirmation
+    setupScene() - Initialize all simulation state, objects, and toys
+    initColorWheelOffscreenCanvas() - Create offscreen canvas for color wheel rendering
+    setupPresetButtons() - Initialize preset button data structures
+    updateCornerFillGradient() - Update gradient for canvas corner masking
+    defineOffscreenRoket(radius) - Generate roket sprite on offscreen canvas
+
+    STATE MANAGEMENT
+    ----------------
+    getControlState() - Capture current state of all controls and settings
+    setControlState(state) - Restore controls and settings from state object
+    savePreset(idx) - Save current state to preset slot (localStorage)
+    loadPreset(idx) - Load and apply preset from slot
+    captureMenuPositions() - Get current menu positions as relative coordinates
+    applyDefaultMenuPositions() - Apply default menu positions after resize
+
+    SIMULATION CONTROL
+    ------------------
+    update() - Main animation loop (FPS, physics substeps, rendering, frame request)
+    simulate() - Single physics simulation step with collision detection
+    wipeRestart() - Restart simulation with current settings
+    forcedWipeRestart() - Force restart without confirmation
+    pause() - Toggle simulation pause state
+    updateFPS() - Calculate FPS with smoothing and jitter detection
+
+    PARTICLE & OBJECT CREATION
+    --------------------------
+    makeBalls() - Generate particle array based on menu settings
+    makePucks() - Create puck objects (oscillating, orbit, cycle, flying, heart)
+    makeBoxes() - Create box container objects
+    makeBumpers() - Generate bumper array
+    makeBlower() - Create blower wind source
+    makeHungryPucks() - Create particle consumer objects
+    makeMisterMister() - Create particle sprayer object
+    makeWorm() - Generate worm with segmented structure
+    makeMagicSet() - Create magic hat and wand objects
+    makeCorners() - Generate corner collision objects for walls
+
+    PARTICLE SPAWNING
     -----------------
-    Various helper functions for menu positioning, collision detection, animation, 
-    preset management, canvas drawing, physics calculations, and user interaction.
+    goShower(ball) - Respawn particle from shower (top-down)
+    goFountain(ball) - Respawn particle from fountain (bottom-up with velocity)
+    loadDefaultLayoutImage() - Load and process image for particle layout spawning
+    respawnBalls() - Generate particle array from current layout type
+
+    RENDERING - MAIN
+    ----------------
+    drawEverything() - Main rendering function (background, particles, objects, menus, UI)
+    drawCircle(x, y, radius) - Draw filled circle at position
+    drawEllipse(x, y, radiusX, radiusY) - Draw filled ellipse
+    drawArrow(posX, posY, angle, radius) - Draw velocity arrow for particle
+    drawHeart(posX, posY, radius) - Draw heart shape
+    drawResizeIndicator() - Draw resize grip indicators
+
+    RENDERING - MENUS
+    -----------------
+    drawMainMenu() - Draw main menu bar with buttons
+    drawMainMenuItem(item, x, centerY, width, height) - Draw individual menu button
+    drawEllipsisButton() - Draw ellipsis menu toggle button
+    drawColorMenu() - Draw color wheel menu with controls
+    drawPhysicsMenu() - Draw physics parameter menu
+    drawGravityMenu() - Draw circular gravity control menu
+    drawWallsMenu() - Draw walls configuration menu
+    drawRespawnMenu() - Draw respawn/spawn configuration menu
+    drawToysMenu() - Draw toys toggle menu
+    drawPresetsMenu() - Draw presets menu with subway-style buttons
+    drawParticlesMenu() - Draw particles configuration menu
+    drawMenuBackground(ctx, centerX, centerY, width, height, options) - Draw menu frame
+
+    RENDERING - PARTICLE STYLES
+    ---------------------------
+    setRenderType(renderType) - Switch between particle rendering styles
+    drawSpheres() - Render particles as shaded 3D spheres
+    drawDiscs() - Render particles as flat colored discs
+    drawCircles() - Render particles as circle outlines
+    drawGummi() - Render particles as gummy bear sprites
+    drawRokets() - Render particles as roket sprites
+    drawEllipses() - Render particles as velocity-oriented ellipses
+    drawArrows() - Render particles as directional arrows (current default)
+
+    MENU ANIMATION
+    --------------
+    animateMainMenu() - Animate main menu slide in/out with spring physics
+    animateColorWheelOpacity() - Fade color wheel menu in/out
+    animatePhysicsMenuOpacity() - Fade physics menu in/out
+    animateGravityMenuOpacity() - Fade gravity menu in/out
+    animateWallsMenuOpacity() - Fade walls menu in/out
+    animateRespawnMenuOpacity() - Fade respawn menu in/out
+    animateToysMenuOpacity() - Fade toys menu in/out
+    animatePresetsMenuOpacity() - Fade presets menu in/out
+    animateParticlesMenuOpacity() - Fade particles menu in/out
+    updatePauseButtonBlink(dt) - Update pause button blink animation
+
+    MENU POSITIONING
+    ----------------
+    updatePhysicsMenuPosition() - Position physics menu relative to particles menu
+    updateParticlesMenuPosition() - Position particles menu in layout
+    updateColorWheelPosition() - Position color wheel menu relative to respawn menu
+    updateRespawnMenuPosition() - Position respawn menu relative to gravity menu
+    updateGravityMenuPosition() - Position gravity menu in layout
+    updateToysMenuPosition() - Position toys menu in layout
+    bringMenuToFront(menuName) - Move menu to top of z-order
+
+    MENU INTERACTION - MAIN
+    -----------------------
+    toggleMainMenu() - Toggle main menu visibility
+    toggleSubmenus() - Hide/show all submenus
+    createColorWheelIcon() - Generate color wheel icon for main menu
+    calculateMainMenuWidth() - Calculate total width of main menu items
+
+    MENU INTERACTION - HANDLERS
+    ---------------------------
+    handleColorWheelInteraction(canvasX, canvasY) - Process color wheel menu clicks
+    handlePhysicsMenuInteraction(canvasX, canvasY) - Process physics menu clicks
+    handleGravityMenuInteraction(canvasX, canvasY) - Process gravity menu clicks
+    handleWallsMenuInteraction(canvasX, canvasY) - Process walls menu clicks
+    handleRespawnMenuInteraction(canvasX, canvasY) - Process respawn menu clicks
+    handleToysMenuInteraction(canvasX, canvasY) - Process toys menu clicks
+    handlePresetsMenuInteraction(canvasX, canvasY) - Process presets menu clicks
+    handlePresetsMenuRelease(canvasX, canvasY) - Handle preset button release (long press)
+    handleParticlesMenuInteraction(canvasX, canvasY) - Process particles menu clicks
+    handleMagicObjectClick(mX, mY) - Process magic hat/wand interactions
+
+    MENU INTERACTION - HIT TESTING
+    ------------------------------
+    particlesMenuHitTest(mouseX, mouseY) - Test if click is inside particles menu
+    respawnMenuHitTest(mouseX, mouseY) - Test if click is inside respawn menu
+
+    MOUSE HANDLERS - OBJECTS
+    ------------------------
+    mouseBumperMove(event) - Handle bumper dragging
+    mouseBumperScale(event) - Handle bumper radius adjustment
+    mouseBlowerMove(event) - Handle blower dragging
+    mouseHungryPuckMove(event) - Handle hungry puck dragging
+    mouseMisterMisterMove(event) - Handle mister mister dragging
+    mousePuckMove(p) - Create puck drag handler for specific puck
+    mouseDynamicPuckMove(event) - Handle dynamic puck dragging
+    mousePuckSpeedSliderDrag(event) - Handle puck speed slider dragging
+    mousePuckAmplitudeSliderDrag(event) - Handle puck amplitude slider dragging
+    mousePuckOrbitCenterDrag(event) - Handle orbit center dragging
+    mousePuckEllipseEndDrag(event) - Handle orbit ellipse endpoint dragging
+    mousePuckOscillateEndDrag(event) - Handle oscillation endpoint dragging
+    mouseDynamicPuckResize(event) - Handle dynamic puck radius adjustment
+    mousePuck0Resize(event) - Handle flying puck resize
+    mousePuck1Resize(event) - Handle orbit puck resize
+    mousePuck2Resize(event) - Handle heartbeat puck resize
+    mousePuck3Resize(event) - Handle cycle puck resize
+    mouseBoxMove(event) - Handle box dragging
+    mouseBoxResize(event) - Handle box resizing
+    mouseBoxRotate(event) - Handle box rotation
+    mouseBoxSpeedSliderDrag(event) - Handle box speed slider dragging
+    mouseBoxAmplitudeDrag(event) - Handle box amplitude slider dragging
+    mouseCornerRadiusDrag(event) - Handle wall corner radius dragging
+    mouseMagicWandMove(event) - Handle magic wand dragging
+    mouseMagicHatMove(event) - Handle magic hat dragging
+
+    MOUSE HANDLERS - MENUS
+    ----------------------
+    colorWheelMouseMove(e) - Handle color wheel control dragging
+    colorWheelPositionMove(e) - Handle color wheel menu position dragging
+    physicsMenuMouseMove(e) - Handle physics menu slider dragging
+    physicsMenuPositionMove(e) - Handle physics menu position dragging
+    particlesMenuMouseMove(e) - Handle particles menu slider dragging
+    particlesMenuPositionMove(e) - Handle particles menu position dragging
+    gravityMenuMouseMove(e) - Handle gravity menu control dragging
+    gravityMenuPositionMove(e) - Handle gravity menu position dragging
+    wallsMenuMouseMove(e) - Handle walls menu slider dragging
+    wallsMenuPositionMove(e) - Handle walls menu position dragging
+    respawnMenuPositionMove(e) - Handle respawn menu position dragging
+    toysMenuPositionMove(e) - Handle toys menu position dragging
+    presetsMenuPositionMove(e) - Handle presets menu position dragging
+
+    TOUCH HANDLERS - OBJECTS
+    ------------------------
+    (All touch handlers mirror mouse handlers with touch event handling)
+    touchBumperMove(event) - Touch version of bumper dragging
+    touchBlowerMove(event) - Touch version of blower dragging
+    touchHungryPuckMove(event) - Touch version of hungry puck dragging
+    touchMisterMisterMove(event) - Touch version of mister mister dragging
+    touchPuckMove(p) - Create touch puck drag handler
+    touchDynamicPuckMove(event) - Touch version of dynamic puck dragging
+    touchPuckSpeedSliderDrag(event) - Touch version of puck speed slider
+    touchPuckAmplitudeSliderDrag(event) - Touch version of puck amplitude slider
+    touchPuckOrbitCenterDrag(event) - Touch version of orbit center dragging
+    touchPuckEllipseEndDrag(event) - Touch version of ellipse endpoint dragging
+    touchPuckOscillateEndDrag(event) - Touch version of oscillation endpoint
+    touchBoxMove(event) - Touch version of box dragging
+    touchBoxSpeedSliderDrag(event) - Touch version of box speed slider
+    touchBoxAmplitudeDrag(event) - Touch version of box amplitude slider
+    touchCornerRadiusDrag(event) - Touch version of corner radius dragging
+    touchMagicWandMove(event) - Touch version of magic wand dragging
+    touchMagicHatMove(event) - Touch version of magic hat dragging
+
+    TOUCH HANDLERS - MENUS
+    ----------------------
+    touchColorWheelMove(event) - Touch version of color wheel control
+    touchColorWheelPositionMove(event) - Touch version of color wheel position
+    touchPhysicsMenuMove(event) - Touch version of physics menu slider
+    touchPhysicsMenuPositionMove(event) - Touch version of physics menu position
+    touchParticlesMenuMove(event) - Touch version of particles menu slider
+    touchParticlesMenuPositionMove(event) - Touch version of particles menu position
+    touchGravityMenuMove(event) - Touch version of gravity menu control
+    touchGravityMenuPositionMove(event) - Touch version of gravity menu position
+    touchWallsMenuMove(event) - Touch version of walls menu slider
+    touchWallsMenuPositionMove(event) - Touch version of walls menu position
+    touchRespawnMenuPositionMove(event) - Touch version of respawn menu position
+    touchToysMenuPositionMove(event) - Touch version of toys menu position
+    touchPresetsMenuPositionMove(event) - Touch version of presets menu position
+
+    EVENT HANDLERS - MAIN
+    ---------------------
+    mouseDownHandler(ev) - Main mouse down event handler (routing)
+    mouseUp() - Main mouse up event handler (cleanup, state reset)
+    touchStartHandler(event) - Main touch start event handler
+    touchEndHandler(event) - Main touch end event handler
+    handleContextMenu(event) - Right-click context menu handler
+
+    SPECIAL INTERACTION MODES
+    -------------------------
+    doubleTapDragMove(event) - Handle shower width adjustment dragging
+    doubleTapDragMoveTouch(event) - Touch version of shower width adjustment
+    misterSpeedDragMove(event) - Handle mister speed adjustment dragging
+    misterSpeedDragMoveTouch(event) - Touch version of mister speed adjustment
+    cancelLongPressOnMove(event) - Cancel preset long-press on movement
+    setNewDir(e) - Set fountain direction based on mouse position
+
+    OBJECT MANAGEMENT
+    -----------------
+    duplicateNormalPuck(puckIndex) - Create copy of normal puck
+    deleteNormalPuck(puckIndex) - Remove normal puck from simulation
+    addBox(parentBox) - Add nested box inside parent box
+    duplicateBox(boxIndex) - Create copy of box
+    deleteBox(boxIndex) - Remove box from simulation
+
+    COLLISION DETECTION
+    -------------------
+    handleBallHits(ball1, ball2) - Elastic collision between two particles
+    handleBallRepulsion(ball1, ball2) - Repulsion force between particles
+    handleBumperHits(ball, bumper) - Particle collision with bumper
+    handlePuckHits(ball, puck) - Particle collision with puck
+    handleBoxHits(ball, box) - Particle collision with box (with containment)
+    handleCornerHits(ball, corner) - Particle collision with rounded corner
+    handleBlowerHits(ball, blower) - Wind force from blower
+    handleHungryPuckHits(ball, hungryPuck) - Particle absorption by hungry puck
+    handleWormSegmentHits(ball, wormSegment, radius, velocity) - Particle-worm collision
+    handleWormOutlineCollision(ball, worm) - Particle collision with worm body
+    handleOutOfBounds(ball, worldSize) - Wall collision and wrapping
+    handleMrMrBounds(hungryPuck, worldSize) - Mister mister boundary behavior
+
+    PHYSICS UTILITIES
+    -----------------
+    closestPointOnSegment(p, a, b) - Find closest point on line segment
+    pointToSegmentDistance(point, segStart, segEnd) - Distance from point to segment
+    rads(theta) - Convert degrees to radians
+    cX(pos) - Convert simulation X to canvas X
+    cY(pos) - Convert simulation Y to canvas Y
+
+    SPECIAL EFFECTS
+    ---------------
+    delayedSplode() - Explosion with staggered particle impulses
+    instantSplode() - Immediate explosion for all particles
+    startContinuousImplode() - Begin continuous implosion effect
+    stopContinuousImplode() - End continuous implosion effect
+    reassignHueIndices() - Reassign particle color indices for multi-hue modes
+
+    RENDERING UTILITIES
+    -------------------
+    catmullRomSpline(points, tension, numSegments) - Generate smooth spline curve
+    offscreenRoketDrawCircle(posX, posY, radius) - Draw circle on roket canvas
+
+    CONTINUOUS ACTION MANAGEMENT
+    ----------------------------
+    startContinuousImplode() - Start interval for continuous particle implosion
+    stopContinuousImplode() - Stop implosion interval
+    startFPSCounter() - Initialize FPS counter (now canvas-based)
+    stopFPSCounter() - Stop FPS counter
+    toggleFPS() - Toggle FPS counter visibility
+    pauseAndStep() - Pause and advance one physics step
 
     ===========================================
     */
