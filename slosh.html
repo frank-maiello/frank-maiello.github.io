@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.24
+		<title>Slosh 2.25
         </title>
 	</head>
 
@@ -12774,7 +12774,32 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.moveTo(x, y);
                 c.lineTo(innerX, innerY);
                 c.lineTo(nextX, nextY);
-                c.strokeStyle = `hsl(${45 * (i / 5)}, 100%, 50%)`;
+                c.strokeStyle = `hsl(${45 * (i / 5) + 25}, 100%, 50%)`;
+                
+                c.stroke();
+            }
+
+            // Draw each star point with different colors
+            c.lineWidth = 0.007 * cScale;
+            for (let i = 0; i < 5; i++) {
+                const angle = (i * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * (0.4 * Math.PI));
+                const x = Math.cos(angle) * this.wandLength * 0.1;
+                const y = Math.sin(angle) * this.wandLength * 0.1;
+                const innerAngle = (angle + Math.PI / 5);
+                const innerX = Math.cos(innerAngle) * this.wandLength * 0.1;
+                const innerY = Math.sin(innerAngle) * this.wandLength * 0.1;
+                
+                // Next outer point
+                const nextAngle = ((i + 1) * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * (0.4 * Math.PI));
+                const nextX = Math.cos(nextAngle) * this.wandLength * 0.2;
+                const nextY = Math.sin(nextAngle) * this.wandLength * 0.2;
+                
+                // Draw one point as a separate path
+                c.beginPath();
+                c.moveTo(x, y);
+                c.lineTo(innerX, innerY);
+                c.lineTo(nextX, nextY);
+                c.strokeStyle = `hsl(${45 * (i / 5) + 25}, 100%, 50%)`;
                 
                 c.stroke();
             }
@@ -12801,7 +12826,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         const sparkleY = Math.sin(sparkleAngle) * sparkleRadius;
                         c.fillStyle = `hsla(${Math.random() * 360}, 100%, 70%, ${(Math.random() * 0.5 + 0.5) * sparkleAlpha})`;
                         c.beginPath();
-                        c.arc(sparkleX, sparkleY, 2, 0, Math.PI * 2);
+                        c.arc(sparkleX, sparkleY, 3, 0, Math.PI * 2);
                         c.fill();
                     }
                 } else {
@@ -12810,12 +12835,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     if (Math.random() < 0.2) {
                         for (let i = 0; i < 5; i++) {
                             const sparkleAngle = Math.random() * Math.PI * 2;
-                            const sparkleRadius = Math.random() * this.wandLength * 0.6;
+                            const sparkleRadius = Math.random() * this.wandLength * 0.3;
                             const sparkleX = Math.cos(sparkleAngle) * sparkleRadius;
                             const sparkleY = Math.sin(sparkleAngle) * sparkleRadius;
-                            c.fillStyle = `hsla(${Math.random() * 360}, 100%, 70%, ${Math.random() * 0.3 + 0.2})`;
+                            c.fillStyle = `hsla(${Math.random() * 360}, 0%, 70%, ${Math.random() * 0.5 + 0.2})`;
                             c.beginPath();
-                            c.arc(sparkleX, sparkleY, 2, 0, Math.PI * 2);
+                            c.arc(sparkleX, sparkleY, 4, 0, Math.PI * 2);
                             c.fill();
                         }
                     }
