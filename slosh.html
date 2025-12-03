@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.25
+		<title>Slosh 2.26
         </title>
 	</head>
 
@@ -605,6 +605,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     var gummiReady = false;
     var doGummi = false; // fourth ball rendering style
     var doArcs = false; // bent arc rendering style
+    var doTeardrops = false; // teardrop rendering style
     // Faster response = smaller tau; controls heading smoothing speed (seconds)
     var gummiHeadingTau = 0.0;
     // Orientation offset so the TOP of the image leads along the velocity vector
@@ -2479,8 +2480,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         ctx.textBaseline = 'middle';
         ctx.fillText('Repulsion Force', sliderStartX + sliderWidth/2, currentY);
         
-        // Draw marker
-        const repulsionPercent = (physicsMenuRepulsionForce - 1) / (20 - 1);
+        // Calculate scaled repulsion force based on large particle radius (more sensitive to large particles)
+        const bigBallRadius = 0.001 * particlesMenuLargeRadius;
+        const baseRadius = 0.025;
+        const repulsionScale = bigBallRadius <= baseRadius ? 1.0 : baseRadius / bigBallRadius;
+        const scaledForce = (physicsMenuRepulsionForce / 10) * repulsionScale;
+        
+        // Draw marker at scaled position
+        const repulsionPercent = (scaledForce * 10 - 1) / (20 - 1);
         const repulsionHandleX = sliderStartX + repulsionPercent * sliderWidth;
         ctx.fillStyle = 'white';
         ctx.fillRect(repulsionHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
@@ -2504,8 +2511,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         ctx.textBaseline = 'middle';
         ctx.fillText('Repulsion Distance', sliderStartX + sliderWidth/2, currentY);
 
-        // Draw marker
-        const repulsionDistPercent = physicsMenuRepulsionDist / 10;
+        // Calculate scaled repulsion distance (reuse avgRadius and repulsionScale from above)
+        const scaledDist = physicsMenuRepulsionDist * repulsionScale;
+        
+        // Draw marker at scaled position
+        const repulsionDistPercent = scaledDist / 10;
         const repulsionDistHandleX = sliderStartX + repulsionDistPercent * sliderWidth;
         ctx.fillStyle = 'white';
         ctx.fillRect(repulsionDistHandleX - 2, currentY - sliderHeight/2 - 3, 4, sliderHeight + 6);
@@ -2606,7 +2616,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         // 6. Tau (Heading Smoothing) slider
         // Determine if tau is relevant (only for gummi bears and rokets) 
-        const tauRelevant = doGummi || doRokets || doArrows || doEllipses || doLines || doArcs;
+        const tauRelevant = doGummi || doRokets || doArrows || doEllipses || doLines || doArcs || doTeardrops;
         const tauOpacity = tauRelevant ? 1.0 : 0.0;
         
         ctx.save();
@@ -5533,6 +5543,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             { value: 'drawArcs', label: 'bendy lines' },
             { value: 'drawEllipses', label: 'grains of rice' },
             { value: 'drawLinedEllipses', label: 'lined grains of rice' },
+            { value: 'drawTeardrops', label: 'teardrops' },
             { value: 'drawArrows', label: 'arrows' },
             { value: 'drawLinedArrows', label: 'lined arrows' },
             { value: 'drawFancyArrows', label: 'fancy arrows' },
@@ -5619,7 +5630,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         const dropdownHeight = 24;
         const dropdownWidth = w - 100;  // Adjust for new slider width
-        const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawArcs', 'drawEllipses', 'drawLinedEllipses', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
+        const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawArcs', 'drawEllipses', 'drawLinedEllipses', 'drawTeardrops', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
         
         // If dropdown is expanded, check dropdown options FIRST (before menu bounds)
         // This allows clicking options that extend outside the menu
@@ -6254,7 +6265,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Handle render type selection
         if (hitTest.startsWith('renderType_')) {
             const index = parseInt(hitTest.split('_')[1]);
-            const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawArcs', 'drawEllipses', 'drawLinedEllipses', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
+            const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawArcs', 'drawEllipses', 'drawLinedEllipses', 'drawTeardrops', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
             particlesMenuRenderType = renderTypes[index];
             setRenderType(particlesMenuRenderType);
             particlesMenuRenderTypeExpanded = false; // Collapse dropdown after selection
@@ -6523,6 +6534,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doGummi = false;
             doRokets = false;
             doEllipses = false;
+            doTeardrops = false;
             colorWheelSat = 80;
             ballSaturation = 80;
             colorWheelLight = 55;
@@ -6550,6 +6562,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doGummi = false;
             doRokets = false;
             doEllipses = false;
+            doTeardrops = false;
             colorWheelSat = 80;
             ballSaturation = 80;
             colorWheelLight = 40;
@@ -6576,6 +6589,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doGummi = false;
             doRokets = false;
             doEllipses = false;
+            doTeardrops = false;
             colorWheelSat = 50;
             ballSaturation = 75;
             colorWheelLight = 55;
@@ -6602,6 +6616,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doArcs = false;
             doRokets = false;
             doEllipses = false;
+            doTeardrops = false;
             colorWheelSat = 100;
             ballSaturation = 100;
             colorWheelLight = 65;
@@ -6629,6 +6644,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doArcs = false;
             doRokets = false;
             doEllipses = false;
+            doTeardrops = false;
             colorWheelSat = 100;
             ballSaturation = 100;
             colorWheelLight = 70;
@@ -6652,6 +6668,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doGummi = false;
             doRokets = false;
             doEllipses = false;
+            doTeardrops = false;
             colorWheelSat = 50;
             ballSaturation = 75;
             colorWheelLight = 60;
@@ -6678,6 +6695,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doGummi = false;
             doRokets = false;
             doEllipses = false;
+            doTeardrops = false;
             colorWheelSat = 50;
             ballSaturation = 75;
             colorWheelLight = 60;
@@ -6704,6 +6722,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doGummi = false;
             doRokets = false;
             doEllipses = true;
+            doTeardrops = false;
             colorWheelSat = 50;
             ballSaturation = 75;
             colorWheelLight = 50;
@@ -6730,10 +6749,38 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doGummi = false;
             doRokets = false;
             doEllipses = true;
+            doTeardrops = false;
             colorWheelSat = 50;
             ballSaturation = 75;
             colorWheelLight = 40;
             ballLightness = 40;
+            if (wasGummi == true) {
+                particlesMenuQuantity = 64;
+                particlesMenuLargeRadius = 15;
+                particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
+                wasGummi = false;
+                makeBalls();
+            }
+        } else if (renderType === 'drawTeardrops') {
+            doCircles = false;
+            doDiscs = false;
+            doSpheres = false;
+            doRings = false;
+            doLines = false;
+            doArrows = false;
+            doArcs = false;
+            doGummi = false;
+            doRokets = false;
+            doEllipses = false;
+            doTeardrops = true;
+            colorWheelSat = 50;
+            ballSaturation = 75;
+            colorWheelLight = 50;
+            ballLightness = 50;
             if (wasGummi == true) {
                 particlesMenuQuantity = 64;
                 particlesMenuLargeRadius = 15;
@@ -6756,6 +6803,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doGummi = false;
             doRokets = false;
             doEllipses = false;
+            doTeardrops = false;
             colorWheelSat = 50;
             ballSaturation = 75;
             colorWheelLight = 60;
@@ -6786,6 +6834,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doGummi = false;
             doRokets = true;
             doEllipses = false;
+            doTeardrops = false;
             colorWheelSat = 50;
             ballSaturation = 75;
             colorWheelLight = 45;
@@ -9003,6 +9052,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         roketCtx.shadowBlur = 10;
         roketCtx.shadowColor = 'black';
         roketCtx.stroke();
+
+        // RED ANTENNA BALL  ----------
+        roketCtx.beginPath();
+        roketCtx.moveTo(0, 0);
+        roketCtx.arc(
+            (1.15 * roketVars.r9 * rpx * Math.cos(0)), 
+            (-1.15 * roketVars.r9 * rpx * Math.sin(0)),
+            0.03 * rpx,
+            0,
+            Math.PI * 2
+        );
+        roketCtx.fillStyle = 'hsl(0, 100%, 50%)';
+        roketCtx.fill();
+
+
 
         // FUSELAGE (smooth Catmull-Rom spline)
         const pts = [
@@ -11579,12 +11643,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		var dir = new Vector2();
 		dir.subtractVectors(ball2.pos, ball1.pos);
 		var d = dir.length();
-		var repulsionThreshold = physProps.repulsionDist * (ball1.radius + ball2.radius);
+		
+		// Automatic repulsion scaling: reduce repulsion for larger particles
+		// Base threshold is 0.025 (menu value 25). Below this, no reduction.
+		// Above this, apply progressive reduction to prevent excessive "shyness"
+		// Use the larger of the two radii to determine scaling (most sensitive to large particles)
+		var maxRadius = Math.max(ball1.radius, ball2.radius);
+		var baseRadius = 0.025;
+		var repulsionScale = maxRadius <= baseRadius ? 1.0 : baseRadius / maxRadius;
+		
+		var scaledRepulsionDist = physProps.repulsionDist * repulsionScale;
+		var repulsionThreshold = scaledRepulsionDist * (ball1.radius + ball2.radius);
 		if (d == 0.0 || d >= repulsionThreshold)
 			return;
 		dir.scale(1.0 / d);
         var compression = Math.abs(repulsionThreshold - d);
-        var force = (physProps.repulsionForce * compression) / physProps.substeps;
+        var scaledRepulsionForce = physProps.repulsionForce * repulsionScale;
+        var force = (scaledRepulsionForce * compression) / physProps.substeps;
 		var totalMass = ball1.mass + ball2.mass;
 		var force1 = force * (ball2.mass / totalMass);
 		var force2 = force * (ball1.mass / totalMass);
@@ -12449,6 +12524,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         doGummi = false;
         doRokets = false;
         doEllipses = false;
+        doTeardrops = false;
         wasGummi = false;
     
         // Ellipse sizing parameters (relative to particle diameter)
@@ -13829,6 +13905,75 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.lineWidth = 0.3 * this.radius * cScale;
                     c.stroke();
                 }
+                
+                c.restore();
+            } else if (doTeardrops == true) {
+                // Teardrop rendering with directional steering
+                const speed = this.vel.length();
+                if (speed > 1e-6) {
+                    const target = Math.atan2(this.vel.y, this.vel.x);
+                    if (!this.headingInitialized) {
+                        this.headingAngle = target;
+                        this.headingInitialized = true;
+                    } else {
+                        // Smooth with exponential filter
+                        const TWO_PI = Math.PI * 2;
+                        let diff = target - this.headingAngle;
+                        // Wrap to [-PI, PI]
+                        diff = ((diff + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
+                        const alpha = 1 - Math.exp(-physProps.dt / Math.max(1e-6, physProps.tau));
+                        this.headingAngle += alpha * diff;
+                    }
+                }
+                
+                const lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 65);
+                const satLevel = ballSaturation * this.saturation;
+                
+                // Calculate teardrop dimensions based on particle radius
+                const tearLength = 3.5 * this.radius * cScale;  // Longer for proper aspect ratio
+                const tearWidth = 2.2 * this.radius * cScale;   // Width for ~1.6:1 length:width ratio
+                
+                c.save();
+                c.translate(cX(this.pos), cY(this.pos));
+                c.rotate(-this.headingAngle + Math.PI / 2); // Rotate 90 degrees CW to correct orientation
+                
+                // Draw teardrop using parametric formula
+                // x(t) = 2a*cos(t) - a*sin(2t), y(t) = b*sin(t)
+                // where π/2 ≤ t ≤ 5π/2
+                const a = 0.3;
+                const b = 2.0;
+                const scale = this.radius * cScale;
+                
+                // The rounded head bulb extends roughly from y=-b to y≈-b*0.3
+                // Approximate centroid of the bulb is around y = -b*0.7
+                const pivotOffsetX = 0;
+                const pivotOffsetY = -b * 0.7 * scale;  // Centroid of bulb head
+                
+                c.beginPath();
+                
+                // Draw the teardrop using small line segments
+                const numPoints = 32;  // Number of segments
+                for (let i = 0; i <= numPoints; i++) {
+                    const t = Math.PI / 2 + (i / numPoints) * (2 * Math.PI);
+                    const x = (2 * a * Math.cos(t) - a * Math.sin(2 * t)) * scale;
+                    const y = b * Math.sin(t) * scale;
+                    
+                    if (i === 0) {
+                        c.moveTo(x - pivotOffsetX, y - pivotOffsetY);
+                    } else {
+                        c.lineTo(x - pivotOffsetX, y - pivotOffsetY);
+                    }
+                }
+                
+                c.closePath();
+                
+                if (this.whiteBall == true || this.tracerBall == true) {
+                    c.fillStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                } else {
+                    c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                }
+                c.fill();
+           
                 
                 c.restore();
             } else if (doLines == true || doArrows == true) {
@@ -16666,24 +16811,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Apply button opacity for fade effect
             c.globalAlpha = this.buttonOpacity;
             
-            // Top-left: Add button (plus)
-            const addLocalPos = rotatePoint(-this.width/2 + btnDistance + (btnRadius * 3), this.height/2 - btnDistance);
-            this.addPos = addLocalPos;
-            drawCircle(cX(this.addPos), cY(this.addPos), btnRadius * cScale);
-            c.fillStyle = 'hsl(320, 100%, 30%)';
-            c.fill();
-            c.strokeStyle = 'black';
-            c.lineWidth = 0.2 * btnRadius * cScale;
-            // Draw + symbol
-            c.beginPath();
-            c.moveTo(cX(this.addPos) - 0.5 * btnRadius * cScale, cY(this.addPos));
-            c.lineTo(cX(this.addPos) + 0.5 * btnRadius * cScale, cY(this.addPos));
-            c.moveTo(cX(this.addPos), cY(this.addPos) - 0.5 * btnRadius * cScale);
-            c.lineTo(cX(this.addPos), cY(this.addPos) + 0.5 * btnRadius * cScale);
-            c.stroke();
-            
-            // Top-left: Subtract button (minus) - below add button
-            const subtractLocalPos = rotatePoint(-this.width/2 + btnDistance, this.height/2 - btnDistance - (btnRadius * 3));
+            // Top-left: Subtract button (minus) - topmost position
+            const subtractLocalPos = rotatePoint(-this.width/2 + btnDistance, this.height/2 - btnDistance);
             this.subtractPos = subtractLocalPos;
             
             // Check if this is the last box
@@ -16700,8 +16829,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.lineTo(cX(this.subtractPos) + 0.5 * btnRadius * cScale, cY(this.subtractPos));
             c.stroke();
             
-            // Top-left: Off button (aligned horizontally with - button, vertically with + button)
-            const offLocalPos = rotatePoint(-this.width/2 + btnDistance, this.height/2 - btnDistance);
+            // Top-left: Off button (close button with X) - below subtract button
+            const offLocalPos = rotatePoint(-this.width/2 + btnDistance, this.height/2 - btnDistance - (btnRadius * 3));
             this.offPos = offLocalPos;
             drawCircle(cX(this.offPos), cY(this.offPos), btnRadius * cScale);
             c.fillStyle = 'rgba(139, 0, 0, 0.6)';
@@ -16716,6 +16845,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.lineTo(cX(this.offPos) - 0.4 * btnRadius * cScale, cY(this.offPos) + 0.4 * btnRadius * cScale);
             c.stroke();
             
+            // Top-right: Add button (plus) - aligned vertically with subtract button
+            const addLocalPos = rotatePoint(-this.width/2 + btnDistance + (btnRadius * 3), this.height/2 - btnDistance);
+            this.addPos = addLocalPos;
+            drawCircle(cX(this.addPos), cY(this.addPos), btnRadius * cScale);
+            c.fillStyle = 'hsl(320, 100%, 30%)';
+            c.fill();
+            c.strokeStyle = 'black';
+            c.lineWidth = 0.2 * btnRadius * cScale;
+            // Draw + symbol
+            c.beginPath();
+            c.moveTo(cX(this.addPos) - 0.5 * btnRadius * cScale, cY(this.addPos));
+            c.lineTo(cX(this.addPos) + 0.5 * btnRadius * cScale, cY(this.addPos));
+            c.moveTo(cX(this.addPos), cY(this.addPos) - 0.5 * btnRadius * cScale);
+            c.lineTo(cX(this.addPos), cY(this.addPos) + 0.5 * btnRadius * cScale);
+            c.stroke();
+            
             // Resize grip (bottom-right corner)
             // Use btnDistance for consistency with other buttons - fixed distance from edges
             const resizeLocalPos = rotatePoint(this.width/2 - btnDistance, -this.height/2 + btnDistance);
@@ -16728,7 +16873,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             const dotSize = 0.3 * btnRadius * cScale;
             const spacing = 0.9 * btnRadius * cScale;
-            c.fillStyle = 'rgba(0, 200, 0, 0.8)';
+            c.fillStyle = 'hsla(0, 0%, 70%, 0.8)';
             
             // Triangle pointing to bottom-right corner, shifted right for symmetry
             const rightShift = spacing;
@@ -17620,6 +17765,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                             c.lineWidth = 0.02 * this.radius * cScale;
                             c.strokeStyle = `hsl(120, 90%, 50%)`;
                             c.stroke();
+                            drawCircle(
+                                buttonPositions[i - 1].x * cScale,
+                                (simHeight - buttonPositions[i - 1].y) * cScale,
+                                0.4 * buttonRadius * cScale);
+                            c.fillStyle = `hsl(60, 90%, 50%)`;
+                            c.fill();
                         } else if (i == 2) {
                             c.beginPath();
                             c.ellipse(
@@ -17635,6 +17786,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                             c.lineWidth = 0.02 * this.radius * cScale;
                             c.strokeStyle = `hsl(120, 80%, 50%)`;
                             c.stroke();
+                            drawCircle(
+                                buttonPositions[i - 1].x * cScale,
+                                (simHeight - buttonPositions[i - 1].y) * cScale,
+                                0.4 * buttonRadius * cScale);
+                            c.fillStyle = `hsl(60, 90%, 50%)`;
+                            c.fill();
                         } else if (i == 3) {  // horizontal line
                             c.beginPath();
                             c.moveTo(
@@ -18181,7 +18338,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     // Draw triangle of dots pointing down and right
                     const dotSize = 0.03 * this.radius * cScale;
                     const spacing = 0.07 * this.radius * cScale;
-                    c.fillStyle = 'rgba(0, 200, 0, 0.8)';
+                    c.fillStyle = 'hsla(0, 0%, 70%, 0.8)';
                     
                     // Row 1 (top-right): 3 dots
                     for (let i = 0; i < 3; i++) {
@@ -18796,10 +18953,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             for (let i = 0; i < numArms; i++) {
                 const angle = (i / numArms) * Math.PI * 2 + 1.5 * baseRotation; // Add rotation here
                 // Draw spiral arm as individual segments to allow tapering
-                let prevX = null;
+                let prevX = null
                 let prevY = null;
                 for (let t = 0; t <= 1; t += 0.05) {
-                    const r = 1.2 * iconRadius * (1 - t * 0.7);
+                    const r = 1.2 * iconRadius * (1 - t * 0.8);
                     const a = angle - t * Math.PI * 1.5;
                     const x = Math.cos(a) * r;
                     const y = Math.sin(a) * r;
@@ -18811,7 +18968,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         c.strokeStyle = `hsla(0, 0%, 0%, 0.55)`;
                         c.lineWidth = 18 * (1 - t * 0.7); // Start at 6, taper down
                         c.stroke();
-                        c.strokeStyle = `hsl(60, 85%, ${lightness - i * 5}%)`;   `hsla(0, 0%, 0%, 0.7)`;
+                        c.strokeStyle = `hsl(${10 + t * 90}, 85%, ${lightness - i * 5}%)`;   `hsla(0, 0%, 0%, 0.7)`;
                         c.lineWidth = 8 * (1 - t * 0.7); // Start at 6, taper down
                         c.stroke();
                     }
