@@ -4491,7 +4491,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     var xPos = this.pos.x + this.shake;
                     var eyeLift = 0.25 + this.age / 2500 * 0.15;
                     var faceAlpha = Math.min(100, this.age / 2000 * 100);
-                    //  draw angry lines for eyes  ---------
+                    //  draw eyebrows  ---------
                     c.strokeStyle = `hsla(0, 0%, 0%, ${faceAlpha}%)`;
                     c.lineWidth = 0.12 * this.radius * cScale;
                     c.lineCap = 'butt'
@@ -4503,7 +4503,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.moveTo((xPos + 0.2 * this.radius) * cScale, (this.pos.y - 0.25 * this.radius) * cScale);
                     c.lineTo((xPos + 0.55 * this.radius) * cScale, (this.pos.y - eyeLift * this.radius) * cScale);
                     c.stroke();
-
+                    //  draw eyes  ---------
+                    c.fillStyle = `hsla(0, 0%, 100%, ${faceAlpha}%)`;
+                    drawCircle((xPos - 0.2 * this.radius) * cScale, (this.pos.y - 0.2 * this.radius) * cScale, 0.15 * this.radius * cScale);
+                    drawCircle((xPos + 0.2 * this.radius) * cScale, (this.pos.y - 0.2 * this.radius) * cScale, 0.15 * this.radius * cScale);
+                    c.fill();
                     //  DRAW MOUTH  ----------
                     if (this.rando < 0.33) {
                         //  POUTY MOUTH  ---------
