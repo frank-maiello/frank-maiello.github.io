@@ -134,7 +134,7 @@
     <div class = "description">Particle Physics Sandbox</div>
     <div class = "verbiage"><br>Fluid-like "sloshy" particle simulation with</div>
     <div class = "verbiage">interactive toys and a menu-driven user interface.</div>
-    <div class = "verbiage">Created with extensive use of Claude by Anthropic.</div>
+    <div class = "verbiage">Created with the extensive help of Claude AI.</div>
     <br>
     <a href = "https://frank-maiello.github.io/slosh.html" target="_blank" class="button">Play</a>
     <a href = "https://github.com/frank-maiello/frank-maiello.github.io/blob/main/slosh.html" target="_blank" class="button">Code</a>
@@ -149,9 +149,10 @@
   <td>
     <div class = "appTitle">3. R0IDS</div>
     <h3><br></h3>
-    <div class = "description">An Arcade Game in the Style of Asteroids</div>
-    <div class = "verbiage"><br>It's a shoot-em-up game you can play!</div>
-    <div class = "verbiage">A cranky enemy, unique obstacles, power-ups, and escalating difficulty.</div>
+    <div class = "description">My Take on Asteroids</div>
+    <div class = "verbiage"><br>First there was Space Invaders. Then came Asteroids.</div>
+    <div class = "verbiage">Unique obstacles, a cranky enemy, weapon power-ups,</div>
+    <div class = "verbiage">floaty physics, increasing difficulty... and cheats!</div>
     <br>
     <a href = "https://frank-maiello.github.io/roids.html" target="_blank" class="button">Play</a>
     <a href = "https://github.com/frank-maiello/frank-maiello.github.io/blob/main/roids.html" target="_blank" class="button">Code</a>
@@ -167,7 +168,8 @@
     <div class = "appTitle">2. DR0PLETS</div>
     <h3><br></h3>
     <div class = "description">Abstract Algorithmic Line Art</div>
-    <div class = "verbiage"><br>Simple line-drawing using trigonometry and polar coordinates.</div>
+    <div class = "verbiage"><br>Repetetive line-drawing the slow way, using</div>
+    <div class = "verbiage">trigonometry and polar coordinates.</div>
     <br>
     <a href = "https://frank-maiello.github.io/droplets.html" target="_blank" class="button">Play</a>
     <a href = "https://github.com/frank-maiello/frank-maiello.github.io/blob/6404a30fcd3e544bf28b16d2a8adea4be639b728/droplets.html" target="_blank" class="button">Code</a>
@@ -183,8 +185,8 @@
   <div class = "appTitle">1. PLINK0 LAB</div>
   <h3><br></h3>
   <div class = "description">Intro to Particle Physics Simulation</div>
-  <div class = "verbiage"><br>If you dare. My first undertaking.</div>
-  <div class = "verbiage">Consult a child to best navigate the skunkworks user interface.</div>
+  <div class = "verbiage"><br>If you dare. My first undertaking. Consult a child</div>
+  <div class = "verbiage">to best navigate the Playskool user interface.</div>
 
   <br>
   <a href = "https://frank-maiello.github.io/plinkolab.html" target="_blank" class="button">Play</a>
@@ -237,6 +239,15 @@
 		c.ellipse(x * cScale, y * cScale, radiusX * cScale, radiusY * cScale, 0, 0, 2 * Math.PI) 
 		c.closePath();
 	}
+
+    //  SETUP SCENE ======================================================
+	function setupScene() {
+        PrimaryNodes = [];
+        SecondaryNodes = [];
+        spawnNodes();
+        spinner = 0;
+        f = 0;
+    }
     
 	//  VECTOR OPERATIONS ---------------------------------------------------------------------
 	class Vector2 {
@@ -286,17 +297,6 @@
 		}
 	}
 
-    function closestPointOnSegment(p, a, b) {
-		var ab = new Vector2();
-		ab.subtractVectors(b, a);
-		var t = ab.dot(ab);
-		if (t == 0.0)
-			return a.clone();
-		t = Math.max(0.0, Math.min(1.0, (p.dot(ab) - a.dot(ab)) / t));
-		var closest = a.clone();
-		return closest.add(ab, t);
-	}
-
     function cX(pos) {
         return pos.x * cScale;
     }
@@ -304,61 +304,113 @@
         return canvas.height - pos.y * cScale;
     }
 
+    //  NORMALIZE DISTANCE  -------------------
+    function measureDistAndShade(node1, node2) {
+		var dir = new Vector2();
+		dir.subtractVectors(node1.pos, node2.pos);
+		d = dir.length();
+		
+		return 1 / d;
+	}
+
     //  NODE CLASS  -------------------
     class NODE { 
-        constructor(pos, angle, color, speed, bullshit) {
+        constructor(pos, angle, color, speed, direction) {
             this.pos = pos.clone();
             this.angle = angle;
             this.color = color;
             this.speed = speed;
-            this.bullshit = bullshit;
+            this.direction = direction;
+            this.trail = [];
+            this.maxTrailLength = 40;
+            this.trailMinDistance = 0.001;
         }
         simulate() {
-            this.angle += .05 * this.bullshit * this.speed;
-            //this.pos.x += 0.003 * Math.cos(this.angle);
-            //this.pos.y -= 0.003 * Math.sin(this.angle);
+            this.angle += .05 * this.direction * this.speed;
+            if (this.direction > 0 && this.angle > 2 * Math.PI) {
+                this.angle -= 2 * Math.PI;
+            }
+            if (this.direction < 0 && this.angle < 0) {
+                this.angle += 2 * Math.PI;
+            }
 
             var lobeId = 5;
-            f += 0.000001 * this.speed * this.bullshit;
-            this.pos.x += (0.005 * Math.cos(this.angle * this.bullshit)) + 0.008 * Math.cos(lobeId * (f + this.angle)) * Math.cos(f + this.angle);
-            this.pos.y += (0.005 * Math.sin(this.angle)) + 0.008 * Math.cos(lobeId * (f + this.angle)) * Math.sin(f + this.angle);
+            f += 0.000001 * this.speed * this.direction;
             
-            //this.pos.x += -0.01 + 0.020 * Math.random();
-            //this.pos.y += -0.01 + 0.010 * Math.random();
+            // Pre-calculate trig values to avoid redundant calculations
+            const angleDirection = this.angle * this.direction;
+            const fPlusAngle = f + this.angle;
+            const lobeFPlusAngle = lobeId * fPlusAngle;
+            
+            const cosAngleDirection = Math.cos(angleDirection);
+            const sinAngle = Math.sin(this.angle);
+            const cosLobeFPlusAngle = Math.cos(lobeFPlusAngle);
+            const cosFPlusAngle = Math.cos(fPlusAngle);
+            const sinFPlusAngle = Math.sin(fPlusAngle);
+            
+            const lobeEffect = 0.008 * cosLobeFPlusAngle;
+            
+            this.pos.x += 0.002 * cosAngleDirection + lobeEffect * cosFPlusAngle;
+            this.pos.y += 0.001 * sinAngle + lobeEffect * sinFPlusAngle;
+            
+            // Add current position to trail
+            this.addToTrail();
+        }
+        addToTrail() {
+            // Only add if moved enough distance from last trail point
+            if (this.trail.length === 0) {
+                this.trail.push(this.pos.clone());
+            } else {
+                const lastPos = this.trail[this.trail.length - 1];
+                const dx = this.pos.x - lastPos.x;
+                const dy = this.pos.y - lastPos.y;
+                const distSquared = dx * dx + dy * dy;
+                
+                if (distSquared > this.trailMinDistance * this.trailMinDistance) {
+                    this.trail.push(this.pos.clone());
+                    
+                    // Keep trail at max length
+                    if (this.trail.length > this.maxTrailLength) {
+                        this.trail.shift();
+                    }
+                }
+            }
         }
     }
 
     //  GENERATE NODE ARRAY ------------------
     function spawnNodes() {
+        // right side
         for (i = 0; i < 20; i++) {
             var radius = 0.1 * simHeight + 0.5 * simHeight * Math.random();
             var angle = 2 * Math.PI * Math.random();
             var color = `hsl(${Math.random() * 360}, 30%, 50%)`;
             var speed = 0.4 * Math.random();
             if (Math.random() < 0.50) {
-                bullshit = 1;
+                var direction = 1;
             } else {
-                bullshit = -1;
+                var direction = -1;
             }
             PrimaryNodes.push(new NODE(
                 new Vector2(
-                    0.9 * simWidth + radius * Math.cos(angle), 
+                    0.7 * simWidth + radius * Math.cos(angle), 
                     0.5 * simHeight + radius * Math.sin(angle)), 
                 2 * Math.PI * Math.random(),
                 color,
                 speed,
-                bullshit));
+                direction));
         }
 
+        //  left side
         for (i = 0; i < 20; i++) {
             var radius = 0.1 * simHeight + 0.5 * simHeight * Math.random();
             var angle = 2 * Math.PI * Math.random();
             var color = `hsl(${Math.random() * 360}, 30%, 50%)`;
             var speed = .1 + .4 * Math.random();
             if (Math.random() < 0.50) {
-                bullshit = 1;
+                direction = 1;
             } else {
-                bullshit = -1;
+                direction = -1;
             }
             SecondaryNodes.push(new NODE(
                 new Vector2(
@@ -367,19 +419,8 @@
                 2 * Math.PI * Math.random(),
                 color,
                 speed,
-                bullshit));
+                direction));
         }
-
-
-    }
-    
-	//  SETUP SCENE ======================================================
-	function setupScene() {
-        PrimaryNodes = [];
-        SecondaryNodes = [];
-        spawnNodes();
-        spinner = 0;
-        f = 0;
     }
 
     //  SIMULATION --------------------------------------------------------------------------
@@ -389,35 +430,17 @@
             SecondaryNodes[n].simulate();
         }
     }
-
-    //  ROID - ROID BOUNCES  -------------------
-    function measureDistAndShade(node1, node2) {
-		var dir = new Vector2();
-		dir.subtractVectors(node1.pos, node2.pos);
-		d = dir.length();
-		
-		return 1 / d;
-	}
-    
     
     //  DRAW EVERYTHING ==============================================================
 	function drawEverything() {
             c.fillStyle = 'hsl(0, 0%, 0%)';
             c.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Apply darkening overlay
-            //c.fillStyle = `rgba(0, 0, 0, ${0.9})`;
-            //c.fillRect(0, 0, canvas.width, canvas.height);
 
-            //c.fillStyle = 'hsl(0, 0%, 80%)';
-            //c.strokeStyle = 'hsl(0, 0%, 80%)';
-            c.lineWidth = 1;
-
+            // Draw connections between primary and secondary nodes
             for (i = 0; i < PrimaryNodes.length; i++) {
                 node1 = PrimaryNodes[i];
-                for (j = i + 1; j < PrimaryNodes.length; j++) {
-                    node2 = PrimaryNodes[j];
-                    c.beginPath();
+                for (j = 0; j < SecondaryNodes.length; j++) {
+                    node2 = SecondaryNodes[i];
                     c.moveTo(node1.pos.x * cScale, node1.pos.y * cScale);
                     c.lineTo(node2.pos.x * cScale, node2.pos.y * cScale);
                     if (measureDistAndShade(node1, node2) * 20 < 60) {
@@ -425,19 +448,14 @@
                     } else {
                         var lineLite = 60;
                     }
-                    c.strokeStyle = `hsla(40, 50%, ${lineLite}%, ${lineLite + 20}%)`;
-                    c.lineWidth = Math.min(2 * measureDistAndShade(node1, node2), 4);
-                    c.stroke();
-                }  
-                
-            }
-            for (i = 0; i < PrimaryNodes.length; i++) {
-                node1 = PrimaryNodes[i];
-                drawCircle(node1.pos.x * cScale, node1.pos.y * cScale, 0.02 * cScale);
-                c.fillStyle = 'hsl(210, 70%, 50%)'
-                c.fill();   
+                    c.strokeStyle = `hsla(0, 70%, 20%, 10%)`;
+                    c.lineWidth = Math.min(2 * measureDistAndShade(node1, node2), 2);
+                    
+                }
+                c.stroke();
             }
 
+            // Draw connections between secondary nodes (left side)
             for (i = 0; i < SecondaryNodes.length; i++) {
                 node1 = SecondaryNodes[i];
                 for (j = i + 1; j < PrimaryNodes.length; j++) {
@@ -453,20 +471,15 @@
                     c.strokeStyle = `hsla(130, 50%, ${lineLite}%, ${lineLite + 20}%)`;
                     c.lineWidth = Math.min(2 * measureDistAndShade(node1, node2), 4);
                     c.stroke();
-                }  
-                
-            }
-            for (i = 0; i < SecondaryNodes.length; i++) {
-                node1 = SecondaryNodes[i];
-                drawCircle(node1.pos.x * cScale, node1.pos.y * cScale, 0.02 * cScale);
-                c.fillStyle = 'hsl(320, 70%, 50%)'
-                c.fill();   
+                }   
             }
 
+            // Draw connections between primary nodes (right side)
             for (i = 0; i < PrimaryNodes.length; i++) {
                 node1 = PrimaryNodes[i];
-                for (j = 0; j < SecondaryNodes.length; j++) {
-                    node2 = SecondaryNodes[i];
+                for (j = i + 1; j < PrimaryNodes.length; j++) {
+                    node2 = PrimaryNodes[j];
+                    c.beginPath();
                     c.moveTo(node1.pos.x * cScale, node1.pos.y * cScale);
                     c.lineTo(node2.pos.x * cScale, node2.pos.y * cScale);
                     if (measureDistAndShade(node1, node2) * 20 < 60) {
@@ -474,21 +487,107 @@
                     } else {
                         var lineLite = 60;
                     }
-                    c.strokeStyle = `hsla(0, 50%, 20%, 30%)`;
-                    c.lineWidth = Math.min(2 * measureDistAndShade(node1, node2), 4);
+                    c.strokeStyle = `hsla(${180 + 3 * lineLite}, 50%, ${lineLite}%, ${lineLite + 20}%)`;
+                    c.lineWidth = Math.min(4 * measureDistAndShade(node1, node2), 4);
                     c.stroke();
+                }  
+            }
+
+            // Draw trails for primary nodes
+            for (i = 0; i < PrimaryNodes.length; i++) {
+                const node = PrimaryNodes[i];
+                if (node.trail.length > 1) {
+                    c.lineCap = 'round';
+                    c.lineJoin = 'round';
+                    
+                    for (let j = 1; j < node.trail.length; j++) {
+                        const alpha = j / node.trail.length;
+                        c.strokeStyle = `hsla(210, 70%, 60%, ${alpha * 0.1})`;
+                        c.lineWidth = 2 + 25 * alpha;
+                        
+                        c.beginPath();
+                        c.moveTo(node.trail[j - 1].x * cScale, node.trail[j - 1].y * cScale);
+                        c.lineTo(node.trail[j].x * cScale, node.trail[j].y * cScale);
+                        c.stroke();
+                    }
                 }
             }
+            
+            // Draw trails for secondary nodes
+            for (i = 0; i < SecondaryNodes.length; i++) {
+                const node = SecondaryNodes[i];
+                if (node.trail.length > 1) {
+                    c.lineCap = 'round';
+                    c.lineJoin = 'round';
+                    for (let j = 1; j < node.trail.length; j++) {
+                        const alpha = j / node.trail.length;
+                        c.strokeStyle = `hsla(320, 70%, 50%, ${alpha * 0.15})`;
+                        c.lineWidth = 2 + 25 * alpha;
+                        
+                        c.beginPath();
+                        c.moveTo(node.trail[j - 1].x * cScale, node.trail[j - 1].y * cScale);
+                        c.lineTo(node.trail[j].x * cScale, node.trail[j].y * cScale);
+                        c.stroke();
+                    }
+                }
+            }
+
+            // Draw primary nodes with spherical shading
+            for (i = 0; i < PrimaryNodes.length; i++) {
+                node1 = PrimaryNodes[i];
+                const x = node1.pos.x * cScale;
+                const y = node1.pos.y * cScale;
+                const radius = 0.03 * cScale;
+                
+                // Create radial gradient for 3D sphere effect
+                const gradient = c.createRadialGradient(
+                    x - radius * 0.3, y - radius * 0.3, radius * 0.1,
+                    x, y, radius
+                );
+                gradient.addColorStop(0, 'hsl(210, 70%, 85%)');
+                gradient.addColorStop(0.3, 'hsl(210, 70%, 60%)');
+                gradient.addColorStop(0.7, 'hsl(210, 70%, 40%)');
+                gradient.addColorStop(1, 'hsl(210, 70%, 20%)');
+                
+                drawCircle(x, y, radius);
+                c.fillStyle = gradient;
+                c.fill();   
+            }
+
+            // Draw secondary nodes with spherical shading
+            for (i = 0; i < SecondaryNodes.length; i++) {
+                node1 = SecondaryNodes[i];
+                const x = node1.pos.x * cScale;
+                const y = node1.pos.y * cScale;
+                const radius = 0.03 * cScale;
+                
+                // Create radial gradient for 3D sphere effect
+                const gradient = c.createRadialGradient(
+                    x - radius * 0.3, y - radius * 0.3, radius * 0.1,
+                    x, y, radius
+                );
+                gradient.addColorStop(0, 'hsl(320, 70%, 85%)');
+                gradient.addColorStop(0.3, 'hsl(320, 70%, 60%)');
+                gradient.addColorStop(0.7, 'hsl(320, 70%, 40%)');
+                gradient.addColorStop(1, 'hsl(320, 70%, 20%)');
+                
+                drawCircle(x, y, radius);
+                c.fillStyle = gradient;
+                c.fill();   
+            }
+
+            // Draw side fades
             const sideFade = c.createLinearGradient(0, 0, canvas.width, 0);
-            sideFade.addColorStop(0, 'hsla(0, 0%, 0%, 1)');
-            sideFade.addColorStop(0.3, 'hsla(0, 0%, 0%, 0.9)');
-            sideFade.addColorStop(0.5, 'hsla(0, 0%, 0%, 0)');
-            sideFade.addColorStop(0.9, 'hsla(0, 0%, 0%, 0)');
-            sideFade.addColorStop(1, 'hsla(0, 0%, 0%, 0.6)');
+            sideFade.addColorStop(0.00, 'hsla(0, 0%, 5%, 1)');
+            sideFade.addColorStop(0.30, 'hsla(0, 0%, 3%, 1.0)');
+            sideFade.addColorStop(0.50, 'hsla(0, 0%, 0%, 0)');
+            sideFade.addColorStop(0.90, 'hsla(0, 0%, 0%, 0)');
+            sideFade.addColorStop(0.97, 'hsla(0, 0%, 0%, 0.8)');
+            sideFade.addColorStop(1, 'hsla(0, 0%, 0%, 0.9)');
             c.fillStyle = sideFade;
             c.fillRect(0, 0, canvas.width, canvas.height);
             c.fillStyle = 'hsla(0, 0%, 0%, 0.2)';
-            //c.fillRect(0, 0, canvas.width, canvas.height);
+            c.fillRect(0, 0, canvas.width, canvas.height);
             
 	}
 
