@@ -7,17 +7,9 @@
 <!-- <meta name="viewport" content="width=device-width, initial-scale=1.0"> -->
 <style>
 
-    body {font-family: monospace; 
-        font-size: 30px;
-        color: hsl(0, 0%, 89%);
-        text-align: left;
-        text-shadow: 5px 7px 10px hsl(0, 0%, 0%);
-        margin: 0;
-        padding: 0;
-    }
-
-    h2 {font-family: verdana; 
-        font-size: 24px;
+    .title {font-family: verdana; 
+        font-size: 38px;
+        font-weight: bold;
         color: hsl(0, 0%, 89%);
         text-align: left;
         text-shadow: 5px 7px 10px hsl(0, 0%, 0%);
@@ -25,6 +17,27 @@
         margin-right: 0px;
         padding-left: 10px;
         padding-right: 5px;
+    }
+
+    .appTitle {font-family: monospace; 
+        font-size: 20px;
+        font-weight: bold;
+        color: hsl(0, 0%, 89%);
+        text-align: left;
+        text-shadow: 5px 7px 10px hsl(0, 0%, 0%);
+        margin: 0;
+        padding: 0;
+        font-weight: bold;
+        color : #C93226;
+    }
+
+    .description {font-family: monospace; 
+        font-size: 20px;
+        color: hsl(0, 0%, 89%);
+        text-align: left;
+        text-shadow: 5px 7px 10px hsl(0, 0%, 0%);
+        margin: 0;
+        padding: 0;
     }
 
     h3 {font-family: verdana; 
@@ -37,9 +50,41 @@
         padding-left: 10px;
         padding-right: 5px;
     }
-    
 
-    .verbiage {font-family: verdana; 
+    .verbiage1 {font-family: verdana; 
+        font-size: 14px;
+        color: hsl(0, 0%, 89%);
+        text-align: left;
+        text-shadow: 5px 7px 10px hsl(0, 0%, 0%);
+        margin-left: 5px;
+        margin-right: 0px;
+        padding-left: 10px;
+        padding-right: 5px;
+    }
+
+    .verbiage1b {font-family: verdana; 
+        font-style: italic;
+        font-size: 14px;
+       
+        text-align: left;
+        text-shadow: 5px 7px 10px hsl(0, 0%, 0%);
+        margin-left: 5px;
+        margin-right: 0px;
+        padding-left: 10px;
+        padding-right: 5px;
+    }
+
+    .verbiage1b a {
+        color: hsl(37, 100%, 58%);
+        text-decoration: none;
+    }
+    
+    .verbiage1b a:hover {
+        color: #C93226;
+        text-decoration: underline;
+    }
+    
+    .verbiage2 {font-family: verdana; 
         font-size: 13px;
         font-style: italic;
         color: hsl(0, 0%, 89%);
@@ -51,15 +96,7 @@
         padding-right: 5px;
     }
     
-    .verbiage a {
-        color: hsl(37, 100%, 58%);
-        text-decoration: none;
-    }
     
-    .verbiage a:hover {
-        color: #C93226;
-        text-decoration: underline;
-    }
 
     table#pubTable {
         text-align: left;
@@ -73,10 +110,7 @@
     padding : 10px 20px;
     }
 
-    .appTitle {
-        font-weight: bold;
-        color : #C93226;
-    }
+    
 
     thead tr th:first-child,
     tbody tr td:first-child {
@@ -91,6 +125,7 @@
     }
 
     .button {
+    font-family: verdana; 
     background-color: #555555;
     border: none;
     color: white;
@@ -118,10 +153,13 @@
 
 <div style="position: relative; z-index: 1; padding: 10px;">
 <title>FM Home</title>
-<h2>Simulation and Animation</h2>
-<div class = "verbiage">A small collection of JavaScript exercises by Frank Maiello</div>
-<div class = "verbiage"><a href="mailto:maiello.frank@gmail.com">maiello.frank@gmail.com</a></div>
-<br>
+
+<div class = "title">I Like to Move it 💃🏼 Move it 🕺🏻</div>
+
+<div class = "verbiage1"><br>A small collection of basic animation exercises by Frank Maiello</div>
+
+<div class = "verbiage1b"><a href="mailto:maiello.frank@gmail.com">maiello.frank@gmail.com</a><br><br></div>
+<div class = "verbiage2">Please use Chrome or Edge for better performance</div>
 <table id = "pubTable">
 
 <tr>
@@ -129,12 +167,12 @@
     <a href = "https://frank-maiello.github.io//slosh.html"><img class = "paperImage" src = "https://frank-maiello.github.io/screen_slosh.png"></a>
   </td>
   <td>
-    <div class = "appTitle">4. SL0SH</div>
+    <div class = "appTitle">3 - SL0SH (CHEF'S SPECIAL)</div>
     <h3><br></h3>
     <div class = "description">Particle Physics Sandbox</div>
-    <div class = "verbiage"><br>Fluid-like "sloshy" particle simulation with</div>
-    <div class = "verbiage">interactive toys and a menu-driven user interface.</div>
-    <div class = "verbiage">Created with the extensive help of Claude AI.</div>
+    <div class = "verbiage2"><br>Fluid-like "sloshy" particle simulation with</div>
+    <div class = "verbiage2">interactive toys and a menu-driven user interface.</div>
+    <div class = "verbiage2">Created with the extensive use of Claude AI.</div>
     <br>
     <a href = "https://frank-maiello.github.io/slosh.html" target="_blank" class="button">Play</a>
     <a href = "https://github.com/frank-maiello/frank-maiello.github.io/blob/main/slosh.html" target="_blank" class="button">Code</a>
@@ -147,12 +185,12 @@
     <a href = "https://frank-maiello.github.io//roids.html"><img class = "paperImage" src = "https://frank-maiello.github.io/screen_roids.png"></a>
   </td>
   <td>
-    <div class = "appTitle">3. R0IDS</div>
+    <div class = "appTitle">2 - R0IDS (STAFF PICK!)</div>
     <h3><br></h3>
     <div class = "description">A Silly Take on Asteroids</div>
-    <div class = "verbiage"><br>First there was Space Invaders, then came Asteroids.</div>
-    <div class = "verbiage">Unique obstacles, a cranky enemy, weapon power-ups,</div>
-    <div class = "verbiage">floaty physics, increasing difficulty... and cheats!</div>
+    <div class = "verbiage2"><br>First there was Space Invaders, then came Asteroids.</div>
+    <div class = "verbiage2">Unique obstacles, cranky enemy, weapon power-ups,</div>
+    <div class = "verbiage2">floaty physics, increasing difficulty... and cheats.</div>
     <br>
     <a href = "https://frank-maiello.github.io/roids.html" target="_blank" class="button">Play</a>
     <a href = "https://github.com/frank-maiello/frank-maiello.github.io/blob/main/roids.html" target="_blank" class="button">Code</a>
@@ -165,11 +203,11 @@
     <a href = "https://frank-maiello.github.io/droplets.html"><img class = "paperImage" src = "https://frank-maiello.github.io/screen_droplets.png"></a>
   </td>
   <td>
-    <div class = "appTitle">2. DR0PLETS</div>
+    <div class = "appTitle">1 - DR0PLETS</div>
     <h3><br></h3>
     <div class = "description">Abstract Algorithmic Line 'Art'</div>
-    <div class = "verbiage"><br>Repetetive line-drawing the slow way, using</div>
-    <div class = "verbiage">trigonometry and polar coordinates.</div>
+    <div class = "verbiage2"><br>Repetetive line-drawing the slow way, using</div>
+    <div class = "verbiage2">trigonometry and polar coordinates.</div>
     <br>
     <a href = "https://frank-maiello.github.io/droplets.html" target="_blank" class="button">Play</a>
     <a href = "https://github.com/frank-maiello/frank-maiello.github.io/blob/6404a30fcd3e544bf28b16d2a8adea4be639b728/droplets.html" target="_blank" class="button">Code</a>
@@ -182,11 +220,11 @@
     <a href = "https://frank-maiello.github.io/plinkolab.html"><img class = "paperImage" src = "https://frank-maiello.github.io/screen_plinkolab.png"></a>
   </td>
   <td>
-  <div class = "appTitle">1. PLINK0 LAB</div>
+  <div class = "appTitle">0 - PLINK0 LAB</div>
   <h3><br></h3>
   <div class = "description">Intro to Particle Physics Simulation</div>
-  <div class = "verbiage"><br>If you dare. My first undertaking. Consult a child</div>
-  <div class = "verbiage">to best navigate the Playskool user interface.</div>
+  <div class = "verbiage2"><br>If you dare. My first undertaking. Consult a child</div>
+  <div class = "verbiage2">to best navigate the Playskool user interface.</div>
 
   <br>
   <a href = "https://frank-maiello.github.io/plinkolab.html" target="_blank" class="button">Play</a>
