@@ -149,8 +149,8 @@
   <td>
     <div class = "appTitle">3. R0IDS</div>
     <h3><br></h3>
-    <div class = "description">My Take on Asteroids</div>
-    <div class = "verbiage"><br>First there was Space Invaders. Then came Asteroids.</div>
+    <div class = "description">A Silly Take on Asteroids</div>
+    <div class = "verbiage"><br>First there was Space Invaders, then came Asteroids.</div>
     <div class = "verbiage">Unique obstacles, a cranky enemy, weapon power-ups,</div>
     <div class = "verbiage">floaty physics, increasing difficulty... and cheats!</div>
     <br>
@@ -167,7 +167,7 @@
   <td>
     <div class = "appTitle">2. DR0PLETS</div>
     <h3><br></h3>
-    <div class = "description">Abstract Algorithmic Line Art</div>
+    <div class = "description">Abstract Algorithmic Line 'Art'</div>
     <div class = "verbiage"><br>Repetetive line-drawing the slow way, using</div>
     <div class = "verbiage">trigonometry and polar coordinates.</div>
     <br>
@@ -436,6 +436,7 @@
             c.fillStyle = 'hsl(0, 0%, 0%)';
             c.fillRect(0, 0, canvas.width, canvas.height);
 
+            /*
             // Draw connections between primary and secondary nodes
             for (i = 0; i < PrimaryNodes.length; i++) {
                 node1 = PrimaryNodes[i];
@@ -454,6 +455,7 @@
                 }
                 c.stroke();
             }
+            */
 
             // Draw connections between secondary nodes (left side)
             for (i = 0; i < SecondaryNodes.length; i++) {
@@ -513,6 +515,7 @@
                 }
             }
             
+            
             // Draw trails for secondary nodes
             for (i = 0; i < SecondaryNodes.length; i++) {
                 const node = SecondaryNodes[i];
@@ -531,6 +534,7 @@
                     }
                 }
             }
+            
 
             // Draw primary nodes with spherical shading
             for (i = 0; i < PrimaryNodes.length; i++) {
@@ -554,6 +558,7 @@
                 c.fill();   
             }
 
+            
             // Draw secondary nodes with spherical shading
             for (i = 0; i < SecondaryNodes.length; i++) {
                 node1 = SecondaryNodes[i];
@@ -575,6 +580,7 @@
                 c.fillStyle = gradient;
                 c.fill();   
             }
+            
 
             // Draw side fades
             const sideFade = c.createLinearGradient(0, 0, canvas.width, 0);
