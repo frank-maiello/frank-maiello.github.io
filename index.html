@@ -505,6 +505,10 @@
             // Orbiting ball around equator
             this.orbitAngle = Math.random() * 2 * Math.PI;
             this.orbitSpeed = 0.03; // radians per frame
+            // Second orbiter that orbits the first orbiter
+            this.subOrbitAngle = Math.random() * 2 * Math.PI;
+            this.subOrbitSpeed = 0.1; // radians per frame (faster than main orbiter)
+            this.subOrbitDistanceMultiplier = 4.0; // Distance from main orbiter to sub-orbiter
         }
         get left() {
             return this.pos.x - this.radius;
@@ -584,6 +588,12 @@
             if (this.orbitAngle > 2 * Math.PI) {
                 this.orbitAngle -= 2 * Math.PI;
             }
+            
+            // Update second orbiter angle
+            this.subOrbitAngle += this.subOrbitSpeed;
+            if (this.subOrbitAngle > 2 * Math.PI) {
+                this.subOrbitAngle -= 2 * Math.PI;
+            }
          
             if (this.spinAngle > 2 * Math.PI) {
                 this.spinAngle -= 2 * Math.PI;
@@ -591,15 +601,45 @@
         }
         draw() {
             // Calculate orbiter's 3D position to determine if it's behind or in front
-            const orbitRadius = this.radius * 1.3;
+            const orbitRadius = this.radius * 1.8;
             const ballX0 = orbitRadius * Math.cos(this.orbitAngle);
             const ballY0 = orbitRadius * Math.sin(this.orbitAngle);
             const ballZ0 = 0;
             const rotBall = quatRotateVec(this.orientation, ballX0, ballY0, ballZ0);
             
-            // Draw orbiter BEHIND globe if z < 0 (facing away from camera)
+            // Calculate sub-orbiter's 3D position relative to main orbiter
+            const subOrbitRadius = this.radius * 0.15 * this.subOrbitDistanceMultiplier; // Orbit around the main orbiter
+            const axisOffset = 30 * Math.PI / 180; // 30-degree offset
+            const subX0 = subOrbitRadius * Math.cos(this.subOrbitAngle);
+            const subY0 = subOrbitRadius * Math.sin(this.subOrbitAngle) * Math.cos(axisOffset);
+            const subZ0 = subOrbitRadius * Math.sin(this.subOrbitAngle) * Math.sin(axisOffset);
+            // Position relative to main orbiter
+            const subBallX = ballX0 + subX0;
+            const subBallY = ballY0 + subY0;
+            const subBallZ = ballZ0 + subZ0;
+            const rotSubBall = quatRotateVec(this.orientation, subBallX, subBallY, subBallZ);
+            
+            // Draw orbiters BEHIND globe if z < 0 (facing away from camera)
             if (rotBall.z < 0) {
-                drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
+                // Check if sub-orbiter is occluded by main orbiter using 2D circular test
+                const subOrbitRadius = this.radius * 0.15 * this.subOrbitDistanceMultiplier;
+                const mainOrbiterRadius = this.radius * 0.15;
+                const dx = rotSubBall.x - rotBall.x;
+                const dy = rotSubBall.y - rotBall.y;
+                const distance2D = Math.sqrt(dx * dx + dy * dy);
+                // Only occlude if distance is less than main orbiter visual radius
+                const isOccludedByOrbiter = (rotSubBall.z < rotBall.z) && (distance2D < mainOrbiterRadius * 1.2);
+                
+                // Draw based on z-order and occlusion
+                if (rotSubBall.z < rotBall.z) {
+                    if (!isOccludedByOrbiter) {
+                        drawSubOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier);
+                    }
+                    drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
+                } else {
+                    drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
+                    drawSubOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier);
+                }
             }
             
             drawGlobeRoid(
@@ -640,9 +680,27 @@
             c.fillStyle = sphereGradient;
             c.fill();
 
-            // Draw orbiter IN FRONT of globe if z >= 0 (facing toward camera)
+            // Draw orbiters IN FRONT of globe if z >= 0 (facing toward camera)
             if (rotBall.z >= 0) {
-                drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
+                // Check if sub-orbiter is occluded by main orbiter using 2D circular test
+                const subOrbitRadius = this.radius * 0.15 * this.subOrbitDistanceMultiplier;
+                const mainOrbiterRadius = this.radius * 0.15;
+                const dx = rotSubBall.x - rotBall.x;
+                const dy = rotSubBall.y - rotBall.y;
+                const distance2D = Math.sqrt(dx * dx + dy * dy);
+                // Only occlude if distance is less than main orbiter visual radius
+                const isOccludedByOrbiter = (rotSubBall.z < rotBall.z) && (distance2D < mainOrbiterRadius * 1.2);
+                
+                // Draw based on z-order and occlusion
+                if (rotSubBall.z < rotBall.z) {
+                    if (!isOccludedByOrbiter) {
+                        drawSubOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier);
+                    }
+                    drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
+                } else {
+                    drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
+                    drawSubOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier);
+                }
             }
         }
     }
@@ -860,8 +918,8 @@
 
     function drawOrbiter(radius, centerPos, orientation, orbitAngle) {
         // Draw orbiting ball around equator
-        const orbitRadius = radius * 1.3; // Slightly outside the globe
-        const baseBallRadius = radius * 0.15; // Base ball size
+        const orbitRadius = radius * 1.8; // Slightly outside the globe
+        const baseBallRadius = radius * 0.35; // Base ball size
         
         // Calculate 3D position on equator (z=0 plane)
         const ballX0 = orbitRadius * Math.cos(orbitAngle);
@@ -915,6 +973,64 @@
         c.strokeStyle = 'rgba(200, 200, 255, 0.3)';
         c.lineWidth = ballPixelRadius * 0.1;
         c.stroke();*/
+    }
+
+    function drawSubOrbiter(radius, centerPos, orientation, orbitAngle, subOrbitAngle, subOrbitDistanceMultiplier) {
+        // Draw smaller orbiter that orbits around the main orbiter
+        const orbitRadius = radius * 1.8;
+        const subOrbitRadius = radius * 0.15 * subOrbitDistanceMultiplier; // Orbit radius around main orbiter
+        const baseBallRadius = radius * 0.08; // Smaller than main orbiter
+        
+        // Calculate main orbiter position
+        const ballX0 = orbitRadius * Math.cos(orbitAngle);
+        const ballY0 = orbitRadius * Math.sin(orbitAngle);
+        const ballZ0 = 0;
+        
+        // Calculate sub-orbiter position with 30-degree axis offset
+        const axisOffset = 30 * Math.PI / 180;
+        const subX0 = subOrbitRadius * Math.cos(subOrbitAngle);
+        const subY0 = subOrbitRadius * Math.sin(subOrbitAngle) * Math.cos(axisOffset);
+        const subZ0 = subOrbitRadius * Math.sin(subOrbitAngle) * Math.sin(axisOffset);
+        
+        // Position relative to main orbiter
+        const subBallX = ballX0 + subX0;
+        const subBallY = ballY0 + subY0;
+        const subBallZ = ballZ0 + subZ0;
+        
+        // Rotate the sub-orbiter position with the globe's orientation
+        const rotSubBall = quatRotateVec(orientation, subBallX, subBallY, subBallZ);
+        
+        // Scale based on z-position (perspective effect)
+        const totalOrbitRadius = orbitRadius + subOrbitRadius;
+        const zNormalized = rotSubBall.z / totalOrbitRadius;
+        const scaleFactor = 1.0 + zNormalized * 0.3;
+        const ballRadius = baseBallRadius * scaleFactor;
+        
+        // Project to 2D screen space
+        const ballScreenX = (centerPos.x + rotSubBall.x) * cScale;
+        const ballScreenY = (centerPos.y - rotSubBall.y) * cScale;
+        
+        // Draw the sub-orbiting ball with spherical shading
+        const ballPixelRadius = ballRadius * cScale;
+        
+        // Sphere gradient for the sub-orbiter (different color from main orbiter)
+        const ballGradient = c.createRadialGradient(
+            ballScreenX - ballPixelRadius * 0.3,
+            ballScreenY - ballPixelRadius * 0.4,
+            0,
+            ballScreenX,
+            ballScreenY,
+            1.1 * ballPixelRadius
+        );
+        ballGradient.addColorStop(0, 'hsl(200, 80%, 80%)');
+        ballGradient.addColorStop(0.3, 'hsl(200, 80%, 70%)');
+        ballGradient.addColorStop(0.7, 'hsl(200, 80%, 40%)');
+        ballGradient.addColorStop(1, 'hsl(200, 60%, 15%)');
+        
+        c.beginPath();
+        c.arc(ballScreenX, ballScreenY, ballPixelRadius, 0, 2 * Math.PI);
+        c.fillStyle = ballGradient;
+        c.fill();
     }
 
     //  SPAWN ROIDS  ------------------------------------------------------------
@@ -1047,42 +1163,70 @@
     }
 
     function drawNodes() {
-        // Draw connections between secondary nodes (left side)
+        // Collect all connections with their distances for sorting
+        let secondaryConnections = [];
+        let primaryConnections = [];
+        
+        // Collect connections between secondary nodes (left side)
         for (i = 0; i < SecondaryNodes.length; i++) {
             node1 = SecondaryNodes[i];
-            for (j = i + 1; j < PrimaryNodes.length; j++) {
+            for (j = i + 1; j < SecondaryNodes.length; j++) {
                 node2 = SecondaryNodes[j];
-                c.beginPath();
-                c.moveTo(node1.pos.x * cScale, node1.pos.y * cScale);
-                c.lineTo(node2.pos.x * cScale, node2.pos.y * cScale);
-                if (measureDistAndShade(node1, node2) * 20 < 60) {
-                    var lineLite = measureDistAndShade(node1, node2) * 20
-                } else {
-                    var lineLite = 60;
-                }
-                c.strokeStyle = `hsla(130, 50%, ${lineLite}%, ${lineLite + 20}%)`;
-                c.lineWidth = Math.min(2 * measureDistAndShade(node1, node2), 4);
-                c.stroke();
+                const invDistance = measureDistAndShade(node1, node2);
+                secondaryConnections.push({
+                    node1: node1,
+                    node2: node2,
+                    invDistance: invDistance
+                });
             }   
         }
 
-        // Draw connections between primary nodes (right side)
+        // Collect connections between primary nodes (right side)
         for (i = 0; i < PrimaryNodes.length; i++) {
             node1 = PrimaryNodes[i];
             for (j = i + 1; j < PrimaryNodes.length; j++) {
                 node2 = PrimaryNodes[j];
-                c.beginPath();
-                c.moveTo(node1.pos.x * cScale, node1.pos.y * cScale);
-                c.lineTo(node2.pos.x * cScale, node2.pos.y * cScale);
-                if (measureDistAndShade(node1, node2) * 20 < 60) {
-                    var lineLite = measureDistAndShade(node1, node2) * 20
-                } else {
-                    var lineLite = 60;
-                }
-                c.strokeStyle = `hsla(${180 + 3 * lineLite}, 50%, ${lineLite}%, ${lineLite + 20}%)`;
-                c.lineWidth = Math.min(4 * measureDistAndShade(node1, node2), 4);
-                c.stroke();
+                const invDistance = measureDistAndShade(node1, node2);
+                primaryConnections.push({
+                    node1: node1,
+                    node2: node2,
+                    invDistance: invDistance
+                });
             }  
+        }
+        
+        // Sort connections: large invDistance (close) = draw last, small invDistance (far) = draw first
+        secondaryConnections.sort((a, b) => a.invDistance - b.invDistance);
+        primaryConnections.sort((a, b) => a.invDistance - b.invDistance);
+        
+        // Draw secondary connections from farthest to closest
+        for (let conn of secondaryConnections) {
+            c.beginPath();
+            c.moveTo(conn.node1.pos.x * cScale, conn.node1.pos.y * cScale);
+            c.lineTo(conn.node2.pos.x * cScale, conn.node2.pos.y * cScale);
+            if (conn.invDistance * 20 < 60) {
+                var lineLite = conn.invDistance * 20;
+            } else {
+                var lineLite = 60;
+            }
+            c.strokeStyle = `hsla(130, 50%, ${lineLite}%, ${lineLite + 20}%)`;
+            c.lineWidth = Math.min(2 * conn.invDistance, 4);
+            c.stroke();
+        }
+        
+        // Draw primary connections from farthest to closest
+        for (let conn of primaryConnections) {
+            c.beginPath();
+            c.moveTo(conn.node1.pos.x * cScale, conn.node1.pos.y * cScale);
+            c.lineTo(conn.node2.pos.x * cScale, conn.node2.pos.y * cScale);
+            if (conn.invDistance * 20 < 60) {
+                var lineLite = conn.invDistance * 20;
+            } else {
+                var lineLite = 60;
+            }
+            c.strokeStyle = `hsla(${180 + 3 * lineLite}, 50%, ${lineLite}%, ${lineLite + 20}%)`;
+            c.lineWidth = Math.min(4 * conn.invDistance, 4);
+            c.stroke();
         }
 
         // Draw trails for primary nodes
