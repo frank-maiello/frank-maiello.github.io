@@ -10,7 +10,7 @@
     .title {font-family: verdana; 
         font-size: 38px;
         font-weight: bold;
-        color: hsl(30, 87%, 50%);
+        color: hsl(30, 60%, 50%);
         text-align: left;
         text-shadow: 5px 7px 10px hsl(0, 0%, 0%);
         margin-left: 0px;
@@ -171,7 +171,7 @@
 
 <div class = "title">I Like to 💃🏼 Move it 🕺🏻 Move it 🐒 </div>
 
-<div class = "verbiage1"><br>A small collection of physics and animation exercises with JavaScript</div>
+<div class = "verbiage1"><br>A small collection of realtime physics and animation exercises with JavaScript</div>
 <div class = "verbiage1b"><a href="mailto:maiello.frank@gmail.com">maiello.frank@gmail.com</a></div>
 <div class = "verbiage2a"><br>Please use Chrome or Edge for best performance</div>
 <table id = "pubTable">
@@ -273,11 +273,52 @@
 	    c = canvas.getContext("2d");
         canvas.style.cursor = "pointer";
        
+        // Store old dimensions
+        const oldSimWidth = simWidth;
+        const oldSimHeight = simHeight;
+        
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;        simMinWidth = 2.0;
         cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
         simWidth = canvas.width / cScale;
         simHeight = canvas.height / cScale;
+        
+        // Calculate scale factors
+        const scaleX = simWidth / oldSimWidth;
+        const scaleY = simHeight / oldSimHeight;
+        
+        // Scale all node positions
+        if (typeof PrimaryNodes !== 'undefined') {
+            for (let i = 0; i < PrimaryNodes.length; i++) {
+                PrimaryNodes[i].pos.x *= scaleX;
+                PrimaryNodes[i].pos.y *= scaleY;
+                // Scale trail positions
+                for (let j = 0; j < PrimaryNodes[i].trail.length; j++) {
+                    PrimaryNodes[i].trail[j].x *= scaleX;
+                    PrimaryNodes[i].trail[j].y *= scaleY;
+                }
+            }
+        }
+        
+        if (typeof SecondaryNodes !== 'undefined') {
+            for (let i = 0; i < SecondaryNodes.length; i++) {
+                SecondaryNodes[i].pos.x *= scaleX;
+                SecondaryNodes[i].pos.y *= scaleY;
+                // Scale trail positions
+                for (let j = 0; j < SecondaryNodes[i].trail.length; j++) {
+                    SecondaryNodes[i].trail[j].x *= scaleX;
+                    SecondaryNodes[i].trail[j].y *= scaleY;
+                }
+            }
+        }
+        
+        // Scale roid positions
+        if (typeof Roid !== 'undefined') {
+            for (let i = 0; i < Roid.length; i++) {
+                Roid[i].pos.x *= scaleX;
+                Roid[i].pos.y *= scaleY;
+            }
+        }
     }
 
     window.addEventListener("resize", resizeCanvas);
@@ -461,6 +502,9 @@
             };
             // also mirror z into scalar for compatibility
             this.angularVelocity = this.omega.z;
+            // Orbiting ball around equator
+            this.orbitAngle = Math.random() * 2 * Math.PI;
+            this.orbitSpeed = 0.03; // radians per frame
         }
         get left() {
             return this.pos.x - this.radius;
@@ -534,12 +578,30 @@
             this.angularVelocity = this.omega.z;
             // clamp scalar axial spin used for visual spin/pole spin
             this.angularVelocity = Math.max(-maxSpin, Math.min(maxSpin, this.angularVelocity));
+            
+            // Update orbiting ball angle
+            this.orbitAngle += this.orbitSpeed;
+            if (this.orbitAngle > 2 * Math.PI) {
+                this.orbitAngle -= 2 * Math.PI;
+            }
          
             if (this.spinAngle > 2 * Math.PI) {
                 this.spinAngle -= 2 * Math.PI;
             }
         }
         draw() {
+            // Calculate orbiter's 3D position to determine if it's behind or in front
+            const orbitRadius = this.radius * 1.3;
+            const ballX0 = orbitRadius * Math.cos(this.orbitAngle);
+            const ballY0 = orbitRadius * Math.sin(this.orbitAngle);
+            const ballZ0 = 0;
+            const rotBall = quatRotateVec(this.orientation, ballX0, ballY0, ballZ0);
+            
+            // Draw orbiter BEHIND globe if z < 0 (facing away from camera)
+            if (rotBall.z < 0) {
+                drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
+            }
+            
             drawGlobeRoid(
                 this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale, 
                 this.originalRadius * cScale, this.hue, this.saturation, this.lightness, 
@@ -577,6 +639,11 @@
             sphereGradient.addColorStop(1.0, highlight);
             c.fillStyle = sphereGradient;
             c.fill();
+
+            // Draw orbiter IN FRONT of globe if z >= 0 (facing toward camera)
+            if (rotBall.z >= 0) {
+                drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
+            }
         }
     }
 
@@ -791,15 +858,75 @@
         c.restore();*/
     }
 
+    function drawOrbiter(radius, centerPos, orientation, orbitAngle) {
+        // Draw orbiting ball around equator
+        const orbitRadius = radius * 1.3; // Slightly outside the globe
+        const baseBallRadius = radius * 0.15; // Base ball size
+        
+        // Calculate 3D position on equator (z=0 plane)
+        const ballX0 = orbitRadius * Math.cos(orbitAngle);
+        const ballY0 = orbitRadius * Math.sin(orbitAngle);
+        const ballZ0 = 0; // On equator
+        
+        // Rotate the ball position with the globe's orientation
+        const rotBall = quatRotateVec(orientation, ballX0, ballY0, ballZ0);
+        
+        // Scale based on z-position (perspective effect)
+        // When z > 0 (toward viewer), scale up; when z < 0 (away from viewer), scale down
+        // Normalize z by orbit radius to get a reasonable scale factor
+        const zNormalized = rotBall.z / orbitRadius; // Range approximately -1 to 1
+        const scaleFactor = 1.0 + zNormalized * 0.3; // Scale from 0.7x to 1.3x
+        const ballRadius = baseBallRadius * scaleFactor;
+        
+        // Project to 2D screen space
+        const ballScreenX = (centerPos.x + rotBall.x) * cScale;
+        const ballScreenY = (centerPos.y - rotBall.y) * cScale; // Invert Y
+        
+        // Draw the orbiting ball with spherical shading
+        const ballPixelRadius = ballRadius * cScale;
+        
+        // Sphere gradient for the ball
+        const ballGradient = c.createRadialGradient(
+            ballScreenX - ballPixelRadius * 0.3,
+            ballScreenY - ballPixelRadius * 0.4,
+            0,
+            ballScreenX,
+            ballScreenY,
+            1.1 * ballPixelRadius
+        );
+        /*ballGradient.addColorStop(0, 'rgb(255, 255, 255)');
+        ballGradient.addColorStop(0.3, 'rgb(200, 200, 255)');
+        ballGradient.addColorStop(0.7, 'rgb(100, 100, 200)');
+        ballGradient.addColorStop(1, 'rgb(30, 30, 80)');*/
+
+        ballGradient.addColorStop(0, 'hsl(320, 80%, 80%)');
+        ballGradient.addColorStop(0.3, 'hsl(320, 80%, 70%)');
+        ballGradient.addColorStop(0.7, 'hsl(320, 80%, 40%)');
+        ballGradient.addColorStop(1, 'hsl(320, 60%, 15%)');
+
+        
+        
+        c.beginPath();
+        c.arc(ballScreenX, ballScreenY, ballPixelRadius, 0, 2 * Math.PI);
+        c.fillStyle = ballGradient;
+        c.fill();
+        
+        /*// Add subtle rim highlight
+        c.strokeStyle = 'rgba(200, 200, 255, 0.3)';
+        c.lineWidth = ballPixelRadius * 0.1;
+        c.stroke();*/
+    }
+
     //  SPAWN ROIDS  ------------------------------------------------------------
     function spawnRoid() {
-        var radius = 0.4;
-        var pos = new Vector2(simWidth - 0.8 * radius, 1.5 * radius);
+        var radius = 0.5;
+        var pos = new Vector2(0.9 * simWidth, 0.15 * simHeight);
+        //var pos = new Vector2(0.7 * simWidth, 0.5 * simHeight);
         var vel = new Vector2(0, 0);
         //var hue = Math.floor(Math.random() * 360);
         var hue = 70;
         var saturation = 60 + 30 * Math.random(); // 60-90% for vibrant colors
-        var lightness = 45 + 15 * Math.random(); // 45-60% to avoid white/pale colors
+        var lightness = 40; // 45-60% to avoid white/pale colors
         let seed = Math.floor(Math.random() * 0xFFFFFFFF);
         let randomNo = Math.random();
         let yaw = Math.random() * 2 * Math.PI;
@@ -919,47 +1046,7 @@
         }
     }
 
-    //  SIMULATION --------------------------------------------------------------------------
-	function simulate() {
-        for (n = 0; n < PrimaryNodes.length; n++) {
-            PrimaryNodes[n].simulate();
-            SecondaryNodes[n].simulate();
-        }
-
-        for (var r = 0; r < Roid.length; r++) {
-            if (Roid[r] != null) {
-                var roid = Roid[r]
-                roid.simulate();
-            }
-        }
-    }
-    
-    //  DRAW EVERYTHING ==============================================================
-	function drawEverything() {
-        c.fillStyle = 'hsl(0, 0%, 0%)';
-        c.fillRect(0, 0, canvas.width, canvas.height);
-
-        /*
-        // Draw connections between primary and secondary nodes
-        for (i = 0; i < PrimaryNodes.length; i++) {
-            node1 = PrimaryNodes[i];
-            for (j = 0; j < SecondaryNodes.length; j++) {
-                node2 = SecondaryNodes[i];
-                c.moveTo(node1.pos.x * cScale, node1.pos.y * cScale);
-                c.lineTo(node2.pos.x * cScale, node2.pos.y * cScale);
-                if (measureDistAndShade(node1, node2) * 20 < 60) {
-                    var lineLite = measureDistAndShade(node1, node2) * 20
-                } else {
-                    var lineLite = 60;
-                }
-                c.strokeStyle = `hsla(0, 70%, 20%, 10%)`;
-                c.lineWidth = Math.min(2 * measureDistAndShade(node1, node2), 2);
-                
-            }
-            c.stroke();
-        }
-        */
-
+    function drawNodes() {
         // Draw connections between secondary nodes (left side)
         for (i = 0; i < SecondaryNodes.length; i++) {
             node1 = SecondaryNodes[i];
@@ -1081,12 +1168,49 @@
             c.fill();   
         }
 
+        /*// Draw connections between primary and secondary nodes
+        for (i = 0; i < PrimaryNodes.length; i++) {
+            node1 = PrimaryNodes[i];
+            for (j = 0; j < SecondaryNodes.length; j++) {
+                node2 = SecondaryNodes[i];
+                c.moveTo(node1.pos.x * cScale, node1.pos.y * cScale);
+                c.lineTo(node2.pos.x * cScale, node2.pos.y * cScale);
+                if (measureDistAndShade(node1, node2) * 20 < 60) {
+                    var lineLite = measureDistAndShade(node1, node2) * 20
+                } else {
+                    var lineLite = 60;
+                }
+                c.strokeStyle = `hsla(0, 70%, 20%, 10%)`;
+                c.lineWidth = Math.min(2 * measureDistAndShade(node1, node2), 2);
+                
+            }
+            c.stroke();
+        }*/
+    }
+
+    //  SIMULATION --------------------------------------------------------------------------
+	function simulate() {
+        for (n = 0; n < PrimaryNodes.length; n++) {
+            PrimaryNodes[n].simulate();
+            SecondaryNodes[n].simulate();
+        }
+
         for (var r = 0; r < Roid.length; r++) {
             if (Roid[r] != null) {
                 var roid = Roid[r]
-                roid.draw();
+                roid.simulate();
             }
         }
+    }
+    
+    //  DRAW EVERYTHING ==============================================================
+	function drawEverything() {
+        // Clear the canvas
+        c.fillStyle = 'hsl(0, 0%, 0%)';
+        c.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw nodes and their connections
+        drawNodes();
         
         // Draw side fades
         const sideFade = c.createLinearGradient(0, 0, canvas.width, 0);
@@ -1098,8 +1222,18 @@
         sideFade.addColorStop(1, 'hsla(0, 0%, 0%, 0.9)');
         c.fillStyle = sideFade;
         c.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw semi-transparent black overlay
         c.fillStyle = 'hsla(0, 0%, 0%, 0.2)';
         c.fillRect(0, 0, canvas.width, canvas.height); 
+
+        // Draw roid
+        for (var r = 0; r < Roid.length; r++) {
+            if (Roid[r] != null) {
+                var roid = Roid[r]
+                roid.draw();
+            }
+        }
 	}
 
     //  MAIN SEQUENCE ----------------------------------------------------------------------------
