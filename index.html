@@ -17,6 +17,21 @@
         margin-right: 0px;
         padding-left: 10px;
         padding-right: 5px;
+        height: 60px;
+        line-height: 60px;
+    }
+
+    .title-word {
+        display: inline-block;
+        margin-right: 8px;
+        transition: all 0.1s ease-out;
+        transform-origin: center center;
+    }
+
+    .title-word.pulse {
+        font-size: 44px;
+        text-shadow: 0px 0px 25px hsl(30, 100%, 60%), 5px 7px 10px hsl(0, 0%, 0%);
+        color: hsl(30, 80%, 60%);
     }
 
     .appTitle {font-family: monospace; 
@@ -98,6 +113,67 @@
         padding-left: 10px;
         padding-right: 5px;
     }
+
+    .gradient-mask {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 200px;
+        background: linear-gradient(to bottom, 
+            rgba(0, 0, 0, 0.9) 0%, 
+            rgba(0, 0, 0, 0.85) 70%, 
+            rgba(0, 0, 0, 0) 100%);
+        z-index: 1;
+        pointer-events: none;
+        animation: fadeIn 1.5s ease-in;
+    }
+
+    .title-blocker {
+        position: fixed;
+        top: -50px;
+        left: 0;
+        width: 600px;
+        height: 240px;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 99;
+        pointer-events: none;
+        filter: blur(15px);
+        animation: fadeIn 1.5s ease-in;
+    }
+
+    .fixed-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        padding: 10px;
+        animation: fadeIn 1.5s ease-in;
+    }
+
+    .fixed-header > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            background-color: rgba(0, 0, 0, 1);
+        }
+        to {
+            opacity: 1;
+            background-color: rgba(0, 0, 0, 0);
+        }
+    }
+
+    .scrollable-content {
+        position: relative;
+        z-index: 50;
+        margin-top: 180px;
+        padding: 10px;
+    }
     
     .verbiage2 {font-family: verdana; 
         font-size: 13px;
@@ -162,18 +238,30 @@
 </style>
 
 </head>
-<body>
+<body style="background-color: #000000;">
 
-<canvas id="myCanvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;"></canvas>
+<canvas id="myCanvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none;"></canvas>
 
-<div style="position: relative; z-index: 1; padding: 10px;">
+<div class="gradient-mask"></div>
+<div class="title-blocker"></div>
+
 <title>FM Home</title>
 
-<div class = "title">I Like to Move it Move it </div>
+<div class="fixed-header">
+<div class="title">
+    <span class="title-word" id="word1">I</span>
+    <span class="title-word" id="word2">Like</span>
+    <span class="title-word" id="word3">to</span>
+    <span class="title-word" id="word4">Move it</span>
+    <span class="title-word" id="word5">Move it</span>
+</div>
 
 <div class = "verbiage1"><br>A small collection of realtime physics and animation exercises with JavaScript</div>
 <div class = "verbiage1b"><a href="mailto:maiello.frank@gmail.com">maiello.frank@gmail.com</a></div>
-<div class = "verbiage2a"><br>Please use Chrome or Edge for best performance</div>
+<div class = "verbiage2a"><br>Please use Chrome or Edge for best performance<br><br></div>
+</div>
+
+<div class="scrollable-content">
 <table id = "pubTable">
 
 <tr>
@@ -181,7 +269,7 @@
     <a href = "https://frank-maiello.github.io//slosh.html"><img class = "paperImage" src = "https://frank-maiello.github.io/screen_slosh.png"></a>
   </td>
   <td>
-    <div class = "appTitle">3 - SL0SH (CHEF'S CHOICE)</div>
+    <div class = "appTitle">SL0SH (CHEF'S CHOICE)</div>
     <h3><br></h3>
     <div class = "description">Particle Physics Sandbox</div>
     <div class = "verbiage2"><br>Fluid-like "sloshy" particle simulation with </div>
@@ -199,7 +287,7 @@
     <a href = "https://frank-maiello.github.io//roids.html"><img class = "paperImage" src = "https://frank-maiello.github.io/screen_roids.png"></a>
   </td>
   <td>
-    <div class = "appTitle">2 - R0IDS (STAFF PICK!)</div>
+    <div class = "appTitle">R0IDS (STAFF PICK!)</div>
     <h3><br></h3>
     <div class = "description">A Take on Asteroids</div>
     <div class = "verbiage2"><br>First there was Space Invaders, then came Asteroids.</div>
@@ -217,7 +305,7 @@
     <a href = "https://frank-maiello.github.io/droplets.html"><img class = "paperImage" src = "https://frank-maiello.github.io/screen_droplets.png"></a>
   </td>
   <td>
-    <div class = "appTitle">1 - DR0PLETS</div>
+    <div class = "appTitle">DR0PLETS</div>
     <h3><br></h3>
     <div class = "description">Abstract Algorithmic Line 'Art'</div>
     <div class = "verbiage2"><br>Repetetive line-drawing the slow way, using</div>
@@ -235,7 +323,7 @@
     <a href = "https://frank-maiello.github.io/plinkolab.html"><img class = "paperImage" src = "https://frank-maiello.github.io/screen_plinkolab.png"></a>
   </td>
   <td>
-  <div class = "appTitle">0 - PLINK0 LAB</div>
+  <div class = "appTitle">PLINK0 LAB</div>
   <h3><br></h3>
   <div class = "description">Intro to Particle Physics Simulation</div>
   <div class = "verbiage2"><br>If you dare. My first undertaking. Consult a child</div>
@@ -257,6 +345,8 @@
     canvas = document.getElementById("myCanvas");
 	    c = canvas.getContext("2d");
         canvas.style.cursor = "pointer";
+        canvas.style.opacity = "0";
+        canvas.style.animation = "fadeIn 1.5s ease-in forwards";
        
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -514,10 +604,10 @@
             this.angularVelocity = this.omega.z;
             // Orbiting ball around equator
             this.orbitAngle = Math.random() * 2 * Math.PI;
-            this.orbitSpeed = 0.03; // radians per frame
+            this.orbitSpeed = 0.02; // radians per frame (reduced by 20% from 0.03)
             // Three sub-orbiters that orbit the first orbiter, evenly spaced
             this.subOrbitAngle = Math.random() * 2 * Math.PI;
-            this.subOrbitSpeed = 0.05; // radians per frame (faster than main orbiter)
+            this.subOrbitSpeed = 0.05; // radians per frame (restored to previous speed)
             this.subOrbitDistanceMultiplier = 4.0; // Distance from main orbiter to sub-orbiter
         }
         get left() {
@@ -634,32 +724,30 @@
                 // Get orbiter positions
                 const mainOrbiterInfo = drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
                 
-                // Get five sub-orbiters spaced 72 degrees apart (first plane)
-                const angleOffset = (2 * Math.PI) / 5; // 72 degrees
+                // Get four sub-orbiters spaced 90 degrees apart (first plane)
+                const angleOffset = (2 * Math.PI) / 4; // 90 degrees
                 const orbiterScaleFactor = mainOrbiterInfo.scaleFactor; // Use main orbiter's scale
                 const subOrbiterInfos = [
                     getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
                     getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
                     getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 4, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
                 ];
                 
-                // Get five sub-orbiters on perpendicular plane (second plane)
+                // Get four sub-orbiters on perpendicular plane (second plane)
                 const subOrbiterInfos2 = [
                     getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
                     getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
                     getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 4, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
                 ];
                 
                 const mainOrbiterRadius = this.radius * 0.15;
-                const subOrbiterHues = [25, 30, 35, 20, 40]; // Different shades of orange
-                const subOrbiterHues2 = [180, 185, 190, 175, 195]; // Different shades of cyan for second plane
+                const subOrbiterHues = [25, 30, 35, 20]; // Different shades of orange
+                const subOrbiterHues2 = [180, 185, 190, 175]; // Different shades of cyan for second plane
                 
                 // Draw sub-orbiters that are behind the main orbiter (first plane)
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos[i];
                     if (subInfo.worldPos.z < rotBall.z) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
@@ -667,7 +755,7 @@
                 }
                 
                 // Draw sub-orbiters that are behind the main orbiter (second plane)
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos2[i];
                     if (subInfo.worldPos.z < rotBall.z) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
@@ -678,7 +766,7 @@
                 drawOrbiterBall(mainOrbiterInfo.screenX, mainOrbiterInfo.screenY, mainOrbiterInfo.pixelRadius);
                 
                 // Draw sub-orbiters that are in front of the main orbiter (first plane)
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos[i];
                     if (subInfo.worldPos.z >= rotBall.z) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
@@ -686,7 +774,7 @@
                 }
                 
                 // Draw sub-orbiters that are in front of the main orbiter (second plane)
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos2[i];
                     if (subInfo.worldPos.z >= rotBall.z) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
@@ -737,32 +825,30 @@
                 // Get orbiter positions
                 const mainOrbiterInfo = drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
                 
-                // Get five sub-orbiters spaced 72 degrees apart (first plane)
-                const angleOffset = (2 * Math.PI) / 5; // 72 degrees
+                // Get four sub-orbiters spaced 90 degrees apart (first plane)
+                const angleOffset = (2 * Math.PI) / 4; // 90 degrees
                 const orbiterScaleFactor = mainOrbiterInfo.scaleFactor; // Use main orbiter's scale
                 const subOrbiterInfos = [
                     getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
                     getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
                     getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 4, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
                 ];
                 
-                // Get five sub-orbiters on perpendicular plane (second plane)
+                // Get four sub-orbiters on perpendicular plane (second plane)
                 const subOrbiterInfos2 = [
                     getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
                     getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
                     getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 4, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
                 ];
                 
                 const mainOrbiterRadius = this.radius * 0.15;
-                const subOrbiterHues = [25, 30, 35, 20, 40]; // Different shades of orange
-                const subOrbiterHues2 = [180, 185, 190, 175, 195]; // Different shades of cyan
+                const subOrbiterHues = [25, 30, 35, 20]; // Different shades of orange
+                const subOrbiterHues2 = [180, 185, 190, 175]; // Different shades of cyan
                 
                 // Draw sub-orbiters that are behind the main orbiter (first plane)
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos[i];
                     if (subInfo.worldPos.z < rotBall.z) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
@@ -770,7 +856,7 @@
                 }
                 
                 // Draw sub-orbiters that are behind the main orbiter (second plane)
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos2[i];
                     if (subInfo.worldPos.z < rotBall.z) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
@@ -781,7 +867,7 @@
                 drawOrbiterBall(mainOrbiterInfo.screenX, mainOrbiterInfo.screenY, mainOrbiterInfo.pixelRadius);
                 
                 // Draw sub-orbiters that are in front of the main orbiter (first plane)
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos[i];
                     if (subInfo.worldPos.z >= rotBall.z) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
@@ -789,7 +875,7 @@
                 }
                 
                 // Draw sub-orbiters that are in front of the main orbiter (second plane)
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos2[i];
                     if (subInfo.worldPos.z >= rotBall.z) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
@@ -1675,8 +1761,8 @@
         perpY /= perpLength;
         perpZ /= perpLength;
         
-        // Phase offset to avoid collisions with first set
-        const phaseOffset = Math.PI / 5; // 36 degrees phase shift
+        // Phase offset to prevent orbital intersections - 45 degrees places balls between first ring's positions
+        const phaseOffset = Math.PI / 4; // 45 degrees offset for 4-ball configuration (halfway between 90-degree spacing)
         
         // Calculate sub-orbiter position using radial and perpendicular vectors
         const cosAngle = Math.cos(subOrbitAngle + phaseOffset);
@@ -2119,6 +2205,86 @@
 	}
     
 	update();
+
+    // Title pulse timing system
+    const tapTimings = [];
+    const wordGroups = [
+        ['word1'],  // I
+        ['word2'],  // Like
+        ['word3'],  // to
+        ['word4'],  // Move it
+        ['word5']   // Move it
+    ];
+    let currentTapIndex = 0;
+    
+    // Saved timings from tapping to "I Like to Move It"
+    // Each timing corresponds to one word group
+    const savedTimings = [0, 233, 433, 743, 1194]; // Based on your actual tapping
+    const loopDuration = 1965; // Total cycle duration before repeat (ms) - average of your cycles
+    const pressDurations = [80, 68, 79, 168, 151]; // Hold durations for emphasis (one cycle)
+    let playbackInterval = null;
+
+    function pulseWord(wordId, duration = 150, emphasis = 1.0) {
+        const word = document.getElementById(wordId);
+        if (word) {
+            // Scale the pulse based on emphasis (duration of key press)
+            const scaleAmount = 1.0 + (emphasis * 0.32); // More emphasis = bigger pulse (max ~1.32x)
+            const glowIntensity = 25 + (emphasis * 15); // More emphasis = brighter glow
+            
+            word.style.transform = `scale(${scaleAmount})`;
+            word.style.textShadow = `0px 0px ${glowIntensity}px hsl(0, 0%, 100%), 5px 7px 10px hsl(0, 0%, 0%)`;
+            word.style.color = `hsl(0, 0%, 100%)`; // White during pulse
+            
+            // After pulse duration, transition to red cooldown
+            setTimeout(() => {
+                word.style.transform = '';
+                word.style.textShadow = '5px 7px 10px hsl(0, 0%, 0%)';
+                word.style.color = 'hsl(0, 90%, 59%)'; // Red during cooldown
+                
+                // After cooldown, return to original color
+                setTimeout(() => {
+                    word.style.textShadow = '';
+                    word.style.color = '';
+                }, 400); // 300ms red cooldown period
+            }, duration);
+        }
+    }
+
+    function pulseGroup(groupIndex, emphasis = 1.0) {
+        const group = wordGroups[groupIndex];
+        if (!group) return;
+        
+        // First three words (I, Like, to) get short staccato pulses
+        // Last two (Move it) get longer pulses
+        const pulseDuration = groupIndex < 3 ? 100 : 150;
+        pulseWord(group[0], pulseDuration, emphasis);
+    }
+
+    function startPlayback() {
+        // Stop any existing playback
+        if (playbackInterval) {
+            clearTimeout(playbackInterval);
+        }
+        
+        // Play each group according to recorded timings with emphasis
+        savedTimings.forEach((timing, index) => {
+            setTimeout(() => {
+                // Calculate emphasis based on press duration (normalize to 0-1 scale)
+                // Short press ~90ms = 0.5, long press ~290ms = 1.5
+                const pressDuration = pressDurations[index % pressDurations.length];
+                const emphasis = Math.max(0.5, Math.min(2.0, pressDuration / 150));
+                pulseGroup(index % 5, emphasis);
+            }, timing);
+        });
+        
+        // Loop the animation
+        const totalDuration = loopDuration;
+        playbackInterval = setTimeout(() => startPlayback(), totalDuration);
+    }
+
+    // Auto-start with saved timings
+    setTimeout(() => startPlayback(), 500);
+
 
 </script> 
 
