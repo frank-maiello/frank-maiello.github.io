@@ -169,7 +169,7 @@
 <div style="position: relative; z-index: 1; padding: 10px;">
 <title>FM Home</title>
 
-<div class = "title">I Like to 💃🏼 Move it 🕺🏻 Move it 🐒 </div>
+<div class = "title">I Like to Move it Move it </div>
 
 <div class = "verbiage1"><br>A small collection of realtime physics and animation exercises with JavaScript</div>
 <div class = "verbiage1b"><a href="mailto:maiello.frank@gmail.com">maiello.frank@gmail.com</a></div>
@@ -319,6 +319,12 @@
                 Roid[i].pos.y *= scaleY;
             }
         }
+        
+        // Scale cube position
+        if (typeof Cube !== 'undefined' && Cube != null) {
+            Cube.pos.x *= scaleX;
+            Cube.pos.y *= scaleY;
+        }
     }
 
     window.addEventListener("resize", resizeCanvas);
@@ -344,12 +350,16 @@
 
         //  INITIALIZE ARRAYS  
         Roid = [];
+        Cube = null; // Single cube instance
+        PongGame = null; // Pong game instance
 
         //  INITIALIZE BOOLEANS 
         dT = 1/60;
 
         //  SPAWN INITIAL OBJECTS  
-        spawnRoid()
+        spawnRoid();
+        spawnCube();
+        spawnPong();
     }
     
 	//  VECTOR OPERATIONS ---------------------------------------------------------------------
@@ -505,9 +515,9 @@
             // Orbiting ball around equator
             this.orbitAngle = Math.random() * 2 * Math.PI;
             this.orbitSpeed = 0.03; // radians per frame
-            // Second orbiter that orbits the first orbiter
+            // Three sub-orbiters that orbit the first orbiter, evenly spaced
             this.subOrbitAngle = Math.random() * 2 * Math.PI;
-            this.subOrbitSpeed = 0.1; // radians per frame (faster than main orbiter)
+            this.subOrbitSpeed = 0.05; // radians per frame (faster than main orbiter)
             this.subOrbitDistanceMultiplier = 4.0; // Distance from main orbiter to sub-orbiter
         }
         get left() {
@@ -601,7 +611,7 @@
         }
         draw() {
             // Calculate orbiter's 3D position to determine if it's behind or in front
-            const orbitRadius = this.radius * 1.8;
+            const orbitRadius = this.radius * 2.5;
             const ballX0 = orbitRadius * Math.cos(this.orbitAngle);
             const ballY0 = orbitRadius * Math.sin(this.orbitAngle);
             const ballZ0 = 0;
@@ -621,24 +631,66 @@
             
             // Draw orbiters BEHIND globe if z < 0 (facing away from camera)
             if (rotBall.z < 0) {
-                // Check if sub-orbiter is occluded by main orbiter using 2D circular test
-                const subOrbitRadius = this.radius * 0.15 * this.subOrbitDistanceMultiplier;
-                const mainOrbiterRadius = this.radius * 0.15;
-                const dx = rotSubBall.x - rotBall.x;
-                const dy = rotSubBall.y - rotBall.y;
-                const distance2D = Math.sqrt(dx * dx + dy * dy);
-                // Only occlude if distance is less than main orbiter visual radius
-                const isOccludedByOrbiter = (rotSubBall.z < rotBall.z) && (distance2D < mainOrbiterRadius * 1.2);
+                // Get orbiter positions
+                const mainOrbiterInfo = drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
                 
-                // Draw based on z-order and occlusion
-                if (rotSubBall.z < rotBall.z) {
-                    if (!isOccludedByOrbiter) {
-                        drawSubOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier);
+                // Get five sub-orbiters spaced 72 degrees apart (first plane)
+                const angleOffset = (2 * Math.PI) / 5; // 72 degrees
+                const orbiterScaleFactor = mainOrbiterInfo.scaleFactor; // Use main orbiter's scale
+                const subOrbiterInfos = [
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 4, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
+                ];
+                
+                // Get five sub-orbiters on perpendicular plane (second plane)
+                const subOrbiterInfos2 = [
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 4, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
+                ];
+                
+                const mainOrbiterRadius = this.radius * 0.15;
+                const subOrbiterHues = [25, 30, 35, 20, 40]; // Different shades of orange
+                const subOrbiterHues2 = [180, 185, 190, 175, 195]; // Different shades of cyan for second plane
+                
+                // Draw sub-orbiters that are behind the main orbiter (first plane)
+                for (let i = 0; i < 5; i++) {
+                    const subInfo = subOrbiterInfos[i];
+                    if (subInfo.worldPos.z < rotBall.z) {
+                        drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
                     }
-                    drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
-                } else {
-                    drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
-                    drawSubOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier);
+                }
+                
+                // Draw sub-orbiters that are behind the main orbiter (second plane)
+                for (let i = 0; i < 5; i++) {
+                    const subInfo = subOrbiterInfos2[i];
+                    if (subInfo.worldPos.z < rotBall.z) {
+                        drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
+                    }
+                }
+                
+                // Draw main orbiter ball
+                drawOrbiterBall(mainOrbiterInfo.screenX, mainOrbiterInfo.screenY, mainOrbiterInfo.pixelRadius);
+                
+                // Draw sub-orbiters that are in front of the main orbiter (first plane)
+                for (let i = 0; i < 5; i++) {
+                    const subInfo = subOrbiterInfos[i];
+                    if (subInfo.worldPos.z >= rotBall.z) {
+                        drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
+                    }
+                }
+                
+                // Draw sub-orbiters that are in front of the main orbiter (second plane)
+                for (let i = 0; i < 5; i++) {
+                    const subInfo = subOrbiterInfos2[i];
+                    if (subInfo.worldPos.z >= rotBall.z) {
+                        drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
+                    }
                 }
             }
             
@@ -682,26 +734,524 @@
 
             // Draw orbiters IN FRONT of globe if z >= 0 (facing toward camera)
             if (rotBall.z >= 0) {
-                // Check if sub-orbiter is occluded by main orbiter using 2D circular test
-                const subOrbitRadius = this.radius * 0.15 * this.subOrbitDistanceMultiplier;
-                const mainOrbiterRadius = this.radius * 0.15;
-                const dx = rotSubBall.x - rotBall.x;
-                const dy = rotSubBall.y - rotBall.y;
-                const distance2D = Math.sqrt(dx * dx + dy * dy);
-                // Only occlude if distance is less than main orbiter visual radius
-                const isOccludedByOrbiter = (rotSubBall.z < rotBall.z) && (distance2D < mainOrbiterRadius * 1.2);
+                // Get orbiter positions
+                const mainOrbiterInfo = drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
                 
-                // Draw based on z-order and occlusion
-                if (rotSubBall.z < rotBall.z) {
-                    if (!isOccludedByOrbiter) {
-                        drawSubOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier);
+                // Get five sub-orbiters spaced 72 degrees apart (first plane)
+                const angleOffset = (2 * Math.PI) / 5; // 72 degrees
+                const orbiterScaleFactor = mainOrbiterInfo.scaleFactor; // Use main orbiter's scale
+                const subOrbiterInfos = [
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 4, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
+                ];
+                
+                // Get five sub-orbiters on perpendicular plane (second plane)
+                const subOrbiterInfos2 = [
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 4, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
+                ];
+                
+                const mainOrbiterRadius = this.radius * 0.15;
+                const subOrbiterHues = [25, 30, 35, 20, 40]; // Different shades of orange
+                const subOrbiterHues2 = [180, 185, 190, 175, 195]; // Different shades of cyan
+                
+                // Draw sub-orbiters that are behind the main orbiter (first plane)
+                for (let i = 0; i < 5; i++) {
+                    const subInfo = subOrbiterInfos[i];
+                    if (subInfo.worldPos.z < rotBall.z) {
+                        drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
                     }
-                    drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
-                } else {
-                    drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
-                    drawSubOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier);
+                }
+                
+                // Draw sub-orbiters that are behind the main orbiter (second plane)
+                for (let i = 0; i < 5; i++) {
+                    const subInfo = subOrbiterInfos2[i];
+                    if (subInfo.worldPos.z < rotBall.z) {
+                        drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
+                    }
+                }
+                
+                // Draw main orbiter ball
+                drawOrbiterBall(mainOrbiterInfo.screenX, mainOrbiterInfo.screenY, mainOrbiterInfo.pixelRadius);
+                
+                // Draw sub-orbiters that are in front of the main orbiter (first plane)
+                for (let i = 0; i < 5; i++) {
+                    const subInfo = subOrbiterInfos[i];
+                    if (subInfo.worldPos.z >= rotBall.z) {
+                        drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
+                    }
+                }
+                
+                // Draw sub-orbiters that are in front of the main orbiter (second plane)
+                for (let i = 0; i < 5; i++) {
+                    const subInfo = subOrbiterInfos2[i];
+                    if (subInfo.worldPos.z >= rotBall.z) {
+                        drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
+                    }
                 }
             }
+        }
+    }
+
+    //  DEFINE CUBE  -----------------
+    class CUBE {
+        constructor(pos, size) {
+            this.pos = pos.clone();
+            this.size = size; // Half-size of cube (distance from center to face)
+            
+            // Quaternion orientation
+            this.orientation = quatFromEuler(
+                Math.random() * 2 * Math.PI,
+                Math.random() * 2 * Math.PI,
+                Math.random() * 2 * Math.PI
+            );
+
+             // Quaternion orientation
+            this.orientation = quatFromEuler(
+                0.25 * Math.PI,
+                0.25 * Math.PI,
+                0.25 * Math.PI
+            );
+            
+            // 3D angular velocity (tumbling in all dimensions)
+            this.omega = {
+                x: 0.2, // slow pitch
+                y: -1, // slow roll
+                z: 1.5  // slow yaw
+            };
+        }
+        
+        simulate() {
+            // Update orientation by integrating angular velocity
+            const half_dt = dT * 0.5;
+            const dq = {
+                w: 1,
+                x: this.omega.x * half_dt,
+                y: this.omega.y * half_dt,
+                z: this.omega.z * half_dt
+            };
+            // new orientation = orientation * dq  (apply small-body-frame rotation)
+            this.orientation = quatMultiply(this.orientation, dq);
+            this.orientation = quatNormalize(this.orientation);
+        }
+        
+        draw() {
+            // Define 8 vertices of the cube in local space
+            const s = this.size * cScale;
+            const vertices = [
+                { x: -s, y: -s, z: -s }, // 0: back-bottom-left
+                { x:  s, y: -s, z: -s }, // 1: back-bottom-right
+                { x:  s, y:  s, z: -s }, // 2: back-top-right
+                { x: -s, y:  s, z: -s }, // 3: back-top-left
+                { x: -s, y: -s, z:  s }, // 4: front-bottom-left
+                { x:  s, y: -s, z:  s }, // 5: front-bottom-right
+                { x:  s, y:  s, z:  s }, // 6: front-top-right
+                { x: -s, y:  s, z:  s }  // 7: front-top-left
+            ];
+            
+            // Rotate all vertices by current orientation
+            const rotated = vertices.map(v => quatRotateVec(this.orientation, v.x, v.y, v.z));
+            
+            // Project to screen space
+            const screenVerts = rotated.map(v => ({
+                x: this.pos.x * cScale + v.x,
+                y: this.pos.y * cScale - v.y, // flip Y for canvas
+                z: v.z
+            }));
+            
+            // Define 6 faces (each face as array of 4 vertex indices)
+            const faces = [
+                { indices: [0, 1, 2, 3], normal: { x: 0, y: 0, z: -1 }, baseHue: 170 }, // back
+                { indices: [4, 5, 6, 7], normal: { x: 0, y: 0, z: 1 }, baseHue: 170 },  // front
+                { indices: [0, 1, 5, 4], normal: { x: 0, y: -1, z: 0 }, baseHue: 170 }, // bottom
+                { indices: [3, 2, 6, 7], normal: { x: 0, y: 1, z: 0 }, baseHue: 170 },  // top
+                { indices: [0, 3, 7, 4], normal: { x: -1, y: 0, z: 0 }, baseHue: 170 }, // left
+                { indices: [1, 2, 6, 5], normal: { x: 1, y: 0, z: 0 }, baseHue: 170 }   // right
+            ];
+            
+            // Calculate each face's average Z and rotated normal for depth sorting and shading
+            const facesWithDepth = faces.map(face => {
+                // Average Z of face vertices
+                const avgZ = face.indices.reduce((sum, idx) => sum + screenVerts[idx].z, 0) / 4;
+                
+                // Rotate the face normal
+                const rotNormal = quatRotateVec(this.orientation, face.normal.x, face.normal.y, face.normal.z);
+                
+                // Simple lighting: assume light from front-top-right (normalized)
+                const lightDir = { x: 0.3, y: 0.5, z: 0.8 };
+                const lightMag = Math.sqrt(lightDir.x * lightDir.x + lightDir.y * lightDir.y + lightDir.z * lightDir.z);
+                const lightDot = (rotNormal.x * lightDir.x + rotNormal.y * lightDir.y + rotNormal.z * lightDir.z) / lightMag;
+                
+                // Map dot product to brightness (0.3 to 1.0 range)
+                const brightness = 0.3 + 0.7 * Math.max(0, lightDot);
+                
+                return {
+                    face: face,
+                    avgZ: avgZ,
+                    brightness: brightness,
+                    rotNormal: rotNormal
+                };
+            });
+            
+            // Sort faces by depth (back to front)
+            facesWithDepth.sort((a, b) => a.avgZ - b.avgZ);
+            
+            // Draw rear faces (facing away) with faint lines first
+            facesWithDepth.forEach(({ face, brightness, rotNormal }) => {
+                if (rotNormal.z >= 0) { // Facing away from camera
+                    c.beginPath();
+                    face.indices.forEach((idx, i) => {
+                        const v = screenVerts[idx];
+                        if (i === 0) {
+                            c.moveTo(v.x, v.y);
+                        } else {
+                            c.lineTo(v.x, v.y);
+                        }
+                    });
+                    c.closePath();
+                    
+                    // Faint rear edges
+                    c.strokeStyle = `hsla(${face.baseHue}, 40%, 30%, 0.8)`;
+                    c.lineWidth = 2;
+                    c.stroke();
+                }
+            });
+            
+            // Draw front faces (facing toward camera)
+            facesWithDepth.forEach(({ face, brightness, rotNormal }) => {
+                if (rotNormal.z < 0) { // Facing toward camera
+                    c.beginPath();
+                    face.indices.forEach((idx, i) => {
+                        const v = screenVerts[idx];
+                        if (i === 0) {
+                            c.moveTo(v.x, v.y);
+                        } else {
+                            c.lineTo(v.x, v.y);
+                        }
+                    });
+                    c.closePath();
+                    
+                    // Use transparency and shading based on lighting
+                    const lightness = 10 + brightness * 30;
+                    c.fillStyle = `hsla(${face.baseHue}, 70%, ${lightness}%, 0.4)`;
+                    c.fill();
+                    
+                    // Edge outline
+                    c.strokeStyle = `hsla(${face.baseHue}, 70%, ${lightness + 10}%, 0.9)`;
+                    c.lineWidth = 3;
+                    c.stroke();
+                }
+            });
+        }
+    }
+
+    //  PONG GAME  -----------------
+    class PONG {
+        constructor() {
+            // Game area in simulation coordinates (bottom right corner)
+            this.width = 0.7; // Game width in sim units (doubled from 0.35)
+            this.height = 0.375; // Game height in sim units (50% taller: 0.25 * 1.5)
+            this.padding = 0.05; // Fixed padding from edges
+            this.updatePosition(); // Calculate initial position
+            
+            // Paddles
+            this.paddleWidth = 0.0075;
+            this.paddleHeight = 0.04;
+            
+            // Goal area (half height, centered)
+            this.goalHeight = this.height * 0.5;
+            this.goalTop = this.height * 0.25;
+            this.goalBottom = this.goalTop + this.goalHeight;
+            this.goalCenter = this.goalTop + this.goalHeight / 2;
+            
+            this.leftPaddleY = this.goalCenter;
+            this.rightPaddleY = this.goalCenter;
+            this.paddleSpeed = 0.004;
+            
+            // Ball
+            this.ballSize = 0.012;
+            this.ballX = this.width / 2;
+            this.ballY = this.height / 2;
+            this.ballVelX = 0.006;
+            this.ballVelY = 0.004;
+            
+            // AI tracking
+            this.leftPaddleTarget = this.ballY;
+            this.rightPaddleTarget = this.ballY;
+            
+            // Scores
+            this.leftScore = 0;
+            this.rightScore = 0;
+        }
+        
+        updatePosition() {
+            // Recalculate position based on current simWidth/simHeight
+            this.x = simWidth - this.width - this.padding;
+            this.y = simHeight - this.height - this.padding;
+        }
+        
+        simulate() {
+            // Update position in case window was resized
+            this.updatePosition();
+            // Move ball
+            this.ballX += this.ballVelX;
+            this.ballY += this.ballVelY;
+            
+            // Bounce off top/bottom walls
+            if (this.ballY - this.ballSize / 2 <= 0) {
+                this.ballY = this.ballSize / 2;
+                this.ballVelY = Math.abs(this.ballVelY);
+            }
+            if (this.ballY + this.ballSize / 2 >= this.height) {
+                this.ballY = this.height - this.ballSize / 2;
+                this.ballVelY = -Math.abs(this.ballVelY);
+            }
+            
+            // Check paddle collisions
+            const paddlePadding = 0.02;
+            
+            // Left paddle
+            const leftPaddleX = paddlePadding;
+            if (this.ballX - this.ballSize / 2 <= leftPaddleX + this.paddleWidth &&
+                this.ballX - this.ballSize / 2 >= leftPaddleX &&
+                this.ballY >= this.leftPaddleY - this.paddleHeight / 2 &&
+                this.ballY <= this.leftPaddleY + this.paddleHeight / 2) {
+                this.ballX = leftPaddleX + this.paddleWidth + this.ballSize / 2;
+                this.ballVelX = Math.abs(this.ballVelX);
+                // Add some variation to Y velocity based on where it hit the paddle
+                const hitPos = (this.ballY - this.leftPaddleY) / (this.paddleHeight / 2);
+                this.ballVelY += hitPos * 0.002;
+            }
+            
+            // Right paddle
+            const rightPaddleX = this.width - this.paddleWidth - paddlePadding;
+            if (this.ballX + this.ballSize / 2 >= rightPaddleX &&
+                this.ballX + this.ballSize / 2 <= rightPaddleX + this.paddleWidth &&
+                this.ballY >= this.rightPaddleY - this.paddleHeight / 2 &&
+                this.ballY <= this.rightPaddleY + this.paddleHeight / 2) {
+                this.ballX = rightPaddleX - this.ballSize / 2;
+                this.ballVelX = -Math.abs(this.ballVelX);
+                // Add some variation to Y velocity
+                const hitPos = (this.ballY - this.rightPaddleY) / (this.paddleHeight / 2);
+                this.ballVelY += hitPos * 0.002;
+            }
+            
+            // Check if ball goes out of bounds - only score if through goal area
+            if (this.ballX < 0) {
+                // Check if ball went through goal area
+                if (this.ballY >= this.goalTop && this.ballY <= this.goalBottom) {
+                    // Right player scores
+                    this.rightScore++;
+                    // Reset scores if either player passes 9
+                    if (this.rightScore > 9) {
+                        this.rightScore = 0;
+                        this.leftScore = 0;
+                    }
+                } else {
+                    // Ball hit wall outside goal - just bounce back
+                    this.ballX = 0;
+                    this.ballVelX = Math.abs(this.ballVelX);
+                }
+                // Reset ball position if scored
+                if (this.ballX < 0) {
+                    this.ballX = this.width / 2;
+                    this.ballY = this.height / 2;
+                    this.ballVelX = (Math.random() > 0.5 ? 1 : -1) * 0.006;
+                    this.ballVelY = (Math.random() - 0.5) * 0.008;
+                }
+            } else if (this.ballX > this.width) {
+                // Check if ball went through goal area
+                if (this.ballY >= this.goalTop && this.ballY <= this.goalBottom) {
+                    // Left player scores
+                    this.leftScore++;
+                    // Reset scores if either player passes 9
+                    if (this.leftScore > 9) {
+                        this.rightScore = 0;
+                        this.leftScore = 0;
+                    }
+                } else {
+                    // Ball hit wall outside goal - just bounce back
+                    this.ballX = this.width;
+                    this.ballVelX = -Math.abs(this.ballVelX);
+                }
+                // Reset ball position if scored
+                if (this.ballX > this.width) {
+                    this.ballX = this.width / 2;
+                    this.ballY = this.height / 2;
+                    this.ballVelX = (Math.random() > 0.5 ? 1 : -1) * 0.006;
+                    this.ballVelY = (Math.random() - 0.5) * 0.008;
+                }
+            }
+            
+            // AI: paddles only track when ball is moving toward them
+            const trackingSpeed = this.paddleSpeed * 1.2;
+            const deadZone = 0.005; // Don't move if within this range
+            
+            // Left paddle AI - only track when ball is moving left
+            if (this.ballVelX < 0) {
+                if (this.leftPaddleY < this.ballY - deadZone) {
+                    this.leftPaddleY += trackingSpeed;
+                } else if (this.leftPaddleY > this.ballY + deadZone) {
+                    this.leftPaddleY -= trackingSpeed;
+                }
+            }
+            
+            // Right paddle AI - only track when ball is moving right
+            if (this.ballVelX > 0) {
+                if (this.rightPaddleY < this.ballY - deadZone) {
+                    this.rightPaddleY += trackingSpeed;
+                } else if (this.rightPaddleY > this.ballY + deadZone) {
+                    this.rightPaddleY -= trackingSpeed;
+                }
+            }
+            
+            // Keep paddles in bounds (allow half paddle length beyond goal opening)
+            const paddleExtension = this.paddleHeight / 2;
+            this.leftPaddleY = Math.max(this.goalTop - paddleExtension + this.paddleHeight / 2, 
+                                        Math.min(this.goalBottom + paddleExtension - this.paddleHeight / 2, this.leftPaddleY));
+            this.rightPaddleY = Math.max(this.goalTop - paddleExtension + this.paddleHeight / 2, 
+                                         Math.min(this.goalBottom + paddleExtension - this.paddleHeight / 2, this.rightPaddleY));
+        }
+        
+        // Draw seven-segment style digit (classic Pong look)
+        drawDigit(digit, x, y, segWidth, segHeight) {
+            // Seven segments: top, top-right, bottom-right, bottom, bottom-left, top-left, middle
+            const segments = {
+                0: [1,1,1,1,1,1,0],
+                1: [0,1,1,0,0,0,0],
+                2: [1,1,0,1,1,0,1],
+                3: [1,1,1,1,0,0,1],
+                4: [0,1,1,0,0,1,1],
+                5: [1,0,1,1,0,1,1],
+                6: [1,0,1,1,1,1,1],
+                7: [1,1,1,0,0,0,0],
+                8: [1,1,1,1,1,1,1],
+                9: [1,1,1,1,0,1,1]
+            };
+            
+            const segs = segments[digit] || [0,0,0,0,0,0,0];
+            const gap = segWidth * 0.15;
+            
+            c.fillStyle = 'hsla(0, 0%, 90%, 0.9)';
+            
+            // Top
+            if (segs[0]) c.fillRect(x + gap, y, segHeight, segWidth);
+            // Top-right
+            if (segs[1]) c.fillRect(x + gap + segHeight, y + gap, segWidth, segHeight);
+            // Bottom-right
+            if (segs[2]) c.fillRect(x + gap + segHeight, y + gap + segHeight + gap, segWidth, segHeight);
+            // Bottom
+            if (segs[3]) c.fillRect(x + gap, y + 2*gap + 2*segHeight, segHeight, segWidth);
+            // Bottom-left
+            if (segs[4]) c.fillRect(x, y + gap + segHeight + gap, segWidth, segHeight);
+            // Top-left
+            if (segs[5]) c.fillRect(x, y + gap, segWidth, segHeight);
+            // Middle
+            if (segs[6]) c.fillRect(x + gap, y + gap + segHeight, segHeight, segWidth);
+        }
+        
+        draw() {
+            c.save();
+
+            // fill game border
+            c.fillStyle = 'hsla(0, 0%, 0%, 0.8)';
+            c.fillRect(
+                (this.x) * cScale,
+                (this.y) * cScale,
+                this.width * cScale,
+                this.height * cScale
+            );
+            
+            // Draw game border with goal gaps (half height, centered vertically) 
+            c.strokeStyle = 'hsla(0, 0%, 100%, 0.6)';
+            c.lineWidth = 2;
+            
+            const goalHeight = this.height * 0.5; // Goal is half the height
+            const goalTop = this.height * 0.25; // Centered vertically
+            const goalBottom = goalTop + goalHeight;
+            
+            c.beginPath();
+            // Top border (full width)
+            c.moveTo(this.x * cScale, this.y * cScale);
+            c.lineTo((this.x + this.width) * cScale, this.y * cScale);
+            
+            // Bottom border (full width)
+            c.moveTo(this.x * cScale, (this.y + this.height) * cScale);
+            c.lineTo((this.x + this.width) * cScale, (this.y + this.height) * cScale);
+            
+            // Left border segments (top and bottom, with gap in middle)
+            c.moveTo(this.x * cScale, this.y * cScale);
+            c.lineTo(this.x * cScale, (this.y + goalTop) * cScale);
+            c.moveTo(this.x * cScale, (this.y + goalBottom) * cScale);
+            c.lineTo(this.x * cScale, (this.y + this.height) * cScale);
+            
+            // Right border segments (top and bottom, with gap in middle)
+            c.moveTo((this.x + this.width) * cScale, this.y * cScale);
+            c.lineTo((this.x + this.width) * cScale, (this.y + goalTop) * cScale);
+            c.moveTo((this.x + this.width) * cScale, (this.y + goalBottom) * cScale);
+            c.lineTo((this.x + this.width) * cScale, (this.y + this.height) * cScale);
+            c.stroke();
+            
+            // Draw center line (dashed)
+            c.setLineDash([5, 5]);
+            c.strokeStyle = 'hsla(0, 0%, 100%, 0.5)';
+            c.lineWidth = 1;
+            c.beginPath();
+            c.moveTo((this.x + this.width / 2) * cScale, this.y * cScale);
+            c.lineTo((this.x + this.width / 2) * cScale, (this.y + this.height) * cScale);
+            c.stroke();
+            c.setLineDash([]);
+            
+            // Draw left paddle
+            c.fillStyle = 'hsla(0, 0%, 100%, 0.9)';
+            const paddlePadding = 0.02; // Distance from edge
+            c.fillRect(
+                (this.x + paddlePadding) * cScale,
+                (this.y + this.leftPaddleY - this.paddleHeight / 2) * cScale,
+                this.paddleWidth * cScale,
+                this.paddleHeight * cScale
+            );
+            
+            // Draw right paddle
+            c.fillStyle = 'hsla(0, 0%, 100%, 0.9)';
+            c.fillRect(
+                (this.x + this.width - this.paddleWidth - paddlePadding) * cScale,
+                (this.y + this.rightPaddleY - this.paddleHeight / 2) * cScale,
+                this.paddleWidth * cScale,
+                this.paddleHeight * cScale
+            );
+            
+            // Draw ball (square)
+            c.fillStyle = 'hsla(0, 0%, 100%, 0.95)';
+            c.fillRect(
+                (this.x + this.ballX - this.ballSize / 2) * cScale,
+                (this.y + this.ballY - this.ballSize / 2) * cScale,
+                this.ballSize * cScale,
+                this.ballSize * cScale
+            );
+            
+            // Draw scores with seven-segment display style
+            const digitSegWidth = 3.0;
+            const digitSegHeight = 10.8;
+            const digitWidth = digitSegHeight + digitSegWidth * 2;
+            
+            // Left score (closer to center)
+            const leftX = (this.x + this.width * 0.4) * cScale - digitWidth / 2;
+            const leftY = (this.y + 0.015) * cScale;
+            this.drawDigit(this.leftScore, leftX, leftY, digitSegWidth, digitSegHeight);
+            
+            // Right score (closer to center)
+            const rightX = (this.x + this.width * 0.6) * cScale - digitWidth / 2;
+            const rightY = (this.y + 0.015) * cScale;
+            this.drawDigit(this.rightScore, rightX, rightY, digitSegWidth, digitSegHeight);
+            
+            c.restore();
         }
     }
 
@@ -918,7 +1468,7 @@
 
     function drawOrbiter(radius, centerPos, orientation, orbitAngle) {
         // Draw orbiting ball around equator
-        const orbitRadius = radius * 1.8; // Slightly outside the globe
+        const orbitRadius = radius * 2.5; // Slightly outside the globe
         const baseBallRadius = radius * 0.35; // Base ball size
         
         // Calculate 3D position on equator (z=0 plane)
@@ -943,6 +1493,11 @@
         // Draw the orbiting ball with spherical shading
         const ballPixelRadius = ballRadius * cScale;
         
+        // Return position info for shadow calculation
+        return { screenX: ballScreenX, screenY: ballScreenY, pixelRadius: ballPixelRadius, worldPos: rotBall, scaleFactor: scaleFactor };
+    }
+    
+    function drawOrbiterBall(ballScreenX, ballScreenY, ballPixelRadius) {
         // Sphere gradient for the ball
         const ballGradient = c.createRadialGradient(
             ballScreenX - ballPixelRadius * 0.3,
@@ -952,45 +1507,113 @@
             ballScreenY,
             1.1 * ballPixelRadius
         );
-        /*ballGradient.addColorStop(0, 'rgb(255, 255, 255)');
-        ballGradient.addColorStop(0.3, 'rgb(200, 200, 255)');
-        ballGradient.addColorStop(0.7, 'rgb(100, 100, 200)');
-        ballGradient.addColorStop(1, 'rgb(30, 30, 80)');*/
 
         ballGradient.addColorStop(0, 'hsl(320, 80%, 80%)');
-        ballGradient.addColorStop(0.3, 'hsl(320, 80%, 70%)');
-        ballGradient.addColorStop(0.7, 'hsl(320, 80%, 40%)');
-        ballGradient.addColorStop(1, 'hsl(320, 60%, 15%)');
-
-        
+        ballGradient.addColorStop(0.3, 'hsl(320, 80%, 60%)');
+        ballGradient.addColorStop(0.7, 'hsl(320, 80%, 30%)');
+        ballGradient.addColorStop(1, 'hsl(320, 60%, 10%)');
         
         c.beginPath();
         c.arc(ballScreenX, ballScreenY, ballPixelRadius, 0, 2 * Math.PI);
         c.fillStyle = ballGradient;
         c.fill();
+    }
+    
+    function drawSubOrbiterShadow(mainOrbiterScreenX, mainOrbiterScreenY, mainOrbiterPixelRadius, 
+                                   subOrbiterScreenX, subOrbiterScreenY, subOrbiterPixelRadius,
+                                   subOrbiterWorldZ, mainOrbiterWorldZ) {
+        // Only draw shadow if sub-orbiter is behind main orbiter
+        if (subOrbiterWorldZ >= mainOrbiterWorldZ) return;
         
-        /*// Add subtle rim highlight
-        c.strokeStyle = 'rgba(200, 200, 255, 0.3)';
-        c.lineWidth = ballPixelRadius * 0.1;
-        c.stroke();*/
+        // Calculate shadow position on main orbiter surface
+        const dx = subOrbiterScreenX - mainOrbiterScreenX;
+        const dy = subOrbiterScreenY - mainOrbiterScreenY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Only draw shadow if sub-orbiter is reasonably close
+        if (distance > mainOrbiterPixelRadius * 4) return;
+        
+        // Shadow is centered on the main orbiter, not offset
+        const shadowCenterX = mainOrbiterScreenX;
+        const shadowCenterY = mainOrbiterScreenY;
+        
+        // Calculate shadow size - larger and softer the farther away
+        const depthFactor = Math.abs(subOrbiterWorldZ - mainOrbiterWorldZ) * 0.02;
+        const shadowRadius = subOrbiterPixelRadius * (1.5 + depthFactor);
+        
+        // Draw shadow as a simple dark circular gradient at the center
+        c.save();
+        c.globalCompositeOperation = 'multiply';
+        
+        const shadowGradient = c.createRadialGradient(
+            shadowCenterX, shadowCenterY, 0,
+            shadowCenterX, shadowCenterY, shadowRadius
+        );
+        shadowGradient.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
+        shadowGradient.addColorStop(0.4, 'rgba(0, 0, 0, 0.6)');
+        shadowGradient.addColorStop(0.7, 'rgba(0, 0, 0, 0.3)');
+        shadowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        
+        c.fillStyle = shadowGradient;
+        c.beginPath();
+        c.arc(shadowCenterX, shadowCenterY, shadowRadius, 0, 2 * Math.PI);
+        c.fill();
+        c.restore();
     }
 
-    function drawSubOrbiter(radius, centerPos, orientation, orbitAngle, subOrbitAngle, subOrbitDistanceMultiplier) {
-        // Draw smaller orbiter that orbits around the main orbiter
-        const orbitRadius = radius * 1.8;
-        const subOrbitRadius = radius * 0.15 * subOrbitDistanceMultiplier; // Orbit radius around main orbiter
-        const baseBallRadius = radius * 0.08; // Smaller than main orbiter
+    function drawSubOrbiter(radius, centerPos, orientation, orbitAngle, subOrbitAngle, subOrbitDistanceMultiplier, orbiterScaleFactor) {
+        const info = getSubOrbiterPosition(radius, centerPos, orientation, orbitAngle, subOrbitAngle, subOrbitDistanceMultiplier, orbiterScaleFactor);
+        drawSubOrbiterBall(info.screenX, info.screenY, info.pixelRadius);
+    }
+    
+    function getSubOrbiterPosition(radius, centerPos, orientation, orbitAngle, subOrbitAngle, subOrbitDistanceMultiplier, orbiterScaleFactor) {
+        // Calculate smaller orbiter that orbits around the main orbiter
+        const orbitRadius = radius * 2.5;
+        const subOrbitRadius = radius * 0.15 * subOrbitDistanceMultiplier * orbiterScaleFactor; // Orbit radius scales with main orbiter
+        const baseBallRadius = radius * 0.12 * orbiterScaleFactor; // Size scales with main orbiter
         
-        // Calculate main orbiter position
+        // Calculate main orbiter position (this is the radial vector from globe center)
         const ballX0 = orbitRadius * Math.cos(orbitAngle);
         const ballY0 = orbitRadius * Math.sin(orbitAngle);
         const ballZ0 = 0;
         
-        // Calculate sub-orbiter position with 30-degree axis offset
-        const axisOffset = 30 * Math.PI / 180;
-        const subX0 = subOrbitRadius * Math.cos(subOrbitAngle);
-        const subY0 = subOrbitRadius * Math.sin(subOrbitAngle) * Math.cos(axisOffset);
-        const subZ0 = subOrbitRadius * Math.sin(subOrbitAngle) * Math.sin(axisOffset);
+        // Normalize the radial vector to get the direction from globe center to orbiter
+        const radialLength = Math.sqrt(ballX0 * ballX0 + ballY0 * ballY0 + ballZ0 * ballZ0);
+        const radialX = ballX0 / radialLength;
+        const radialY = ballY0 / radialLength;
+        const radialZ = ballZ0 / radialLength;
+        
+        // Create orbital plane perpendicular to radial vector
+        // Use Z-axis as reference to find perpendicular vectors
+        // First perpendicular vector (in the plane perpendicular to radial)
+        let perp1X, perp1Y, perp1Z;
+        if (Math.abs(radialZ) < 0.9) {
+            // Cross product with Z axis
+            perp1X = -radialY;
+            perp1Y = radialX;
+            perp1Z = 0;
+        } else {
+            // Cross product with X axis if radial is too close to Z
+            perp1X = 0;
+            perp1Y = -radialZ;
+            perp1Z = radialY;
+        }
+        const perp1Length = Math.sqrt(perp1X * perp1X + perp1Y * perp1Y + perp1Z * perp1Z);
+        perp1X /= perp1Length;
+        perp1Y /= perp1Length;
+        perp1Z /= perp1Length;
+        
+        // Second perpendicular vector (cross product of radial and perp1)
+        const perp2X = radialY * perp1Z - radialZ * perp1Y;
+        const perp2Y = radialZ * perp1X - radialX * perp1Z;
+        const perp2Z = radialX * perp1Y - radialY * perp1X;
+        
+        // Calculate sub-orbiter position in the plane perpendicular to radial vector
+        const cosAngle = Math.cos(subOrbitAngle);
+        const sinAngle = Math.sin(subOrbitAngle);
+        const subX0 = subOrbitRadius * (perp1X * cosAngle + perp2X * sinAngle);
+        const subY0 = subOrbitRadius * (perp1Y * cosAngle + perp2Y * sinAngle);
+        const subZ0 = subOrbitRadius * (perp1Z * cosAngle + perp2Z * sinAngle);
         
         // Position relative to main orbiter
         const subBallX = ballX0 + subX0;
@@ -1010,10 +1633,83 @@
         const ballScreenX = (centerPos.x + rotSubBall.x) * cScale;
         const ballScreenY = (centerPos.y - rotSubBall.y) * cScale;
         
-        // Draw the sub-orbiting ball with spherical shading
+        // Return position info
         const ballPixelRadius = ballRadius * cScale;
+        return { screenX: ballScreenX, screenY: ballScreenY, pixelRadius: ballPixelRadius, worldPos: rotSubBall };
+    }
+    
+    function getSubOrbiterPosition2(radius, centerPos, orientation, orbitAngle, subOrbitAngle, subOrbitDistanceMultiplier, orbiterScaleFactor) {
+        // Calculate smaller orbiter on perpendicular orbital plane (parallel to radial vector)
+        const orbitRadius = radius * 2.5;
+        const subOrbitRadius = radius * 0.15 * subOrbitDistanceMultiplier * orbiterScaleFactor; // Orbit radius scales with main orbiter
+        const baseBallRadius = radius * 0.12 * orbiterScaleFactor; // Size scales with main orbiter
         
-        // Sphere gradient for the sub-orbiter (different color from main orbiter)
+        // Calculate main orbiter position (radial vector from globe center)
+        const ballX0 = orbitRadius * Math.cos(orbitAngle);
+        const ballY0 = orbitRadius * Math.sin(orbitAngle);
+        const ballZ0 = 0;
+        
+        // Normalize the radial vector
+        const radialLength = Math.sqrt(ballX0 * ballX0 + ballY0 * ballY0 + ballZ0 * ballZ0);
+        const radialX = ballX0 / radialLength;
+        const radialY = ballY0 / radialLength;
+        const radialZ = ballZ0 / radialLength;
+        
+        // Create orbital plane parallel to radial vector (perpendicular to first ring)
+        // This plane contains the radial vector as one axis
+        // Use Z-axis as reference to find perpendicular vector
+        let perpX, perpY, perpZ;
+        if (Math.abs(radialZ) < 0.9) {
+            // Cross product with Z axis
+            perpX = -radialY;
+            perpY = radialX;
+            perpZ = 0;
+        } else {
+            // Cross product with X axis if radial is too close to Z
+            perpX = 0;
+            perpY = -radialZ;
+            perpZ = radialY;
+        }
+        const perpLength = Math.sqrt(perpX * perpX + perpY * perpY + perpZ * perpZ);
+        perpX /= perpLength;
+        perpY /= perpLength;
+        perpZ /= perpLength;
+        
+        // Phase offset to avoid collisions with first set
+        const phaseOffset = Math.PI / 5; // 36 degrees phase shift
+        
+        // Calculate sub-orbiter position using radial and perpendicular vectors
+        const cosAngle = Math.cos(subOrbitAngle + phaseOffset);
+        const sinAngle = Math.sin(subOrbitAngle + phaseOffset);
+        const subX0 = subOrbitRadius * (radialX * cosAngle + perpX * sinAngle);
+        const subY0 = subOrbitRadius * (radialY * cosAngle + perpY * sinAngle);
+        const subZ0 = subOrbitRadius * (radialZ * cosAngle + perpZ * sinAngle);
+        
+        // Position relative to main orbiter
+        const subBallX = ballX0 + subX0;
+        const subBallY = ballY0 + subY0;
+        const subBallZ = ballZ0 + subZ0;
+        
+        // Rotate the sub-orbiter position with the globe's orientation
+        const rotSubBall = quatRotateVec(orientation, subBallX, subBallY, subBallZ);
+        
+        // Scale based on z-position (perspective effect)
+        const totalOrbitRadius = orbitRadius + subOrbitRadius;
+        const zNormalized = rotSubBall.z / totalOrbitRadius;
+        const scaleFactor = 1.0 + zNormalized * 0.3;
+        const ballRadius = baseBallRadius * scaleFactor;
+        
+        // Project to 2D screen space
+        const ballScreenX = (centerPos.x + rotSubBall.x) * cScale;
+        const ballScreenY = (centerPos.y - rotSubBall.y) * cScale;
+        
+        // Return position info
+        const ballPixelRadius = ballRadius * cScale;
+        return { screenX: ballScreenX, screenY: ballScreenY, pixelRadius: ballPixelRadius, worldPos: rotSubBall };
+    }
+    
+    function drawSubOrbiterBall(ballScreenX, ballScreenY, ballPixelRadius, hue = 200) {
+        // Sphere gradient for the sub-orbiter with variable hue
         const ballGradient = c.createRadialGradient(
             ballScreenX - ballPixelRadius * 0.3,
             ballScreenY - ballPixelRadius * 0.4,
@@ -1022,10 +1718,10 @@
             ballScreenY,
             1.1 * ballPixelRadius
         );
-        ballGradient.addColorStop(0, 'hsl(200, 80%, 80%)');
-        ballGradient.addColorStop(0.3, 'hsl(200, 80%, 70%)');
-        ballGradient.addColorStop(0.7, 'hsl(200, 80%, 40%)');
-        ballGradient.addColorStop(1, 'hsl(200, 60%, 15%)');
+        ballGradient.addColorStop(0, `hsl(${hue}, 80%, 80%)`);
+        ballGradient.addColorStop(0.3, `hsl(${hue}, 80%, 70%)`);
+        ballGradient.addColorStop(0.7, `hsl(${hue}, 80%, 40%)`);
+        ballGradient.addColorStop(1, `hsl(${hue}, 60%, 15%)`);
         
         c.beginPath();
         c.arc(ballScreenX, ballScreenY, ballPixelRadius, 0, 2 * Math.PI);
@@ -1036,7 +1732,7 @@
     //  SPAWN ROIDS  ------------------------------------------------------------
     function spawnRoid() {
         var radius = 0.4;
-        var pos = new Vector2(0.9 * simWidth, 0.3 * simHeight);
+        var pos = new Vector2(0.8 * simWidth, 0.3 * simHeight);
         //var pos = new Vector2(0.7 * simWidth, 0.5 * simHeight);
         var vel = new Vector2(0, 0);
         //var hue = Math.floor(Math.random() * 360);
@@ -1050,6 +1746,18 @@
         let roll = Math.random() * 2 * Math.PI;
                 
         Roid.push(new ROID(pos, vel, radius, hue, saturation, lightness, randomNo, yaw, pitch, roll));   
+    }
+
+    //  SPAWN CUBE  ------------------------------------------------------------
+    function spawnCube() {
+        var size = 0.2; // Half-size of cube
+        var pos = new Vector2(0.6 * simWidth, 0.75 * simHeight); // Center of screen
+        Cube = new CUBE(pos, size);
+    }
+
+    //  SPAWN PONG GAME  ------------------------------------------------------------
+    function spawnPong() {
+        PongGame = new PONG();
     }
 
     //  NODE CLASS  -------------------
@@ -1163,6 +1871,45 @@
     }
 
     function drawNodes() {
+        // Draw trails for primary nodes
+        for (i = 0; i < PrimaryNodes.length; i++) {
+            const node = PrimaryNodes[i];
+            if (node.trail.length > 1) {
+                c.lineCap = 'round';
+                c.lineJoin = 'round';
+                
+                for (let j = 1; j < node.trail.length; j++) {
+                    const alpha = j / node.trail.length;
+                    c.strokeStyle = `hsla(210, 70%, 60%, ${alpha * 0.1})`;
+                    c.lineWidth = 2 + 25 * alpha;
+                    
+                    c.beginPath();
+                    c.moveTo(node.trail[j - 1].x * cScale, node.trail[j - 1].y * cScale);
+                    c.lineTo(node.trail[j].x * cScale, node.trail[j].y * cScale);
+                    c.stroke();
+                }
+            }
+        }
+            
+        // Draw trails for secondary nodes
+        for (i = 0; i < SecondaryNodes.length; i++) {
+            const node = SecondaryNodes[i];
+            if (node.trail.length > 1) {
+                c.lineCap = 'round';
+                c.lineJoin = 'round';
+                for (let j = 1; j < node.trail.length; j++) {
+                    const alpha = j / node.trail.length;
+                    c.strokeStyle = `hsla(320, 70%, 50%, ${alpha * 0.15})`;
+                    c.lineWidth = 2 + 25 * alpha;
+                    
+                    c.beginPath();
+                    c.moveTo(node.trail[j - 1].x * cScale, node.trail[j - 1].y * cScale);
+                    c.lineTo(node.trail[j].x * cScale, node.trail[j].y * cScale);
+                    c.stroke();
+                }
+            }
+        }
+        
         // Collect all connections with their distances for sorting
         let secondaryConnections = [];
         let primaryConnections = [];
@@ -1227,45 +1974,6 @@
             c.strokeStyle = `hsla(${180 + 3 * lineLite}, 50%, ${lineLite}%, ${lineLite + 20}%)`;
             c.lineWidth = Math.min(4 * conn.invDistance, 4);
             c.stroke();
-        }
-
-        // Draw trails for primary nodes
-        for (i = 0; i < PrimaryNodes.length; i++) {
-            const node = PrimaryNodes[i];
-            if (node.trail.length > 1) {
-                c.lineCap = 'round';
-                c.lineJoin = 'round';
-                
-                for (let j = 1; j < node.trail.length; j++) {
-                    const alpha = j / node.trail.length;
-                    c.strokeStyle = `hsla(210, 70%, 60%, ${alpha * 0.1})`;
-                    c.lineWidth = 2 + 25 * alpha;
-                    
-                    c.beginPath();
-                    c.moveTo(node.trail[j - 1].x * cScale, node.trail[j - 1].y * cScale);
-                    c.lineTo(node.trail[j].x * cScale, node.trail[j].y * cScale);
-                    c.stroke();
-                }
-            }
-        }
-            
-        // Draw trails for secondary nodes
-        for (i = 0; i < SecondaryNodes.length; i++) {
-            const node = SecondaryNodes[i];
-            if (node.trail.length > 1) {
-                c.lineCap = 'round';
-                c.lineJoin = 'round';
-                for (let j = 1; j < node.trail.length; j++) {
-                    const alpha = j / node.trail.length;
-                    c.strokeStyle = `hsla(320, 70%, 50%, ${alpha * 0.15})`;
-                    c.lineWidth = 2 + 25 * alpha;
-                    
-                    c.beginPath();
-                    c.moveTo(node.trail[j - 1].x * cScale, node.trail[j - 1].y * cScale);
-                    c.lineTo(node.trail[j].x * cScale, node.trail[j].y * cScale);
-                    c.stroke();
-                }
-            }
         }
             
         // Draw primary nodes with spherical shading
@@ -1345,6 +2053,16 @@
                 roid.simulate();
             }
         }
+        
+        // Simulate cube
+        if (Cube != null) {
+            Cube.simulate();
+        }
+        
+        // Simulate pong game
+        if (PongGame != null) {
+            PongGame.simulate();
+        }
     }
     
     //  DRAW EVERYTHING ==============================================================
@@ -1368,8 +2086,13 @@
         c.fillRect(0, 0, canvas.width, canvas.height);
 
         // Draw semi-transparent black overlay
-        c.fillStyle = 'hsla(0, 0%, 0%, 0.2)';
+        c.fillStyle = 'hsla(0, 0%, 0%, 0.5)';
         c.fillRect(0, 0, canvas.width, canvas.height); 
+
+        // Draw cube
+        if (Cube != null) {
+            Cube.draw();
+        }
 
         // Draw roid
         for (var r = 0; r < Roid.length; r++) {
@@ -1377,6 +2100,11 @@
                 var roid = Roid[r]
                 roid.draw();
             }
+        }
+        
+        // Draw pong game
+        if (PongGame != null) {
+            PongGame.draw();
         }
 	}
 
