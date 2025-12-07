@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.26
+		<title>Slosh 2.27
         </title>
 	</head>
 
@@ -606,6 +606,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     var doGummi = false; // fourth ball rendering style
     var doArcs = false; // bent arc rendering style
     var doTeardrops = false; // teardrop rendering style
+    var doSquares = false; // square rendering style
+    var doTracedSquares = false; // traced square rendering style
+    var doDirectionalSquares = false; // directional square rendering style
+    var doTracedDirectionalSquares = false; // traced directional square rendering style
     // Faster response = smaller tau; controls heading smoothing speed (seconds)
     var gummiHeadingTau = 0.0;
     // Orientation offset so the TOP of the image leads along the velocity vector
@@ -2615,8 +2619,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         currentY += sliderSpacing;
         
         // 6. Tau (Heading Smoothing) slider
-        // Determine if tau is relevant (only for gummi bears and rokets) 
-        const tauRelevant = doGummi || doRokets || doArrows || doEllipses || doLines || doArcs || doTeardrops;
+        // Determine if tau is relevant (only for gummi bears, rokets, and directional rendering styles) 
+        const tauRelevant = doGummi || doRokets || doArrows || doEllipses || doLines || doArcs || doTeardrops || doDirectionalSquares || doTracedDirectionalSquares;
         const tauOpacity = tauRelevant ? 1.0 : 0.0;
         
         ctx.save();
@@ -5535,10 +5539,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const dropdownHeight = 24;
         const dropdownWidth = w - 40;  // Equal 20px spacing on both sides
         const renderTypes = [
-            { value: 'drawRings', label: 'circles' },
+            { value: 'drawRings', label: 'empty circles' },
             { value: 'drawCircles', label: 'simple discs' },
-            { value: 'drawDiscs', label: 'circled discs' },
+            { value: 'drawDiscs', label: 'filled circles' },
             { value: 'drawSpheres', label: 'spheres' },
+            { value: 'drawSquares', label: 'empty squares' },
+            { value: 'drawTracedSquares', label: 'filled squares' },
+            { value: 'drawDirectionalSquares', label: 'directional squares' },
+            { value: 'drawTracedDirectionalSquares', label: 'filled directional squares' },
             { value: 'drawLines', label: 'directional lines' },
             { value: 'drawArcs', label: 'bendy lines' },
             { value: 'drawEllipses', label: 'grains of rice' },
@@ -5629,8 +5637,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         dropdownY += sliderSpacing + 10; // After slider 3, position at dropdown
         
         const dropdownHeight = 24;
-        const dropdownWidth = w - 100;  // Adjust for new slider width
-        const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawArcs', 'drawEllipses', 'drawLinedEllipses', 'drawTeardrops', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
+        const dropdownWidth = w - 40;  // Match the draw function width
+        const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs', 'drawSpheres', 'drawSquares', 'drawTracedSquares', 'drawDirectionalSquares', 'drawTracedDirectionalSquares', 'drawLines', 'drawArcs', 'drawEllipses', 'drawLinedEllipses', 'drawTeardrops', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
         
         // If dropdown is expanded, check dropdown options FIRST (before menu bounds)
         // This allows clicking options that extend outside the menu
@@ -6265,7 +6273,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Handle render type selection
         if (hitTest.startsWith('renderType_')) {
             const index = parseInt(hitTest.split('_')[1]);
-            const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs',  'drawSpheres', 'drawLines', 'drawArcs', 'drawEllipses', 'drawLinedEllipses', 'drawTeardrops', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
+            const renderTypes = ['drawRings', 'drawCircles', 'drawDiscs', 'drawSpheres', 'drawSquares', 'drawTracedSquares', 'drawDirectionalSquares', 'drawTracedDirectionalSquares', 'drawLines', 'drawArcs', 'drawEllipses', 'drawLinedEllipses', 'drawTeardrops', 'drawArrows', 'drawLinedArrows', 'drawFancyArrows', 'drawRokets', 'drawGummies'];
             particlesMenuRenderType = renderTypes[index];
             setRenderType(particlesMenuRenderType);
             particlesMenuRenderTypeExpanded = false; // Collapse dropdown after selection
@@ -6526,6 +6534,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
        if (renderType === 'drawSpheres') {
             doSpheres = true;
             doDiscs = false;
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
             doCircles = false;
             doRings = false;
             doLines = false;
@@ -6554,6 +6566,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
        } else if (renderType === 'drawDiscs') {
             doDiscs = true;
             doSpheres = false;
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
             doCircles = false;
             doRings = false;
             doLines = false;
@@ -6578,10 +6594,138 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 wasGummi = false;
                 makeBalls();
             }
+       } else if (renderType === 'drawSquares') {
+            doSquares = true;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
+            doDiscs = false;
+            doSpheres = false;
+            doCircles = false;
+            doRings = false;
+            doLines = false;
+            doArrows = false;
+            doArcs = false;
+            doGummi = false;
+            doRokets = false;
+            doEllipses = false;
+            doTeardrops = false;
+            colorWheelSat = 80;
+            ballSaturation = 80;
+            colorWheelLight = 40;
+            ballLightness = 40;
+            if (wasGummi == true) {
+                particlesMenuQuantity = 64;
+                particlesMenuLargeRadius = 15;
+                particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
+                wasGummi = false;
+                makeBalls();
+            }
+       } else if (renderType === 'drawTracedSquares') {
+            doSquares = false;
+            doTracedSquares = true;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
+            doDiscs = false;
+            doSpheres = false;
+            doCircles = false;
+            doRings = false;
+            doLines = false;
+            doArrows = false;
+            doArcs = false;
+            doGummi = false;
+            doRokets = false;
+            doEllipses = false;
+            doTeardrops = false;
+            colorWheelSat = 50;
+            ballSaturation = 75;
+            colorWheelLight = 55;
+            ballLightness = 55;
+            if (wasGummi == true) {
+                particlesMenuQuantity = 64;
+                particlesMenuLargeRadius = 15;
+                particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
+                wasGummi = false;
+                makeBalls();
+            }
+       } else if (renderType === 'drawDirectionalSquares') {
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = true;
+            doTracedDirectionalSquares = false;
+            doDiscs = false;
+            doSpheres = false;
+            doCircles = false;
+            doRings = false;
+            doLines = false;
+            doArrows = false;
+            doArcs = false;
+            doGummi = false;
+            doRokets = false;
+            doEllipses = false;
+            doTeardrops = false;
+            colorWheelSat = 50;
+            ballSaturation = 75;
+            colorWheelLight = 60;
+            ballLightness = 60;
+            if (wasGummi == true) {
+                particlesMenuQuantity = 64;
+                particlesMenuLargeRadius = 15;
+                particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
+                wasGummi = false;
+                makeBalls();
+            }
+       } else if (renderType === 'drawTracedDirectionalSquares') {
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = true;
+            doDiscs = false;
+            doSpheres = false;
+            doCircles = false;
+            doRings = false;
+            doLines = false;
+            doArrows = false;
+            doArcs = false;
+            doGummi = false;
+            doRokets = false;
+            doEllipses = false;
+            doTeardrops = false;
+            colorWheelSat = 50;
+            ballSaturation = 75;
+            colorWheelLight = 60;
+            ballLightness = 60;
+            if (wasGummi == true) {
+                particlesMenuQuantity = 64;
+                particlesMenuLargeRadius = 15;
+                particlesMenuSmallRadius = 3;
+                physicsMenuRepulsionForce = 20;
+                physProps.repulsionForce = 2.0;
+                physProps.repulsionDist = 4;
+                physicsMenuRepulsionDist = 4;
+                wasGummi = false;
+                makeBalls();
+            }
        } else if (renderType === 'drawCircles') {
             doCircles = true;
             doDiscs = false;
             doSpheres = false;
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
             doRings = false;
             doLines = false;
             doArrows = false;
@@ -6608,6 +6752,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         } else if (renderType === 'drawRings') {
             doRings = true;
             doGummi = false;
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
             doCircles = false;
             doDiscs = false;
             doSpheres = false;
@@ -6636,6 +6784,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doGummi = true;
             doRings = false;
             wasGummi = true;
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
             doDiscs = false;
             doSpheres = false;
             doCircles = false;
@@ -6661,6 +6813,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doCircles = false;
             doDiscs = false;
             doSpheres = false;
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
             doRings = false;
             doLines = true;
             doArrows = false;
@@ -6688,6 +6844,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doCircles = false;
             doDiscs = false;
             doSpheres = false;
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
             doRings = false;
             doLines = false;
             doArrows = false;
@@ -6742,6 +6902,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doCircles = false;
             doDiscs = false;
             doSpheres = false;
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
             doRings = false;
             doLines = true;
             doArrows = false;
@@ -6769,6 +6933,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doCircles = false;
             doDiscs = false;
             doSpheres = false;
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
             doRings = false;
             doLines = false;
             doArrows = false;
@@ -6796,6 +6964,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doCircles = false;
             doDiscs = false;
             doSpheres = false;
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
             doRings = false;
             doLines = true;
             doArrows = true;
@@ -6827,6 +6999,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             doCircles = false;
             doDiscs = false;
             doSpheres = false;
+            doSquares = false;
+            doTracedSquares = false;
+            doDirectionalSquares = false;
+            doTracedDirectionalSquares = false;
             doRings = false;
             doLines = true;
             doArrows = false;
@@ -8344,14 +8520,101 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
         if (!boxHandled) {
+        // Check if clicking on cyclone, magnet, or blower BEFORE checking pucks
+        // This ensures toys can be dragged instead of the puck underneath
+        if (typeof Cyclone !== 'undefined' && Cyclone.length > 0 && !Cyclone[0].isLocked) {
+            const cyclone = Cyclone[0];
+            const cycloneRadius = 60 / cScale;
+            const dx = mousePos.x - cyclone.pos.x;
+            const dy = mousePos.y - cyclone.pos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < cycloneRadius) {
+                // Let the cyclone's own mousedown handler deal with it
+                return;
+            }
+        }
+        if (typeof Magnet !== 'undefined' && Magnet.length > 0 && !Magnet[0].isLocked) {
+            const magnet = Magnet[0];
+            const magnetRadius = 60 / cScale;
+            const dx = mousePos.x - magnet.pos.x;
+            const dy = mousePos.y - magnet.pos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < magnetRadius) {
+                // Let the magnet's own mousedown handler deal with it
+                return;
+            }
+        }
+        // Check blower BEFORE pucks to give it priority
+        if (blowerState >= 1 && typeof Blower !== 'undefined' && Blower.length > 0) {
+            const blower = Blower[0];
+            const dx = mousePos.x - blower.pos.x;
+            const dy = mousePos.y - blower.pos.y;
+            const dBlower = Math.sqrt(dx * dx + dy * dy);
+            if (dBlower < 2.0 * blower.radius) {
+                // Don't allow blower interaction if locked to a puck
+                if (blower.isLocked) {
+                    e.preventDefault();
+                    return;
+                }
+                
+                // Check if clicking on blower yellow suspend button (only in state 1)
+                if (blowerState === 1) {
+                    const suspendButtonX = blower.pos.x + Math.cos(Math.PI + blower.blowerAngle) * 1.0 * blower.radius;
+                    const suspendButtonY = blower.pos.y + Math.sin(Math.PI + blower.blowerAngle) * 1.0 * blower.radius;
+                    const dSuspendButton = Math.sqrt(
+                        Math.pow(mousePos.x - suspendButtonX, 2) + 
+                        Math.pow(mousePos.y - suspendButtonY, 2)
+                    );
+                    if (dSuspendButton < 0.15 * blower.radius) {
+                        // Toggle blower active state
+                        blowerActive = !blowerActive;
+                        e.preventDefault();
+                        return;
+                    }
+                    const offButtonX = blower.pos.x + Math.cos(Math.PI + blower.blowerAngle) * 1.35 * blower.radius;
+                    const offButtonY = blower.pos.y + Math.sin(Math.PI + blower.blowerAngle) * 1.35 * blower.radius;
+                    const dOffButton = Math.sqrt(
+                        Math.pow(mousePos.x - offButtonX, 2) + 
+                        Math.pow(mousePos.y - offButtonY, 2)
+                    );
+                    if (dOffButton < 0.15 * blower.radius) {
+                        // Turn blower completely off and hide it
+                        blower.active = false;
+                        if (typeof blowerState !== 'undefined') blowerState = 0;
+                        // Update the toys menu blower icon
+                        var blowerToy = toysMenuItems && toysMenuItems.find(item => item && item.id === 'showBlowerButton');
+                        if (blowerToy) blowerToy.checked = false;
+                        e.preventDefault();
+                        return;
+                    }
+                }
+                
+                // Check if click is in outer half of radius (angle mode) or inner half (move mode)
+                if (dBlower > 0.5 * blower.radius) {
+                    // Outer: adjust angle mode
+                    isBlowerAngleMode = true;
+                } else {
+                    // Inner: move mode
+                    isBlowerAngleMode = false;
+                    dX = startX / cScale - blower.pos.x;
+                    dY = (simHeight - startY / cScale) - blower.pos.y;
+                }
+                document.addEventListener('mousemove', mouseBlowerMove);
+                document.addEventListener('touchmove', touchBlowerMove, {passive: false});
+                return; // Blower handled, don't check pucks
+            }
+        }
+        
         // Check all normal pucks dynamically for button and grip clicks
         // Find the closest match across all normal pucks
         let normalPuckHandled = false;
+        
         let closestPlusIndex = -1, closestPlusDist = Infinity;
         let closestMinusIndex = -1, closestMinusDist = Infinity;
         let closestGripIndex = -1, closestGripDist = Infinity;
         let closestBodyIndex = -1, closestBodyDist = Infinity;
         
+        if (!normalPuckHandled) {
         for (let i = 0; i < Puck.length; i++) {
             const puck = Puck[i];
             if (!puck || puck.heartBeat || puck.cycle || puck.flying || puck.orbit || puck.yinyang) {
@@ -8776,53 +9039,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 normalPuckHandled = true;
             }
         }
-        if (!normalPuckHandled) {
-            if (dBlower < 2.0 * blower.radius) {
-                // Check if clicking on blower yellow suspend button (only in state 1)
-                if (blowerState === 1) {
-                    const suspendButtonX = blower.pos.x + Math.cos(Math.PI + blower.blowerAngle) * 1.0 * blower.radius;
-                    const suspendButtonY = blower.pos.y + Math.sin(Math.PI + blower.blowerAngle) * 1.0 * blower.radius;
-                    const dSuspendButton = Math.sqrt(
-                        Math.pow(mousePos.x - suspendButtonX, 2) + 
-                        Math.pow(mousePos.y - suspendButtonY, 2)
-                    );
-                    if (dSuspendButton < 0.15 * blower.radius) {
-                        // Toggle blower active state
-                        blowerActive = !blowerActive;
-                        e.preventDefault();
-                        return; // Don't proceed with other blower interactions
-                    }
-                    const offButtonX = blower.pos.x + Math.cos(Math.PI + blower.blowerAngle) * 1.35 * blower.radius;
-                    const offButtonY = blower.pos.y + Math.sin(Math.PI + blower.blowerAngle) * 1.35 * blower.radius;
-                    const dOffButton = Math.sqrt(
-                        Math.pow(mousePos.x - offButtonX, 2) + 
-                        Math.pow(mousePos.y - offButtonY, 2)
-                    );
-                    if (dOffButton < 0.15 * blower.radius) {
-                            // Turn blower completely off and hide it
-                            blower.active = false;
-                            if (typeof blowerState !== 'undefined') blowerState = 0;
-                            // Update the toys menu blower icon
-                            var blowerToy = toysMenuItems && toysMenuItems.find(item => item && item.id === 'showBlowerButton');
-                            if (blowerToy) blowerToy.checked = false;
-                            e.preventDefault();
-                            return; // Don't proceed with other blower interactions
-                    }
-                }
-                
-                // Check if click is in outer half of radius (angle mode) or inner half (move mode)
-                if (dBlower > 0.5 * blower.radius) {
-                    // Outer: adjust angle mode
-                    isBlowerAngleMode = true;
-                } else {
-                    // Inner: move mode
-                    isBlowerAngleMode = false;
-                    dX = startX / cScale - blower.pos.x;
-                    dY = (simHeight - startY / cScale) - blower.pos.y;
-                }
-                document.addEventListener('mousemove', mouseBlowerMove);
-                document.addEventListener('touchmove', touchBlowerMove, {passive: false});
-            } else if (showBumpers == true && Bumpers.length > 0 && mousePos.y < bumperArrayTop && mousePos.y > bumperArrayBottom) {
+        } // close for loop for puck checking (added second brace)
+        } // close for loop for puck checking
+        } // close if (!normalPuckHandled) for puck checking
+        
+        // Blower interaction is now handled earlier (lines 8547-8607) with higher priority than pucks
+        
+        if (!normalPuckHandled && showBumpers == true && Bumpers.length > 0 && mousePos.y < bumperArrayTop && mousePos.y > bumperArrayBottom) {
                 // Check if shift key is pressed for scaling mode
                 if (e.shiftKey) {
                     isBumperScaleMode = true;
@@ -8839,9 +9062,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     document.addEventListener('mousemove', mouseBumperMove);
                     document.addEventListener('touchmove', touchBumperMove, {passive: false});
                 }
-            } else {
-                // Nothing else selected: handle shower, fountain, or spray direction
-                if (doShower) {
+        }
+        
+        if (!normalPuckHandled) {
+            // Nothing else selected: handle shower, fountain, or spray direction
+            if (doShower) {
                     // Single click in shower mode: set shower position and start drag for width control
                     if (doGravityDown || doGravityUp || (!doGravityDown && !doGravityUp && !doGravityLeft && !doGravityRight)) {
                         // Gravity is up/down or none (default down): set X position
@@ -8874,13 +9099,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     document.addEventListener('mousemove', setNewDir, false);
                     document.addEventListener('touchmove', setNewDir, {passive: false});
                 }
-                    const now = performance.now(); // Fix: define the missing 'now' variable
-                    lastTapTime = now;
-                    lastTapX = cursorX;
-                    lastTapY = cursorY;
-            }
+            const now = performance.now(); // Fix: define the missing 'now' variable
+            lastTapTime = now;
+            lastTapX = cursorX;
+            lastTapY = cursorY;
         }
-        }}}}}}} // close normalPuckHandled, boxHandled and nested else structure
+        } // close if (!boxHandled) block
+    } // close mouseDownHandler function
+    }}} // close additional nested blocks from puck checking restructure
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -9398,6 +9624,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     function mouseBlowerMove(event) {
         const rect = canvas.getBoundingClientRect();
         blower = Blower[0];
+        
+        // Don't move if locked to a puck
+        if (blower.isLocked) return;
+        
         newX = event.clientX - rect.left;
         newY = event.clientY - rect.top;   
         startX = event.clientX - rect.left;
@@ -9414,6 +9644,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Move mode: move the blower with the mouse
             blower.pos.x = (newX / cScale) - dX;
             blower.pos.y = (simHeight - newY / cScale) - dY;
+            
+            // Blower puck-snapping removed - moves freely without snapping to pucks
         }
     }
     function mouseHungryPuckMove(event) {
@@ -10692,6 +10924,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         isBlowerAngleMode = false;
         isBumperScaleMode = false;
         
+        // Blower puck-docking removed - blower no longer locks to pucks
+        
         document.removeEventListener('mousemove', mouseHungryPuckMove);
         document.removeEventListener('mousemove', mouseHungryPuck2Move);
         document.removeEventListener('mousemove', mouseBlowerMove);
@@ -10919,7 +11153,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const mouseX = (event.clientX - rect.left) / cScale;
         const mouseY = simHeight - (event.clientY - rect.top) / cScale;
         
-        // Check if right-clicking on Blower
+        // Blower puck-locking removed - no unlock needed
+        
+        // Check if right-clicking on Blower (for state cycling)
         if (blowerState >= 1 && Blower && Blower.length > 0) {
             const blower = Blower[0];
             const dx = mouseX - blower.pos.x;
@@ -13759,7 +13995,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (doDiscs == true) {
                 drawCircle(cX(this.pos), cY(this.pos), 0.95 * this.radius * cScale);    
                 var lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 50);
-                //var satLevel = ballSaturation * this.saturation;
+                var satLevel = ballSaturation * this.saturation;
+                var satLevel = this.saturation * 100;
+                if (this.whiteBall == true || this.tracerBall == true) {
+                    // reg color
+                    c.fillStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                    // hi color
+                    c.strokeStyle = `hsl(0, 0%, ${ballLightness + 50}%)`;
+                } else {
+                    // reg color   
+                    c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                    // hi color
+                    c.strokeStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp + 25}%)`;
+                }
+                c.fill();
+                c.lineWidth = 0.2 * this.radius * cScale;
+                c.stroke();
+            } else if (doSquares == true || doTracedSquares == true) {
+                const fillThisX = cX(this.pos) - 0.71 * this.radius * cScale;
+                const fillThisY = cY(this.pos) - 0.71 * this.radius * cScale;
+                const fillWidth = 2 * 0.71 * this.radius * cScale;
+                const fillHeight = 2 * 0.71 * this.radius * cScale;
+                var lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 50);
+                var satLevel = ballSaturation * this.saturation;
                 var satLevel = this.saturation * 100;
                 if (this.whiteBall == true || this.tracerBall == true) {
                     // reg color
@@ -13771,11 +14029,64 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     // reg color   
                     c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
                     // hi color
-                    c.strokeStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp + 25}%)`;
+                    c.strokeStyle = `hsl(${this.speedHue + 15}, ${satLevel}%, ${lightnessClamp + 15}%)`;
                     c.lineWidth = 0.2 * this.radius * cScale;
                 }
-                c.fill();
-                c.stroke();
+                if (doTracedSquares == true) {
+                    c.fillRect(fillThisX, fillThisY, fillWidth, fillHeight);
+                    c.strokeRect(fillThisX, fillThisY, fillWidth, fillHeight);
+                } else {
+                    c.strokeRect(fillThisX, fillThisY, fillWidth, fillHeight);
+                }
+            } else if (doDirectionalSquares == true || doTracedDirectionalSquares == true) {
+                var lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 50);
+                var satLevel = ballSaturation * this.saturation;
+                var satLevel = this.saturation * 100;
+                if (this.whiteBall == true || this.tracerBall == true) {
+                    // reg color
+                    c.fillStyle = `hsl(0, 0%, ${ballLightness + 20}%)`;
+                    // hi color
+                    c.strokeStyle = `hsl(0, 0%, ${ballLightness + 50}%)`;
+                    c.lineWidth = 0.2 * this.radius * cScale;
+                } else {
+                    // reg color   
+                    c.fillStyle = `hsl(${this.speedHue}, ${satLevel}%, ${lightnessClamp}%)`;
+                    // hi color
+                    c.strokeStyle = `hsl(${this.speedHue + 15}, ${satLevel}%, ${lightnessClamp + 15}%)`;
+                    c.lineWidth = 0.2 * this.radius * cScale;
+                }
+
+                const speed = this.vel.length();
+                if (speed > 1e-6) {
+                    const target = Math.atan2(this.vel.y, this.vel.x);
+                    if (!this.headingInitialized) {
+                        this.headingAngle = target;
+                        this.headingInitialized = true;
+                    } else {
+                        // Smooth with exponential filter
+                        const TWO_PI = Math.PI * 2;
+                        let diff = target - this.headingAngle;
+                        // Wrap to [-PI, PI]
+                        diff = ((diff + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
+                        const alpha = 1 - Math.exp(-physProps.dt / Math.max(1e-6, physProps.tau));
+                        this.headingAngle += alpha * diff;
+                    }
+                }
+                
+                c.save();
+                c.translate(cX(this.pos), cY(this.pos));
+                c.rotate(-this.headingAngle); // Negative because canvas Y is inverted
+                
+                const squareSize = 0.71 * this.radius * cScale;
+                if (doTracedDirectionalSquares == true) {
+                    c.beginPath();
+                    c.fillRect(-squareSize, -squareSize, 2 * squareSize, 2 * squareSize);
+                    c.strokeRect(-squareSize, -squareSize, 2 * squareSize, 2 * squareSize);
+                } else {
+                    c.strokeRect(-squareSize, -squareSize, 2 * squareSize, 2 * squareSize);
+                }
+
+                c.restore();
             } else if (doSpheres == true) {
                 const lightnessClamp = this.wakeUp * Math.min(this.speedHueRatio * ballLightness, 55);
                 const satLevel = ballSaturation * this.saturation;
@@ -18912,6 +19223,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.isBeingUsed = false; // Track if cyclone is actively swirling particles
             this.rotationAngle = 0; // Current rotation angle
             this.lastTime = null; // Track time for continuous rotation
+            this.isLocked = false; // Whether cyclone is locked to a puck
+            this.lockedToPuck = null; // Reference to the locked puck (index in Puck array)
         }
         draw() {
             // Draw cyclone as a spinning vortex icon
@@ -18982,6 +19295,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.beginPath();
             c.arc(0, 0, 6, 0, Math.PI * 2);
             c.fill();
+            
+            // Draw red lock icon if cyclone is locked to a puck
+            if (this.isLocked) {
+                const lockSize = 40;
+                const lockY = -lockSize / 4; // Position slightly above center
+                
+                // Draw lock body (rectangle)
+                c.fillStyle = 'rgb(255, 0, 0)';
+                c.fillRect(-lockSize/4, lockY, lockSize/2, lockSize/2.5);
+                
+                // Draw lock shackle (arc on top)
+                c.strokeStyle = 'rgb(255, 0, 0)';
+                c.lineWidth = 3;
+                c.beginPath();
+                c.arc(0, lockY - 0.15 * lockSize, lockSize/6, Math.PI, 0, false);
+                c.stroke();
+
+                // Draw shackle straight lengths
+                c.beginPath();
+                c.moveTo(-lockSize/6, lockY);
+                c.lineTo(-lockSize/6, lockY - 0.15 * lockSize);
+                c.moveTo(lockSize/6, lockY);
+                c.lineTo(lockSize/6, lockY - 0.15 * lockSize);
+                c.stroke();
+            }
 
             c.restore();
         }
@@ -19003,6 +19341,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             if (typeof Cyclone !== 'undefined' && Cyclone.length > 0) {
                 if (!Cyclone[0].active) return;
+                // Don't allow dragging if locked to a puck
+                if (Cyclone[0].isLocked) return;
                 
                 var cyclone = Cyclone[0];
                 var mouseX = e.offsetX / cScale;
@@ -19030,6 +19370,38 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             if (typeof Cyclone !== 'undefined' && Cyclone.length > 0) {
                 Cyclone[0].isBeingUsed = false;
+                
+                // Check if cyclone is centered on a puck and lock it
+                const lockDistance = 0.2; // Very close to center to lock
+                for (let p = 0; p < Puck.length; p++) {
+                    const puck = Puck[p];
+                    if (!puck || !puck.pos) continue;
+                    
+                    // Skip pucks that aren't visible based on toggles
+                    if (puck.heartBeat === true && !showHeart) continue;
+                    if (puck.cycle === true && !showCycle) continue;
+                    if (puck.orbit === true && puck.yinyang !== true && !showOrbit) continue;
+                    if (puck.orbit === true && puck.yinyang === true && !showYinYang) continue;
+                    if (puck.flying === true && !doFlyingPuck && !doFlyingPuck2) continue;
+                    if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
+                    
+                    // Skip pucks with zero radius (not yet arrived)
+                    if (puck.radius < 0.01) continue;
+                    
+                    const dx = Cyclone[0].pos.x - puck.pos.x;
+                    const dy = Cyclone[0].pos.y - puck.pos.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < lockDistance) {
+                        // Lock cyclone to this puck
+                        Cyclone[0].isLocked = true;
+                        Cyclone[0].lockedToPuck = p;
+                        Cyclone[0].active = true;
+                        Cyclone[0].isBeingUsed = true;
+                        cycloneHoldTimer = setInterval(swirl, 50);
+                        break;
+                    }
+                }
             }
             isCycloneDragging = false;
             globalInteractionLock = false;
@@ -19049,10 +19421,73 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         canvas.addEventListener('mousemove', function(e) {
             if (isCycloneDragging && typeof Cyclone !== 'undefined' && Cyclone.length > 0) {
+                // Don't move if locked to a puck
+                if (Cyclone[0].isLocked) return;
+                
                 var mouseX = e.offsetX / cScale;
                 var mouseY = (simHeight - e.offsetY / cScale);
                 Cyclone[0].pos.x = mouseX - cycloneDragOffset.x;
                 Cyclone[0].pos.y = mouseY - cycloneDragOffset.y;
+                
+                // Check for nearby pucks and snap to center
+                for (let p = 0; p < Puck.length; p++) {
+                    const puck = Puck[p];
+                    if (!puck || !puck.pos) continue;
+                    
+                    // Skip pucks that aren't visible based on toggles
+                    if (puck.heartBeat === true && !showHeart) continue;
+                    if (puck.cycle === true && !showCycle) continue;
+                    if (puck.orbit === true && puck.yinyang !== true && !showOrbit) continue;
+                    if (puck.orbit === true && puck.yinyang === true && !showYinYang) continue;
+                    if (puck.flying === true && !doFlyingPuck && !doFlyingPuck2) continue;
+                    if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
+                    
+                    // Skip pucks with zero radius (not yet arrived)
+                    if (puck.radius < 0.01) continue;
+                    
+                    const dx = Cyclone[0].pos.x - puck.pos.x;
+                    const dy = Cyclone[0].pos.y - puck.pos.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // Snap when within half the puck's radius
+                    const snapDistance = puck.radius * 0.5;
+                    if (dist < snapDistance) {
+                        // Snap to puck center
+                        Cyclone[0].pos.x = puck.pos.x;
+                        Cyclone[0].pos.y = puck.pos.y;
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Double-click to unlock cyclone from puck
+        canvas.addEventListener('dblclick', function(e) {
+            if (typeof Cyclone !== 'undefined' && Cyclone.length > 0 && Cyclone[0].isLocked) {
+                var mouseX = e.offsetX / cScale;
+                var mouseY = (simHeight - e.offsetY / cScale);
+                var dx = mouseX - Cyclone[0].pos.x;
+                var dy = mouseY - Cyclone[0].pos.y;
+                const cycloneRadius = 60 / cScale;
+                const distFromCenter = Math.sqrt(dx*dx + dy*dy);
+                
+                // If double-clicking on a locked cyclone, unlock it
+                if (distFromCenter < cycloneRadius) {
+                    e.preventDefault();
+                    
+                    const oldPuckIndex = Cyclone[0].lockedToPuck;
+                    Cyclone[0].isLocked = false;
+                    Cyclone[0].lockedToPuck = null;
+                    
+                    // Stop the swirling if it was active
+                    if (cycloneHoldTimer) {
+                        clearInterval(cycloneHoldTimer);
+                        cycloneHoldTimer = null;
+                    }
+                    Cyclone[0].isBeingUsed = false;
+                    
+                    return false;
+                }
             }
         });
 
@@ -19157,6 +19592,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.radius = 0.2;
             this.pos = pos.clone();
             this.force = 5;
+            this.isLocked = false; // Whether magnet is locked to a puck
+            this.lockedToPuck = null; // Reference to the locked puck (index in Puck array)
         }
         draw() {
             // draw magnet  ----------
@@ -19314,6 +19751,35 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
                 c.fill();
             }
+            
+            // Draw red lock icon if magnet is locked to a puck
+            if (this.isLocked) {
+                const lockSize = 40;
+                const lockY = -lockSize / 4; // Position slightly above center
+                
+                c.save();
+                c.translate(centerX, centerY);
+                
+                // Draw lock body (rectangle)
+                c.fillStyle = 'rgb(255, 0, 0)';
+                c.fillRect(-lockSize/4, lockY, lockSize/2, lockSize/2.5);
+                
+                // Draw lock shackle (arc on top)
+                c.strokeStyle = 'rgb(255, 0, 0)';
+                c.lineWidth = 3;
+                c.beginPath();
+                c.arc(0, lockY - 0.15 * lockSize, lockSize/6, Math.PI, 0, false);
+                c.stroke();
+
+                // Draw shackle straight lengths
+                c.beginPath();
+                c.moveTo(-lockSize/6, lockY);
+                c.lineTo(-lockSize/6, lockY - 0.15 * lockSize);
+                c.moveTo(lockSize/6, lockY);
+                c.lineTo(lockSize/6, lockY - 0.15 * lockSize);
+                c.stroke();
+            }
+            c.restore();
         }
     }
 
@@ -19382,6 +19848,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 const distFromCenter = Math.sqrt(dx*dx + dy*dy);
                 
                 if (distFromCenter < magnetRadius) {
+                    // Don't allow dragging if locked to a puck
+                    if (magnet.isLocked) return;
+                    
                     globalInteractionLock = true;
                     isImploderDragging = true;
                     imploderDragOffset.x = dx;
@@ -19409,16 +19878,113 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         });
         canvas.addEventListener('mousemove', function(e) {
             if (isImploderDragging && typeof Magnet !== 'undefined' && Magnet.length > 0) {
+                // Don't move if locked to a puck
+                if (Magnet[0].isLocked) return;
+                
                 var mouseX = e.offsetX / cScale;
                 var mouseY = (simHeight - e.offsetY / cScale);
                 Magnet[0].pos.x = mouseX - imploderDragOffset.x;
                 Magnet[0].pos.y = mouseY - imploderDragOffset.y;
+                
+                // Check for nearby pucks and snap to center
+                for (let p = 0; p < Puck.length; p++) {
+                    const puck = Puck[p];
+                    if (!puck || !puck.pos) continue;
+                    
+                    // Skip pucks that aren't visible based on toggles
+                    if (puck.heartBeat === true && !showHeart) continue;
+                    if (puck.cycle === true && !showCycle) continue;
+                    if (puck.orbit === true && puck.yinyang !== true && !showOrbit) continue;
+                    if (puck.orbit === true && puck.yinyang === true && !showYinYang) continue;
+                    if (puck.flying === true && !doFlyingPuck && !doFlyingPuck2) continue;
+                    if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
+                    
+                    // Skip pucks with zero radius (not yet arrived)
+                    if (puck.radius < 0.01) continue;
+                    
+                    const dx = Magnet[0].pos.x - puck.pos.x;
+                    const dy = Magnet[0].pos.y - puck.pos.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // Snap when within half the puck's radius
+                    const snapDistance = puck.radius * 0.5;
+                    if (dist < snapDistance) {
+                        // Snap to puck center
+                        Magnet[0].pos.x = puck.pos.x;
+                        Magnet[0].pos.y = puck.pos.y;
+                        break;
+                    }
+                }
             }
         });
         canvas.addEventListener('mouseup', function(e) {
+            if (imploderHoldTimer) {
+                clearInterval(imploderHoldTimer);
+                imploderHoldTimer = null;
+            }
+            if (typeof Magnet !== 'undefined' && Magnet.length > 0) {
+                // Check if magnet is centered on a puck and lock it
+                const lockDistance = 0.2;
+                for (let p = 0; p < Puck.length; p++) {
+                    const puck = Puck[p];
+                    if (!puck || !puck.pos) continue;
+                    
+                    // Skip pucks that aren't visible based on toggles
+                    if (puck.heartBeat === true && !showHeart) continue;
+                    if (puck.cycle === true && !showCycle) continue;
+                    if (puck.orbit === true && puck.yinyang !== true && !showOrbit) continue;
+                    if (puck.orbit === true && puck.yinyang === true && !showYinYang) continue;
+                    if (puck.flying === true && !doFlyingPuck && !doFlyingPuck2) continue;
+                    if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
+                    
+                    // Skip pucks with zero radius (not yet arrived)
+                    if (puck.radius < 0.01) continue;
+                    
+                    const dx = Magnet[0].pos.x - puck.pos.x;
+                    const dy = Magnet[0].pos.y - puck.pos.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < lockDistance) {
+                        // Lock magnet to this puck
+                        Magnet[0].isLocked = true;
+                        Magnet[0].lockedToPuck = p;
+                        imploderHoldTimer = setInterval(magnetize, 50);
+                        break;
+                    }
+                }
+            }
             isImploderDragging = false;
             globalInteractionLock = false;
         });
+        
+        // Double-click to unlock magnet from puck
+        canvas.addEventListener('dblclick', function(e) {
+            if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].isLocked) {
+                var mouseX = e.offsetX / cScale;
+                var mouseY = (simHeight - e.offsetY / cScale);
+                var dx = mouseX - Magnet[0].pos.x;
+                var dy = mouseY - Magnet[0].pos.y;
+                const magnetRadius = 60 / cScale;
+                const distFromCenter = Math.sqrt(dx*dx + dy*dy);
+                
+                // If double-clicking on a locked magnet, unlock it
+                if (distFromCenter < magnetRadius) {
+                    e.preventDefault();
+                    
+                    Magnet[0].isLocked = false;
+                    Magnet[0].lockedToPuck = null;
+                    
+                    // Stop the magnetizing if it was active
+                    if (imploderHoldTimer) {
+                        clearInterval(imploderHoldTimer);
+                        imploderHoldTimer = null;
+                    }
+                    
+                    return false;
+                }
+            }
+        });
+        
         canvas.addEventListener('touchstart', function(e) {
         if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active) {
             var touch = e.touches[0];
@@ -19527,6 +20093,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.pos = pos.clone();
             this.blowerAngle = 0.8 * Math.PI;
             this.force = 100;
+            this.isLocked = false; // Whether blower is locked to a puck
+            this.lockedToPuck = null; // Reference to the locked puck (index in Puck array)
 		}
         get left() {
             return this.pos.x - this.radius;
@@ -19611,6 +20179,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 0.65 * this.radius * cScale);
             c.fillStyle = 'hsla(0, 0%, 0%, 70%)';
             c.fill();
+            
+            // Blower puck-docking removed - no lock icon drawn
                 
             // Draw aeolus image 
             if (aeolusReady && aeolusImage && aeolusImage.complete && aeolusImage.width > 0 && aeolusImage.height > 0) {
@@ -20093,6 +20663,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                             (puck.buttonOpacity < 0.99); // Button fade animation
             if (shouldSim) puck.simulate();
         }
+        
+        // UPDATE CYCLONE POSITION IF LOCKED TO A PUCK  ----------------------------------
+        if (typeof Cyclone !== 'undefined' && Cyclone.length > 0 && Cyclone[0].isLocked && Cyclone[0].lockedToPuck !== null) {
+            const puckIndex = Cyclone[0].lockedToPuck;
+            if (puckIndex >= 0 && puckIndex < Puck.length && Puck[puckIndex]) {
+                // Update cyclone position to match locked puck center
+                Cyclone[0].pos.x = Puck[puckIndex].pos.x;
+                Cyclone[0].pos.y = Puck[puckIndex].pos.y;
+            }
+        }
+        
+        // UPDATE MAGNET POSITION IF LOCKED TO A PUCK  ----------------------------------
+        if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].isLocked && Magnet[0].lockedToPuck !== null) {
+            const puckIndex = Magnet[0].lockedToPuck;
+            if (puckIndex >= 0 && puckIndex < Puck.length && Puck[puckIndex]) {
+                // Update magnet position to match locked puck center
+                Magnet[0].pos.x = Puck[puckIndex].pos.x;
+                Magnet[0].pos.y = Puck[puckIndex].pos.y;
+            }
+        }
+        
+        // Blower puck-docking removed - blower position no longer follows pucks
 
         // SIMULATE BOXES  ----------------------------------
         if (showBoxes && Array.isArray(Box)) {
@@ -20221,6 +20813,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (puck.orbit && !showOrbit) continue;
                 if (puck.flying && !doFlyingPuck && !doFlyingPuck2) continue;
                 if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
+                
+                // Skip collision detection if cyclone or magnet is locked to this puck
+                if (typeof Cyclone !== 'undefined' && Cyclone.length > 0 && Cyclone[0].isLocked && Cyclone[0].lockedToPuck === p) continue;
+                if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].isLocked && Magnet[0].lockedToPuck === p) continue;
+                
                 if (puck.right < ball.left) continue;
                 if (Math.abs(ball.pos.y - puck.pos.y) <= ball.radius + puck.radius) handlePuckHits(ball, puck);
             }
@@ -20470,12 +21067,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             ball.draw();
 		}
-        //  DRAW BOXES ----------------------------------------------------------------
-        if (showBoxes && Array.isArray(Box)) {
-            for (let b = 0; b < Box.length; b++) {
-                Box[b].draw();
-            }
-        }
+        
         //  DRAW WORM ---------------------------------------------------------------------
         if (doWorm == true && mrMode != "worm") {
              WormProps.SpaceWorm.draw()
@@ -20486,27 +21078,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             bumpers = Bumpers[k];   
             bumpers.draw();
             }
-        }
-        //  DRAW STINKER ----------------------------------
-        if (typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active) {
-            Stinker[0].draw();
-        }
-        //  DRAW MAGIC SET HERE NORMALLY AND WHEN DISPENSING ---------------------------------------------------------------------
-        if (MagicSet[0]) {
-            MagicSet[0].draw('after'); // Draw full magic set (wand always, hat only when not swarming)
-        }
-        //  DRAW BLOWER  ---------------------------------------------------------------     
-        if (blowerState >= 1 && blowerState <= 3) {
-            var blower = Blower[0];
-            blower.draw();
-        }
-        //  DRAW MAGNET  ---------------------------------------------------------------
-        if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active) {
-            Magnet[0].draw();
-        }
-        //  DRAW CYCLONE ----------------------------------
-        if (typeof Cyclone !== 'undefined' && Cyclone.length > 0 && Cyclone[0].active) {
-            Cyclone[0].draw();
         }
         //  DRAW HEARTS ---------------------------------------------------------------
         if (typeof Hearts !== 'undefined' && Hearts.length > 0) {
@@ -20524,6 +21095,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             var hungryPuck = Hungrypuck[1];
             hungryPuck.draw2();
         }
+        //  DRAW BOXES ----------------------------------------------------------------
+        if (showBoxes && Array.isArray(Box)) {
+            for (let b = 0; b < Box.length; b++) {
+                Box[b].draw();
+            }
+        }
         //  DRAW PUCKS ----------------------------------------------------------------         
         for (p=0; p < Puck.length; p++) { 
             var puck = Puck[p];
@@ -20536,6 +21113,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Only check showPucks for normal pucks (not heartBeat, cycle, flying, or orbit)
             if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !showPucks) continue;
             puck.draw(p); // Pass index to draw function
+        }
+        //  DRAW MAGNET  ---------------------------------------------------------------
+        if (typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active) {
+            Magnet[0].draw();
+        }
+        //  DRAW CYCLONE ----------------------------------
+        if (typeof Cyclone !== 'undefined' && Cyclone.length > 0 && Cyclone[0].active) {
+            Cyclone[0].draw();
+        }
+        //  DRAW STINKER ----------------------------------
+        if (typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active) {
+            Stinker[0].draw();
+        }
+        //  DRAW MAGIC SET HERE NORMALLY AND WHEN DISPENSING ---------------------------------------------------------------------
+        if (MagicSet[0]) {
+            MagicSet[0].draw('after'); // Draw full magic set (wand always, hat only when not swarming)
+        }
+        //  DRAW BLOWER  ---------------------------------------------------------------     
+        if (blowerState >= 1 && blowerState <= 3) {
+            var blower = Blower[0];
+            blower.draw();
         }
         
         //  DRAW CORNERS  ---------------------------------------------------------------------
