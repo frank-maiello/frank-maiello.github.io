@@ -188,7 +188,7 @@
         margin-top: -200px;
         pointer-events: auto;
         cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: none;
         background: none;
         border: none;
         padding: 40px 60px 40px 40px;
@@ -205,14 +205,14 @@
         transform: translateY(-50%);
         width: 750px;
         height: 700px;
-        background: linear-gradient(135deg, 
+        background: linear-gradient(155deg, 
             hsla(24, 15%, 30%, 1.0) 0%,
-            hsla(24, 15%, 20%, 0.9) 50%,
+            hsla(24, 15%, 10%, 0.9) 50%,
             hsla(24, 15%, 5%, 0.7) 100%);
             
         clip-path: url(#rounded-trapezoid);
         z-index: -1;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: none;
     }
     
     .fan-blade::after {
@@ -229,9 +229,9 @@
     
     .fan-blade:hover::before {
         background: linear-gradient(135deg, 
-            hsla(24, 15%, 30%, 1.0) 0%,
-            hsla(24, 15%, 20%, 0.9) 50%,
-            hsla(24, 15%, 5%, 0.7) 100%); 
+            hsla(24, 45%, 40%, 1.0) 0%,
+            hsla(24, 35%, 10%, 0.9) 50%,
+            hsla(24, 15%, 10%, 0.7) 100%); 
     }
     
     .blade-content {
@@ -329,7 +329,7 @@
 <svg style="position: absolute; width: 0; height: 0;">
     <defs>
         <clipPath id="rounded-trapezoid" clipPathUnits="objectBoundingBox">
-            <path d="M 0.053,0.3 Q 0,0.3 0,0.34 L 0,0.74 Q 0,0.78 0.053,0.78 L 0.947,0.62 Q 1,0.62 1,0.58 L 1,0.42 Q 1,0.38 0.947,0.38 Z"/>
+            <path d="M 0.053,0.3 Q 0,0.3 0,0.34 L 0.027,0.74 Q 0.027,0.78 0.08,0.78 L 0.947,0.62 Q 1,0.62 1,0.58 L 1,0.42 Q 1,0.38 0.947,0.38 Z"/>
         </clipPath>
     </defs>
 </svg>
@@ -471,106 +471,93 @@
         bottomMargin = 0;
     
     //  FAN MENU ROTATION SYSTEM --------------------------------------------------------------
-    let currentBladeIndex = 0;
+    let currentRotation = 0; // Continuous rotation in degrees
+    let targetBladeIndex = 0;
     const totalBlades = 4;
     const bladeAngleSpacing = -20; // Degrees between blades (negative to open downward)
-    let fanDragging = false;
-    let startX = 0;
-    let startY = 0;
-    let lastX = 0;
-    let lastY = 0;
-    let velocityX = 0;
-    let velocityY = 0;
+    let scrollAccumulator = 0;
+    const scrollSensitivity = 0.08; // How much rotation per scroll unit (reduced for finer control)
+    const snapThreshold = 0.5; // How close to snap (in blade units)
+    let isSnapping = false;
+    let snapAnimationFrame = null;
     
     function updateFanRotation() {
         const blades = document.querySelectorAll('.fan-blade');
         
         blades.forEach((blade, index) => {
-            const relativeIndex = index - currentBladeIndex;
+            // Calculate the angle offset from the current rotation
+            const relativeRotation = currentRotation / bladeAngleSpacing;
+            const relativeIndex = index + relativeRotation;
             const angle = relativeIndex * bladeAngleSpacing;
             
-            // Calculate z-index based on angle (more negative = further back)
-            const zIndex = 100 - Math.abs(relativeIndex);
+            // Calculate z-index based on distance from center
+            const distanceFromCenter = Math.abs(relativeIndex);
+            const zIndex = 100 - Math.floor(distanceFromCenter);
             blade.style.zIndex = zIndex;
             
-            // Apply rotation and scaling
-            if (relativeIndex === 0) {
-                // Active blade - front and center
-                blade.style.transform = `rotate(${angle}deg) scale(1)`;
-                blade.style.opacity = '1';
-                blade.style.pointerEvents = 'auto';
-            } else {
-                // Inactive blades - rotated and slightly scaled down
-                const scale = 0.9 - Math.abs(relativeIndex) * 0.05;
-                const opacity = Math.max(0.4, 1 - Math.abs(relativeIndex) * 0.2);
-                blade.style.transform = `rotate(${angle}deg) scale(${scale})`;
-                blade.style.opacity = opacity;
-                // Allow pointer events on all blades
-                blade.style.pointerEvents = 'auto';
-            }
+            // Calculate scale and opacity based on distance from active position
+            const scale = Math.max(0.8, 1 - distanceFromCenter * 0.05);
+            const opacity = Math.max(0.4, 1 - distanceFromCenter * 0.2);
+            
+            blade.style.transform = `rotate(${angle}deg) scale(${scale})`;
+            blade.style.opacity = opacity;
+            blade.style.pointerEvents = 'auto';
         });
     }
     
-    function rotateFan(direction) {
-        const oldIndex = currentBladeIndex;
-        currentBladeIndex = currentBladeIndex + direction;
-        if (currentBladeIndex < 0) {
-            currentBladeIndex = totalBlades - 1;
-        } else if (currentBladeIndex >= totalBlades) {
-            currentBladeIndex = 0;
+    function snapToNearest() {
+        if (isSnapping) return;
+        
+        isSnapping = true;
+        const targetRotation = Math.round(currentRotation / bladeAngleSpacing) * bladeAngleSpacing;
+        
+        function animate() {
+            const diff = targetRotation - currentRotation;
+            if (Math.abs(diff) < 0.1) {
+                currentRotation = targetRotation;
+                targetBladeIndex = Math.round(-currentRotation / bladeAngleSpacing) % totalBlades;
+                if (targetBladeIndex < 0) targetBladeIndex += totalBlades;
+                updateFanRotation();
+                isSnapping = false;
+                return;
+            }
+            
+            currentRotation += diff * 0.15;
+            updateFanRotation();
+            snapAnimationFrame = requestAnimationFrame(animate);
         }
-        updateFanRotation();
+        
+        animate();
     }
     
-    // Mouse drag to rotate fan
-    document.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.fan-blade')) {
-            fanDragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            lastX = e.clientX;
-            lastY = e.clientY;
-            velocityX = 0;
-            velocityY = 0;
-        }
-    });
-    
-    document.addEventListener('mousemove', (e) => {
-        if (fanDragging) {
-            velocityX = e.clientX - lastX;
-            velocityY = e.clientY - lastY;
-            lastX = e.clientX;
-            lastY = e.clientY;
-        }
-    });
-    
-    document.addEventListener('mouseup', () => {
-        if (fanDragging) {
-            fanDragging = false;
+    // Mouse wheel to rotate fan
+    document.addEventListener('wheel', (e) => {
+        if (e.target.closest('.fan-blade') || e.target.closest('#fan-container')) {
+            e.preventDefault();
             
-            // Determine direction based on velocity - check both X and Y
-            const flickThreshold = 5; // Lower threshold = more sensitive
-            
-            // Map gestures: flick up/right = next, flick down/left = previous
-            if (Math.abs(velocityX) > flickThreshold || Math.abs(velocityY) > flickThreshold) {
-                if (Math.abs(velocityX) > Math.abs(velocityY)) {
-                    // Horizontal flick dominates
-                    if (velocityX > 0) {
-                        rotateFan(1);
-                    } else {
-                        rotateFan(-1);
-                    }
-                } else {
-                    // Vertical flick dominates - negative Y is up, positive Y is down
-                    if (velocityY < 0) {
-                        rotateFan(1);
-                    } else {
-                        rotateFan(-1);
-                    }
-                }
+            if (snapAnimationFrame) {
+                cancelAnimationFrame(snapAnimationFrame);
+                isSnapping = false;
             }
+            
+            scrollAccumulator -= e.deltaY * scrollSensitivity; // Reversed direction
+            
+            // Clamp rotation to first and last blade
+            const minRotation = 0; // First blade at position 0
+            const maxRotation = -(totalBlades - 1) * bladeAngleSpacing; // Last blade
+            scrollAccumulator = Math.max(minRotation, Math.min(maxRotation, scrollAccumulator));
+            
+            currentRotation = scrollAccumulator;
+            
+            updateFanRotation();
+            
+            // Debounce snapping
+            clearTimeout(window.snapTimeout);
+            window.snapTimeout = setTimeout(() => {
+                snapToNearest();
+            }, 150);
         }
-    });
+    }, { passive: false });
     
     // Initialize fan on page load
     document.addEventListener('DOMContentLoaded', () => {
@@ -654,6 +641,8 @@
 
     //  SETUP SCENE ======================================================
 	function setupScene() {
+        makeStars()
+
         PrimaryNodes = [];
         SecondaryNodes = [];
         spawnNodes();
@@ -840,71 +829,101 @@
 	}
 
     // Quaternion helpers to avoid gimbal lock when integrating orientation
-        function quatFromEuler(yaw, pitch, roll) {
-            // yaw (Z), pitch (X), roll (Y) — same convention as earlier Euler usage
-            const cy = Math.cos(yaw * 0.5);
-            const sy = Math.sin(yaw * 0.5);
-            const cp = Math.cos(pitch * 0.5);
-            const sp = Math.sin(pitch * 0.5);
-            const cr = Math.cos(roll * 0.5);
-            const sr = Math.sin(roll * 0.5);
-            // q = q_yaw * q_pitch * q_roll
-            const w = cy * cp * cr + sy * sp * sr;
-            const x = cy * sp * cr + sy * cp * sr;
-            const y = cy * cp * sr - sy * sp * cr;
-            const z = sy * cp * cr - cy * sp * sr;
-            return { w: w, x: x, y: y, z: z };
-        }
+    function quatFromEuler(yaw, pitch, roll) {
+        // yaw (Z), pitch (X), roll (Y) — same convention as earlier Euler usage
+        const cy = Math.cos(yaw * 0.5);
+        const sy = Math.sin(yaw * 0.5);
+        const cp = Math.cos(pitch * 0.5);
+        const sp = Math.sin(pitch * 0.5);
+        const cr = Math.cos(roll * 0.5);
+        const sr = Math.sin(roll * 0.5);
+        // q = q_yaw * q_pitch * q_roll
+        const w = cy * cp * cr + sy * sp * sr;
+        const x = cy * sp * cr + sy * cp * sr;
+        const y = cy * cp * sr - sy * sp * cr;
+        const z = sy * cp * cr - cy * sp * sr;
+        return { w: w, x: x, y: y, z: z };
+    }
 
-        function quatMultiply(a, b) {
-            return {
-                w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
-                x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-                y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-                z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w
-            };
-        }
+    function quatMultiply(a, b) {
+        return {
+            w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+            x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+            y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+            z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w
+        };
+    }
 
-        function quatNormalize(q) {
-            const len = Math.sqrt(q.w*q.w + q.x*q.x + q.y*q.y + q.z*q.z) || 1.0;
-            q.w /= len; q.x /= len; q.y /= len; q.z /= len;
-            return q;
-        }
-        
-        function quatFromAxisAngle(ax, ay, az, angle) {
-            // Create a quaternion from axis-angle representation
-            const halfAngle = angle * 0.5;
-            const s = Math.sin(halfAngle);
-            return {
-                w: Math.cos(halfAngle),
-                x: ax * s,
-                y: ay * s,
-                z: az * s
-            };
-        }
+    function quatNormalize(q) {
+        const len = Math.sqrt(q.w*q.w + q.x*q.x + q.y*q.y + q.z*q.z) || 1.0;
+        q.w /= len; q.x /= len; q.y /= len; q.z /= len;
+        return q;
+    }
+    
+    function quatFromAxisAngle(ax, ay, az, angle) {
+        // Create a quaternion from axis-angle representation
+        const halfAngle = angle * 0.5;
+        const s = Math.sin(halfAngle);
+        return {
+            w: Math.cos(halfAngle),
+            x: ax * s,
+            y: ay * s,
+            z: az * s
+        };
+    }
 
-        function quatRotateVec(q, vx, vy, vz) {
-            // Standard, stable quaternion-vector rotation using cross products:
-            // t = 2 * cross(q.xyz, v)
-            // v' = v + q.w * t + cross(q.xyz, t)
-            const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
-            // cross(q.xyz, v)
-            const cx = qy * vz - qz * vy;
-            const cy = qz * vx - qx * vz;
-            const cz = qx * vy - qy * vx;
-            const tx = 2 * cx;
-            const ty = 2 * cy;
-            const tz = 2 * cz;
-            // cross(q.xyz, t)
-            const c2x = qy * tz - qz * ty;
-            const c2y = qz * tx - qx * tz;
-            const c2z = qx * ty - qy * tx;
-            return {
-                x: vx + qw * tx + c2x,
-                y: vy + qw * ty + c2y,
-                z: vz + qw * tz + c2z
-            };
+    function quatRotateVec(q, vx, vy, vz) {
+        // Standard, stable quaternion-vector rotation using cross products:
+        // t = 2 * cross(q.xyz, v)
+        // v' = v + q.w * t + cross(q.xyz, t)
+        const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+        // cross(q.xyz, v)
+        const cx = qy * vz - qz * vy;
+        const cy = qz * vx - qx * vz;
+        const cz = qx * vy - qy * vx;
+        const tx = 2 * cx;
+        const ty = 2 * cy;
+        const tz = 2 * cz;
+        // cross(q.xyz, t)
+        const c2x = qy * tz - qz * ty;
+        const c2y = qz * tx - qx * tz;
+        const c2z = qx * ty - qy * tx;
+        return {
+            x: vx + qw * tx + c2x,
+            y: vy + qw * ty + c2y,
+            z: vz + qw * tz + c2z
+        };
+    }
+
+    //  DEFINE STAR CLASS  -----------------
+    class STAR{
+        constructor(posX, posY, radius, lightness) {
+            this.posX = posX;
+            this.posY = posY;
+            this.radius = radius;
+            //this.lightness = 0.05 + 0.95 * Math.random() * (1 - (posY / (0.5 * simHeight)));
+            this.lightness = lightness;
+        }       
+        draw() {
+            c.beginPath();
+            c.arc(this.posX * cScale, this.posY * cScale,
+            this.radius, 0, 2*Math.PI)
+            c.fillStyle = `hsl(0, 0%, ${this.lightness*100}%)`
+            c.closePath
+            c.fill();
         }
+    }
+
+    function makeStars() {
+        Starfield = [];
+        for (r = 0; r < 1000; r++) {
+            posX = Math.random() * simWidth;
+            posY = Math.random() * simHeight;
+            radius = 0.3 + .8 * Math.random();
+            lightness = 0.05 + 0.95 * Math.random();
+            Starfield.push(new STAR(posX, posY, radius, lightness));
+        }
+    }
 
     //  DEFINE ROIDS  -----------------
     class ROID {
@@ -2351,7 +2370,7 @@
     //  SPAWN CUBE  ------------------------------------------------------------
     function spawnCube() {
         var size = 0.15; // Half-size of cube
-        var pos = new Vector2(0.15 * simWidth, 0.85 * simHeight); // Center of screen
+        var pos = new Vector2(0.1 * simWidth, 0.85 * simHeight); // Center of screen
         Cube = new CUBE(pos, size);
     }
 
@@ -2677,6 +2696,12 @@
         c.fillStyle = 'hsl(0, 0%, 0%)';
         c.fillRect(0, 0, canvas.width, canvas.height);
 
+        // Draw Starfield  --------------------
+        for (var n = 0; n < Starfield.length; n++) {
+            star = Starfield[n];
+            star.draw();
+        }
+
         // Draw nodes and their connections
         drawPrimaryNodes();
         //drawSecondaryNodes();
@@ -2690,10 +2715,10 @@
         sideFade.addColorStop(0.97, 'hsla(0, 0%, 0%, 0.8)');
         sideFade.addColorStop(1, 'hsla(0, 0%, 0%, 0.9)');
         c.fillStyle = sideFade;
-        c.fillRect(0, 0, canvas.width, canvas.height);
+        //c.fillRect(0, 0, canvas.width, canvas.height);
 
         // Draw semi-transparent black overlay
-        c.fillStyle = 'hsla(0, 0%, 0%, 0.5)';
+        c.fillStyle = 'hsla(0, 0%, 0%, 0.7)';
         c.fillRect(0, 0, canvas.width, canvas.height); 
 
         // Draw cube
@@ -2721,7 +2746,6 @@
     
     function update() {
         simulate();
-        
 		drawEverything();
 		requestAnimationFrame(update);
 	}
