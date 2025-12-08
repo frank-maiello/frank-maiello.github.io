@@ -22,9 +22,9 @@
     }
 
     .title {font-family: verdana; 
-        font-size: 38px;
+        font-size: 50px;
         font-weight: bold;
-        color: hsl(30, 60%, 50%);
+        color: hsl(30, 60%, 30%);
         text-align: left;
         text-shadow: 5px 7px 10px hsl(0, 0%, 0%);
         margin-left: 0px;
@@ -1146,14 +1146,20 @@
                 // Draw sub-orbiters that are behind the globe
                 for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos[i];
-                    if (subInfo.worldPos.z < 0) {
+                    // Check if actually behind the globe surface
+                    const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
+                    const isSubBehind = subInfo.worldPos.z < 0 && subDistFromAxis < this.radius;
+                    if (isSubBehind) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
                     }
                 }
                 
                 for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos2[i];
-                    if (subInfo.worldPos.z < 0) {
+                    // Check if actually behind the globe surface
+                    const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
+                    const isSubBehind = subInfo.worldPos.z < 0 && subDistFromAxis < this.radius;
+                    if (isSubBehind) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
                     }
                 }
@@ -1295,7 +1301,10 @@
             // Draw sub-orbiters that are in front of the globe (first plane)
             for (let i = 0; i < 4; i++) {
                 const subInfo = subOrbiterInfos[i];
-                if (subInfo.worldPos.z >= 0) {
+                // Check if in front OR behind but outside the globe's shadow
+                const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
+                const isSubInFront = subInfo.worldPos.z >= 0 || subDistFromAxis >= this.radius;
+                if (isSubInFront) {
                     drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
                 }
             }
@@ -1303,7 +1312,10 @@
             // Draw sub-orbiters that are in front of the globe (second plane)
             for (let i = 0; i < 4; i++) {
                 const subInfo = subOrbiterInfos2[i];
-                if (subInfo.worldPos.z >= 0) {
+                // Check if in front OR behind but outside the globe's shadow
+                const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
+                const isSubInFront = subInfo.worldPos.z >= 0 || subDistFromAxis >= this.radius;
+                if (isSubInFront) {
                     drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
                 }
             }
@@ -2369,8 +2381,8 @@
 
     //  SPAWN CUBE  ------------------------------------------------------------
     function spawnCube() {
-        var size = 0.15; // Half-size of cube
-        var pos = new Vector2(0.1 * simWidth, 0.85 * simHeight); // Center of screen
+        var size = 0.1; // Half-size of cube
+        var pos = new Vector2(2 * size, simHeight - 2 * size); // Center of screen
         Cube = new CUBE(pos, size);
     }
 
