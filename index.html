@@ -1587,9 +1587,9 @@
             
             // 3D angular velocity (tumbling in all dimensions)
             this.omega = {
-                x: 0.2, // slow pitch
+                x: 0.8, // slow pitch
                 y: -1, // slow roll
-                z: 1.5  // slow yaw
+                z: -0.6  // slow yaw
             };
             
             // Tic-tac-toe game state
@@ -1865,7 +1865,7 @@
             
             // Draw tic-tac-toe on the right face (face index 5: [1, 2, 6, 5])
             // This face always has the game, regardless of orientation
-            const tttFace = faces[5]; // Right face with normal { x: 1, y: 0, z: 0 }
+            const tttFace = faces[2]; // Right face with normal { x: 1, y: 0, z: 0 }
             
             // Get the rotated vertices for this face
             const faceVerts = tttFace.indices.map(idx => screenVerts[idx]);
