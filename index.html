@@ -472,6 +472,7 @@
     
     //  FAN MENU ROTATION SYSTEM --------------------------------------------------------------
     let currentRotation = 0; // Continuous rotation in degrees
+    let targetRotation = 0; // Target rotation for smooth interpolation
     let targetBladeIndex = 0;
     const totalBlades = 4;
     const bladeAngleSpacing = -20; // Degrees between blades (negative to open downward)
@@ -480,6 +481,8 @@
     const snapThreshold = 0.5; // How close to snap (in blade units)
     let isSnapping = false;
     let snapAnimationFrame = null;
+    let smoothScrollFrame = null;
+    const smoothingFactor = 0.15; // How quickly to interpolate (0.1 = smooth, 0.3 = faster)
     
     function updateFanRotation() {
         const blades = document.querySelectorAll('.fan-blade');
@@ -503,6 +506,21 @@
             blade.style.opacity = opacity;
             blade.style.pointerEvents = 'auto';
         });
+    }
+    
+    function smoothScrollAnimation() {
+        const diff = targetRotation - currentRotation;
+        
+        if (Math.abs(diff) < 0.01) {
+            currentRotation = targetRotation;
+            updateFanRotation();
+            smoothScrollFrame = null;
+            return;
+        }
+        
+        currentRotation += diff * smoothingFactor;
+        updateFanRotation();
+        smoothScrollFrame = requestAnimationFrame(smoothScrollAnimation);
     }
     
     function snapToNearest() {
@@ -547,9 +565,12 @@
             const maxRotation = -(totalBlades - 1) * bladeAngleSpacing; // Last blade
             scrollAccumulator = Math.max(minRotation, Math.min(maxRotation, scrollAccumulator));
             
-            currentRotation = scrollAccumulator;
+            targetRotation = scrollAccumulator;
             
-            updateFanRotation();
+            // Start smooth scrolling animation if not already running
+            if (!smoothScrollFrame) {
+                smoothScrollFrame = requestAnimationFrame(smoothScrollAnimation);
+            }
             
             // Debounce snapping
             clearTimeout(window.snapTimeout);
