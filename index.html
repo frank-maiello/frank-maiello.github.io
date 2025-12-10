@@ -415,7 +415,7 @@
             <div class="blade-text">
                 <div class="appTitle">DR0PLETS</div>
                 <h3><br></h3>
-                <div class="description">Abstract Algorithmic Line 'Art'</div>
+                <div class="description">Algorithmic Line 'Art'</div>
                 <div class="verbiage2"><br>Repetetive line-drawing the slow way, using</div>
                 <div class="verbiage2">trigonometry and polar coordinates.</div>
                 <div class="verbiage2"><br>Click the Auto button for instant gratification.</div>
@@ -661,6 +661,8 @@
         spawnRoid();
         spawnCube();
         spawnPong();
+
+        makeSnow();
     }
     
     //  MOUSE TRACKBALL INTERACTION -----------------------------------------------------------
@@ -895,6 +897,167 @@
         };
     }
 
+    class SNOW{
+        constructor(pos, vel, radius, angle, type, rotation) {
+            this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.radius = radius;
+            this.angle = angle;
+            this.type = type;
+            this.rotation = rotation;
+        }
+        simulate() {
+            if (this.type == 'bigFlake') {
+                // big flakes fall slower
+                const gravity = new Vector2(0, 0.03);
+                this.vel.add(gravity, dT);
+                // Terminal velocity for big flakes
+                if (this.vel.y > 0.15) this.vel.y = 0.15;
+            } else {
+                // small flakes fall faster
+                const gravity = new Vector2(0, 0.1);
+                this.vel.add(gravity, dT);
+                // Terminal velocity for small flakes
+                if (this.vel.y > 0.3) this.vel.y = 0.3;
+            }
+			this.pos.add(this.vel, dT);
+            if (this.type == 'bigFlake') {
+                if (this.pos.y - 5 * this.radius > simHeight) {
+                    this.pos.y = -5 * this.radius;
+                    this.pos.x = Math.random() * simWidth;
+                    // Don't reset velocity - keep it falling
+                }
+            } else {
+                if (this.pos.y - this.radius > simHeight) {
+                    this.pos.y = -this.radius;
+                    this.pos.x = Math.random() * simWidth;
+                    // Don't reset velocity - keep it falling
+                }
+            }
+            
+            this.angle += this.rotation * dT;
+        }
+        draw() {
+            c.save();
+            c.translate(this.pos.x * cScale, this.pos.y * cScale);
+            c.rotate(this.angle);
+            c.fillStyle = 'hsla(0, 0%, 80%, 0.8)';
+            c.strokeStyle = 'hsla(0, 0%, 80%, 0.8)';
+            c.lineWidth = 0.003 * cScale;
+            if (this.type == 'dot') {
+                c.beginPath();
+                c.arc(0, 0, this.radius * cScale, 0, 2 * Math.PI);
+                c.fill();
+            }
+            if (this.type == 'smallFlake') {
+                for (var f = 0; f < 6; f++) {
+                    c.beginPath();
+                    c.moveTo(0, 0);
+                    c.lineTo(0, 2 * this.radius * cScale);
+                    c.stroke();
+                    c.rotate(Math.PI / 3);
+                }  
+            }
+            c.restore();
+        }
+        drawBig() {
+            c.save();
+            c.translate(this.pos.x * cScale, this.pos.y * cScale);
+            c.rotate(this.angle);
+            c.fillStyle = 'hsla(0, 0%, 80%, 0.8)';
+            c.strokeStyle = 'hsla(0, 0%, 80%, 0.8)';
+            c.lineWidth = 0.003 * cScale;
+            if (this.type == 'bigFlake') {
+                const bigFlakeRadius = 7 * this.radius;
+                const arrowPoint = 0.6 * bigFlakeRadius;
+                const arrowBase = 0.8 * bigFlakeRadius;
+                const hexSize = 0.4 * bigFlakeRadius;
+                c.lineWidth = 0.004 * cScale;
+                // drqaw six arms w/ arrows
+                for (var f = 0; f < 6; f++) {
+                    c.beginPath();
+                    c.moveTo(0, 0);
+                    c.lineTo(0, bigFlakeRadius * cScale);
+                    c.lineWidth = 0.007 * cScale;
+                    c.stroke();
+                    // draw arrowhead
+                    c.beginPath();
+                    c.moveTo(-2 * this.radius * cScale, arrowBase * cScale);
+                    c.lineTo(0, arrowPoint * cScale);
+                    c.lineTo(2 * this.radius * cScale, arrowBase * cScale);
+                    c.lineWidth = 0.004 * cScale;
+                    c.stroke();
+                    c.rotate(Math.PI / 3);
+                }
+
+                //c.rotate(Math.PI / 6);
+                // draw hexagon inside
+                c.beginPath();
+                for (var h = 0; h < 6; h++) {
+                    const hx = hexSize * Math.cos(h * Math.PI / 3) * cScale;
+                    const hy = hexSize * Math.sin(h * Math.PI / 3) * cScale;
+                    if (h == 0) {
+                        c.moveTo(hx, hy);
+                    } else {
+                        c.lineTo(hx, hy);
+                    }
+                }
+                c.closePath();
+                c.lineWidth = 0.004 * cScale;
+                c.stroke();
+            }
+            c.restore();
+        }
+    }
+
+    // MAKE SNOW --------------------------------------------------------------
+    function makeSnow() {
+        Snowfield = [];
+        //  draw small snowflakes
+        for (var s = 0; s < 700; s++) {
+            posX = Math.random() * simWidth;
+            posY = Math.random() * simHeight;
+            radius = 0.0025 + 0.004 * Math.random();
+            velX = (Math.random() - 0.5) * 0.05;
+            velY = 0.0;
+            angle = Math.random() * 2 * Math.PI;
+            typeRand = Math.random();
+            if (typeRand < 0.8) {
+                type = 'dot';
+            } else {
+                type = 'smallFlake'
+            }
+            rotation = (Math.random() - 0.5) * 1;
+            Snowfield.push(new SNOW(
+                new Vector2(posX, posY),
+                new Vector2(velX, velY),
+                radius,
+                angle,
+                type,
+                rotation));
+        }
+
+        //  draw big snowflakes
+        for (var s = 0; s < 30; s++) {
+            posX = Math.random() * simWidth;
+            posY = Math.random() * simHeight;
+            radius = 0.005 + 0.006 * Math.random();
+            velX = (Math.random() - 0.5) * 0.05;
+            velY = 0.3;
+            angle = Math.random() * 2 * Math.PI;
+            typeRand = Math.random();
+            type = 'bigFlake';
+            rotation = (Math.random() - 0.5) * 1;
+            Snowfield.push(new SNOW(
+                new Vector2(posX, posY),
+                new Vector2(velX, velY),
+                radius,
+                angle,
+                type,
+                rotation));
+        }
+    }
+
     //  DEFINE STAR CLASS  -----------------
     class STAR{
         constructor(posX, posY, radius, lightness) {
@@ -1117,55 +1280,79 @@
             const subBallZ = ballZ0 + subZ0;
             const rotSubBall = quatRotateVec(this.orientation, subBallX, subBallY, subBallZ);
             
+            // Calculate orbiter and sub-orbiter positions ONCE (used in both behind/front sections)
+            const mainOrbiterInfo = drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
+            const angleOffset = (2 * Math.PI) / 4; // 90 degrees
+            const orbiterScaleFactor = mainOrbiterInfo.scaleFactor;
+            const subOrbiterInfos = [
+                getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
+            ];
+            const subOrbiterInfos2 = [
+                getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
+                getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
+            ];
+            const subOrbiterHues = [15, 25, 35, 20];
+            const subOrbiterHues2 = [170, 185, 195, 180];
+            
             // Draw orbiters BEHIND globe if z < 0 (facing away from camera)
             if (rotBall.z < 0) {
-                // Get orbiter positions
-                const mainOrbiterInfo = drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
                 
-                // Get four sub-orbiters spaced 90 degrees apart (first plane)
-                const angleOffset = (2 * Math.PI) / 4; // 90 degrees
-                const orbiterScaleFactor = mainOrbiterInfo.scaleFactor;
-                const subOrbiterInfos = [
-                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
-                ];
-                
-                // Get four sub-orbiters on perpendicular plane (second plane)
-                const subOrbiterInfos2 = [
-                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                    getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
-                ];
-                
-                const subOrbiterHues = [15, 25, 35, 20];
-                const subOrbiterHues2 = [170, 185, 195, 180];
-                
-                // Draw sub-orbiters that are behind the globe
+                // Draw ALL sub-orbiters that are behind the main orbiter (whether behind globe or not)
                 for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos[i];
-                    // Check if actually behind the globe surface
                     const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
-                    const isSubBehind = subInfo.worldPos.z < 0 && subDistFromAxis < this.radius;
-                    if (isSubBehind) {
+                    const isSubBehindGlobe = subInfo.worldPos.z < 0 && subDistFromAxis < this.radius;
+                    const isSubInFrontOfGlobe = !isSubBehindGlobe;
+                    const isBehindMainOrbiter = subInfo.worldPos.z < mainOrbiterInfo.worldPos.z;
+                    
+                    // Draw if behind main orbiter (regardless of globe occlusion)
+                    if (isBehindMainOrbiter) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
                     }
                 }
                 
                 for (let i = 0; i < 4; i++) {
                     const subInfo = subOrbiterInfos2[i];
-                    // Check if actually behind the globe surface
                     const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
-                    const isSubBehind = subInfo.worldPos.z < 0 && subDistFromAxis < this.radius;
-                    if (isSubBehind) {
+                    const isSubBehindGlobe = subInfo.worldPos.z < 0 && subDistFromAxis < this.radius;
+                    const isBehindMainOrbiter = subInfo.worldPos.z < mainOrbiterInfo.worldPos.z;
+                    
+                    if (isBehindMainOrbiter) {
                         drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
                     }
                 }
                 
                 // Draw main orbiter ball (it's behind the globe)
                 drawOrbiterBall(mainOrbiterInfo.screenX, mainOrbiterInfo.screenY, mainOrbiterInfo.pixelRadius);
+                
+                // Draw sub-orbiters that are in front of main orbiter (whether behind globe or not)
+                for (let i = 0; i < 4; i++) {
+                    const subInfo = subOrbiterInfos[i];
+                    const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
+                    const isSubBehindGlobe = subInfo.worldPos.z < 0 && subDistFromAxis < this.radius;
+                    const isInFrontOfMainOrbiter = subInfo.worldPos.z >= mainOrbiterInfo.worldPos.z;
+                    
+                    // Draw if in front of main orbiter (regardless of globe occlusion)
+                    if (isInFrontOfMainOrbiter) {
+                        drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
+                    }
+                }
+                
+                for (let i = 0; i < 4; i++) {
+                    const subInfo = subOrbiterInfos2[i];
+                    const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
+                    const isSubBehindGlobe = subInfo.worldPos.z < 0 && subDistFromAxis < this.radius;
+                    const isInFrontOfMainOrbiter = subInfo.worldPos.z >= mainOrbiterInfo.worldPos.z;
+                    
+                    if (isInFrontOfMainOrbiter) {
+                        drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
+                    }
+                }
             }
             
             // Calculate polar orbiter position for occlusion checking
@@ -1267,59 +1454,65 @@
             c.fillStyle = sphereGradient;
             c.fill();
 
-            // Always draw orbiters that are in front of the globe (z >= 0), after all shading
-            // Get orbiter positions
-            const mainOrbiterInfo = drawOrbiter(this.radius, this.pos, this.orientation, this.orbitAngle);
-            
-            // Get four sub-orbiters spaced 90 degrees apart (first plane)
-            const angleOffset = (2 * Math.PI) / 4; // 90 degrees
-            const orbiterScaleFactor = mainOrbiterInfo.scaleFactor; // Use main orbiter's scale
-            const subOrbiterInfos = [
-                getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                getSubOrbiterPosition(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
-            ];
-            
-            // Get four sub-orbiters on perpendicular plane (second plane)
-            const subOrbiterInfos2 = [
-                getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 2, this.subOrbitDistanceMultiplier, orbiterScaleFactor),
-                getSubOrbiterPosition2(this.radius, this.pos, this.orientation, this.orbitAngle, this.subOrbitAngle + angleOffset * 3, this.subOrbitDistanceMultiplier, orbiterScaleFactor)
-            ];
-            
-            const mainOrbiterRadius = this.radius * 0.15;
-            const subOrbiterHues = [15, 25, 35, 20]; // Moderate variation: red-orange to orange
-            const subOrbiterHues2 = [170, 185, 195, 180]; // Moderate variation: cyan to light cyan
-            
-            // Draw main orbiter if in front of globe
+            // Draw orbiters that are in front of the globe (z >= 0), after all shading
             if (rotBall.z >= 0) {
-                drawOrbiterBall(mainOrbiterInfo.screenX, mainOrbiterInfo.screenY, mainOrbiterInfo.pixelRadius);
-            }
+                const mainOrbiterRadius = this.radius * 0.15;
             
-            // Draw sub-orbiters that are in front of the globe (first plane)
+            // STEP 1: Draw sub-orbiters that are BEHIND the main orbiter (first plane)
             for (let i = 0; i < 4; i++) {
                 const subInfo = subOrbiterInfos[i];
-                // Check if in front OR behind but outside the globe's shadow
                 const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
                 const isSubInFront = subInfo.worldPos.z >= 0 || subDistFromAxis >= this.radius;
-                if (isSubInFront) {
+                const isBehindMainOrbiter = subInfo.worldPos.z < mainOrbiterInfo.worldPos.z;
+                
+                if (isSubInFront && isBehindMainOrbiter) {
                     drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
                 }
             }
             
-            // Draw sub-orbiters that are in front of the globe (second plane)
+            // STEP 2: Draw sub-orbiters that are BEHIND the main orbiter (second plane)
             for (let i = 0; i < 4; i++) {
                 const subInfo = subOrbiterInfos2[i];
-                // Check if in front OR behind but outside the globe's shadow
                 const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
                 const isSubInFront = subInfo.worldPos.z >= 0 || subDistFromAxis >= this.radius;
-                if (isSubInFront) {
+                const isBehindMainOrbiter = subInfo.worldPos.z < mainOrbiterInfo.worldPos.z;
+                
+                if (isSubInFront && isBehindMainOrbiter) {
                     drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
                 }
             }
             
+            // STEP 3: Draw main orbiter (covers sub-orbiters behind it)
+            // Draw it when in front of globe for proper occlusion
+            if (rotBall.z >= 0) {
+                drawOrbiterBall(mainOrbiterInfo.screenX, mainOrbiterInfo.screenY, mainOrbiterInfo.pixelRadius);
+            }
+            
+            // STEP 4: Draw sub-orbiters that are IN FRONT of the main orbiter (first plane)
+            for (let i = 0; i < 4; i++) {
+                const subInfo = subOrbiterInfos[i];
+                const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
+                const isSubInFront = subInfo.worldPos.z >= 0 || subDistFromAxis >= this.radius;
+                const isInFrontOfMainOrbiter = subInfo.worldPos.z >= mainOrbiterInfo.worldPos.z;
+                
+                if (isSubInFront && isInFrontOfMainOrbiter) {
+                    drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues[i]);
+                }
+            }
+            
+            // STEP 5: Draw sub-orbiters that are IN FRONT of the main orbiter (second plane)
+            for (let i = 0; i < 4; i++) {
+                const subInfo = subOrbiterInfos2[i];
+                const subDistFromAxis = Math.sqrt(subInfo.worldPos.x * subInfo.worldPos.x + subInfo.worldPos.y * subInfo.worldPos.y);
+                const isSubInFront = subInfo.worldPos.z >= 0 || subDistFromAxis >= this.radius;
+                const isInFrontOfMainOrbiter = subInfo.worldPos.z >= mainOrbiterInfo.worldPos.z;
+                
+                if (isSubInFront && isInFrontOfMainOrbiter) {
+                    drawSubOrbiterBall(subInfo.screenX, subInfo.screenY, subInfo.pixelRadius, subOrbiterHues2[i]);
+                }
+            }
+            } // End of "in front of globe" section
+
             // Draw polar orbiter trail segments that are in front of the globe
             if (this.polarOrbitTrail.length > 1) {
                 c.lineCap = 'butt';
@@ -1398,6 +1591,14 @@
                 y: -1, // slow roll
                 z: 1.5  // slow yaw
             };
+            
+            // Tic-tac-toe game state
+            this.tttBoard = [0, 0, 0, 0, 0, 0, 0, 0, 0]; // 0=empty, 1=X, 2=O
+            this.tttCurrentPlayer = 1; // 1=X, 2=O
+            this.tttGameOver = false;
+            this.tttWinner = 0;
+            this.tttMoveTimer = 0;
+            this.tttMoveDelay = 1.0; // seconds between moves
         }
         
         simulate() {
@@ -1412,6 +1613,146 @@
             // new orientation = orientation * dq  (apply small-body-frame rotation)
             this.orientation = quatMultiply(this.orientation, dq);
             this.orientation = quatNormalize(this.orientation);
+            
+            // Update tic-tac-toe game
+            if (!this.tttGameOver) {
+                this.tttMoveTimer += dT;
+                if (this.tttMoveTimer >= this.tttMoveDelay) {
+                    this.tttMoveTimer = 0;
+                    this.makeTTTMove();
+                }
+            } else {
+                // Reset game after 3 seconds
+                this.tttMoveTimer += dT;
+                if (this.tttMoveTimer >= 3.0) {
+                    this.resetTTTGame();
+                }
+            }
+        }
+        
+        makeTTTMove() {
+            // Find empty cells
+            const emptyCells = [];
+            for (let i = 0; i < 9; i++) {
+                if (this.tttBoard[i] === 0) {
+                    emptyCells.push(i);
+                }
+            }
+            
+            if (emptyCells.length === 0) {
+                this.tttGameOver = true;
+                return;
+            }
+            
+            // Use optimal strategy (minimax) to ensure draws
+            const move = this.getBestMove();
+            this.tttBoard[move] = this.tttCurrentPlayer;
+            
+            // Check for winner
+            const winner = this.checkTTTWinner();
+            if (winner !== 0) {
+                this.tttGameOver = true;
+                this.tttWinner = winner;
+            } else if (emptyCells.length === 1) {
+                // Board full, it's a draw
+                this.tttGameOver = true;
+            } else {
+                // Switch player
+                this.tttCurrentPlayer = this.tttCurrentPlayer === 1 ? 2 : 1;
+            }
+        }
+        
+        getBestMove() {
+            let bestScore = -Infinity;
+            let bestMove = -1;
+            
+            for (let i = 0; i < 9; i++) {
+                if (this.tttBoard[i] === 0) {
+                    this.tttBoard[i] = this.tttCurrentPlayer;
+                    const score = this.minimax(0, false);
+                    this.tttBoard[i] = 0;
+                    
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMove = i;
+                    }
+                }
+            }
+            
+            return bestMove;
+        }
+        
+        minimax(depth, isMaximizing) {
+            const winner = this.checkTTTWinner();
+            
+            // Terminal states
+            if (winner === this.tttCurrentPlayer) {
+                return 10 - depth;
+            } else if (winner !== 0) {
+                return depth - 10;
+            }
+            
+            // Check for draw
+            let hasEmpty = false;
+            for (let i = 0; i < 9; i++) {
+                if (this.tttBoard[i] === 0) {
+                    hasEmpty = true;
+                    break;
+                }
+            }
+            if (!hasEmpty) {
+                return 0;
+            }
+            
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (this.tttBoard[i] === 0) {
+                        this.tttBoard[i] = this.tttCurrentPlayer;
+                        const score = this.minimax(depth + 1, false);
+                        this.tttBoard[i] = 0;
+                        bestScore = Math.max(score, bestScore);
+                    }
+                }
+                return bestScore;
+            } else {
+                let bestScore = Infinity;
+                const opponent = this.tttCurrentPlayer === 1 ? 2 : 1;
+                for (let i = 0; i < 9; i++) {
+                    if (this.tttBoard[i] === 0) {
+                        this.tttBoard[i] = opponent;
+                        const score = this.minimax(depth + 1, true);
+                        this.tttBoard[i] = 0;
+                        bestScore = Math.min(score, bestScore);
+                    }
+                }
+                return bestScore;
+            }
+        }
+        
+        checkTTTWinner() {
+            const b = this.tttBoard;
+            const lines = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], // cols
+                [0, 4, 8], [2, 4, 6]             // diagonals
+            ];
+            
+            for (let line of lines) {
+                const [a, b_idx, c] = line;
+                if (b[a] !== 0 && b[a] === b[b_idx] && b[a] === b[c]) {
+                    return b[a];
+                }
+            }
+            return 0;
+        }
+        
+        resetTTTGame() {
+            this.tttBoard = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+            this.tttCurrentPlayer = 1;
+            this.tttGameOver = false;
+            this.tttWinner = 0;
+            this.tttMoveTimer = 0;
         }
         
         draw() {
@@ -1521,6 +1862,179 @@
                     c.stroke();
                 }
             });
+            
+            // Draw tic-tac-toe on the right face (face index 5: [1, 2, 6, 5])
+            // This face always has the game, regardless of orientation
+            const tttFace = faces[5]; // Right face with normal { x: 1, y: 0, z: 0 }
+            
+            // Get the rotated vertices for this face
+            const faceVerts = tttFace.indices.map(idx => screenVerts[idx]);
+            
+            // Calculate grid cells (3x3) in screen space
+            // Get corner positions
+            const v0 = faceVerts[0]; // bottom-left
+            const v1 = faceVerts[1]; // bottom-right
+            const v2 = faceVerts[2]; // top-right
+            const v3 = faceVerts[3]; // top-left
+            
+            // Draw grid lines
+            c.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            c.lineWidth = 2;
+            
+            // Vertical lines (divide horizontally into thirds)
+            for (let i = 1; i <= 2; i++) {
+                const t = i / 3;
+                // Bottom edge point
+                const bx = v0.x + (v1.x - v0.x) * t;
+                const by = v0.y + (v1.y - v0.y) * t;
+                // Top edge point
+                const tx = v3.x + (v2.x - v3.x) * t;
+                const ty = v3.y + (v2.y - v3.y) * t;
+                
+                c.beginPath();
+                c.moveTo(bx, by);
+                c.lineTo(tx, ty);
+                c.stroke();
+            }
+            
+            // Horizontal lines (divide vertically into thirds)
+            for (let i = 1; i <= 2; i++) {
+                const t = i / 3;
+                // Left edge point
+                const lx = v0.x + (v3.x - v0.x) * t;
+                const ly = v0.y + (v3.y - v0.y) * t;
+                // Right edge point
+                const rx = v1.x + (v2.x - v1.x) * t;
+                const ry = v1.y + (v2.y - v1.y) * t;
+                
+                c.beginPath();
+                c.moveTo(lx, ly);
+                c.lineTo(rx, ry);
+                c.stroke();
+            }
+            
+            // Draw X's and O's
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 3; col++) {
+                    const cellIndex = row * 3 + col;
+                    const mark = this.tttBoard[cellIndex];
+                    
+                    if (mark !== 0) {
+                        // Calculate cell center
+                        const colT = (col + 0.5) / 3;
+                        const rowT = (row + 0.5) / 3;
+                        
+                        // Bottom edge interpolation
+                        const bx = v0.x + (v1.x - v0.x) * colT;
+                        const by = v0.y + (v1.y - v0.y) * colT;
+                        // Top edge interpolation
+                        const tx = v3.x + (v2.x - v3.x) * colT;
+                        const ty = v3.y + (v2.y - v3.y) * colT;
+                        
+                        // Final center position
+                        const cx = bx + (tx - bx) * rowT;
+                        const cy = by + (ty - by) * rowT;
+                        
+                        // Calculate the offset size for marks (fraction of cell)
+                        const offset = 0.25;
+                        
+                        // Calculate four corner positions of the mark area
+                        const colTMin = (col + 0.5 - offset) / 3;
+                        const colTMax = (col + 0.5 + offset) / 3;
+                        const rowTMin = (row + 0.5 - offset) / 3;
+                        const rowTMax = (row + 0.5 + offset) / 3;
+                        
+                        // Bottom-left corner
+                        const bl = {
+                            x: v0.x + (v1.x - v0.x) * colTMin,
+                            y: v0.y + (v1.y - v0.y) * colTMin
+                        };
+                        const tl = {
+                            x: v3.x + (v2.x - v3.x) * colTMin,
+                            y: v3.y + (v2.y - v3.y) * colTMin
+                        };
+                        bl.x = bl.x + (tl.x - bl.x) * rowTMin;
+                        bl.y = bl.y + (tl.y - bl.y) * rowTMin;
+                        
+                        // Bottom-right corner
+                        const br = {
+                            x: v0.x + (v1.x - v0.x) * colTMax,
+                            y: v0.y + (v1.y - v0.y) * colTMax
+                        };
+                        const tr = {
+                            x: v3.x + (v2.x - v3.x) * colTMax,
+                            y: v3.y + (v2.y - v3.y) * colTMax
+                        };
+                        br.x = br.x + (tr.x - br.x) * rowTMin;
+                        br.y = br.y + (tr.y - br.y) * rowTMin;
+                        
+                        // Top-left corner
+                        tl.x = v0.x + (v1.x - v0.x) * colTMin;
+                        tl.y = v0.y + (v1.y - v0.y) * colTMin;
+                        const tl2 = {
+                            x: v3.x + (v2.x - v3.x) * colTMin,
+                            y: v3.y + (v2.y - v3.y) * colTMin
+                        };
+                        tl.x = tl.x + (tl2.x - tl.x) * rowTMax;
+                        tl.y = tl.y + (tl2.y - tl.y) * rowTMax;
+                        
+                        // Top-right corner
+                        tr.x = v0.x + (v1.x - v0.x) * colTMax;
+                        tr.y = v0.y + (v1.y - v0.y) * colTMax;
+                        const tr2 = {
+                            x: v3.x + (v2.x - v3.x) * colTMax,
+                            y: v3.y + (v2.y - v3.y) * colTMax
+                        };
+                        tr.x = tr.x + (tr2.x - tr.x) * rowTMax;
+                        tr.y = tr.y + (tr2.y - tr.y) * rowTMax;
+                        
+                        if (mark === 1) {
+                            // Draw X using diagonal lines in face space
+                            c.strokeStyle = 'rgba(255, 100, 100, 0.9)';
+                            c.lineWidth = 4;
+                            c.beginPath();
+                            c.moveTo(bl.x, bl.y);
+                            c.lineTo(tr.x, tr.y);
+                            c.moveTo(br.x, br.y);
+                            c.lineTo(tl.x, tl.y);
+                            c.stroke();
+                        } else if (mark === 2) {
+                            // Draw O using 8-point approximation in face space
+                            c.strokeStyle = 'rgba(100, 100, 255, 0.9)';
+                            c.lineWidth = 4;
+                            c.beginPath();
+                            
+                            const numPoints = 16;
+                            for (let i = 0; i <= numPoints; i++) {
+                                const angle = (i / numPoints) * Math.PI * 2;
+                                const localX = Math.cos(angle) * offset;
+                                const localY = Math.sin(angle) * offset;
+                                
+                                const colTCircle = (col + 0.5 + localX) / 3;
+                                const rowTCircle = (row + 0.5 + localY) / 3;
+                                
+                                const bCircle = {
+                                    x: v0.x + (v1.x - v0.x) * colTCircle,
+                                    y: v0.y + (v1.y - v0.y) * colTCircle
+                                };
+                                const tCircle = {
+                                    x: v3.x + (v2.x - v3.x) * colTCircle,
+                                    y: v3.y + (v2.y - v3.y) * colTCircle
+                                };
+                                const px = bCircle.x + (tCircle.x - bCircle.x) * rowTCircle;
+                                const py = bCircle.y + (tCircle.y - bCircle.y) * rowTCircle;
+                                
+                                if (i === 0) {
+                                    c.moveTo(px, py);
+                                } else {
+                                    c.lineTo(px, py);
+                                }
+                            }
+                            c.stroke();
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -2139,10 +2653,10 @@
             1.1 * pixelRadius
         );
         
-        ballGradient.addColorStop(0, 'hsl(275, 0%, 100%)');
-        ballGradient.addColorStop(0.3, 'hsl(275, 0%, 65%)');
-        ballGradient.addColorStop(0.7, 'hsl(275, 0%, 25%)');
-        ballGradient.addColorStop(1, 'hsl(275, 0%, 10%)');
+        ballGradient.addColorStop(0, 'hsl(275, 30%, 100%)');
+        ballGradient.addColorStop(0.3, 'hsl(275, 30%, 65%)');
+        ballGradient.addColorStop(0.7, 'hsl(275, 30%, 25%)');
+        ballGradient.addColorStop(1, 'hsl(275, 30%, 10%)');
         
         c.beginPath();
         c.arc(screenX, screenY, pixelRadius, 0, 2 * Math.PI);
@@ -2254,11 +2768,9 @@
         // Rotate the sub-orbiter position with the globe's orientation
         const rotSubBall = quatRotateVec(orientation, subBallX, subBallY, subBallZ);
         
-        // Scale based on z-position (perspective effect)
-        const totalOrbitRadius = orbitRadius + subOrbitRadius;
-        const zNormalized = rotSubBall.z / totalOrbitRadius;
-        const scaleFactor = 1.0 + zNormalized * 0.3;
-        const ballRadius = baseBallRadius * scaleFactor;
+        // Use the main orbiter's scale factor (already passed in and applied to sizes)
+        // No additional scaling needed - the assembly scales as one unit
+        const ballRadius = baseBallRadius;
         
         // Project to 2D screen space
         const ballScreenX = (centerPos.x + rotSubBall.x) * cScale;
@@ -2324,11 +2836,9 @@
         // Rotate the sub-orbiter position with the globe's orientation
         const rotSubBall = quatRotateVec(orientation, subBallX, subBallY, subBallZ);
         
-        // Scale based on z-position (perspective effect)
-        const totalOrbitRadius = orbitRadius + subOrbitRadius;
-        const zNormalized = rotSubBall.z / totalOrbitRadius;
-        const scaleFactor = 1.0 + zNormalized * 0.3;
-        const ballRadius = baseBallRadius * scaleFactor;
+        // Use the main orbiter's scale factor (already passed in and applied to sizes)
+        // No additional scaling needed - the assembly scales as one unit
+        const ballRadius = baseBallRadius;
         
         // Project to 2D screen space
         const ballScreenX = (centerPos.x + rotSubBall.x) * cScale;
@@ -2700,6 +3210,11 @@
         if (PongGame != null) {
             PongGame.simulate();
         }
+
+        for (var i = 0; i < Snowfield.length; i++) {
+            var snow = Snowfield[i];
+            snow.simulate();
+        }
     }
     
     //  DRAW EVERYTHING ==============================================================
@@ -2708,11 +3223,11 @@
         c.fillStyle = 'hsl(0, 0%, 0%)';
         c.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Draw Starfield  --------------------
+        /*// Draw Starfield  --------------------
         for (var n = 0; n < Starfield.length; n++) {
             star = Starfield[n];
             star.draw();
-        }
+        }*/
 
         // Draw nodes and their connections
         drawPrimaryNodes();
@@ -2733,6 +3248,11 @@
         c.fillStyle = 'hsla(0, 0%, 0%, 0.7)';
         c.fillRect(0, 0, canvas.width, canvas.height); 
 
+        for (var i = 0; i < Snowfield.length; i++) {
+            var snow = Snowfield[i];
+            snow.draw();
+        }
+        
         // Draw cube
         if (Cube != null) {
             Cube.draw();
@@ -2745,11 +3265,18 @@
                 roid.draw();
             }
         }
+
+        for (var i = 0; i < Snowfield.length; i++) {
+            var snow = Snowfield[i];
+            snow.drawBig();
+        }
         
         // Draw pong game
         if (PongGame != null) {
             PongGame.draw();
         }
+
+        
 	}
 
     //  MAIN SEQUENCE ----------------------------------------------------------------------------
