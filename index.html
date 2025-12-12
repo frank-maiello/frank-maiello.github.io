@@ -180,7 +180,7 @@
     
     .fan-blade {
         position: absolute;
-        right: 0;
+        right: 50px;
         left: 30px;
         top: 30%;
         transform-origin: 80%;
@@ -329,7 +329,7 @@
 <svg style="position: absolute; width: 0; height: 0;">
     <defs>
         <clipPath id="rounded-trapezoid" clipPathUnits="objectBoundingBox">
-            <path d="M 0.053,0.3 Q 0,0.3 0,0.34 L 0.027,0.74 Q 0.027,0.78 0.08,0.78 L 0.947,0.62 Q 1,0.62 1,0.58 L 1,0.42 Q 1,0.38 0.947,0.38 Z"/>
+            <path d="M 0.053,0.3 Q 0,0.3 0,0.34 L 0.027,0.74 Q 0.027,0.78 0.08,0.78 L 0.98,0.65 Q 1,0.65 1,0.61 L 1,0.39 Q 1,0.35 0.98,0.35 Z"/>
         </clipPath>
     </defs>
 </svg>
@@ -928,7 +928,7 @@
             this.rotation = rotation;
         }
         simulate() {
-            if (this.type == 'bigFlake') {
+            if (this.type == 'bigFlake' || this.type == 'bigFlake2' || this.type == 'bigFlake3') {
                 // big flakes fall slower
                 const gravity = new Vector2(0, 0.03);
                 this.vel.add(gravity, dT);
@@ -942,7 +942,7 @@
                 if (this.vel.y > 0.3) this.vel.y = 0.3;
             }
 			this.pos.add(this.vel, dT);
-            if (this.type == 'bigFlake') {
+            if (this.type == 'bigFlake' || this.type == 'bigFlake2' || this.type == 'bigFlake3') {
                 if (this.pos.y - 5 * this.radius > simHeight) {
                     this.pos.y = -5 * this.radius;
                     this.pos.x = Math.random() * simWidth;
@@ -988,6 +988,7 @@
             c.fillStyle = 'hsla(0, 0%, 80%, 0.8)';
             c.strokeStyle = 'hsla(0, 0%, 80%, 0.8)';
             c.lineWidth = 0.003 * cScale;
+
             if (this.type == 'bigFlake') {
                 const bigFlakeRadius = 7 * this.radius;
                 const arrowPoint = 0.6 * bigFlakeRadius;
@@ -1027,6 +1028,90 @@
                 c.lineWidth = 0.004 * cScale;
                 c.stroke();
             }
+
+            if (this.type == 'bigFlake2') {
+                const bigFlakeRadius = 7 * this.radius;
+                const lowArrowPoint = 0.3 * bigFlakeRadius;
+                const lowArrowBase = 0.4 * bigFlakeRadius;
+                const midArrowPoint = 0.45 * bigFlakeRadius;
+                const midArrowBase = 0.65 * bigFlakeRadius;
+                const highArrowPoint = 0.7 * bigFlakeRadius;
+                const highArrowBase = 0.85 * bigFlakeRadius;
+                c.lineWidth = 0.004 * cScale;
+                // drqaw six arms w/ arrows
+                for (var f = 0; f < 6; f++) {
+                    c.beginPath();
+                    c.moveTo(0, 0);
+                    c.lineTo(0, bigFlakeRadius * cScale);
+                    c.lineWidth = 0.007 * cScale;
+                    c.stroke();
+                    // draw low arrowhead
+                    c.beginPath();
+                    c.moveTo(-1.2 * this.radius * cScale, lowArrowBase * cScale);
+                    c.lineTo(0, lowArrowPoint * cScale);
+                    c.lineTo(1.2 * this.radius * cScale, lowArrowBase * cScale);
+                    c.lineWidth = 0.004 * cScale;
+                    c.stroke();
+                    // draw mid arrowhead
+                    c.beginPath();
+                    c.moveTo(-1.7 * this.radius * cScale, midArrowBase * cScale);
+                    c.lineTo(0, midArrowPoint * cScale);
+                    c.lineTo(1.7 * this.radius * cScale, midArrowBase * cScale);
+                    c.lineWidth = 0.004 * cScale;
+                    c.stroke();
+                    c.rotate(Math.PI / 3);
+                    // draw high arrowhead
+                    c.beginPath();
+                    c.moveTo(-1.2 * this.radius * cScale, highArrowBase * cScale);
+                    c.lineTo(0, highArrowPoint * cScale);
+                    c.lineTo(1.2 * this.radius * cScale, highArrowBase * cScale);
+                    c.lineWidth = 0.004 * cScale;
+                    c.stroke();
+                }
+            }
+
+            if (this.type == 'bigFlake3') {
+                const bigFlakeRadius = 7 * this.radius;
+                const lowArrowPoint = 0.2 * bigFlakeRadius;
+                const lowArrowBase = 0.3 * bigFlakeRadius;
+                const midArrowPoint = 0.4 * bigFlakeRadius;
+                const midArrowBase = 0.7 * bigFlakeRadius;
+                const highArrowPoint = 0.8 * bigFlakeRadius;
+                const highArrowBase = 0.9 * bigFlakeRadius;
+                c.lineWidth = 0.004 * cScale;
+                // drqaw six arms w/ arrows
+                for (var f = 0; f < 6; f++) {
+                    c.beginPath();
+                    c.moveTo(0, 0);
+                    c.lineTo(0, bigFlakeRadius * cScale);
+                    c.lineWidth = 0.007 * cScale;
+                    c.stroke();
+                    // draw low arrowhead
+                    c.beginPath();
+                    c.moveTo(-1 * this.radius * cScale, lowArrowBase * cScale);
+                    c.lineTo(0, lowArrowPoint * cScale);
+                    c.lineTo(1 * this.radius * cScale, lowArrowBase * cScale);
+                    c.lineWidth = 0.004 * cScale;
+                    c.stroke();
+                    // draw middle arrowhead
+                    c.beginPath();
+                    c.moveTo(-2 * this.radius * cScale, midArrowBase * cScale);
+                    c.lineTo(0, midArrowPoint * cScale);
+                    c.lineTo(2 * this.radius * cScale, midArrowBase * cScale);
+                    c.lineWidth = 0.004 * cScale;
+                    c.stroke();
+                    // draw high arrowhead
+                    c.beginPath();
+                    c.moveTo(-4 * this.radius * cScale, highArrowBase * cScale);
+                    c.lineTo(0, highArrowPoint * cScale);
+                    c.lineTo(4 * this.radius * cScale, highArrowBase * cScale);
+                    c.lineWidth = 0.004 * cScale;
+                    c.stroke();
+                    
+                    c.rotate(Math.PI / 3);
+                }
+            }
+
             c.restore();
         }
     }
@@ -1067,7 +1152,14 @@
             velY = 0.3;
             angle = Math.random() * 2 * Math.PI;
             typeRand = Math.random();
-            type = 'bigFlake';
+            if (typeRand < 0.33) {
+                type = 'bigFlake';
+            } else if (typeRand < 0.66) {
+                type = 'bigFlake2'
+            } else {
+                type = 'bigFlake3'
+            }
+            
             rotation = (Math.random() - 0.5) * 1;
             Snowfield.push(new SNOW(
                 new Vector2(posX, posY),
@@ -1873,12 +1965,12 @@
                     c.closePath();
                     
                     // Use transparency and shading based on lighting
-                    const lightness = 10 + brightness * 30;
-                    c.fillStyle = `hsla(${face.baseHue}, 70%, ${lightness}%, 0.4)`;
+                    const lightness = 15 + brightness * 30;
+                    c.fillStyle = `hsla(${face.baseHue}, 70%, ${lightness}%, 0.6)`;
                     c.fill();
                     
                     // Edge outline
-                    c.strokeStyle = `hsla(${face.baseHue}, 70%, ${lightness + 10}%, 0.9)`;
+                    c.strokeStyle = `hsla(${face.baseHue}, 70%, ${lightness + 20}%, 0.9)`;
                     c.lineWidth = 3;
                     c.stroke();
                 }
@@ -2056,6 +2148,158 @@
                     }
                 }
             }
+            
+            // Draw text on one face - mapped flush to surface like tic-tac-toe
+            const faceTexts = [
+                { index: 5, text: "A STRANGE GAME", lines: ["A", "STRANGE", "GAME"] }  // right face - three lines
+            ];
+            
+            faceTexts.forEach(({ index, text, lines }) => {
+                const textFace = faces[index];
+                const textFaceData = facesWithDepth.find(f => f.face === textFace);
+                
+                // Draw text regardless of face orientation
+                if (textFaceData) {
+                    const faceVerts = textFace.indices.map(idx => screenVerts[idx]);
+                    const v0 = faceVerts[0]; // bottom-left
+                    const v1 = faceVerts[1]; // bottom-right
+                    const v2 = faceVerts[2]; // top-right
+                    const v3 = faceVerts[3]; // top-left
+                    
+                    // Function to map face coordinates (0-1, 0-1) to screen position
+                    const mapToFace = (u, v) => {
+                        // Bottom edge interpolation
+                        const bx = v0.x + (v1.x - v0.x) * u;
+                        const by = v0.y + (v1.y - v0.y) * u;
+                        // Top edge interpolation
+                        const tx = v3.x + (v2.x - v3.x) * u;
+                        const ty = v3.y + (v2.y - v3.y) * u;
+                        // Vertical interpolation
+                        return {
+                            x: bx + (tx - bx) * v,
+                            y: by + (ty - by) * v
+                        };
+                    };
+                    
+                    // Draw each line
+                    lines.forEach((line, lineIndex) => {
+                        const chars = line.split(''); // Don't reverse character order
+                        const numChars = chars.length;
+                        const totalWidth = numChars * 0.12; // Each char takes ~12% of face width
+                        const startU = (1 - totalWidth) / 2; // Center horizontally
+                        
+                        // Calculate vertical position for three lines
+                        let lineV;
+                        if (lines.length === 3) {
+                            lineV = [0.25, 0.5, 0.75][lineIndex]; // Top, middle, bottom
+                        } else {
+                            lineV = 0.5; // Center vertically
+                        }
+                        
+                        for (let i = 0; i < numChars; i++) {
+                            const char = chars[i];
+                            if (char === ' ') continue;
+                            
+                            const charU = startU + i * 0.12 + 0.06; // Center of character
+                            const charV = lineV;
+                            
+                            // Draw character using line segments mapped to face
+                            c.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+                            c.lineWidth = 3;
+                            c.lineCap = 'round';
+                            c.lineJoin = 'round';
+                            
+                            // Define simple stroke patterns for each character
+                            const strokes = this.getCharStrokes(char);
+                            
+                            strokes.forEach(stroke => {
+                                c.beginPath();
+                                stroke.forEach((point, idx) => {
+                                    const u = charU + point.x * 0.08;
+                                    const v = charV + point.y * 0.15;
+                                    const pos = mapToFace(u, v);
+                                    
+                                    if (idx === 0) {
+                                        c.moveTo(pos.x, pos.y);
+                                    } else {
+                                        c.lineTo(pos.x, pos.y);
+                                    }
+                                });
+                                c.stroke();
+                            });
+                        }
+                    });
+                }
+            });
+        }
+        
+        getCharStrokes(char) {
+            // Return stroke definitions for characters (simplified vector font)
+            const strokes = {
+                'W': [
+                    [{x:-0.4,y:-0.5},{x:-0.2,y:0.5},{x:0,y:-0.2},{x:0.2,y:0.5},{x:0.4,y:-0.5}]
+                ],
+                'O': [
+                    [{x:-0.3,y:-0.3},{x:0.3,y:-0.3},{x:0.3,y:0.3},{x:-0.3,y:0.3},{x:-0.3,y:-0.3}]
+                ],
+                'U': [
+                    [{x:-0.3,y:-0.4},{x:-0.3,y:0.2},{x:-0.1,y:0.4},{x:0.1,y:0.4},{x:0.3,y:0.2},{x:0.3,y:-0.4}]
+                ],
+                'L': [
+                    [{x:-0.2,y:-0.4},{x:-0.2,y:0.4},{x:0.3,y:0.4}]
+                ],
+                'D': [
+                    [{x:-0.3,y:-0.4},{x:-0.3,y:0.4},{x:0.1,y:0.4},{x:0.3,y:0.2},{x:0.3,y:-0.2},{x:0.1,y:-0.4},{x:-0.3,y:-0.4}]
+                ],
+                'Y': [
+                    [{x:-0.3,y:-0.4},{x:0,y:0}],
+                    [{x:0.3,y:-0.4},{x:0,y:0},{x:0,y:0.4}]
+                ],
+                'I': [
+                    [{x:0,y:-0.4},{x:0,y:0.4}]
+                ],
+                'K': [
+                    [{x:-0.2,y:-0.4},{x:-0.2,y:0.4}],
+                    [{x:0.3,y:-0.4},{x:-0.2,y:0},{x:0.3,y:0.4}]
+                ],
+                'E': [
+                    [{x:0.2,y:-0.4},{x:-0.2,y:-0.4},{x:-0.2,y:0.4},{x:0.2,y:0.4}],
+                    [{x:-0.2,y:0},{x:0.1,y:0}]
+                ],
+                'T': [
+                    [{x:-0.3,y:-0.4},{x:0.3,y:-0.4}],
+                    [{x:0,y:-0.4},{x:0,y:0.4}]
+                ],
+                'P': [
+                    [{x:-0.2,y:0.4},{x:-0.2,y:-0.4},{x:0.2,y:-0.4},{x:0.3,y:-0.2},{x:0.3,y:0},{x:0.2,y:0.2},{x:-0.2,y:0.2}]
+                ],
+                'A': [
+                    [{x:-0.3,y:0.4},{x:0,y:-0.4},{x:0.3,y:0.4}],
+                    [{x:-0.2,y:0.1},{x:0.2,y:0.1}]
+                ],
+                'G': [
+                    [{x:0.3,y:-0.2},{x:0.2,y:-0.4},{x:-0.2,y:-0.4},{x:-0.3,y:-0.2},{x:-0.3,y:0.2},{x:-0.2,y:0.4},{x:0.2,y:0.4},{x:0.3,y:0.2},{x:0.3,y:0},{x:0,y:0}]
+                ],
+                'M': [
+                    [{x:-0.3,y:0.4},{x:-0.3,y:-0.4},{x:0,y:0},{x:0.3,y:-0.4},{x:0.3,y:0.4}]
+                ],
+                '?': [
+                    [{x:-0.2,y:-0.2},{x:-0.2,y:-0.4},{x:0.2,y:-0.4},{x:0.2,y:-0.1},{x:0,y:0.1}],
+                    [{x:0,y:0.3},{x:0,y:0.4}]
+                ],
+                'S': [
+                    [{x:0.3,y:-0.3},{x:0.2,y:-0.4},{x:-0.2,y:-0.4},{x:-0.3,y:-0.3},{x:-0.2,y:-0.1},{x:0.2,y:0.1},{x:0.3,y:0.3},{x:0.2,y:0.4},{x:-0.2,y:0.4},{x:-0.3,y:0.3}]
+                ],
+                'N': [
+                    [{x:-0.3,y:0.4},{x:-0.3,y:-0.4},{x:0.3,y:0.4},{x:0.3,y:-0.4}]
+                ],
+                'R': [
+                    [{x:-0.2,y:0.4},{x:-0.2,y:-0.4},{x:0.2,y:-0.4},{x:0.3,y:-0.2},{x:0.3,y:0},{x:0.2,y:0.2},{x:-0.2,y:0.2}],
+                    [{x:0,y:0.2},{x:0.3,y:0.4}]
+                ]
+            };
+            
+            return strokes[char] || []; // Return empty if character not defined
         }
     }
 
@@ -3269,16 +3513,16 @@
         c.fillStyle = 'hsla(0, 0%, 0%, 0.7)';
         c.fillRect(0, 0, canvas.width, canvas.height); 
 
-        for (var i = 0; i < Snowfield.length; i++) {
-            var snow = Snowfield[i];
-            snow.draw();
-        }
-        
         // Draw cube
         if (Cube != null) {
             Cube.draw();
         }
 
+        for (var i = 0; i < Snowfield.length; i++) {
+            var snow = Snowfield[i];
+            snow.draw();
+        }
+        
         // Draw roid
         for (var r = 0; r < Roid.length; r++) {
             if (Roid[r] != null) {
