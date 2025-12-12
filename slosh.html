@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.27
+		<title>Slosh 2.28
         </title>
 	</head>
 
@@ -20582,7 +20582,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         // NORMAL PUCKS (Puck[5+]) - can be duplicated/deleted ----------------------------------------------------------
         Puck.push (new PUCK(
-            0.2, 
+            0.25, 
             new Vector2(0.35 * simWidth, 
                 0.2 * simHeight), 
                 puck2color, 
@@ -21079,12 +21079,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             bumpers.draw();
             }
         }
-        //  DRAW HEARTS ---------------------------------------------------------------
-        if (typeof Hearts !== 'undefined' && Hearts.length > 0) {
-            for (let i = 0; i < Hearts.length; i++) {
-                Hearts[i].draw();
-            }
-        }
+        
         //  DRAW HUNGRY PUCKS ---------------------------------------------------------------     
         if (showEaters == true) {
             // draw first hungry puck
@@ -21125,6 +21120,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //  DRAW STINKER ----------------------------------
         if (typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active) {
             Stinker[0].draw();
+        }
+        //  DRAW HEARTS ---------------------------------------------------------------
+        if (typeof Hearts !== 'undefined' && Hearts.length > 0) {
+            for (let i = 0; i < Hearts.length; i++) {
+                Hearts[i].draw();
+            }
         }
         //  DRAW MAGIC SET HERE NORMALLY AND WHEN DISPENSING ---------------------------------------------------------------------
         if (MagicSet[0]) {
