@@ -470,6 +470,10 @@
         topMargin = 0;
         bottomMargin = 0;
     
+    //  LOAD FROSTY IMAGE --------------------------------------------------------------
+    const frostyImage = new Image();
+    frostyImage.src = 'frosty.png';
+    
     //  FAN MENU ROTATION SYSTEM --------------------------------------------------------------
     let currentRotation = 0; // Continuous rotation in degrees
     let targetRotation = 0; // Target rotation for smooth interpolation
@@ -662,7 +666,7 @@
 
     //  SETUP SCENE ======================================================
 	function setupScene() {
-        makeStars()
+        //makeStars()
 
         PrimaryNodes = [];
         SecondaryNodes = [];
@@ -684,6 +688,9 @@
         spawnPong();
 
         makeSnow();
+        
+        // MAKE BUBBLES
+        //makeBubbles();
     }
     
     //  MOUSE TRACKBALL INTERACTION -----------------------------------------------------------
@@ -918,6 +925,91 @@
         };
     }
 
+    // BUBBLE CLASS  ---------------------------------------------------------------------
+    class BUBBLES{
+        constructor(pos) {
+            this.pos = pos.clone();
+            this.vel = new Vector2(0.1 * (Math.random() - 0.5), -0.2);
+            this.drift = 0.1 * (Math.random() - 0.5);
+            this.radius = 0.02 + Math.random() * 0.03;
+            this.hue = Math.random() * 360;
+        }
+        simulate() {
+            const luft = new Vector2(0, -0.1);
+            this.vel.add(luft, dT);
+            this.vel.x += this.drift * dT;
+            this.pos.add(this.vel, dT);
+        }
+        draw() {
+            drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
+            //  OVERALL BUBBLE SHADING  ----------
+            var sphereGradient = c.createRadialGradient(
+                this.pos.x * cScale, 
+                this.pos.y * cScale, 
+                0, 
+                this.pos.x * cScale, 
+                this.pos.y * cScale, 
+                1 * this.radius * cScale
+            );
+            var highlight = `hsla(${this.hue}, 40%, 70%, 90%)`;
+            var midtone = `hsla(${this.hue}, 50%, 40%, 60%)`;
+            var shadow = `hsla(0, 0%, 0%, 0%)`;
+            sphereGradient.addColorStop(0.0, shadow);
+            sphereGradient.addColorStop(0.8, midtone);
+            sphereGradient.addColorStop(1.0, highlight);
+            c.fillStyle = sphereGradient;
+            c.fill();
+            //  HIGHLIGHT OVERLAY  ----------
+            var sphereGradient = c.createRadialGradient(
+                (this.pos.x - (0.2 * this.radius)) * cScale, 
+                (this.pos.y - (0.4 * this.radius)) * cScale, 
+                0, 
+                (this.pos.x - (0.2 * this.radius)) * cScale, 
+                (this.pos.y - (0.4 * this.radius)) * cScale, 
+                1.45 * this.radius * cScale
+            );
+            var highlight = `hsla(${this.hue}, 20%, 60%, 100%)`;
+            var midtone = `hsla(${this.hue}, 50%, 20%, 60%)`;
+            var shadow = `hsla(0, 0%, 0%, 0%)`;
+            sphereGradient.addColorStop(0.0, highlight);
+            sphereGradient.addColorStop(0.2, midtone);
+            sphereGradient.addColorStop(1.0, shadow);
+            c.fillStyle = sphereGradient;
+            c.fill();
+        }
+    }
+
+    // MAKE BUBBLES  ---------------------------------------------------------------------
+    Bubbles = [];
+    let bubbleSpawnTimer = 0;
+    const bubbleSpawnInterval = 0.1; // seconds between bubble spawns
+    
+    function makeBubbles() {
+        // Bubbles will be spawned periodically from the pipe, not all at once
+    }
+    
+    function spawnBubble() {
+        // Calculate pipe bowl position based on snowman image position
+        // Image is 400px wide, positioned at 0.75 * simWidth * cScale
+        const snowmanX = 0.75 * simWidth * cScale;
+        const snowmanY = simHeight * cScale;
+        const imageWidth = 400;
+        const imageHeight = (frostyImage.naturalHeight / frostyImage.naturalWidth) * imageWidth;
+        
+        // Pipe bowl is at a fixed pixel offset from the snowman center
+        // Adjust these pixel values to match the pipe location in your image
+        const pipeOffsetX = -144; // pixels to the left of center
+        const pipeOffsetY = -361; // pixels up from bottom
+        
+        const bubbleX = (snowmanX + pipeOffsetX + (Math.random() - 0.5) * 6) / cScale;
+        const bubbleY = (snowmanY + pipeOffsetY + (Math.random() - 0.5) * 2) / cScale;
+        
+        Bubbles.push(new BUBBLES(new Vector2(bubbleX, bubbleY)));
+    }
+        
+
+    
+    //  SNOWFLAKE CLASS  ---------------------------------------------------------------------
     class SNOW{
         constructor(pos, vel, radius, angle, type, rotation) {
             this.pos = pos.clone();
@@ -3452,6 +3544,26 @@
         }*/
     }
 
+    function drawSnowman() {
+        // draw snowman image at this position
+        const snowmanX = 0.75 * simWidth * cScale;
+        const snowmanY = simHeight * cScale;
+        
+        // Draw the frosty image if it's loaded
+        if (frostyImage.complete && frostyImage.naturalWidth > 0) {
+            // Calculate size to maintain aspect ratio
+            const imageWidth = 400; // Adjust this to desired width
+            const imageHeight = (frostyImage.naturalHeight / frostyImage.naturalWidth) * imageWidth;
+            
+            // Draw image centered at snowmanX, snowmanY
+            c.drawImage(frostyImage, 
+                snowmanX - imageWidth / 2, 
+                snowmanY - imageHeight, 
+                imageWidth, 
+                imageHeight);
+        }
+    }
+
     //  SIMULATION --------------------------------------------------------------------------
 	function simulate() {
         for (n = 0; n < PrimaryNodes.length; n++) {
@@ -3479,6 +3591,23 @@
         for (var i = 0; i < Snowfield.length; i++) {
             var snow = Snowfield[i];
             snow.simulate();
+        }
+        
+        // Simulate bubbles and spawn new ones periodically
+        bubbleSpawnTimer += dT;
+        if (bubbleSpawnTimer >= bubbleSpawnInterval) {
+            bubbleSpawnTimer = 0;
+            spawnBubble();
+        }
+        
+        for (var b = Bubbles.length - 1; b >= 0; b--) {
+            var bubble = Bubbles[b];
+            bubble.simulate();
+            
+            // Remove bubbles that have floated off screen
+            if (bubble.pos.y < -0.1) {
+                Bubbles.splice(b, 1);
+            }
         }
     }
     
@@ -3531,17 +3660,25 @@
             }
         }
 
+        // Draw snowman
+        drawSnowman();
+
+         // Draw bubbles
+        for (var b = 0; b < Bubbles.length; b++) {
+            var bubble = Bubbles[b];
+            bubble.draw();
+        }
+
+        // draw big snowflakes
         for (var i = 0; i < Snowfield.length; i++) {
             var snow = Snowfield[i];
             snow.drawBig();
         }
-        
+
         // Draw pong game
         if (PongGame != null) {
             PongGame.draw();
         }
-
-        
 	}
 
     //  MAIN SEQUENCE ----------------------------------------------------------------------------
