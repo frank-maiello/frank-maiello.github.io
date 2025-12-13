@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
 	<head>
-		<title>Slosh 2.28
+		<title>Slosh 2.29
         </title>
 	</head>
 
@@ -7266,6 +7266,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             return;
         }
         
+        // Declare interaction flags at function scope
+        let boxHandled = false;
+        let normalPuckHandled = false;
+        
         // Calculate mouse position in canvas coordinates
         bounds = canvas.getBoundingClientRect();
         mX = e.clientX - bounds.left - canvas.clientLeft;
@@ -8080,8 +8084,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             return;
         }
         
-        // Check all boxes for button and grip clicks
-        let boxHandled = false;
+        // Check all boxes for button and grip clicks (only if boxes are visible)
+        if (showBoxes) {
         for (let i = Box.length - 1; i >= 0; i--) {
             const box = Box[i];
             if (!box) continue;
@@ -8519,6 +8523,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 break;
             }
         }
+        } // close if (showBoxes)
         if (!boxHandled) {
         // Check if clicking on cyclone, magnet, or blower BEFORE checking pucks
         // This ensures toys can be dragged instead of the puck underneath
@@ -8607,7 +8612,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         // Check all normal pucks dynamically for button and grip clicks
         // Find the closest match across all normal pucks
-        let normalPuckHandled = false;
         
         let closestPlusIndex = -1, closestPlusDist = Infinity;
         let closestMinusIndex = -1, closestMinusDist = Infinity;
@@ -8617,8 +8621,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         if (!normalPuckHandled) {
         for (let i = 0; i < Puck.length; i++) {
             const puck = Puck[i];
-            if (!puck || puck.heartBeat || puck.cycle || puck.flying || puck.orbit || puck.yinyang) {
-                continue; // Skip special pucks
+            if (!puck || puck.heartBeat || puck.cycle || puck.flying || puck.orbit || puck.yinyang || puck.radius <= 0) {
+                continue; // Skip special pucks and hidden pucks
             }
             
             // Calculate distances for this normal puck
@@ -8663,7 +8667,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         let closestArrowIndex = -1;
         for (let i = 0; i < Puck.length; i++) {
             const puck = Puck[i];
-            if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !puck.yinyang && puck.arrowPos) {
+            if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !puck.yinyang && puck.radius > 0 && puck.arrowPos) {
                 const dx = mousePos.x - puck.arrowPos.x;
                 const dy = mousePos.y - puck.arrowPos.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
@@ -8679,7 +8683,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         let closestOffIndex = -1;
         for (let i = 0; i < Puck.length; i++) {
             const puck = Puck[i];
-            if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !puck.yinyang && puck.offPos) {
+            if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !puck.yinyang && puck.radius > 0 && puck.offPos) {
                 const dx = mousePos.x - puck.offPos.x;
                 const dy = mousePos.y - puck.offPos.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
@@ -8709,7 +8713,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const puck = Puck[i];
             // Check handles when submenu is open (same condition as when handles are drawn)
             const subMenuOpen = (puck.subPuckRotationAngle > 0 || puck.subPuckAnimating) && !puck.subPuckMotionMode;
-            if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !puck.yinyang && subMenuOpen) {
+            if (!puck.heartBeat && !puck.cycle && !puck.flying && !puck.orbit && !puck.yinyang && puck.radius > 0 && subMenuOpen) {
                 // Check oscillation endpoints
                 if (puck.horizOscillateLeftEnd && puck.horizOscillateEndRadius) {
                     const dx = mousePos.x - puck.horizOscillateLeftEnd.x;
