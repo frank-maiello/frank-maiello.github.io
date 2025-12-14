@@ -2719,8 +2719,8 @@
     class PONG {
         constructor() {
             // Game area in simulation coordinates (bottom right corner)
-            this.width = 0.7; // Game width in sim units (doubled from 0.35)
-            this.height = 0.375; // Game height in sim units (50% taller: 0.25 * 1.5)
+            this.width = 0.85 * 0.7; // Game width in sim units (doubled from 0.35)
+            this.height = 0.85 * 0.375; // Game height in sim units (50% taller: 0.25 * 1.5)
             this.padding = 0.05; // Fixed padding from edges
             this.updatePosition(); // Calculate initial position
             
