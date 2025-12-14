@@ -688,6 +688,10 @@
         spawnPong();
 
         makeSnow();
+        
+        // Create Christmas lights
+        createTopLightString();
+        createWorkshopLightString();
     }
     
     //  MOUSE TRACKBALL INTERACTION -----------------------------------------------------------
@@ -735,6 +739,30 @@
                 result.roid.omega.y = 0;
                 result.roid.omega.z = 0;
                 result.roid.isDragging = true;
+            } else {
+                // Check if click is near pipe for continuous bubble mode
+                const rect = canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+                
+                // Calculate pipe bowl position
+                const snowmanX = 0.75 * simWidth * cScale;
+                const snowmanY = simHeight * cScale;
+                const pipeOffsetX = -147;
+                const pipeOffsetY = -356;
+                const pipeX = snowmanX + pipeOffsetX;
+                const pipeY = snowmanY + pipeOffsetY;
+                
+                // Check if click is near pipe (within 100 pixels)
+                const dx = clickX - pipeX;
+                const dy = clickY - pipeY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < 100) {
+                    // Activate continuous mode for 1 minute
+                    continuousMode = true;
+                    continuousModeTimer = 0;
+                }
             }
         });
         
@@ -988,7 +1016,15 @@
     // MAKE BUBBLES  ---------------------------------------------------------------------
     Bubbles = [];
     let bubbleSpawnTimer = 0;
-    const bubbleSpawnInterval = 0.005; // seconds between bubble spawns
+    let bubbleBurstInterval = 3.0 + Math.random() * 2.0; // random pause between 3-5 seconds
+    const bubblesPerBurst = 120; // number of bubbles in each burst
+    let burstDuration = 5.0 + Math.random() * 10.0; // random burst duration between 5-15 seconds
+    let burstTimer = 0;
+    let burstActive = false;
+    let bubblesSpawnedInBurst = 0;
+    let continuousMode = false;
+    let continuousModeTimer = 0;
+    const continuousModeDuration = 60.0; // 1 minute
 
     function spawnBubble() {
         // Calculate pipe bowl position based on snowman image position
@@ -1009,6 +1045,282 @@
         Bubbles.push(new BUBBLES(new Vector2(bubbleX, bubbleY)));
     }
         
+    // SMOKE PUFF CLASS  ---------------------------------------------------------------------
+    class SMOKEPUFF {
+        constructor(pos) {
+            this.pos = pos.clone();
+            this.vel = new Vector2((Math.random() - 0.5) * 0.05, -0.08 - Math.random() * 0.04);
+            this.radius = 0.015 + Math.random() * 0.01;
+            this.maxRadius = this.radius * 2.5;
+            this.opacity = 0.7;
+            this.age = 0;
+            this.lifetime = 3.0 + Math.random() * 2.0; // 3-5 seconds
+        }
+        simulate() {
+            this.age += dT;
+            
+            // Rise and drift
+            this.vel.y *= 0.99; // slow down vertical rise
+            this.pos.add(this.vel, dT);
+            
+            // Expand over time
+            if (this.radius < this.maxRadius) {
+                this.radius += 0.02 * dT;
+            }
+            
+            // Fade out
+            this.opacity = Math.max(0, 0.7 * (1 - this.age / this.lifetime));
+        }
+        draw() {
+            c.save();
+            c.globalAlpha = this.opacity;
+            
+            // Draw cartoony puff - use multiple overlapping circles
+            c.fillStyle = 'hsl(0, 0%, 85%)';
+            
+            // Main puff circles
+            for (let i = 0; i < 5; i++) {
+                const angle = (i / 5) * Math.PI * 2;
+                const offsetX = Math.cos(angle) * this.radius * 0.4;
+                const offsetY = Math.sin(angle) * this.radius * 0.4;
+                
+                c.beginPath();
+                c.arc(
+                    (this.pos.x + offsetX) * cScale,
+                    (this.pos.y + offsetY) * cScale,
+                    this.radius * 0.7 * cScale,
+                    0,
+                    Math.PI * 2
+                );
+                c.fill();
+            }
+            
+            // Center circle
+            c.beginPath();
+            c.arc(
+                this.pos.x * cScale,
+                this.pos.y * cScale,
+                this.radius * 0.6 * cScale,
+                0,
+                Math.PI * 2
+            );
+            c.fill();
+            
+            c.restore();
+        }
+        isDead() {
+            return this.age >= this.lifetime;
+        }
+    }
+
+    // MAKE SMOKE PUFFS  ---------------------------------------------------------------------
+    SmokePuffs = [];
+    let smokeSpawnTimer = 0;
+    const smokeSpawnInterval = 1.5 + Math.random() * 1.5; // 1.5-3 seconds between puffs
+    let nextSmokeInterval = smokeSpawnInterval;
+
+    function spawnSmokePuff() {
+        // Calculate chimney position
+        const workshopX = 0.93 * simWidth * cScale;
+        const hillBaseY = simHeight * cScale * 0.55;
+        const workshopY = hillBaseY + 200;
+        const buildingHeight = 60;
+        const roofHeight = 35;
+        const chimneyX = workshopX + 25;
+        const chimneyY = workshopY - buildingHeight - roofHeight + 30;
+        const chimneyHeight = 40;
+        
+        // Spawn from top of chimney
+        const smokeX = (chimneyX + (Math.random() - 0.5) * 8) / cScale;
+        const smokeY = (chimneyY - chimneyHeight + (Math.random() - 0.5) * 4) / cScale;
+        
+        SmokePuffs.push(new SMOKEPUFF(new Vector2(smokeX, smokeY)));
+    }
+
+    
+    //  CHRISTMAS LIGHTS CLASS  ---------------------------------------------------------------------
+    class LIGHT_BULB {
+        constructor(pos, color, index, rotation, size = 1.0) {
+            this.pos = pos.clone();
+            this.color = color; // hue value
+            this.index = index;
+            this.rotation = rotation; // rotation angle in radians
+            this.size = size; // size multiplier
+            this.brightness = 0.6 + Math.random() * 0.4; // base brightness
+            this.group = index % 3; // Assign to one of 3 groups for synchronized flashing
+            this.twinklePhase = this.group * (Math.PI * 2 / 3); // Offset by group
+            this.twinkleSpeed = 2.5; // Speed of flashing
+        }
+        
+        simulate() {
+            // Update twinkle animation
+            this.twinklePhase += dT * this.twinkleSpeed;
+        }
+        
+        draw() {
+            // Calculate current brightness based on group flash
+            // Use a sharper square wave for on/off effect
+            const flashCycle = Math.sin(this.twinklePhase);
+            const flashBrightness = flashCycle > 0 ? 1.0 : 0.2; // On or dim
+            const currentBrightness = this.brightness * flashBrightness;
+            const lightness = 40 + currentBrightness * 40;
+            
+            c.save();
+            c.translate(this.pos.x * cScale, this.pos.y * cScale);
+            c.rotate(this.rotation);
+            
+            const bulbWidth = 0.045 * cScale * this.size;
+            const bulbHeight = 0.075 * cScale * this.size;
+            const socketWidth = 0.0167 * cScale * this.size;
+            const socketHeight = 0.03 * cScale * this.size;
+            const offset = 0.035 * cScale * this.size; // Push bulb away from wire to make room for socket
+            
+            // Draw green cylindrical socket/base at wire connection
+            // Top ellipse (rim)
+            c.fillStyle = 'hsl(0, 0%, 40%)';
+            c.beginPath();
+            c.ellipse(0, 0, socketWidth, socketWidth * 0.3, 0, 0, Math.PI * 2);
+            c.fill();
+            
+            // Socket body (green cylinder)
+            c.fillStyle = 'hsl(120, 50%, 35%)';
+            c.fillRect(-socketWidth, 0, socketWidth * 2, socketHeight);
+            
+            // Bottom ellipse
+            c.fillStyle = 'hsl(120, 50%, 25%)';
+            c.beginPath();
+            c.ellipse(0, socketHeight, socketWidth, socketWidth * 0.3, 0, 0, Math.PI * 2);
+            c.fill();
+            
+            // Socket sides for 3D effect
+            c.fillStyle = 'hsl(120, 50%, 30%)';
+            c.fillRect(-socketWidth, 0, socketWidth * 0.3, socketHeight);
+            c.fillRect(socketWidth * 0.7, 0, socketWidth * 0.3, socketHeight);
+            
+            // Translate down to offset the bulb from the wire
+            c.translate(0, offset + socketHeight);
+            
+            // Draw glow around the flame shape
+            const glowGradient = c.createRadialGradient(0, 0, 0, 0, 0, bulbHeight * 1.3);
+            glowGradient.addColorStop(0, `hsla(${this.color}, 100%, ${lightness}%, ${currentBrightness * 0.8})`);
+            glowGradient.addColorStop(0.5, `hsla(${this.color}, 100%, ${lightness - 10}%, ${currentBrightness * 0.3})`);
+            glowGradient.addColorStop(1, `hsla(${this.color}, 100%, ${lightness - 20}%, 0)`);
+            c.fillStyle = glowGradient;
+            c.beginPath();
+            c.arc(0, 0, bulbHeight * 1.3, 0, Math.PI * 2);
+            c.fill();
+            
+            // Draw classic flame/candle bulb shape pointing downward
+            c.fillStyle = `hsl(${this.color}, 90%, ${lightness}%)`;
+            c.beginPath();
+            // Start at top (rounded)
+            c.moveTo(0, -bulbHeight / 2);
+            c.quadraticCurveTo(
+                bulbWidth / 2, -bulbHeight / 2,
+                bulbWidth / 2, -bulbHeight / 4
+            );
+            // Right curve to bottom point
+            c.quadraticCurveTo(
+                bulbWidth / 2, bulbHeight / 4,
+                0, bulbHeight / 2
+            );
+            // Left curve from bottom point to top
+            c.quadraticCurveTo(
+                -bulbWidth / 2, bulbHeight / 4,
+                -bulbWidth / 2, -bulbHeight / 4
+            );
+            c.quadraticCurveTo(
+                -bulbWidth / 2, -bulbHeight / 2,
+                0, -bulbHeight / 2
+            );
+            c.fill();
+            
+            // Draw highlight on bulb
+            c.fillStyle = `hsla(${this.color}, 100%, 95%, ${currentBrightness * 0.7})`;
+            c.beginPath();
+            c.ellipse(
+                -bulbWidth * 0.15,
+                -bulbHeight * 0.1,
+                bulbWidth * 0.25,
+                bulbHeight * 0.2,
+                0, 0, Math.PI * 2
+            );
+            c.fill();
+            
+            c.restore();
+        }
+    }
+
+    // CREATE LIGHT STRINGS  ---------------------------------------------------------------------
+    let TopLights = [];
+    let WorkshopLights = [];
+    
+    function createTopLightString() {
+        const colors = [0, 120, 240, 60, 300]; // Red, Green, Blue, Yellow, Magenta
+        const numLights = 25;
+        const totalWidth = simWidth * 1.15; // Stretch to the right
+        const spacing = totalWidth / (numLights + 1);
+        
+        for (let i = 0; i < numLights; i++) {
+            const progress = i / numLights;
+            const x = spacing * (i + 1);
+            const sag = Math.sin(progress * Math.PI * 6) * 0.18; // three complete arcs with deeper droop
+            const y = 0.1 + sag;
+            
+            // Calculate tangent to the wire at this point
+            // dy/dx = (dy/dprogress) / (dx/dprogress)
+            // dy/dprogress = cos(progress * π * 6) * π * 6 * 0.18
+            // dx/dprogress ≈ totalWidth
+            const dyDprogress = Math.cos(progress * Math.PI * 6) * Math.PI * 6 * 0.18;
+            const dxDprogress = totalWidth;
+            const tangentSlope = dyDprogress / dxDprogress;
+            // Use tangent angle directly - bulb hangs perpendicular naturally
+            const rotation = Math.atan(tangentSlope);
+            
+            const color = colors[i % colors.length];
+            TopLights.push(new LIGHT_BULB(new Vector2(x, y), color, i, rotation));
+        }
+    }
+    
+    function createWorkshopLightString() {
+        const colors = [0, 120, 240, 60, 300]; // Red, Green, Blue, Yellow, Magenta
+        const numLights = 12;
+        
+        // Calculate workshop position
+        const workshopX = 0.93 * simWidth;
+        const hillBaseY = simHeight * 0.55;
+        const workshopY = (hillBaseY * cScale + 200) / cScale;
+        const buildingWidth = 80 / cScale;
+        const buildingHeight = 60 / cScale;
+        const roofHeight = 35 / cScale;
+        
+        // String lights along the roof edge
+        const startX = workshopX - buildingWidth/2 - 10/cScale;
+        const endX = workshopX + buildingWidth/2 + 10/cScale;
+        const roofY = workshopY - buildingHeight - roofHeight;
+        
+        for (let i = 0; i < numLights; i++) {
+            const progress = i / (numLights - 1);
+            const x = startX + (endX - startX) * progress;
+            // Follow the roof line (triangular)
+            const roofProgress = Math.abs(progress - 0.5) * 2; // 0 at peak, 1 at edges
+            const y = roofY + roofProgress * roofHeight * 0.8;
+            
+            // Calculate tangent to roof line
+            let tangentSlope;
+            if (progress < 0.5) {
+                // Ascending to peak
+                tangentSlope = -(roofHeight * 0.8) / ((endX - startX) / 2);
+            } else {
+                // Descending from peak
+                tangentSlope = (roofHeight * 0.8) / ((endX - startX) / 2);
+            }
+            const rotation = Math.atan(tangentSlope);
+            
+            const color = colors[i % colors.length];
+            WorkshopLights.push(new LIGHT_BULB(new Vector2(x, y), color, i, rotation, 0.25));
+        }
+    }
 
     
     //  SNOWFLAKE CLASS  ---------------------------------------------------------------------
@@ -1056,8 +1368,8 @@
             c.save();
             c.translate(this.pos.x * cScale, this.pos.y * cScale);
             c.rotate(this.angle);
-            c.fillStyle = 'hsla(0, 0%, 80%, 0.8)';
-            c.strokeStyle = 'hsla(0, 0%, 80%, 0.8)';
+            c.fillStyle = 'hsla(0, 0%, 100%, 0.8)';
+            c.strokeStyle = 'hsla(0, 0%, 100%, 0.8)';
             c.lineWidth = 0.003 * cScale;
             if (this.type == 'dot') {
                 c.beginPath();
@@ -3546,6 +3858,232 @@
         }*/
     }
 
+    function drawHills() {
+        // Draw snow-covered rolling hills in the background
+        const hillBaseY = simHeight * cScale * 0.55; // Hills start at 55% down the screen
+        
+        c.save();
+        
+        // Create two layers of hills for depth
+        
+        // Middle hill - gentle rolling with some transparency
+        c.beginPath();
+        c.moveTo(0, canvas.height);
+        c.lineTo(0, hillBaseY + 210);
+        c.bezierCurveTo(
+            canvas.width * 0.25, hillBaseY + 160,
+            canvas.width * 0.5, hillBaseY + 230,
+            canvas.width * 0.7, hillBaseY + 180
+        );
+        c.bezierCurveTo(
+            canvas.width * 0.85, hillBaseY + 150,
+            canvas.width * 0.95, hillBaseY + 200,
+            canvas.width, hillBaseY + 170
+        );
+        c.lineTo(canvas.width, canvas.height);
+        c.closePath();
+        
+        // Medium snow gradient - fully opaque
+        const middleGradient = c.createLinearGradient(0, hillBaseY + 120, 0, hillBaseY + 250);
+        middleGradient.addColorStop(0, 'hsl(210, 40%, 65%)');
+        middleGradient.addColorStop(0.15, 'hsl(210, 38%, 62%)');
+        middleGradient.addColorStop(0.35, 'hsl(210, 36%, 58%)');
+        middleGradient.addColorStop(0.55, 'hsl(210, 34%, 54%)');
+        middleGradient.addColorStop(0.75, 'hsl(210, 32%, 50%)');
+        middleGradient.addColorStop(1, 'hsl(210, 30%, 45%)');
+        c.fillStyle = middleGradient;
+        c.fill();
+        
+        // Front hill (closest, lightest) - subtle rolling, fully opaque
+        c.beginPath();
+        c.moveTo(0, canvas.height);
+        c.lineTo(0, hillBaseY + 270);
+        c.bezierCurveTo(
+            canvas.width * 0.3, hillBaseY + 220,
+            canvas.width * 0.45, hillBaseY + 290,
+            canvas.width * 0.65, hillBaseY + 240
+        );
+        c.bezierCurveTo(
+            canvas.width * 0.8, hillBaseY + 210,
+            canvas.width * 0.92, hillBaseY + 260,
+            canvas.width, hillBaseY + 230
+        );
+        c.lineTo(canvas.width, canvas.height);
+        c.closePath();
+        
+        // Lighter snow gradient - fully opaque
+        const frontGradient = c.createLinearGradient(0, hillBaseY + 180, 0, hillBaseY + 320);
+        frontGradient.addColorStop(0, 'hsl(210, 45%, 75%)');
+        frontGradient.addColorStop(0.15, 'hsl(210, 43%, 72%)');
+        frontGradient.addColorStop(0.35, 'hsl(210, 41%, 68%)');
+        frontGradient.addColorStop(0.55, 'hsl(210, 39%, 64%)');
+        frontGradient.addColorStop(0.75, 'hsl(210, 37%, 58%)');
+        frontGradient.addColorStop(1, 'hsl(210, 35%, 53%)');
+        c.fillStyle = frontGradient;
+        c.fill();
+        
+        c.restore();
+    }
+
+    function drawSantasWorkshop() {
+        // Position: right of snowman (which is at 0.75)
+        const workshopX = 0.93 * simWidth * cScale;
+        const hillBaseY = simHeight * cScale * 0.55;
+        // Place on top of the hill - approximately at hillBaseY + 220
+        const workshopY = hillBaseY + 200;
+        
+        const buildingWidth = 80;
+        const buildingHeight = 60;
+        const roofHeight = 35;
+        
+        c.save();
+        
+        // Draw chimney FIRST (so it appears behind the building)
+        const chimneyWidth = 15;
+        const chimneyHeight = 40;
+        const chimneyX = workshopX + 25;
+        const chimneyY = workshopY - buildingHeight - roofHeight + 30;
+        
+        // Draw alternating red and white curved stripes for 50/50 coverage
+        const stripeHeight = 4;
+        const numStripes = Math.ceil(chimneyHeight / stripeHeight) + 1; // Add one extra to ensure full coverage
+        
+        for (let i = 0; i < numStripes; i++) {
+            // Alternate between red and white
+            c.fillStyle = (i % 2 === 0) ? 'hsl(0, 70%, 40%)' : 'hsl(0, 0%, 95%)';
+            
+            c.beginPath();
+            const startY = chimneyY - chimneyHeight + (i * stripeHeight);
+            
+            // Create curved stripe path
+            c.moveTo(chimneyX - chimneyWidth/2, startY);
+            c.bezierCurveTo(
+                chimneyX - chimneyWidth/4, startY + stripeHeight * 0.25,
+                chimneyX + chimneyWidth/4, startY + stripeHeight * 0.75,
+                chimneyX + chimneyWidth/2, startY + stripeHeight
+            );
+            c.lineTo(chimneyX + chimneyWidth/2, startY + stripeHeight * 2);
+            c.bezierCurveTo(
+                chimneyX + chimneyWidth/4, startY + stripeHeight * 1.75,
+                chimneyX - chimneyWidth/4, startY + stripeHeight * 1.25,
+                chimneyX - chimneyWidth/2, startY + stripeHeight
+            );
+            c.closePath();
+            c.fill();
+        }
+        
+        // Chimney cap - more prominent, positioned to conceal incomplete top stripes
+        c.fillStyle = 'hsl(0, 60%, 30%)';
+        c.fillRect(chimneyX - chimneyWidth/2 - 4, chimneyY - chimneyHeight + 0, chimneyWidth + 8, 6);
+        
+        // Draw foundation (stone/concrete base)
+        const foundationHeight = 8;
+        c.fillStyle = 'hsl(0, 0%, 30%)';
+        c.fillRect(workshopX - buildingWidth/2 - 5, workshopY, buildingWidth + 10, foundationHeight);
+        
+        // Foundation detail lines (to show stone blocks)
+        c.strokeStyle = 'hsl(0, 0%, 20%)';
+        c.lineWidth = 1;
+        c.beginPath();
+        // Horizontal line
+        c.moveTo(workshopX - buildingWidth/2 - 5, workshopY + foundationHeight/2);
+        c.lineTo(workshopX + buildingWidth/2 + 5, workshopY + foundationHeight/2);
+        // Vertical lines
+        c.moveTo(workshopX - buildingWidth/4, workshopY);
+        c.lineTo(workshopX - buildingWidth/4, workshopY + foundationHeight);
+        c.moveTo(workshopX + buildingWidth/4, workshopY);
+        c.lineTo(workshopX + buildingWidth/4, workshopY + foundationHeight);
+        c.stroke();
+        
+        // Draw building walls (red)
+        c.fillStyle = 'hsl(0, 80%, 45%)';
+        c.fillRect(workshopX - buildingWidth/2, workshopY - buildingHeight, buildingWidth, buildingHeight);
+        
+        // Draw roof (dark red/brown)
+        c.fillStyle = 'hsl(0, 60%, 35%)';
+        c.beginPath();
+        c.moveTo(workshopX - buildingWidth/2 - 10, workshopY - buildingHeight);
+        c.lineTo(workshopX, workshopY - buildingHeight - roofHeight);
+        c.lineTo(workshopX + buildingWidth/2 + 10, workshopY - buildingHeight);
+        c.closePath();
+        c.fill();
+        
+        // Draw three steps in front of door
+        const stepWidth = 26;
+        const stepHeight = 4;
+        const stepDepth = 6;
+        
+        // Bottom step
+        c.fillStyle = 'hsl(0, 0%, 45%)';
+        c.fillRect(workshopX - stepWidth/2, workshopY, stepWidth, stepDepth);
+        c.fillRect(workshopX - stepWidth/2, workshopY, stepWidth, stepHeight);
+        
+        // Middle step
+        c.fillStyle = 'hsl(0, 0%, 48%)';
+        c.fillRect(workshopX - stepWidth/2 + 3, workshopY - stepHeight, stepWidth - 6, stepDepth);
+        c.fillRect(workshopX - stepWidth/2 + 3, workshopY - stepHeight, stepWidth - 6, stepHeight);
+        
+        // Top step
+        c.fillStyle = 'hsl(0, 0%, 51%)';
+        c.fillRect(workshopX - stepWidth/2 + 6, workshopY - stepHeight * 2, stepWidth - 12, stepDepth);
+        c.fillRect(workshopX - stepWidth/2 + 6, workshopY - stepHeight * 2, stepWidth - 12, stepHeight);
+        
+        // Draw door ajar with light streaming from crack
+        const doorWidth = 20;
+        const doorHeight = 30;
+        const crackWidth = 3;
+        const doorX = workshopX - doorWidth/2;
+        const doorY = workshopY - doorHeight;
+        
+        // Draw door frame/opening (warm interior light)
+        c.fillStyle = 'hsl(45, 100%, 60%)';
+        c.fillRect(doorX, doorY, doorWidth, doorHeight);
+        
+        // Draw the door itself (slightly open, covering most of opening)
+        c.fillStyle = 'hsl(30, 50%, 20%)';
+        c.fillRect(doorX, doorY, doorWidth - crackWidth, doorHeight);
+        
+        // Draw bright light streaming from the crack (over the door)
+        const glowGradient = c.createLinearGradient(doorX + doorWidth - crackWidth - 20, doorY, doorX + doorWidth - crackWidth, doorY);
+        glowGradient.addColorStop(0, 'hsla(45, 100%, 60%, 0)');
+        glowGradient.addColorStop(0.5, 'hsla(45, 100%, 70%, 0.2)');
+        glowGradient.addColorStop(1, 'hsla(45, 100%, 90%, 0.5)');
+        c.fillStyle = glowGradient;
+        c.fillRect(doorX + doorWidth - crackWidth - 20, doorY, 20, doorHeight);
+        
+        // Door handle/knob
+        c.fillStyle = 'hsl(45, 60%, 80%)';
+        c.beginPath();
+        c.arc(doorX + doorWidth - crackWidth - 3, doorY + doorHeight/2, 2, 0, Math.PI * 2);
+        c.fill();
+        
+        // Draw windows (yellow light)
+        c.fillStyle = 'hsl(45, 100%, 70%)';
+        const windowSize = 12;
+        c.fillRect(workshopX - 30, workshopY - buildingHeight + 15, windowSize, windowSize);
+        c.fillRect(workshopX + 18, workshopY - buildingHeight + 15, windowSize, windowSize);
+        
+        // Window panes
+        c.strokeStyle = 'hsl(30, 50%, 20%)';
+        c.lineWidth = 1;
+        // Left window
+        c.beginPath();
+        c.moveTo(workshopX - 24, workshopY - buildingHeight + 15);
+        c.lineTo(workshopX - 24, workshopY - buildingHeight + 27);
+        c.moveTo(workshopX - 30, workshopY - buildingHeight + 21);
+        c.lineTo(workshopX - 18, workshopY - buildingHeight + 21);
+        c.stroke();
+        // Right window
+        c.beginPath();
+        c.moveTo(workshopX + 24, workshopY - buildingHeight + 15);
+        c.lineTo(workshopX + 24, workshopY - buildingHeight + 27);
+        c.moveTo(workshopX + 18, workshopY - buildingHeight + 21);
+        c.lineTo(workshopX + 30, workshopY - buildingHeight + 21);
+        c.stroke();
+        
+        c.restore();
+    }
+
     function drawSnowman() {
         // draw snowman image at this position
         const snowmanX = 0.75 * simWidth * cScale;
@@ -3595,11 +4133,109 @@
             snow.simulate();
         }
         
-        // Simulate bubbles and spawn new ones periodically
-        bubbleSpawnTimer += dT;
-        if (bubbleSpawnTimer >= bubbleSpawnInterval) {
-            bubbleSpawnTimer = 0;
-            spawnBubble();
+        // Simulate smoke puffs
+        smokeSpawnTimer += dT;
+        if (smokeSpawnTimer >= nextSmokeInterval) {
+            spawnSmokePuff();
+            smokeSpawnTimer = 0;
+            nextSmokeInterval = 1.5 + Math.random() * 1.5; // 1.5-3 seconds between puffs
+        }
+        
+        for (var s = SmokePuffs.length - 1; s >= 0; s--) {
+            var puff = SmokePuffs[s];
+            puff.simulate();
+            
+            // Remove dead puffs
+            if (puff.isDead()) {
+                SmokePuffs.splice(s, 1);
+            }
+        }
+        
+        // Simulate Christmas lights
+        for (var l = 0; l < TopLights.length; l++) {
+            TopLights[l].simulate();
+        }
+        for (var l = 0; l < WorkshopLights.length; l++) {
+            WorkshopLights[l].simulate();
+        }
+        
+        // Simulate bubbles - continuous mode or periodic bursts
+        if (continuousMode) {
+            // Continuous mode - spawn bubbles constantly
+            continuousModeTimer += dT;
+            
+            // Spawn bubbles almost every frame
+            if (Math.random() < 0.98) {
+                spawnBubble();
+                // Very high chance of extra bubbles for density
+                if (Math.random() < 0.8) {
+                    spawnBubble();
+                    if (Math.random() < 0.4) {
+                        spawnBubble();
+                    }
+                }
+            }
+            
+            // End continuous mode after 1 minute
+            if (continuousModeTimer >= continuousModeDuration) {
+                continuousMode = false;
+                continuousModeTimer = 0;
+                // Reset burst timer to start fresh
+                bubbleSpawnTimer = 0;
+                burstActive = false;
+            }
+        } else {
+            // Normal periodic bursts
+            bubbleSpawnTimer += dT;
+            
+            if (!burstActive) {
+                // Wait for next burst
+                if (bubbleSpawnTimer >= bubbleBurstInterval) {
+                    bubbleSpawnTimer = 0;
+                    burstActive = true;
+                    burstTimer = 0;
+                    bubblesSpawnedInBurst = 0;
+                    // Set new random burst duration for this burst
+                    burstDuration = 5.0 + Math.random() * 10.0; // 5-15 seconds
+                }
+            } else {
+                // Burst is active - spawn bubbles with natural timing
+                burstTimer += dT;
+                
+                // Use a sine-based curve for natural burst intensity
+                // Peak intensity at the middle of the burst
+                const burstProgress = burstTimer / burstDuration;
+                const intensity = Math.sin(burstProgress * Math.PI); // 0 to 1 and back to 0
+                
+                // Spawn rate increases at peak (middle of burst)
+                // At peak, spawn multiple bubbles per frame for density
+                const spawnProbability = intensity * 2.0; // Max 200% chance per frame at peak
+                
+                if (bubblesSpawnedInBurst < bubblesPerBurst) {
+                    if (Math.random() < spawnProbability) {
+                        spawnBubble();
+                        bubblesSpawnedInBurst++;
+                        
+                        // Spawn additional bubbles at all intensity levels
+                        if (intensity > 0.3 && bubblesSpawnedInBurst < bubblesPerBurst && Math.random() < 0.9) {
+                            spawnBubble();
+                            bubblesSpawnedInBurst++;
+                            // Even more at peak
+                            if (intensity > 0.6 && bubblesSpawnedInBurst < bubblesPerBurst && Math.random() < 0.6) {
+                                spawnBubble();
+                                bubblesSpawnedInBurst++;
+                            }
+                        }
+                    }
+                }
+                
+                // End burst when all bubbles spawned OR duration is complete
+                if (bubblesSpawnedInBurst >= bubblesPerBurst || burstTimer >= burstDuration) {
+                    burstActive = false;
+                    // Set new random pause interval for next burst
+                    bubbleBurstInterval = 3.0 + Math.random() * 2.0; // 3-5 seconds
+                }
+            }
         }
         
         for (var b = Bubbles.length - 1; b >= 0; b--) {
@@ -3628,7 +4264,89 @@
         // Draw nodes and their connections
         drawPrimaryNodes();
         //drawSecondaryNodes();
+
+        // Draw semi-transparent black overlay
+        c.fillStyle = 'hsla(0, 0%, 0%, 0.7)';
+        c.fillRect(0, 0, canvas.width, canvas.height); 
+
+        // Draw first 1/3 of light snow (will be behind both hills)
+        const snowThird = Math.floor(Snowfield.length / 3);
+        for (var i = 0; i < snowThird; i++) {
+            var snow = Snowfield[i];
+            snow.draw();
+        }
+
+        // Draw middle hill (covers first third of snow)
+        const hillBaseY = simHeight * cScale * 0.55;
+        c.save();
         
+        c.beginPath();
+        c.moveTo(0, canvas.height);
+        c.lineTo(0, hillBaseY + 210);
+        c.bezierCurveTo(
+            canvas.width * 0.25, hillBaseY + 160,
+            canvas.width * 0.5, hillBaseY + 230,
+            canvas.width * 0.7, hillBaseY + 180
+        );
+        c.bezierCurveTo(
+            canvas.width * 0.85, hillBaseY + 150,
+            canvas.width * 0.95, hillBaseY + 200,
+            canvas.width, hillBaseY + 170
+        );
+        c.lineTo(canvas.width, canvas.height);
+        c.closePath();
+        
+        const middleGradient = c.createLinearGradient(0, hillBaseY + 120, 0, hillBaseY + 250);
+        middleGradient.addColorStop(0, 'hsl(210, 40%, 65%)');
+        middleGradient.addColorStop(0.15, 'hsl(210, 38%, 62%)');
+        middleGradient.addColorStop(0.35, 'hsl(210, 36%, 58%)');
+        middleGradient.addColorStop(0.55, 'hsl(210, 34%, 54%)');
+        middleGradient.addColorStop(0.75, 'hsl(210, 32%, 50%)');
+        middleGradient.addColorStop(1, 'hsl(210, 30%, 45%)');
+        c.fillStyle = middleGradient;
+        c.fill();
+        
+        // Draw second 1/3 of light snow (will be behind front hill)
+        for (var i = snowThird; i < snowThird * 2; i++) {
+            var snow = Snowfield[i];
+            snow.draw();
+        }
+
+        // Draw front hill (covers second third of snow)
+        c.beginPath();
+        c.moveTo(0, canvas.height);
+        c.lineTo(0, hillBaseY + 270);
+        c.bezierCurveTo(
+            canvas.width * 0.3, hillBaseY + 220,
+            canvas.width * 0.45, hillBaseY + 290,
+            canvas.width * 0.65, hillBaseY + 240
+        );
+        c.bezierCurveTo(
+            canvas.width * 0.8, hillBaseY + 210,
+            canvas.width * 0.92, hillBaseY + 260,
+            canvas.width, hillBaseY + 230
+        );
+        c.lineTo(canvas.width, canvas.height);
+        c.closePath();
+        
+        const frontGradient = c.createLinearGradient(0, hillBaseY + 180, 0, hillBaseY + 320);
+        frontGradient.addColorStop(0, 'hsl(210, 45%, 75%)');
+        frontGradient.addColorStop(0.15, 'hsl(210, 43%, 72%)');
+        frontGradient.addColorStop(0.35, 'hsl(210, 41%, 68%)');
+        frontGradient.addColorStop(0.55, 'hsl(210, 39%, 64%)');
+        frontGradient.addColorStop(0.75, 'hsl(210, 37%, 58%)');
+        frontGradient.addColorStop(1, 'hsl(210, 35%, 53%)');
+        c.fillStyle = frontGradient;
+        c.fill();
+        
+        c.restore();
+
+        // Draw final 1/3 of light snow (will appear in front of hills)
+        for (var i = snowThird * 2; i < Snowfield.length; i++) {
+            var snow = Snowfield[i];
+            snow.draw();
+        }
+
         // Draw side fades
         const sideFade = c.createLinearGradient(0, 0, canvas.width, 0);
         sideFade.addColorStop(0.00, 'hsla(0, 0%, 5%, 0.9)');
@@ -3640,18 +4358,28 @@
         c.fillStyle = sideFade;
         //c.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Draw semi-transparent black overlay
-        c.fillStyle = 'hsla(0, 0%, 0%, 0.7)';
-        c.fillRect(0, 0, canvas.width, canvas.height); 
-
         // Draw cube
         if (Cube != null) {
             Cube.draw();
         }
 
-        for (var i = 0; i < Snowfield.length; i++) {
-            var snow = Snowfield[i];
-            snow.draw();
+        // Draw Santa's Workshop
+        drawSantasWorkshop();
+
+        // Workshop light wire
+        if (WorkshopLights.length > 0) {
+            c.beginPath();
+            c.moveTo(WorkshopLights[0].pos.x * cScale, WorkshopLights[0].pos.y * cScale);
+            for (var l = 0; l < WorkshopLights.length; l++) {
+                c.lineTo(WorkshopLights[l].pos.x * cScale, WorkshopLights[l].pos.y * cScale);
+            }
+            c.stroke();
+        }
+        c.restore();
+        
+        
+        for (var l = 0; l < WorkshopLights.length; l++) {
+            WorkshopLights[l].draw();
         }
         
         // Draw roid
@@ -3665,6 +4393,12 @@
         // Draw snowman
         drawSnowman();
 
+        // Draw smoke puffs
+        for (var s = 0; s < SmokePuffs.length; s++) {
+            var puff = SmokePuffs[s];
+            puff.draw();
+        }
+
          // Draw bubbles
         for (var b = 0; b < Bubbles.length; b++) {
             var bubble = Bubbles[b];
@@ -3676,6 +4410,29 @@
             var snow = Snowfield[i];
             snow.drawBig();
         }
+
+        // Draw Christmas light wires
+        c.save();
+        c.strokeStyle = 'hsl(120, 50%, 15%)';
+        c.lineWidth = 4;
+        
+        // Top light wire
+        if (TopLights.length > 0) {
+            c.beginPath();
+            c.moveTo(0, TopLights[0].pos.y * cScale);
+            for (var l = 0; l < TopLights.length; l++) {
+                c.lineTo(TopLights[l].pos.x * cScale, TopLights[l].pos.y * cScale);
+            }
+            c.lineTo(canvas.width, TopLights[TopLights.length - 1].pos.y * cScale);
+            c.stroke();
+        }
+
+        // Draw Christmas light bulbs
+        for (var l = 0; l < TopLights.length; l++) {
+            TopLights[l].draw();
+        }
+        
+        
 
         // Draw pong game
         if (PongGame != null) {
