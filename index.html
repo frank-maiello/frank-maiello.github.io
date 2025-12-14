@@ -649,6 +649,12 @@
             Cube.pos.x *= scaleX;
             Cube.pos.y *= scaleY;
         }
+        
+        // Recreate Christmas lights with new canvas size
+        TopLights = [];
+        WorkshopLights = [];
+        createTopLightString();
+        createWorkshopLightString();
     }
 
     window.addEventListener("resize", resizeCanvas);
@@ -1123,7 +1129,7 @@
         // Calculate chimney position
         const workshopX = 0.93 * simWidth * cScale;
         const hillBaseY = simHeight * cScale * 0.55;
-        const workshopY = hillBaseY + 200;
+        const workshopY = hillBaseY + 175;
         const buildingHeight = 60;
         const roofHeight = 35;
         const chimneyX = workshopX + 25;
@@ -1289,7 +1295,7 @@
         // Calculate workshop position
         const workshopX = 0.93 * simWidth;
         const hillBaseY = simHeight * 0.55;
-        const workshopY = (hillBaseY * cScale + 200) / cScale;
+        const workshopY = (hillBaseY * cScale + 175) / cScale;
         const buildingWidth = 80 / cScale;
         const buildingHeight = 60 / cScale;
         const roofHeight = 35 / cScale;
@@ -3929,8 +3935,8 @@
         // Position: right of snowman (which is at 0.75)
         const workshopX = 0.93 * simWidth * cScale;
         const hillBaseY = simHeight * cScale * 0.55;
-        // Place on top of the hill - approximately at hillBaseY + 220
-        const workshopY = hillBaseY + 200;
+        // Place on top of the hill
+        const workshopY = hillBaseY + 175;
         
         const buildingWidth = 80;
         const buildingHeight = 60;
@@ -4101,6 +4107,45 @@
                 snowmanY - imageHeight, 
                 imageWidth, 
                 imageHeight);
+            
+            // Draw speech bubble (to the right of Frosty)
+            const bubbleX = snowmanX + 80;
+            const bubbleY = snowmanY - imageHeight + 30;
+            const bubbleWidth = 160;
+            const bubbleHeight = 50;
+            const tailSize = 40;
+            
+            c.save();
+            
+            // Draw bubble main body
+            c.fillStyle = 'hsla(180, 80%, 58%, 0.5)';
+            c.strokeStyle = 'hsl(0, 0%, 40%)';
+            c.lineWidth = 3;
+            c.beginPath();
+            c.roundRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight, 15);
+            c.fill();
+            c.stroke();
+            
+            // Draw speech bubble tail (pointing to mouth)
+            c.fillStyle = 'hsla(180, 80%, 58%, 0.5)';
+            c.strokeStyle = 'hsl(0, 0%, 40%)';
+            c.lineWidth = 3;
+            c.beginPath();
+            c.moveTo(bubbleX + 10, bubbleY + bubbleHeight);
+            c.lineTo(bubbleX - tailSize, bubbleY + bubbleHeight + tailSize);
+            c.lineTo(bubbleX + 40, bubbleY + bubbleHeight);
+            c.closePath();
+            c.fill();
+            c.stroke();
+            
+            // Draw text "Stay Frosty!"
+            c.fillStyle = 'hsl(0, 0%, 95%)';
+            c.font = 'italic 24px sans-serif';
+            c.textAlign = 'center';
+            c.textBaseline = 'middle';
+            c.fillText('Stay Frosty!', bubbleX + bubbleWidth / 2, bubbleY + bubbleHeight / 2);
+            
+            c.restore();
         }
     }
 
@@ -4249,6 +4294,62 @@
         }
     }
     
+    function drawFootprints(startX, endX, numPrints) {
+        // Draw a trail of footprints from startX to endX (as fractions of simWidth)
+        const hillBaseY = simHeight * cScale * 0.55;
+        const startXPos = startX * simWidth * cScale;
+        const endXPos = endX * simWidth * cScale;
+        const spacing = (endXPos - startXPos) / numPrints;
+        
+        // Calculate size based on distance (smaller = farther away)
+        const avgX = (startX + endX) / 2;
+        const sizeFactor = avgX < 0.6 ? 0.5 : 1.0; // Smaller on middle hill (farther away)
+        
+        c.save();
+        c.fillStyle = 'hsla(210, 30%, 35%, 0.4)'; // Darker indentation in snow
+        
+        for (let i = 0; i < numPrints; i++) {
+            const progress = i / numPrints;
+            const x = startXPos + spacing * i;
+            
+            // Calculate y position on the hill
+            let y;
+            if (avgX < 0.6) {
+                // On middle hill - use its bezier curve approximation
+                const t = (x / canvas.width - 0) / (1 - 0);
+                if (t < 0.7) {
+                    y = hillBaseY + 210 - 50 * Math.sin(t * Math.PI);
+                } else {
+                    y = hillBaseY + 180 - 30 * Math.sin((t - 0.7) * Math.PI * 3);
+                }
+            } else {
+                // On front hill
+                const t = (x / canvas.width - 0) / (1 - 0);
+                if (t < 0.65) {
+                    y = hillBaseY + 270 - 50 * Math.sin(t * Math.PI * 1.5);
+                } else {
+                    y = hillBaseY + 240 - 30 * Math.sin((t - 0.65) * Math.PI * 2);
+                }
+            }
+            
+            const leftRight = i % 2; // Alternate left and right foot
+            const footWidth = 35 * sizeFactor;
+            const footLength = 55 * sizeFactor;
+            const offset = leftRight ? -20 * sizeFactor : 20 * sizeFactor;
+            
+            // Draw boot print shape
+            c.beginPath();
+            // Toe area (rounded front)
+            c.ellipse(x + offset, y - footLength * 0.3, footWidth * 0.5, footLength * 0.3, 0, 0, Math.PI * 2);
+            c.fill();
+            
+            // Heel area (rectangular)
+            c.fillRect(x + offset - footWidth * 0.35, y, footWidth * 0.7, footLength * 0.4);
+        }
+        
+        c.restore();
+    }
+
     //  DRAW EVERYTHING ==============================================================
 	function drawEverything() {
         // Clear the canvas
