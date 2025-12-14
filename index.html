@@ -4370,6 +4370,14 @@
         c.fillStyle = 'hsla(0, 0%, 0%, 0.7)';
         c.fillRect(0, 0, canvas.width, canvas.height); 
 
+        // Draw roid
+        for (var r = 0; r < Roid.length; r++) {
+            if (Roid[r] != null) {
+                var roid = Roid[r]
+                roid.draw();
+            }
+        }
+
         // Draw first 1/3 of light snow (will be behind both hills)
         const snowThird = Math.floor(Snowfield.length / 3);
         for (var i = 0; i < snowThird; i++) {
@@ -4481,14 +4489,6 @@
         
         for (var l = 0; l < WorkshopLights.length; l++) {
             WorkshopLights[l].draw();
-        }
-        
-        // Draw roid
-        for (var r = 0; r < Roid.length; r++) {
-            if (Roid[r] != null) {
-                var roid = Roid[r]
-                roid.draw();
-            }
         }
 
         // Draw snowman
