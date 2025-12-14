@@ -688,9 +688,6 @@
         spawnPong();
 
         makeSnow();
-        
-        // MAKE BUBBLES
-        //makeBubbles();
     }
     
     //  MOUSE TRACKBALL INTERACTION -----------------------------------------------------------
@@ -931,17 +928,24 @@
             this.pos = pos.clone();
             this.vel = new Vector2(0.1 * (Math.random() - 0.5), -0.2);
             this.drift = 0.1 * (Math.random() - 0.5);
-            this.radius = 0.02 + Math.random() * 0.03;
+            this.radius = 0.008;
+            this.finalRadius = 0.01 + Math.random() * 0.03;
             this.hue = Math.random() * 360;
         }
         simulate() {
             const luft = new Vector2(0, -0.1);
+            if (this.radius < this.finalRadius) {
+                 this.radius += 0.08 * dT; // bubbles grow as they rise
+            } else {
+                    this.radius = this.finalRadius;
+            }
             this.vel.add(luft, dT);
             this.vel.x += this.drift * dT;
             this.pos.add(this.vel, dT);
         }
         draw() {
             drawCircle(this.pos.x * cScale, this.pos.y * cScale, this.radius * cScale);
+            
             //  OVERALL BUBBLE SHADING  ----------
             var sphereGradient = c.createRadialGradient(
                 this.pos.x * cScale, 
@@ -951,14 +955,16 @@
                 this.pos.y * cScale, 
                 1 * this.radius * cScale
             );
-            var highlight = `hsla(${this.hue}, 40%, 70%, 90%)`;
-            var midtone = `hsla(${this.hue}, 50%, 40%, 60%)`;
+            var highlight = `hsla(${this.hue}, 40%, 70%, 70%)`;
+            var midtone = `hsla(${this.hue + 120}, 50%, 40%, 40%)`;
             var shadow = `hsla(0, 0%, 0%, 0%)`;
             sphereGradient.addColorStop(0.0, shadow);
             sphereGradient.addColorStop(0.8, midtone);
-            sphereGradient.addColorStop(1.0, highlight);
+            sphereGradient.addColorStop(0.9, highlight);
+            sphereGradient.addColorStop(1.0, shadow);
             c.fillStyle = sphereGradient;
             c.fill();
+
             //  HIGHLIGHT OVERLAY  ----------
             var sphereGradient = c.createRadialGradient(
                 (this.pos.x - (0.2 * this.radius)) * cScale, 
@@ -966,13 +972,13 @@
                 0, 
                 (this.pos.x - (0.2 * this.radius)) * cScale, 
                 (this.pos.y - (0.4 * this.radius)) * cScale, 
-                1.45 * this.radius * cScale
+                1.6 * this.radius * cScale
             );
-            var highlight = `hsla(${this.hue}, 20%, 60%, 100%)`;
-            var midtone = `hsla(${this.hue}, 50%, 20%, 60%)`;
+            var highlight = `hsla(${this.hue}, 20%, 70%, 70%)`;
+            var midtone = `hsla(${this.hue - 120}, 50%, 20%, 60%)`;
             var shadow = `hsla(0, 0%, 0%, 0%)`;
             sphereGradient.addColorStop(0.0, highlight);
-            sphereGradient.addColorStop(0.2, midtone);
+            sphereGradient.addColorStop(0.15, midtone);
             sphereGradient.addColorStop(1.0, shadow);
             c.fillStyle = sphereGradient;
             c.fill();
@@ -982,12 +988,8 @@
     // MAKE BUBBLES  ---------------------------------------------------------------------
     Bubbles = [];
     let bubbleSpawnTimer = 0;
-    const bubbleSpawnInterval = 0.1; // seconds between bubble spawns
-    
-    function makeBubbles() {
-        // Bubbles will be spawned periodically from the pipe, not all at once
-    }
-    
+    const bubbleSpawnInterval = 0.005; // seconds between bubble spawns
+
     function spawnBubble() {
         // Calculate pipe bowl position based on snowman image position
         // Image is 400px wide, positioned at 0.75 * simWidth * cScale
@@ -998,10 +1000,10 @@
         
         // Pipe bowl is at a fixed pixel offset from the snowman center
         // Adjust these pixel values to match the pipe location in your image
-        const pipeOffsetX = -144; // pixels to the left of center
-        const pipeOffsetY = -361; // pixels up from bottom
+        const pipeOffsetX = -147; // pixels to the left of center
+        const pipeOffsetY = -356; // pixels up from bottom
         
-        const bubbleX = (snowmanX + pipeOffsetX + (Math.random() - 0.5) * 6) / cScale;
+        const bubbleX = (snowmanX + pipeOffsetX + (Math.random() - 0.5) * 10) / cScale;
         const bubbleY = (snowmanY + pipeOffsetY + (Math.random() - 0.5) * 2) / cScale;
         
         Bubbles.push(new BUBBLES(new Vector2(bubbleX, bubbleY)));
