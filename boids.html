@@ -284,7 +284,7 @@
 
     //  MOVING OBSTACLE CLASS ---------------------------------------------------------------------
     class MovingObstacle {
-        constructor(y, speed = 0.5, size = 0.3, respawnDelay = 5.0) {
+        constructor(y, speed = 0.5, size = 0.3, respawnDelay = 10.0) {
             this.x = -size; // Start just off the left edge
             this.y = y;
             this.speed = speed; // Units per second
@@ -392,12 +392,12 @@
     
     function makeObstacles() {
         obstacles = [];
-        //obstacles.push(new OBSTACLE(0.7 * simWidth, 0.7 * simHeight));
+        obstacles.push(new OBSTACLE(0.8 * simWidth, 0.35 * simHeight));
         obstacles.push(new OBSTACLE(0.25 * simWidth, 0.5 * simHeight));
         
         // Create moving obstacles
         movingObstacles = [];
-        movingObstacles.push(new MovingObstacle(0.8 * simHeight, 0.5, 0.3));
+        movingObstacles.push(new MovingObstacle(0.8 * simHeight, 0.4, 0.3));
     }
 
     class BOID {
