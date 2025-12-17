@@ -374,7 +374,7 @@
                 <div class="description">Particle Physics Sandbox</div>
                 <div class="verbiage2"><br>Fluid-like "sloshy" particle simulation with</div>
                 <div class="verbiage2">interactive toys and a menu-driven user interface.</div>
-                <div class="verbiage2">Created with the help of Claude. Go Claude!</div>
+                <div class="verbiage2">Created with the help of Claude.</div>
                 <div class="blade-buttons">
                     <br>
                     <a href="https://github.com/frank-maiello/frank-maiello.github.io/blob/main/slosh.html" target="_blank" class="button">Code</a>
@@ -404,8 +404,30 @@
             </div>
         </div>
     </div>
-    
+
     <div class="fan-blade" data-blade="2">
+        <div class="blade-content">
+            <div class="blade-image">
+                <a href="https://frank-maiello.github.io/boids.html" target="_blank">
+                    <img src="https://frank-maiello.github.io/screen_boids.png" alt="Boids">
+                </a>
+            </div>
+            <div class="blade-text">
+                <div class="appTitle">B0IDS</div>
+                <h3><br></h3>
+                <div class="description">Flocking Behavior</div>
+                <div class="verbiage2"><br>Birds aren't real. They're a simulation based</div>
+                <div class="verbiage2">on Craig Reynolds' 1986 Boids algorithm.</div>
+                <div class="verbiage2">Each 'boid' sees only its immediate neighbors.</div>
+                <div class="blade-buttons">
+                    <br>
+                    <a href="https://github.com/frank-maiello/frank-maiello.github.io/blob/main/boids.html" target="_blank" class="button">Code</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="fan-blade" data-blade="3">
         <div class="blade-content">
             <div class="blade-image">
                 <a href="https://frank-maiello.github.io/droplets.html" target="_blank">
@@ -427,7 +449,7 @@
         </div>
     </div>
     
-    <div class="fan-blade" data-blade="3">
+    <div class="fan-blade" data-blade="4">
         <div class="blade-content">
             <div class="blade-image">
                 <a href="https://frank-maiello.github.io/plinkolab.html" target="_blank">
@@ -478,7 +500,7 @@
     let currentRotation = 0; // Continuous rotation in degrees
     let targetRotation = 0; // Target rotation for smooth interpolation
     let targetBladeIndex = 0;
-    const totalBlades = 4;
+    const totalBlades = 5;
     const bladeAngleSpacing = -20; // Degrees between blades (negative to open downward)
     let scrollAccumulator = 0;
     const scrollSensitivity = 0.08; // How much rotation per scroll unit (reduced for finer control)
