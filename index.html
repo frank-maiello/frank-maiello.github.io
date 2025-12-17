@@ -415,7 +415,7 @@
             <div class="blade-text">
                 <div class="appTitle">B0IDS</div>
                 <h3><br></h3>
-                <div class="description">Flocking Behavior</div>
+                <div class="description">I'm Flyin' Here!</div>
                 <div class="verbiage2"><br>Birds aren't real. They're a simulation based</div>
                 <div class="verbiage2">on Craig Reynolds' 1986 Boids algorithm.</div>
                 <div class="verbiage2">Each 'boid' sees only its immediate neighbors.</div>
@@ -497,34 +497,30 @@
     frostyImage.src = 'frosty.png';
     
     //  FAN MENU ROTATION SYSTEM --------------------------------------------------------------
-    let currentRotation = 0; // Continuous rotation in degrees
-    let targetRotation = 0; // Target rotation for smooth interpolation
+    let currentRotation = 0;
+    let targetRotation = 0;
     let targetBladeIndex = 0;
     const totalBlades = 5;
-    const bladeAngleSpacing = -20; // Degrees between blades (negative to open downward)
+    const bladeAngleSpacing = -20;
     let scrollAccumulator = 0;
-    const scrollSensitivity = 0.08; // How much rotation per scroll unit (reduced for finer control)
-    const snapThreshold = 0.5; // How close to snap (in blade units)
+    const scrollSensitivity = 0.08;
     let isSnapping = false;
     let snapAnimationFrame = null;
     let smoothScrollFrame = null;
-    const smoothingFactor = 0.15; // How quickly to interpolate (0.1 = smooth, 0.3 = faster)
+    const smoothingFactor = 0.15;
     
     function updateFanRotation() {
         const blades = document.querySelectorAll('.fan-blade');
         
         blades.forEach((blade, index) => {
-            // Calculate the angle offset from the current rotation
             const relativeRotation = currentRotation / bladeAngleSpacing;
             const relativeIndex = index + relativeRotation;
             const angle = relativeIndex * bladeAngleSpacing;
             
-            // Calculate z-index based on distance from center
             const distanceFromCenter = Math.abs(relativeIndex);
             const zIndex = 100 - Math.floor(distanceFromCenter);
             blade.style.zIndex = zIndex;
             
-            // Calculate scale and opacity based on distance from active position
             const scale = Math.max(0.8, 1 - distanceFromCenter * 0.05);
             const opacity = Math.max(0.4, 1 - distanceFromCenter * 0.2);
             
@@ -552,15 +548,24 @@
     function snapToNearest() {
         if (isSnapping) return;
         
+        // Cancel smooth scroll animation before snapping
+        if (smoothScrollFrame) {
+            cancelAnimationFrame(smoothScrollFrame);
+            smoothScrollFrame = null;
+        }
+        
         isSnapping = true;
-        const targetRotation = Math.round(currentRotation / bladeAngleSpacing) * bladeAngleSpacing;
+        // Find nearest multiple of 20 (positions where a blade is horizontal)
+        const bladeSpacing = Math.abs(bladeAngleSpacing); // 20
+        const nearestBladeIndex = Math.round(currentRotation / bladeSpacing);
+        const snapTarget = nearestBladeIndex * bladeSpacing;
         
         function animate() {
-            const diff = targetRotation - currentRotation;
+            const diff = snapTarget - currentRotation;
             if (Math.abs(diff) < 0.1) {
-                currentRotation = targetRotation;
-                targetBladeIndex = Math.round(-currentRotation / bladeAngleSpacing) % totalBlades;
-                if (targetBladeIndex < 0) targetBladeIndex += totalBlades;
+                currentRotation = snapTarget;
+                targetRotation = snapTarget;
+                scrollAccumulator = snapTarget;
                 updateFanRotation();
                 isSnapping = false;
                 return;
@@ -574,7 +579,6 @@
         animate();
     }
     
-    // Mouse wheel to rotate fan
     document.addEventListener('wheel', (e) => {
         if (e.target.closest('.fan-blade') || e.target.closest('#fan-container')) {
             e.preventDefault();
@@ -584,21 +588,22 @@
                 isSnapping = false;
             }
             
-            scrollAccumulator -= e.deltaY * scrollSensitivity; // Reversed direction
+            // Detect mouse wheel vs trackpad and adjust sensitivity
+            const isMouseWheel = Math.abs(e.deltaY) > 40;
+            const sensitivity = isMouseWheel ? scrollSensitivity * 0.3 : scrollSensitivity;
             
-            // Clamp rotation to first and last blade
-            const minRotation = 0; // First blade at position 0
-            const maxRotation = -(totalBlades - 1) * bladeAngleSpacing; // Last blade
+            scrollAccumulator -= e.deltaY * sensitivity;
+            
+            const minRotation = 0;
+            const maxRotation = -(totalBlades - 1) * bladeAngleSpacing;
             scrollAccumulator = Math.max(minRotation, Math.min(maxRotation, scrollAccumulator));
             
             targetRotation = scrollAccumulator;
             
-            // Start smooth scrolling animation if not already running
             if (!smoothScrollFrame) {
                 smoothScrollFrame = requestAnimationFrame(smoothScrollAnimation);
             }
             
-            // Debounce snapping
             clearTimeout(window.snapTimeout);
             window.snapTimeout = setTimeout(() => {
                 snapToNearest();
