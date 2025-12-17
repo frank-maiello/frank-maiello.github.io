@@ -2,7 +2,7 @@
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.1</title>
+    <title>Boids 1.2</title>
     <style>
         html, body {
             margin: 0;
@@ -37,6 +37,12 @@
     cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
     simWidth = canvas.width / cScale;
     simHeight = canvas.height / cScale;
+
+    if (simWidth < simHeight) {
+        doTrails = false;
+    } else {
+        doTrails = true;
+    }
 
     // Mouse tracking
     let mouseX = simWidth / 2;
@@ -276,13 +282,122 @@
         }
     }
 
+    //  MOVING OBSTACLE CLASS ---------------------------------------------------------------------
+    class MovingObstacle {
+        constructor(y, speed = 0.5, size = 0.3, respawnDelay = 5.0) {
+            this.x = -size; // Start just off the left edge
+            this.y = y;
+            this.speed = speed; // Units per second
+            this.size = size; // Width/height of the obstacle
+            this.radius = size * 0.7; // Effective radius for collision detection
+            this.image = kittyPlaneImage;
+            this.respawnDelay = respawnDelay; // Seconds to wait before respawning
+            this.isWaiting = false;
+            this.waitTimer = 0;
+            this.propellerAngle = 0; // For spinning propeller effect
+        }
+        
+        update(dt) {
+            if (this.isWaiting) {
+                // Count down the respawn timer
+                this.waitTimer -= dt;
+                if (this.waitTimer <= 0) {
+                    // Timer expired, respawn
+                    this.x = -this.size;
+                    this.isWaiting = false;
+                }
+            } else {
+                // Normal movement
+                this.x += this.speed * dt;
+                
+                // Check if passed the right edge
+                if (this.x - this.size > simWidth) {
+                    // Start waiting timer
+                    this.isWaiting = true;
+                    this.waitTimer = this.respawnDelay;
+                }
+            }
+            
+            // Spin the propeller (fast rotation)
+            this.propellerAngle += dt * 20; // 20 radians per second
+        }
+        
+        contains(x, y) {
+            // Use rectangular collision for the moving obstacle
+            return x >= this.x - this.size/2 && x <= this.x + this.size/2 &&
+                   y >= this.y - this.size/2 && y <= this.y + this.size/2;
+        }
+        
+        draw() {
+            if (this.image && this.image.complete) {
+                c.save();
+                const drawSize = this.size * cScale;
+                const centerX = this.x * cScale;
+                const centerY = canvas.height - this.y * cScale;
+                
+                // Draw the airplane image
+                c.drawImage(
+                    this.image,
+                    centerX - drawSize / 2,
+                    centerY - drawSize / 2,
+                    drawSize,
+                    drawSize
+                );
+                
+                // Draw spinning propeller effect
+                // Propeller rotates perpendicular to movement (around the X-axis in 3D)
+                const propX = centerX + drawSize * 0.45; // Adjust based on your image
+                const propY = centerY + drawSize * 0.12;
+                const propLength = drawSize * 0.25;
+                
+                // Calculate apparent width based on rotation angle (3D effect)
+                const width1 = Math.cos(this.propellerAngle) * propLength;
+                const width2 = Math.cos(this.propellerAngle + Math.PI / 2) * propLength;
+                
+                // Draw propeller blades with varying width (simulating 3D rotation)
+                c.strokeStyle = 'rgba(200, 200, 220, 0.4)';
+                c.lineWidth = 4;
+                c.lineCap = 'round';
+                
+                // Vertical blade (appears to change width as it rotates)
+                c.beginPath();
+                c.moveTo(propX, propY - width1);
+                c.lineTo(propX, propY + width1);
+                c.stroke();
+                
+                // Second blade 90 degrees out of phase
+                c.beginPath();
+                c.moveTo(propX, propY - width2);
+                c.lineTo(propX, propY + width2);
+                c.stroke();
+                
+                c.restore();
+            } else {
+                // Fallback if image not loaded
+                c.fillStyle = 'rgba(255, 100, 100, 0.5)';
+                c.fillRect(
+                    this.x * cScale - this.size * cScale / 2,
+                    canvas.height - this.y * cScale - this.size * cScale / 2,
+                    this.size * cScale,
+                    this.size * cScale
+                );
+            }
+        }
+    }
+
     // Obstacle setup
     var spatialGrid; // Spatial hash grid for efficient neighbor finding
+    var kittyPlaneImage; // Image for moving obstacle
+    var movingObstacles = []; // Array for moving obstacles
     
     function makeObstacles() {
         obstacles = [];
-        obstacles.push(new OBSTACLE(0.7 * simWidth, 0.7 * simHeight));
+        //obstacles.push(new OBSTACLE(0.7 * simWidth, 0.7 * simHeight));
         obstacles.push(new OBSTACLE(0.25 * simWidth, 0.5 * simHeight));
+        
+        // Create moving obstacles
+        movingObstacles = [];
+        movingObstacles.push(new MovingObstacle(0.8 * simHeight, 0.5, 0.3));
     }
 
     class BOID {
@@ -303,14 +418,14 @@
         simulate(){
             this.pos.x += this.vel.x * deltaT;
             this.pos.y += this.vel.y * deltaT;
-            if (doTrail == true) {
+            if (doTrails == true) {
                 this.history.push([this.pos.x, this.pos.y])
                 this.history = this.history.slice(boidProps.trailLength);
             }
         }
         draw(){
             // Draw trail ----------
-            if (doTrail == true && this.history.length > 0) {
+            if (doTrails == true && this.history.length > 0) {
                 c.beginPath();
                 c.moveTo(cX({x: this.history[0][0]}), cY({y: this.history[0][1]}));
                 for (const point of this.history) {
@@ -422,6 +537,22 @@
                 boid.vel.y += obsDy * obsStrength * deltaT;
             }
         }
+        
+        // MOVING OBSTACLE AVOIDANCE
+        for (let obstacle of movingObstacles) {
+            const obsDx = boid.pos.x - obstacle.x;
+            const obsDy = boid.pos.y - obstacle.y;
+            const obsDistSq = obsDx * obsDx + obsDy * obsDy;
+            const obstacleAvoidRadius = obstacle.radius + boidProps.minDistance * 1.5;
+            const radiusSq = obstacleAvoidRadius * obstacleAvoidRadius;
+            
+            if (obsDistSq < radiusSq && obsDistSq > 0) {
+                const obsDist = Math.sqrt(obsDistSq);
+                const obsStrength = boidProps.avoidFactor * 3.0 * (obstacleAvoidRadius - obsDist) / obsDist;
+                boid.vel.x += obsDx * obsStrength * deltaT;
+                boid.vel.y += obsDy * obsStrength * deltaT;
+            }
+        }
     }
 
     function handleBoidRules(boid) {
@@ -504,6 +635,11 @@
             spatialGrid.insert(boid);
         }
         
+        // Update moving obstacles
+        for (let obstacle of movingObstacles) {
+            obstacle.update(deltaT);
+        }
+        
         for (var i = 0; i < Boids.length; i++) {
             var boid = Boids[i];
             // HANDLE BOID RULES
@@ -533,6 +669,11 @@
         for (let obstacle of obstacles) {
             obstacle.draw();
         }
+        
+        // Draw moving obstacles
+        for (let obstacle of movingObstacles) {
+            obstacle.draw();
+        }
     }
 
     function setupScene() {
@@ -551,10 +692,13 @@
             trailLength: -10 // Number of trail points to keep (negative for last N points)
         }
         deltaT = 1/60;
-        doTrail = true;
-        
+       
         // Initialize spatial grid with cell size equal to visual range
         spatialGrid = new SpatialHashGrid(boidProps.visualRange);
+        
+        // Load kitty plane image
+        kittyPlaneImage = new Image();
+        kittyPlaneImage.src = 'kitty_plane.png';
         
         // make Boids ----------
         makeBoids();
