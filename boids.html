@@ -2,7 +2,7 @@
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.2</title>
+    <title>Boids 1.3</title>
     <style>
         html, body {
             margin: 0;
@@ -113,6 +113,7 @@
         }
     });
 
+    //  HANDLE WINDOW RESIZING  ------------------
     function resizeCanvas() {
         canvas = document.getElementById("myCanvas");
         c = canvas.getContext("2d");
@@ -197,10 +198,10 @@
         }
     }
 
+    //  COORDINATE CONVERSION  -----------
     function cX(pos) {
         return pos.x * cScale;
     }
-
     function cY(pos) {
         return canvas.height - pos.y * cScale;
     }
@@ -252,6 +253,7 @@
             return nearby;
         }
     }
+    
 
     //  OBSTACLE CLASS ---------------------------------------------------------------------
     class OBSTACLE {
@@ -346,8 +348,8 @@
                 
                 // Draw spinning propeller effect
                 // Propeller rotates perpendicular to movement (around the X-axis in 3D)
-                const propX = centerX + drawSize * 0.45; // Adjust based on your image
-                const propY = centerY + drawSize * 0.12;
+                const propX = centerX + drawSize * 0.452; // Adjust based on your image
+                const propY = centerY + drawSize * 0.125;
                 const propLength = drawSize * 0.25;
                 
                 // Calculate apparent width based on rotation angle (3D effect)
@@ -355,8 +357,9 @@
                 const width2 = Math.cos(this.propellerAngle + Math.PI / 2) * propLength;
                 
                 // Draw propeller blades with varying width (simulating 3D rotation)
-                c.strokeStyle = 'rgba(200, 200, 220, 0.4)';
-                c.lineWidth = 4;
+                //c.strokeStyle = 'rgba(200, 200, 260, 0.4)';
+                c.strokeStyle = 'hsla(200, 90%, 50%, 0.8)';
+                c.lineWidth = 6;
                 c.lineCap = 'round';
                 
                 // Vertical blade (appears to change width as it rotates)
@@ -385,11 +388,7 @@
         }
     }
 
-    // Obstacle setup
-    var spatialGrid; // Spatial hash grid for efficient neighbor finding
-    var kittyPlaneImage; // Image for moving obstacle
-    var movingObstacles = []; // Array for moving obstacles
-    
+    //  MAKE OBSTACLES  ---------------------------------------------------------------------
     function makeObstacles() {
         obstacles = [];
         obstacles.push(new OBSTACLE(0.8 * simWidth, 0.35 * simHeight));
@@ -400,13 +399,18 @@
         movingObstacles.push(new MovingObstacle(0.8 * simHeight, 0.4, 0.3));
     }
 
+    //  BOID CLASS ---------------------------------------------------------------------
     class BOID {
         constructor(pos, vel, hue) {
             this.pos = pos.clone();
             this.vel = vel.clone();
             this.hue = hue;
+            this.saturation = 0;
+            this.lightness = 0;
             this.radius = boidRadius;
             this.angle = 0;
+            this.hueCounter = 0;
+            this.speedAdjust = 0;
             this.history = [];
         }
         get left() {
@@ -424,6 +428,27 @@
             }
         }
         draw(){
+            // calculate angle of velocity vector
+            const angle = Math.atan2(this.vel.y, this.vel.x);
+            // scale size based on normalized velocity
+            const radScale = this.radius * cScale;
+            this.speedAdjust = this.vel.length() / boidProps.speedLimit;
+
+            // arrow dimensions ----------
+            const arrowLength = Math.max((this.speedAdjust) * 1.5 * radScale, 1 * radScale);
+            const arrowWidth = Math.min((1/this.speedAdjust) * 0.8 * radScale, 1.8 * radScale);
+            const arrowDent = Math.min((1/this.speedAdjust) * 1.0 * radScale, 0.7 * radScale);
+
+            // code hsl based on speed and height ----------
+            //this.hueCounter += 0.05;
+            if (this.hueCounter >= 360) {
+                this.hueCounter = 0;
+            }
+            this.hue = 160 - this.speedAdjust * 200;
+            //this.hue = 260 + this.speedAdjust * 70 + 20 * Math.sin(this.hueCounter * Math.PI / 180);
+            this.saturation = 30 + (this.pos.y / simHeight * 50);  
+            this.lightness = 40 + (this.pos.y / simHeight * 30); 
+            
             // Draw trail ----------
             if (doTrails == true && this.history.length > 0) {
                 c.beginPath();
@@ -431,38 +456,30 @@
                 for (const point of this.history) {
                     c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
                 }
-                //c.strokeStyle = `hsla(${this.hue}, 80%, 80%, 0.4)`;
-                c.strokeStyle = `hsla(${this.hue}, 80%, 50%, 0.5)`;
-                c.lineWidth = 1;
+                c.strokeStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness * 1.2}%, 0.5)`;
+                c.lineWidth = 1.0;
                 c.stroke();
             }
 
             // Draw boid ----------
-            const angle = Math.atan2(this.vel.y, this.vel.x);
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
             c.rotate(-angle);
-            const radScale = this.radius * cScale;
-            // scale width based on normalized velocity
-            const speedAdjust = 1 / (this.vel.length() / boidProps.speedLimit);
-            const arrowLength = Math.max((1 / speedAdjust) * 1.5 * radScale, 1 * radScale);
-            const arrowWidth = Math.min(speedAdjust * 0.8 * radScale, 1.8 * radScale);
-            const arrowDent = Math.min(speedAdjust * 1.0 * radScale, 0.7 * radScale);
             c.beginPath();
             c.moveTo(arrowLength, 0);
             c.lineTo(-arrowLength, -arrowWidth / 2);
             c.lineTo(-arrowLength + arrowDent, 0);
             c.lineTo(-arrowLength, arrowWidth / 2);
             c.closePath();
-            c.fillStyle = `hsl(45, 80%, 50%)`;
+            c.fillStyle = `hsl(${this.hue - 275}, ${this.saturation}%, ${this.lightness}%)`;
+            c.lineWidth = 1.0;
             c.fill();
 
-            // Draw wings
+            // stroke wings ----------
             c.beginPath();
             c.moveTo(arrowLength, 0);
             c.lineTo(-arrowLength, -arrowWidth / 2);
-            c.strokeStyle = `hsl(${this.hue}, 90%, 40%)`;
-            c.lineWidth = 1.0;
+            c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
             c.stroke();
             c.beginPath();
             c.moveTo(-arrowLength, arrowWidth / 2);
@@ -485,6 +502,7 @@
         }
     }
 
+    //  MAKE BOIDS  ---------------------------------------------------------------------
     function makeBoids() {
         Boids = [];
         const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
@@ -520,6 +538,7 @@
         }
     }
 
+    //  HANDLE OBSTACLES -------------
     function handleObstacles(boid) {
         // OBSTACLE AVOIDANCE - loop through all obstacles
         for (let obstacle of obstacles) {
@@ -555,6 +574,7 @@
         }
     }
 
+    //  HANDLE BOID RULES -------------
     function handleBoidRules(boid) {
         let separationX = 0;
         let separationY = 0;
@@ -566,7 +586,6 @@
         
         // Get nearby boids from spatial hash
         const nearbyBoids = spatialGrid.getNearby(boid, boidProps.visualRange);
-        
         const visualRangeSq = boidProps.visualRange * boidProps.visualRange;
         const minDistSq = boidProps.minDistance * boidProps.minDistance;
         
@@ -621,13 +640,12 @@
     function clampSpeed(boid) {
     const speed = boid.vel.length();
     if (speed > boidProps.speedLimit) {
-        // use vector normalization to clamp speed
         boid.vel.normalize();
         boid.vel.scale(boidProps.speedLimit);
     }
     }
 
-    // Main animation loop
+    // Main animation loop  ------------
     function simulateEverything() {
         // Rebuild spatial grid
         spatialGrid.clear();
@@ -642,19 +660,20 @@
         
         for (var i = 0; i < Boids.length; i++) {
             var boid = Boids[i];
-            // HANDLE BOID RULES
+            // handle boid rules
             handleBoidRules(boid);
-            // HANDLE OBSTACLES
+            // handle obstacles
             handleObstacles(boid);
-            // Limit Speed
+            // limit speed
             clampSpeed(boid);
-            // Keep within bounds
+            // keep within bounds
             handleBounds(boid);
-            //  Update Position
+            // update position
             boid.simulate();
         }
     }
 
+    //  DRAW EVERYTHING  ------------
     function drawEverything() {
         // Clear canvas
         c.clearRect(0, 0, width, height);
@@ -676,10 +695,11 @@
         }
     }
 
+    //  SETUP SCENE  ------------
     function setupScene() {
         boidRadius = 0.015
         boidProps = {
-            numBoids: 3000,
+            numBoids: 2400,
             marginX: simWidth * 0.2,
             marginY: simHeight * 0.2,
             minDistance: 5.0 * boidRadius, // Rule 1 - The distance to stay away from other Boids
@@ -689,29 +709,27 @@
             centeringFactor: 5.0, // Rule 3 - Adjust velocity by this %
             speedLimit: 1.1, // clamp speed to this value
             turnFactor: 1.0, // How strongly Boids turn back when near edge
-            trailLength: -10 // Number of trail points to keep (negative for last N points)
+            trailLength: -8 // Number of trail points to keep (negative for last N points)
         }
         deltaT = 1/60;
-       
-        // Initialize spatial grid with cell size equal to visual range
-        spatialGrid = new SpatialHashGrid(boidProps.visualRange);
-        
         // Load kitty plane image
         kittyPlaneImage = new Image();
         kittyPlaneImage.src = 'kitty_plane.png';
-        
         // make Boids ----------
         makeBoids();
         // make Obstacles ----------
         makeObstacles()
+        // make spatial grid ----------
+        spatialGrid = new SpatialHashGrid(boidProps.visualRange);
     }
 
+    //  RUN  ------------------------------------------------
     setupScene();
     function update() {
-            simulateEverything();
-            drawEverything();
-            requestAnimationFrame(update);
-        } 
+        simulateEverything();
+        drawEverything();
+        requestAnimationFrame(update);
+    } 
     update();
 
     </script>
