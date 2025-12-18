@@ -2,7 +2,7 @@
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.3</title>
+    <title>Boids 1.4</title>
     <style>
         html, body {
             margin: 0;
@@ -287,16 +287,31 @@
     //  MOVING OBSTACLE CLASS ---------------------------------------------------------------------
     class MovingObstacle {
         constructor(y, speed = 0.5, size = 0.3, respawnDelay = 10.0) {
-            this.x = -size; // Start just off the left edge
             this.y = y;
+            this.baseY = y; // Store initial y for loop calculation
             this.speed = speed; // Units per second
+            this.baseSpeed = speed; // Store base speed
             this.size = size; // Width/height of the obstacle
             this.radius = size * 0.7; // Effective radius for collision detection
-            this.image = kittyPlaneImage;
             this.respawnDelay = respawnDelay; // Seconds to wait before respawning
             this.isWaiting = false;
             this.waitTimer = 0;
             this.propellerAngle = 0; // For spinning propeller effect
+            this.angle = 0; // Current orientation angle
+            
+            // Direction: 1 = left to right, -1 = right to left
+            this.direction = 1;
+            this.x = -size; // Start position based on direction
+            this.image = kittyPlaneImage;
+            
+            // Loop-the-loop parameters (clothoid trajectory)
+            this.loopStartX = 0.4 * simWidth; // Where the loop begins
+            this.loopRadius = 0.35 * simHeight; // Radius of the loop
+            this.loopPhase = 0; // Current phase through the loop (0 = before, 1-2 = during, 3+ = after)
+            this.pathDistance = 0; // Total distance traveled
+            this.loopProgress = 0; // Progress through the loop (0 to 1)
+            this.willDoLoop = false; // Whether this pass will do a loop
+            this.loopDecided = false; // Whether we've decided about the loop yet
         }
         
         update(dt) {
@@ -304,24 +319,116 @@
                 // Count down the respawn timer
                 this.waitTimer -= dt;
                 if (this.waitTimer <= 0) {
-                    // Timer expired, respawn
-                    this.x = -this.size;
+                    // Timer expired, respawn from opposite direction
+                    this.direction *= -1;
+                    if (this.direction === 1) {
+                        this.x = -this.size; // Start from left
+                        this.image = kittyPlaneImage;
+                    } else {
+                        this.x = simWidth + this.size; // Start from right
+                        this.image = kittyPlaneReverseImage;
+                    }
+                    this.y = this.baseY;
+                    this.pathDistance = 0;
+                    this.loopPhase = 0;
+                    this.loopProgress = 0;
+                    this.angle = 0;
+                    this.loopDecided = false;
+                    this.willDoLoop = false;
                     this.isWaiting = false;
                 }
             } else {
-                // Normal movement
-                this.x += this.speed * dt;
+                // Check if we've reached the loop start point
+                const loopTrigger = this.direction === 1 ? 
+                    this.x >= this.loopStartX : 
+                    this.x <= (simWidth - this.loopStartX);
+                    
+                if (this.loopPhase === 0 && loopTrigger) {
+                    // Decide whether to do a loop (50% chance)
+                    if (!this.loopDecided) {
+                        this.willDoLoop = Math.random() < 0.5;
+                        this.loopDecided = true;
+                    }
+                    
+                    if (this.willDoLoop) {
+                        this.loopPhase = 1;
+                        this.loopProgress = 0;
+                    } else {
+                        // Skip the loop, go straight to phase 2
+                        this.loopPhase = 2;
+                    }
+                }
                 
-                // Check if passed the right edge
-                if (this.x - this.size > simWidth) {
+                if (this.loopPhase === 0) {
+                    // Before the loop - straight flight
+                    this.x += this.speed * dt * this.direction;
+                    this.y = this.baseY;
+                    this.angle = 0;
+                    this.speed = this.baseSpeed;
+                    
+                } else if (this.loopPhase === 1) {
+                    // During the loop - follow circular trajectory
+                    const loopCircumference = 2 * Math.PI * this.loopRadius;
+                    const progressSpeed = this.baseSpeed / loopCircumference;
+                    
+                    // Advance through the loop based on time
+                    this.loopProgress += progressSpeed * dt;
+                    
+                    if (this.loopProgress >= 1.0) {
+                        // Loop complete
+                        this.loopPhase = 2;
+                        this.loopProgress = 0;
+                        this.y = this.baseY;
+                        this.angle = 0;
+                        this.speed = this.baseSpeed;
+                        // Continue moving forward after loop
+                        this.x += this.speed * dt * this.direction;
+                    } else {
+                        // Smooth continuous trajectory
+                        const p = this.loopProgress;
+                        
+                        // Smooth ease-in/ease-out using cosine
+                        const easeProgress = 0.5 - 0.5 * Math.cos(p * Math.PI);
+                        
+                        // Full 2π rotation (base theta is always positive)
+                        const theta = easeProgress * 2 * Math.PI;
+                        
+                        // Smooth speed variation
+                        const speedMult = 0.85 + 0.15 * Math.sin(theta * 0.5);
+                        this.speed = this.baseSpeed * speedMult;
+                        
+                        // Move along the circular path - velocity is tangent to the circle
+                        // X movement direction depends on flight direction
+                        this.x += this.speed * Math.cos(theta) * dt * this.direction;
+                        // Y movement is always upward for the loop
+                        this.y += this.speed * Math.sin(theta) * dt;
+                        
+                        // Plane angle follows the tangent (flip for reverse direction)
+                        this.angle = theta * this.direction;
+                    }
+                    
+                } else {
+                    // After the loop - straight flight
+                    this.x += this.speed * dt * this.direction;
+                    this.y = this.baseY;
+                    this.angle = 0;
+                    this.speed = this.baseSpeed;
+                }
+                
+                // Check if passed the edge (either direction)
+                const passedEdge = this.direction === 1 ? 
+                    this.x - this.size > simWidth : 
+                    this.x + this.size < 0;
+                    
+                if (passedEdge) {
                     // Start waiting timer
                     this.isWaiting = true;
                     this.waitTimer = this.respawnDelay;
                 }
             }
             
-            // Spin the propeller (fast rotation)
-            this.propellerAngle += dt * 20; // 20 radians per second
+            // Spin the propeller (faster when going faster)
+            this.propellerAngle += dt * 20 * (this.speed / this.baseSpeed);
         }
         
         contains(x, y) {
@@ -337,19 +444,23 @@
                 const centerX = this.x * cScale;
                 const centerY = canvas.height - this.y * cScale;
                 
-                // Draw the airplane image
+                // Translate to airplane center and rotate
+                c.translate(centerX, centerY);
+                c.rotate(-this.angle); // Negative because canvas Y is inverted
+                
+                // Draw the airplane image centered at origin
                 c.drawImage(
                     this.image,
-                    centerX - drawSize / 2,
-                    centerY - drawSize / 2,
+                    -drawSize / 2,
+                    -drawSize / 2,
                     drawSize,
                     drawSize
                 );
                 
                 // Draw spinning propeller effect
-                // Propeller rotates perpendicular to movement (around the X-axis in 3D)
-                const propX = centerX + drawSize * 0.452; // Adjust based on your image
-                const propY = centerY + drawSize * 0.125;
+                // Propeller position relative to rotated airplane (flip for reverse)
+                const propX = this.direction === 1 ? drawSize * 0.452 : -drawSize * 0.452;
+                const propY = drawSize * 0.125; // Slight vertical offset
                 const propLength = drawSize * 0.25;
                 
                 // Calculate apparent width based on rotation angle (3D effect)
@@ -357,8 +468,7 @@
                 const width2 = Math.cos(this.propellerAngle + Math.PI / 2) * propLength;
                 
                 // Draw propeller blades with varying width (simulating 3D rotation)
-                //c.strokeStyle = 'rgba(200, 200, 260, 0.4)';
-                c.strokeStyle = 'hsla(200, 90%, 50%, 0.8)';
+                c.strokeStyle = 'hsla(200, 90%, 70%, 0.6)';
                 c.lineWidth = 6;
                 c.lineCap = 'round';
                 
@@ -391,12 +501,12 @@
     //  MAKE OBSTACLES  ---------------------------------------------------------------------
     function makeObstacles() {
         obstacles = [];
-        obstacles.push(new OBSTACLE(0.8 * simWidth, 0.35 * simHeight));
-        obstacles.push(new OBSTACLE(0.25 * simWidth, 0.5 * simHeight));
+        obstacles.push(new OBSTACLE(0.8 * simWidth, 0.45 * simHeight));
+        obstacles.push(new OBSTACLE(0.25 * simWidth, 0.65 * simHeight));
         
         // Create moving obstacles
         movingObstacles = [];
-        movingObstacles.push(new MovingObstacle(0.8 * simHeight, 0.4, 0.3));
+        movingObstacles.push(new MovingObstacle(0.3 * simHeight, 0.6, 0.3));
     }
 
     //  BOID CLASS ---------------------------------------------------------------------
@@ -440,12 +550,11 @@
             const arrowDent = Math.min((1/this.speedAdjust) * 1.0 * radScale, 0.7 * radScale);
 
             // code hsl based on speed and height ----------
-            //this.hueCounter += 0.05;
+            /*this.hueCounter += 0.05;
             if (this.hueCounter >= 360) {
                 this.hueCounter = 0;
-            }
-            this.hue = 160 - this.speedAdjust * 200;
-            //this.hue = 260 + this.speedAdjust * 70 + 20 * Math.sin(this.hueCounter * Math.PI / 180);
+            }*/
+            this.hue = 0 - this.speedAdjust * 40;
             this.saturation = 30 + (this.pos.y / simHeight * 50);  
             this.lightness = 40 + (this.pos.y / simHeight * 30); 
             
@@ -471,8 +580,7 @@
             c.lineTo(-arrowLength + arrowDent, 0);
             c.lineTo(-arrowLength, arrowWidth / 2);
             c.closePath();
-            c.fillStyle = `hsl(${this.hue - 275}, ${this.saturation}%, ${this.lightness}%)`;
-            c.lineWidth = 1.0;
+            c.fillStyle = `hsl(${this.hue + 90}, ${this.saturation}%, ${this.lightness}%)`;
             c.fill();
 
             // stroke wings ----------
@@ -480,6 +588,7 @@
             c.moveTo(arrowLength, 0);
             c.lineTo(-arrowLength, -arrowWidth / 2);
             c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+            c.lineWidth = 1.0;
             c.stroke();
             c.beginPath();
             c.moveTo(-arrowLength, arrowWidth / 2);
@@ -699,7 +808,7 @@
     function setupScene() {
         boidRadius = 0.015
         boidProps = {
-            numBoids: 2400,
+            numBoids: 2800,
             marginX: simWidth * 0.2,
             marginY: simHeight * 0.2,
             minDistance: 5.0 * boidRadius, // Rule 1 - The distance to stay away from other Boids
@@ -709,12 +818,14 @@
             centeringFactor: 5.0, // Rule 3 - Adjust velocity by this %
             speedLimit: 1.1, // clamp speed to this value
             turnFactor: 1.0, // How strongly Boids turn back when near edge
-            trailLength: -8 // Number of trail points to keep (negative for last N points)
+            trailLength: -10 // Number of trail points to keep (negative for last N points)
         }
         deltaT = 1/60;
-        // Load kitty plane image
+        // Load kitty plane images
         kittyPlaneImage = new Image();
         kittyPlaneImage.src = 'kitty_plane.png';
+        kittyPlaneReverseImage = new Image();
+        kittyPlaneReverseImage.src = 'kitty_plane_reverse.png';
         // make Boids ----------
         makeBoids();
         // make Obstacles ----------
