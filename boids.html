@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.9</title>
+    <title>Boids 1.10</title>
     <style>
         html, body {
             margin: 0;
@@ -371,7 +371,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             ctx.clip();
             
             // Draw outline strokes
-            ctx.strokeStyle = 'hsla(200, 80%, 80%, 0.8)';
+            ctx.strokeStyle = 'hsl(200, 80%, 80%)';
             ctx.lineWidth = 6;
             for (let puff of puffs) {
                 ctx.beginPath();
@@ -380,7 +380,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Fill all puffs
-            ctx.fillStyle = 'white';
+            ctx.fillStyle = 'hsl(0, 0%, 100%)';
             for (let puff of puffs) {
                 ctx.beginPath();
                 ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
@@ -1278,6 +1278,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  RUN  ------------------------------------------------
     setupScene();
+    
+    // Load and play audio
+    const audio = new Audio('audio.mp3');
+    audio.loop = true; // Loop the audio
+    audio.volume = 0.5; // Set volume to 50%
+    
+    // Try to play audio immediately, or wait for user interaction if blocked
+    audio.play().catch(function(error) {
+        console.log('Audio autoplay blocked. Waiting for user interaction...');
+        // Play on first click anywhere on the page
+        document.addEventListener('click', function() {
+            audio.play();
+        }, { once: true });
+    });
+    
     function update() {
         simulateEverything();
         drawEverything();
