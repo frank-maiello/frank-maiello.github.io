@@ -1,8 +1,17 @@
+<!-- 
+BOIDS :: autonomous flocking behavior ::
+copyright 2025 :: Frank Maiello :: maiello.frank@gmail.com ::
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. In no event shall the author or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort or otherwise, arising from, our of or in, connection with the software or the use of other dealings in the Software.
+-->
+
 <!DOCTYPE html>
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.4</title>
+    <title>Boids 1.7</title>
     <style>
         html, body {
             margin: 0;
@@ -37,12 +46,6 @@
     cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
     simWidth = canvas.width / cScale;
     simHeight = canvas.height / cScale;
-
-    if (simWidth < simHeight) {
-        doTrails = false;
-    } else {
-        doTrails = true;
-    }
 
     // Mouse tracking
     let mouseX = simWidth / 2;
@@ -261,34 +264,172 @@
             this.x = x;
             this.y = y;
             this.radius = radius;
+            // Create unique cloud shape using true randomness (changes on refresh)
+            this.seed = Math.random();
+            this.generatePuffs();
+            this.renderToCanvas();
+        }
+        
+        generatePuffs() {
+            const numPuffs = 4;
+            this.puffData = [];
+            
+            // Use seed to create deterministic but varied random values
+            let rng = this.seed;
+            const seededRandom = () => {
+                rng = (rng * 9301 + 49297) % 233280;
+                return rng / 233280;
+            };
+            
+            // Create cloud-like arrangement with horizontal spread
+            for (let i = 0; i < numPuffs; i++) {
+                if (i < 3) {
+                    // First 3 puffs form the base with flat bottom
+                    // Horizontal position: spread across the width with variation
+                    const offsetX = -0.7 + (i / 2) * 1.4 + (seededRandom() - 0.5) * 0.05;
+                    
+                    // Size variation
+                    const size = 0.6 + seededRandom() * 0.3;
+                    
+                    // Vertical position: constrained to be close to the crop line
+                    const offsetY = 0.3 + (seededRandom() - 0.5) * 0.4;
+                    
+                    this.puffData.push({
+                        offsetX: offsetX,
+                        offsetY: offsetY,
+                        size: size
+                    });
+                } else {
+                    // Fourth puff adds height - positioned above the crop line
+                    const offsetX = -0.2 + (seededRandom() - 0.5) * 0.4; // More centered
+                    const size = 0.5 + seededRandom() * 0.25; // Slightly smaller
+                    const offsetY = -0.3 + (seededRandom() - 0.5) * 0.2; // Positioned higher (negative = up)
+                    
+                    this.puffData.push({
+                        offsetX: offsetX,
+                        offsetY: offsetY,
+                        size: size
+                    });
+                }
+            }
         }
         
         contains(x, y) {
-            const dist = Math.sqrt((x - this.x) ** 2 + (y - this.y) ** 2);
-            return dist < this.radius;
+            // Calculate the crop line position
+            const r = this.radius;
+            const cropY = this.y + r * 0.5;
+            
+            // Don't collide below the crop line
+            if (y > cropY) return false;
+            
+            // Elliptical collision - wider horizontally than vertically
+            const dx = (x - this.x) / (r * 1.5); // 1.5x wider horizontally
+            const dy = (y - this.y) / r;
+            return (dx * dx + dy * dy) < 1;
+        }
+        
+        renderToCanvas() {
+            // Create offscreen canvas sized for the cloud
+            const r = this.radius * cScale;
+            const padding = 30;
+            const size = r * 3 + padding * 2;
+            
+            this.offscreenCanvas = document.createElement('canvas');
+            this.offscreenCanvas.width = size;
+            this.offscreenCanvas.height = size;
+            const ctx = this.offscreenCanvas.getContext('2d');
+            
+            // Center position in offscreen canvas
+            const cx = size / 2;
+            const cy = size / 2;
+            
+            // Build puffs array
+            const puffs = this.puffData.map(puff => ({
+                x: cx + r * puff.offsetX,
+                y: cy + r * puff.offsetY,
+                r: r * puff.size,
+                data: puff
+            }));
+            
+            puffs.sort((a, b) => a.x - b.x);
+            
+            const bottomY = Math.max(...puffs.map(puff => puff.y + puff.r * 0.5));
+            
+            ctx.save();
+            
+            // Create clipping region
+            const leftmost = Math.min(...puffs.map(p => p.x - p.r)) - 20;
+            const rightmost = Math.max(...puffs.map(p => p.x + p.r)) + 20;
+            const topmost = Math.min(...puffs.map(p => p.y - p.r)) - 20;
+            
+            ctx.beginPath();
+            ctx.rect(leftmost, topmost, rightmost - leftmost, bottomY - topmost + 2);
+            ctx.clip();
+            
+            // Draw outline strokes
+            ctx.strokeStyle = 'hsla(200, 80%, 80%, 0.8)';
+            ctx.lineWidth = 6;
+            for (let puff of puffs) {
+                ctx.beginPath();
+                ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+            
+            // Fill all puffs
+            ctx.fillStyle = 'white';
+            for (let puff of puffs) {
+                ctx.beginPath();
+                ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+            
+            // Draw bottom edge
+            const bottomTraceY = bottomY + 1.5;
+            ctx.strokeStyle = 'hsla(200, 80%, 80%, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let i = 0; i < puffs.length; i++) {
+                const puff = puffs[i];
+                const dy = bottomY - puff.y;
+                if (dy < puff.r && dy > -puff.r) {
+                    const ratio = Math.min(1, Math.max(-1, dy / puff.r));
+                    const angle = Math.acos(ratio);
+                    const extend = 2;
+                    const leftX = puff.x - puff.r * Math.sin(angle) - (i === 0 ? extend : 0);
+                    const rightX = puff.x + puff.r * Math.sin(angle) + (i === puffs.length - 1 ? extend : 0);
+                    ctx.moveTo(leftX, bottomTraceY);
+                    ctx.lineTo(rightX, bottomTraceY);
+                }
+            }
+            ctx.stroke();
+            
+            // Store the offset for drawing
+            this.offsetX = size / 2;
+            this.offsetY = size / 2;
         }
         
         draw() {
-            c.fillStyle = 'rgba(100, 100, 255, 0.2)';
-            c.strokeStyle = 'rgba(50, 50, 255, 0.5)';
-            c.lineWidth = 2;
-            c.beginPath();
-            c.arc(
-                this.x * cScale, 
-                canvas.height - this.y * cScale, 
-                this.radius * cScale, 
-                0, 
-                2 * Math.PI);
-            c.fill();
-            c.stroke();
+            const cx = this.x * cScale;
+            const cy = canvas.height - this.y * cScale;
+            
+            // Simply draw the pre-rendered canvas
+            c.drawImage(this.offscreenCanvas, cx - this.offsetX, cy - this.offsetY);
         }
     }
 
     //  MOVING OBSTACLE CLASS ---------------------------------------------------------------------
     class MovingObstacle {
-        constructor(y, speed = 0.5, size = 0.3, respawnDelay = 10.0) {
-            this.y = y;
-            this.baseY = y; // Store initial y for loop calculation
+        constructor(y, speed = 0.5, size = 0.3, respawnDelay = 30.0, isFirstPass = false) {
+            // On first pass, try to spawn above the topmost cloud
+            if (isFirstPass) {
+                this.y = this.pickAltitudeAboveClouds();
+            } else {
+                // Randomize vertical position avoiding cloud elevations
+                this.y = this.pickSafeAltitude();
+            }
+            this.baseY = this.y; // Store initial y for loop calculation
             this.speed = speed; // Units per second
             this.baseSpeed = speed; // Store base speed
             this.size = size; // Width/height of the obstacle
@@ -298,11 +439,27 @@
             this.waitTimer = 0;
             this.propellerAngle = 0; // For spinning propeller effect
             this.angle = 0; // Current orientation angle
+            this.isUpsideDown = false; // Whether plane is flying upside-down
+            
+            // Determine if plane should be upside-down (only if in top 30%)
+            const topThreshold = simHeight * 0.7; // 30% from top
+            if (this.y > topThreshold) {
+                this.isUpsideDown = Math.random() < 0.5; // 50% chance
+                if (this.isUpsideDown) {
+                    this.angle = Math.PI; // Start upside-down
+                }
+            }
             
             // Direction: 1 = left to right, -1 = right to left
             this.direction = 1;
             this.x = -size; // Start position based on direction
-            this.image = kittyPlaneImage;
+            
+            // Set image based on direction and upside-down state
+            if (this.isUpsideDown) {
+                this.image = kittyPlaneReverseImage; // Use reverse/flipped image when upside-down
+            } else {
+                this.image = kittyPlaneImage;
+            }
             
             // Loop-the-loop parameters (clothoid trajectory)
             this.loopStartX = 0.4 * simWidth; // Where the loop begins
@@ -314,6 +471,75 @@
             this.loopDecided = false; // Whether we've decided about the loop yet
         }
         
+        pickAltitudeAboveClouds() {
+            const minY = simHeight * 0.05;
+            const maxY = simHeight * 0.9;
+            const buffer = 0.15;
+            
+            if (obstacles.length === 0) {
+                // No clouds, use regular method
+                return this.pickSafeAltitude();
+            }
+            
+            // Find the highest cloud (largest y value)
+            let highestCloudBottom = -Infinity;
+            for (let obstacle of obstacles) {
+                const cloudBottom = obstacle.y + obstacle.radius * 0.5;
+                if (cloudBottom > highestCloudBottom) {
+                    highestCloudBottom = cloudBottom;
+                }
+            }
+            
+            // Try to spawn above the highest cloud
+            const targetY = highestCloudBottom + buffer;
+            
+            // Check if there's enough room above
+            if (targetY + 0.1 <= maxY) {
+                // There's room, pick a random position above the highest cloud
+                return targetY + Math.random() * (maxY - targetY);
+            } else {
+                // Not enough room above, use regular method
+                return this.pickSafeAltitude();
+            }
+        }
+        
+        pickSafeAltitude() {
+            const minY = simHeight * 0.05;
+            const maxY = simHeight * 0.9;
+            const buffer = 0.15; // Extra spacing buffer around clouds
+            
+            // Try to find a safe altitude (max 20 attempts)
+            for (let attempt = 0; attempt < 20; attempt++) {
+                const candidateY = minY + Math.random() * (maxY - minY);
+                let isSafe = true;
+                
+                // Check against all cloud obstacles
+                for (let obstacle of obstacles) {
+                    // In simulation coordinates: higher y = higher up on screen
+                    const cloudBottom = obstacle.y + obstacle.radius * 0.5; // Flat bottom (crop line)
+                    const cloudTop = obstacle.y - obstacle.radius * 1.2; // Approximate top below center
+                    
+                    // Cloud occupies the vertical range from cloudTop (lower y) to cloudBottom (higher y)
+                    const effectiveTop = cloudTop - buffer; // Extend safe zone below cloud
+                    const effectiveBottom = cloudBottom + buffer; // Extend safe zone above cloud
+                    
+                    // Check if candidate altitude conflicts with this cloud
+                    // Plane is unsafe if it's between the cloud's top and bottom
+                    if (candidateY >= effectiveTop && candidateY <= effectiveBottom) {
+                        isSafe = false;
+                        break;
+                    }
+                }
+                
+                if (isSafe) {
+                    return candidateY;
+                }
+            }
+            
+            // If no safe altitude found after attempts, return a default safe position
+            return simHeight * 0.2; // Low altitude as fallback
+        }
+        
         update(dt) {
             if (this.isWaiting) {
                 // Count down the respawn timer
@@ -323,16 +549,32 @@
                     this.direction *= -1;
                     if (this.direction === 1) {
                         this.x = -this.size; // Start from left
-                        this.image = kittyPlaneImage;
                     } else {
                         this.x = simWidth + this.size; // Start from right
-                        this.image = kittyPlaneReverseImage;
                     }
-                    this.y = this.baseY;
+                    
+                    // Randomize vertical position avoiding cloud elevations
+                    this.y = this.pickSafeAltitude();
+                    this.baseY = this.y;
+                    
+                    // Determine if plane should be upside-down (only if in top 30%)
+                    const topThreshold = simHeight * 0.7;
+                    this.isUpsideDown = false;
+                    if (this.y > topThreshold) {
+                        this.isUpsideDown = Math.random() < 0.5;
+                    }
+                    
+                    // Set image based on direction and upside-down state
+                    if (this.isUpsideDown) {
+                        this.image = this.direction === 1 ? kittyPlaneReverseImage : kittyPlaneImage;
+                    } else {
+                        this.image = this.direction === 1 ? kittyPlaneImage : kittyPlaneReverseImage;
+                    }
+                    
                     this.pathDistance = 0;
                     this.loopPhase = 0;
                     this.loopProgress = 0;
-                    this.angle = 0;
+                    this.angle = this.isUpsideDown ? Math.PI : 0;
                     this.loopDecided = false;
                     this.willDoLoop = false;
                     this.isWaiting = false;
@@ -343,9 +585,12 @@
                     this.x >= this.loopStartX : 
                     this.x <= (simWidth - this.loopStartX);
                     
-                if (this.loopPhase === 0 && loopTrigger) {
-                    // Decide whether to do a loop (50% chance)
-                    if (!this.loopDecided) {
+                if (this.loopPhase === 0 && loopTrigger && !this.isUpsideDown) {
+                    // Decide whether to do a loop (50% chance) - only if not upside-down
+                    // and only if plane is within bottom 25% of screen
+                    const isInBottomQuarter = this.baseY <= simHeight * 0.35;
+                    
+                    if (!this.loopDecided && isInBottomQuarter) {
                         this.willDoLoop = Math.random() < 0.5;
                         this.loopDecided = true;
                     }
@@ -363,7 +608,7 @@
                     // Before the loop - straight flight
                     this.x += this.speed * dt * this.direction;
                     this.y = this.baseY;
-                    this.angle = 0;
+                    this.angle = this.isUpsideDown ? Math.PI : 0;
                     this.speed = this.baseSpeed;
                     
                 } else if (this.loopPhase === 1) {
@@ -411,7 +656,7 @@
                     // After the loop - straight flight
                     this.x += this.speed * dt * this.direction;
                     this.y = this.baseY;
-                    this.angle = 0;
+                    this.angle = this.isUpsideDown ? Math.PI : 0;
                     this.speed = this.baseSpeed;
                 }
                 
@@ -458,9 +703,17 @@
                 );
                 
                 // Draw spinning propeller effect
-                // Propeller position relative to rotated airplane (flip for reverse)
-                const propX = this.direction === 1 ? drawSize * 0.452 : -drawSize * 0.452;
-                const propY = drawSize * 0.125; // Slight vertical offset
+                // Propeller position relative to rotated airplane
+                // Account for both direction and upside-down orientation
+                let propX, propY;
+                if (this.isUpsideDown) {
+                    // When upside-down, flip the horizontal position
+                    propX = this.direction === 1 ? -drawSize * 0.452 : drawSize * 0.452;
+                    propY = drawSize * 0.125; // Keep same vertical offset (rotation handles the flip)
+                } else {
+                    propX = this.direction === 1 ? drawSize * 0.452 : -drawSize * 0.452;
+                    propY = drawSize * 0.125; // Slight vertical offset
+                }
                 const propLength = drawSize * 0.25;
                 
                 // Calculate apparent width based on rotation angle (3D effect)
@@ -506,7 +759,7 @@
         
         // Create moving obstacles
         movingObstacles = [];
-        movingObstacles.push(new MovingObstacle(0.3 * simHeight, 0.6, 0.3));
+        movingObstacles.push(new MovingObstacle(0.3 * simHeight, 0.6, 0.3, 30.0, true)); // true = isFirstPass
     }
 
     //  BOID CLASS ---------------------------------------------------------------------
@@ -529,7 +782,7 @@
         get right() {
             return this.pos.x + this.radius;
         }
-        simulate(){
+        simulate() {
             this.pos.x += this.vel.x * deltaT;
             this.pos.y += this.vel.y * deltaT;
             if (doTrails == true) {
@@ -537,16 +790,14 @@
                 this.history = this.history.slice(boidProps.trailLength);
             }
         }
-        draw(){
-            // calculate angle of velocity vector
-            const angle = Math.atan2(this.vel.y, this.vel.x);
+        draw() {
             // scale size based on normalized velocity
             const radScale = this.radius * cScale;
             this.speedAdjust = this.vel.length() / boidProps.speedLimit;
 
             // arrow dimensions ----------
             const arrowLength = Math.max((this.speedAdjust) * 1.5 * radScale, 1 * radScale);
-            const arrowWidth = Math.min((1/this.speedAdjust) * 0.8 * radScale, 1.8 * radScale);
+            const arrowWidth = Math.min((1/this.speedAdjust) * 0.8 * radScale, 1.5 * radScale);
             const arrowDent = Math.min((1/this.speedAdjust) * 1.0 * radScale, 0.7 * radScale);
 
             // code hsl based on speed and height ----------
@@ -554,35 +805,62 @@
             if (this.hueCounter >= 360) {
                 this.hueCounter = 0;
             }*/
-            this.hue = 0 - this.speedAdjust * 40;
-            this.saturation = 30 + (this.pos.y / simHeight * 50);  
-            this.lightness = 40 + (this.pos.y / simHeight * 30); 
-            
+            this.hue = 350 - this.speedAdjust * 40;
+            //this.hue = 160 - this.speedAdjust * 200;
+            //this.hue = 30 - this.speedAdjust * 40;
+            //this.hue = 180 - this.speedAdjust * 360;
+            //this.saturation = 30 + (this.pos.y / simHeight * 50);  
+            this.saturation = 85;  
+            //this.lightness = 100 - (50 + (this.pos.y / simHeight * 30)); 
+            this.lightness = 35 + (1 - (this.pos.y / simHeight)) * 35; 
+
             // Draw trail ----------
             if (doTrails == true && this.history.length > 0) {
                 c.beginPath();
+                c.strokeStyle = 'hsla(0, 0%, 0%, 0.3)';
+                c.lineWidth = 1.0;
                 c.moveTo(cX({x: this.history[0][0]}), cY({y: this.history[0][1]}));
-                for (const point of this.history) {
+                for (var point of this.history) {
                     c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
+                    
                 }
-                c.strokeStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness * 1.2}%, 0.5)`;
+                //c.strokeStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness * 1.2}%, 0.5)`;
+                c.strokeStyle = 'hsla(0, 0%, 0%, 0.3)';
                 c.lineWidth = 1.0;
                 c.stroke();
-            }
+            } 
 
             // Draw boid ----------
+            const angle = Math.atan2(this.vel.y, this.vel.x);
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
             c.rotate(-angle);
+            c.beginPath();
+            
+            /*
+            c.arc(0, 0, 0.5 * arrowWidth, 0, 2 * Math.PI);
+            c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
+            c.fill();
+            */
+
+            // fill arrow shape ----------
             c.beginPath();
             c.moveTo(arrowLength, 0);
             c.lineTo(-arrowLength, -arrowWidth / 2);
             c.lineTo(-arrowLength + arrowDent, 0);
             c.lineTo(-arrowLength, arrowWidth / 2);
             c.closePath();
-            c.fillStyle = `hsl(${this.hue + 90}, ${this.saturation}%, ${this.lightness}%)`;
+            c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
             c.fill();
 
+            /*
+            // draw body circle ----------
+            c.beginPath();
+            c.arc(-1.5 * arrowLength, 0, 0.4 * radScale, 0, 2 * Math.PI);
+            c.fillStyle = `hsl(${this.hue + 60}, ${this.saturation}%, ${this.lightness * 0.9}%)`;
+            c.fill();
+            */
+            
             // stroke wings ----------
             c.beginPath();
             c.moveTo(arrowLength, 0);
@@ -594,6 +872,15 @@
             c.moveTo(-arrowLength, arrowWidth / 2);
             c.lineTo(arrowLength, 0);
             c.stroke();
+
+            /*
+            // draw eye circle ----------
+            c.beginPath();
+            c.arc(0.1 * arrowLength, -0.1 * arrowWidth, 0.005 * cScale, 0, 2 * Math.PI);
+            //c.fillStyle = `blue`;
+            c.fillStyle = `hsl(210, 80%, 30%)`;
+            c.fill();
+            */
 
             /*// draw beak
             c.beginPath();
@@ -762,9 +1049,11 @@
             spatialGrid.insert(boid);
         }
         
-        // Update moving obstacles
-        for (let obstacle of movingObstacles) {
-            obstacle.update(deltaT);
+        if (doKitty == true) {
+            // Update moving obstacles
+            for (let obstacle of movingObstacles) {
+                obstacle.update(deltaT);
+            }
         }
         
         for (var i = 0; i < Boids.length; i++) {
@@ -787,28 +1076,30 @@
         // Clear canvas
         c.clearRect(0, 0, width, height);
         
+        // Draw all obstacles
+        for (let obstacle of obstacles) {
+            obstacle.draw();
+        }
+
         // Draw boids
         for (var b = 0; b < Boids.length; b++) {
             boid = Boids[b];
             boid.draw();
         }
-
-        // Draw all obstacles
-        for (let obstacle of obstacles) {
-            obstacle.draw();
-        }
         
-        // Draw moving obstacles
-        for (let obstacle of movingObstacles) {
-            obstacle.draw();
+        if (doKitty == true) {
+            // Draw moving obstacles
+            for (let obstacle of movingObstacles) {
+                obstacle.draw();
+            }
         }
     }
 
     //  SETUP SCENE  ------------
     function setupScene() {
-        boidRadius = 0.015
+        boidRadius = 0.02
         boidProps = {
-            numBoids: 2800,
+            numBoids: 2000,
             marginX: simWidth * 0.2,
             marginY: simHeight * 0.2,
             minDistance: 5.0 * boidRadius, // Rule 1 - The distance to stay away from other Boids
@@ -821,7 +1112,7 @@
             trailLength: -10 // Number of trail points to keep (negative for last N points)
         }
         deltaT = 1/60;
-        // Load kitty plane images
+        // Load plane images
         kittyPlaneImage = new Image();
         kittyPlaneImage.src = 'kitty_plane.png';
         kittyPlaneReverseImage = new Image();
@@ -832,6 +1123,13 @@
         makeObstacles()
         // make spatial grid ----------
         spatialGrid = new SpatialHashGrid(boidProps.visualRange);
+        // decide on trails based on aspect ratio  ---------
+        if (simWidth < simHeight) {
+            doTrails = false;
+        } else {
+            doTrails = true;
+        }
+        doKitty = true;
     }
 
     //  RUN  ------------------------------------------------
