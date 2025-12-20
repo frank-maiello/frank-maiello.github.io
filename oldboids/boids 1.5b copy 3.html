@@ -1,0 +1,1006 @@
+<!-- 
+BOIDS :: autonomous flocking behavior ::
+copyright 2025 :: Frank Maiello :: maiello.frank@gmail.com ::
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. In no event shall the author or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort or otherwise, arising from, our of or in, connection with the software or the use of other dealings in the Software.
+-->
+
+<!DOCTYPE html>
+<html>
+    <head>
+    <meta name="viewport" content="width=500, initial-scale=1.0">
+    <title>Boids 1.5</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        body {
+            background-image: url('sky.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+    </style>
+    </head>
+<body>
+<canvas id="myCanvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%">
+</canvas>
+<script>
+
+    // Setup canvas and handle window resizing  ------------------
+    canvas = document.getElementById("myCanvas");
+    c = canvas.getContext("2d");
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+
+    simMinWidth = 2.0;
+    cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+    simWidth = canvas.width / cScale;
+    simHeight = canvas.height / cScale;
+
+    // Mouse tracking
+    let mouseX = simWidth / 2;
+    let mouseY = simHeight / 2;
+    let draggedObstacle = null;
+    let lastClickTime = 0;
+    let lastClickedObstacle = null;
+
+    canvas.addEventListener('mousedown', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = (e.clientX - rect.left) / cScale;
+        mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
+        
+        // Find which obstacle was clicked
+        let clickedObstacle = null;
+        for (let obs of obstacles) {
+            if (obs.contains(mouseX, mouseY)) {
+                clickedObstacle = obs;
+                break;
+            }
+        }
+        
+        if (e.button === 0) { // Left click
+            const currentTime = Date.now();
+            
+            // Check for double-click
+            if (currentTime - lastClickTime < 300) {
+                if (clickedObstacle && clickedObstacle === lastClickedObstacle) {
+                    // Double-click on obstacle: create new obstacle at this position
+                    obstacles.push(new OBSTACLE(mouseX, mouseY));
+                } else if (!clickedObstacle && lastClickedObstacle === null) {
+                    // Double-click on empty canvas: create new obstacle
+                    obstacles.push(new OBSTACLE(mouseX, mouseY));
+                }
+                lastClickTime = 0;
+                lastClickedObstacle = null;
+            } else {
+                // Single click: drag obstacle if clicked on one
+                draggedObstacle = clickedObstacle;
+                lastClickTime = currentTime;
+                lastClickedObstacle = clickedObstacle;
+            }
+        } else if (e.button === 2) { // Right click
+            // Delete the clicked obstacle
+            if (clickedObstacle) {
+                obstacles = obstacles.filter(obs => obs !== clickedObstacle);
+            }
+            e.preventDefault();
+        }
+    });
+
+    canvas.addEventListener('mouseup', function(e) {
+        draggedObstacle = null;
+    });
+
+    canvas.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = (e.clientX - rect.left) / cScale;
+        mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
+        
+        if (draggedObstacle) {
+            draggedObstacle.x = mouseX;
+            draggedObstacle.y = mouseY;
+        }
+    });
+
+    //  HANDLE WINDOW RESIZING  ------------------
+    function resizeCanvas() {
+        canvas = document.getElementById("myCanvas");
+        c = canvas.getContext("2d");
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+
+        const oldSimWidth = simWidth;
+        const oldSimHeight = simHeight;
+
+        simMinWidth = 2.0;
+        cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+        simWidth = canvas.width / cScale;
+        simHeight = canvas.height / cScale;
+
+        // Calculate scale factors
+        const scaleX = simWidth / oldSimWidth;
+        const scaleY = simHeight / oldSimHeight;
+        
+        // Scale boid positions
+        if (typeof boid !== 'undefined' && boid != null) {
+            for (let boid of Boids) {
+                boid.pos.x *= scaleX;
+                boid.pos.y *= scaleY;
+            }
+        }
+        
+        // Scale obstacles
+        if (typeof obstacles !== 'undefined' && obstacles != null) {
+            for (let obstacle of obstacles) {
+                obstacle.x *= scaleX;
+                obstacle.y *= scaleY;
+            }
+        }
+    }
+    window.addEventListener("resize", resizeCanvas);
+
+    //  VECTOR OPERATIONS ---------------------------------------------------------------------
+    class Vector2 {
+        constructor(x = 0.0, y = 0.0) {
+            this.x = x; 
+            this.y = y;
+        }
+        clone() {
+            return new Vector2(this.x, this.y);
+        }
+        add(v, s=1) {
+            this.x += v.x * s;
+            this.y += v.y * s;
+            return this;
+        }
+        addVectors(a, b) {
+            this.x = a.x + b.x;
+            this.y = a.y + b.y;
+            return this;
+        }
+        subtract(v, s = 1.0) {
+            this.x -= v.x * s;
+            this.y -= v.y * s;
+            return this;
+        }
+        subtractVectors(a, b) {
+            this.x = a.x - b.x;
+            this.y = a.y - b.y;
+            return this;			
+        }
+        length() {
+            return Math.sqrt(this.x * this.x + this.y * this.y);
+        }
+        scale(s) {
+            this.x *= s;
+            this.y *= s;
+        }
+        normalize() {
+            const len = this.length();
+            if (len > 0) {
+                this.x /= len;
+                this.y /= len;
+            }
+            return this;
+        }
+    }
+
+    //  COORDINATE CONVERSION  -----------
+    function cX(pos) {
+        return pos.x * cScale;
+    }
+    function cY(pos) {
+        return canvas.height - pos.y * cScale;
+    }
+
+    //  SPATIAL HASH GRID ---------------------------------------------------------------------
+    class SpatialHashGrid {
+        constructor(cellSize) {
+            this.cellSize = cellSize;
+            this.grid = new Map();
+        }
+        
+        // Convert position to grid key
+        getKey(x, y) {
+            const gridX = Math.floor(x / this.cellSize);
+            const gridY = Math.floor(y / this.cellSize);
+            return `${gridX},${gridY}`;
+        }
+        
+        // Clear the grid
+        clear() {
+            this.grid.clear();
+        }
+        
+        // Add boid to grid
+        insert(boid) {
+            const key = this.getKey(boid.pos.x, boid.pos.y);
+            if (!this.grid.has(key)) {
+                this.grid.set(key, []);
+            }
+            this.grid.get(key).push(boid);
+        }
+        
+        // Get nearby boids within a radius
+        getNearby(boid, radius) {
+            const nearby = [];
+            const cellRadius = Math.ceil(radius / this.cellSize);
+            const centerX = Math.floor(boid.pos.x / this.cellSize);
+            const centerY = Math.floor(boid.pos.y / this.cellSize);
+            
+            // Check all cells within the radius
+            for (let dx = -cellRadius; dx <= cellRadius; dx++) {
+                for (let dy = -cellRadius; dy <= cellRadius; dy++) {
+                    const key = `${centerX + dx},${centerY + dy}`;
+                    if (this.grid.has(key)) {
+                        nearby.push(...this.grid.get(key));
+                    }
+                }
+            }
+            return nearby;
+        }
+    }
+    
+
+    //  OBSTACLE CLASS ---------------------------------------------------------------------
+    class OBSTACLE {
+        constructor(x, y, radius = 0.15) {
+            this.x = x;
+            this.y = y;
+            this.radius = radius;
+            // Create unique cloud shape using true randomness (changes on refresh)
+            this.seed = Math.random();
+            this.generatePuffs();
+            this.renderToCanvas();
+        }
+        
+        generatePuffs() {
+            const numPuffs = 3;
+            this.puffData = [];
+            
+            // Use seed to create deterministic but varied random values
+            let rng = this.seed;
+            const seededRandom = () => {
+                rng = (rng * 9301 + 49297) % 233280;
+                return rng / 233280;
+            };
+            
+            // Create cloud-like arrangement with horizontal spread
+            for (let i = 0; i < numPuffs; i++) {
+                // Horizontal position: spread across the width with variation
+                const offsetX = -0.7 + (i / (numPuffs - 1)) * 1.4 + (seededRandom() - 0.5) * 0.05;
+                
+                // Size variation
+                const size = 0.6 + seededRandom() * 0.3;
+                
+                // Vertical position: constrained to be no more than 0.5 radii above the bottom
+                // This ensures all puffs will be close to the crop line
+                const offsetY = 0.3 + (seededRandom() - 0.5) * 0.4;
+                
+                this.puffData.push({
+                    offsetX: offsetX,
+                    offsetY: offsetY,
+                    size: size
+                });
+            }
+        }
+        
+        contains(x, y) {
+            const dist = Math.sqrt((x - this.x) ** 2 + (y - this.y) ** 2);
+            return dist < this.radius;
+        }
+        
+        renderToCanvas() {
+            // Create offscreen canvas sized for the cloud
+            const r = this.radius * cScale;
+            const padding = 30;
+            const size = r * 3 + padding * 2;
+            
+            this.offscreenCanvas = document.createElement('canvas');
+            this.offscreenCanvas.width = size;
+            this.offscreenCanvas.height = size;
+            const ctx = this.offscreenCanvas.getContext('2d');
+            
+            // Center position in offscreen canvas
+            const cx = size / 2;
+            const cy = size / 2;
+            
+            // Build puffs array
+            const puffs = this.puffData.map(puff => ({
+                x: cx + r * puff.offsetX,
+                y: cy + r * puff.offsetY,
+                r: r * puff.size,
+                data: puff
+            }));
+            
+            puffs.sort((a, b) => a.x - b.x);
+            
+            const bottomY = Math.max(...puffs.map(puff => puff.y + puff.r * 0.5));
+            
+            ctx.save();
+            
+            // Create clipping region
+            const leftmost = Math.min(...puffs.map(p => p.x - p.r)) - 20;
+            const rightmost = Math.max(...puffs.map(p => p.x + p.r)) + 20;
+            const topmost = Math.min(...puffs.map(p => p.y - p.r)) - 20;
+            
+            ctx.beginPath();
+            ctx.rect(leftmost, topmost, rightmost - leftmost, bottomY - topmost + 2);
+            ctx.clip();
+            
+            // Draw outline strokes
+            ctx.strokeStyle = 'hsla(200, 80%, 80%, 0.8)';
+            ctx.lineWidth = 6;
+            for (let puff of puffs) {
+                ctx.beginPath();
+                ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+            
+            // Fill all puffs
+            ctx.fillStyle = 'white';
+            for (let puff of puffs) {
+                ctx.beginPath();
+                ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+            
+            // Draw bottom edge
+            const bottomTraceY = bottomY + 1.5;
+            ctx.strokeStyle = 'hsla(200, 80%, 80%, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let i = 0; i < puffs.length; i++) {
+                const puff = puffs[i];
+                const dy = bottomY - puff.y;
+                if (dy < puff.r && dy > -puff.r) {
+                    const ratio = Math.min(1, Math.max(-1, dy / puff.r));
+                    const angle = Math.acos(ratio);
+                    const extend = 2;
+                    const leftX = puff.x - puff.r * Math.sin(angle) - (i === 0 ? extend : 0);
+                    const rightX = puff.x + puff.r * Math.sin(angle) + (i === puffs.length - 1 ? extend : 0);
+                    ctx.moveTo(leftX, bottomTraceY);
+                    ctx.lineTo(rightX, bottomTraceY);
+                }
+            }
+            ctx.stroke();
+            
+            // Store the offset for drawing
+            this.offsetX = size / 2;
+            this.offsetY = size / 2;
+        }
+        
+        draw() {
+            const cx = this.x * cScale;
+            const cy = canvas.height - this.y * cScale;
+            
+            // Simply draw the pre-rendered canvas
+            c.drawImage(this.offscreenCanvas, cx - this.offsetX, cy - this.offsetY);
+        }
+    }
+
+    //  MOVING OBSTACLE CLASS ---------------------------------------------------------------------
+    class MovingObstacle {
+        constructor(y, speed = 0.5, size = 0.3, respawnDelay = 10.0) {
+            this.y = y;
+            this.baseY = y; // Store initial y for loop calculation
+            this.speed = speed; // Units per second
+            this.baseSpeed = speed; // Store base speed
+            this.size = size; // Width/height of the obstacle
+            this.radius = size * 0.7; // Effective radius for collision detection
+            this.respawnDelay = respawnDelay; // Seconds to wait before respawning
+            this.isWaiting = false;
+            this.waitTimer = 0;
+            this.propellerAngle = 0; // For spinning propeller effect
+            this.angle = 0; // Current orientation angle
+            
+            // Direction: 1 = left to right, -1 = right to left
+            this.direction = 1;
+            this.x = -size; // Start position based on direction
+            this.image = kittyPlaneImage;
+            
+            // Loop-the-loop parameters (clothoid trajectory)
+            this.loopStartX = 0.4 * simWidth; // Where the loop begins
+            this.loopRadius = 0.35 * simHeight; // Radius of the loop
+            this.loopPhase = 0; // Current phase through the loop (0 = before, 1-2 = during, 3+ = after)
+            this.pathDistance = 0; // Total distance traveled
+            this.loopProgress = 0; // Progress through the loop (0 to 1)
+            this.willDoLoop = false; // Whether this pass will do a loop
+            this.loopDecided = false; // Whether we've decided about the loop yet
+        }
+        
+        update(dt) {
+            if (this.isWaiting) {
+                // Count down the respawn timer
+                this.waitTimer -= dt;
+                if (this.waitTimer <= 0) {
+                    // Timer expired, respawn from opposite direction
+                    this.direction *= -1;
+                    if (this.direction === 1) {
+                        this.x = -this.size; // Start from left
+                        this.image = kittyPlaneImage;
+                    } else {
+                        this.x = simWidth + this.size; // Start from right
+                        this.image = kittyPlaneReverseImage;
+                    }
+                    this.y = this.baseY;
+                    this.pathDistance = 0;
+                    this.loopPhase = 0;
+                    this.loopProgress = 0;
+                    this.angle = 0;
+                    this.loopDecided = false;
+                    this.willDoLoop = false;
+                    this.isWaiting = false;
+                }
+            } else {
+                // Check if we've reached the loop start point
+                const loopTrigger = this.direction === 1 ? 
+                    this.x >= this.loopStartX : 
+                    this.x <= (simWidth - this.loopStartX);
+                    
+                if (this.loopPhase === 0 && loopTrigger) {
+                    // Decide whether to do a loop (50% chance)
+                    if (!this.loopDecided) {
+                        this.willDoLoop = Math.random() < 0.5;
+                        this.loopDecided = true;
+                    }
+                    
+                    if (this.willDoLoop) {
+                        this.loopPhase = 1;
+                        this.loopProgress = 0;
+                    } else {
+                        // Skip the loop, go straight to phase 2
+                        this.loopPhase = 2;
+                    }
+                }
+                
+                if (this.loopPhase === 0) {
+                    // Before the loop - straight flight
+                    this.x += this.speed * dt * this.direction;
+                    this.y = this.baseY;
+                    this.angle = 0;
+                    this.speed = this.baseSpeed;
+                    
+                } else if (this.loopPhase === 1) {
+                    // During the loop - follow circular trajectory
+                    const loopCircumference = 2 * Math.PI * this.loopRadius;
+                    const progressSpeed = this.baseSpeed / loopCircumference;
+                    
+                    // Advance through the loop based on time
+                    this.loopProgress += progressSpeed * dt;
+                    
+                    if (this.loopProgress >= 1.0) {
+                        // Loop complete
+                        this.loopPhase = 2;
+                        this.loopProgress = 0;
+                        this.y = this.baseY;
+                        this.angle = 0;
+                        this.speed = this.baseSpeed;
+                        // Continue moving forward after loop
+                        this.x += this.speed * dt * this.direction;
+                    } else {
+                        // Smooth continuous trajectory
+                        const p = this.loopProgress;
+                        
+                        // Smooth ease-in/ease-out using cosine
+                        const easeProgress = 0.5 - 0.5 * Math.cos(p * Math.PI);
+                        
+                        // Full 2π rotation (base theta is always positive)
+                        const theta = easeProgress * 2 * Math.PI;
+                        
+                        // Smooth speed variation
+                        const speedMult = 0.85 + 0.15 * Math.sin(theta * 0.5);
+                        this.speed = this.baseSpeed * speedMult;
+                        
+                        // Move along the circular path - velocity is tangent to the circle
+                        // X movement direction depends on flight direction
+                        this.x += this.speed * Math.cos(theta) * dt * this.direction;
+                        // Y movement is always upward for the loop
+                        this.y += this.speed * Math.sin(theta) * dt;
+                        
+                        // Plane angle follows the tangent (flip for reverse direction)
+                        this.angle = theta * this.direction;
+                    }
+                    
+                } else {
+                    // After the loop - straight flight
+                    this.x += this.speed * dt * this.direction;
+                    this.y = this.baseY;
+                    this.angle = 0;
+                    this.speed = this.baseSpeed;
+                }
+                
+                // Check if passed the edge (either direction)
+                const passedEdge = this.direction === 1 ? 
+                    this.x - this.size > simWidth : 
+                    this.x + this.size < 0;
+                    
+                if (passedEdge) {
+                    // Start waiting timer
+                    this.isWaiting = true;
+                    this.waitTimer = this.respawnDelay;
+                }
+            }
+            
+            // Spin the propeller (faster when going faster)
+            this.propellerAngle += dt * 20 * (this.speed / this.baseSpeed);
+        }
+        
+        contains(x, y) {
+            // Use rectangular collision for the moving obstacle
+            return x >= this.x - this.size/2 && x <= this.x + this.size/2 &&
+                   y >= this.y - this.size/2 && y <= this.y + this.size/2;
+        }
+        
+        draw() {
+            if (this.image && this.image.complete) {
+                c.save();
+                const drawSize = this.size * cScale;
+                const centerX = this.x * cScale;
+                const centerY = canvas.height - this.y * cScale;
+                
+                // Translate to airplane center and rotate
+                c.translate(centerX, centerY);
+                c.rotate(-this.angle); // Negative because canvas Y is inverted
+                
+                // Draw the airplane image centered at origin
+                c.drawImage(
+                    this.image,
+                    -drawSize / 2,
+                    -drawSize / 2,
+                    drawSize,
+                    drawSize
+                );
+                
+                // Draw spinning propeller effect
+                // Propeller position relative to rotated airplane (flip for reverse)
+                const propX = this.direction === 1 ? drawSize * 0.452 : -drawSize * 0.452;
+                const propY = drawSize * 0.125; // Slight vertical offset
+                const propLength = drawSize * 0.25;
+                
+                // Calculate apparent width based on rotation angle (3D effect)
+                const width1 = Math.cos(this.propellerAngle) * propLength;
+                const width2 = Math.cos(this.propellerAngle + Math.PI / 2) * propLength;
+                
+                // Draw propeller blades with varying width (simulating 3D rotation)
+                c.strokeStyle = 'hsla(200, 90%, 70%, 0.6)';
+                c.lineWidth = 6;
+                c.lineCap = 'round';
+                
+                // Vertical blade (appears to change width as it rotates)
+                c.beginPath();
+                c.moveTo(propX, propY - width1);
+                c.lineTo(propX, propY + width1);
+                c.stroke();
+                
+                // Second blade 90 degrees out of phase
+                c.beginPath();
+                c.moveTo(propX, propY - width2);
+                c.lineTo(propX, propY + width2);
+                c.stroke();
+                
+                c.restore();
+            } else {
+                // Fallback if image not loaded
+                c.fillStyle = 'rgba(255, 100, 100, 0.5)';
+                c.fillRect(
+                    this.x * cScale - this.size * cScale / 2,
+                    canvas.height - this.y * cScale - this.size * cScale / 2,
+                    this.size * cScale,
+                    this.size * cScale
+                );
+            }
+        }
+    }
+
+    //  MAKE OBSTACLES  ---------------------------------------------------------------------
+    function makeObstacles() {
+        obstacles = [];
+        obstacles.push(new OBSTACLE(0.8 * simWidth, 0.45 * simHeight));
+        obstacles.push(new OBSTACLE(0.25 * simWidth, 0.65 * simHeight));
+        
+        // Create moving obstacles
+        movingObstacles = [];
+        movingObstacles.push(new MovingObstacle(0.3 * simHeight, 0.6, 0.3));
+    }
+
+    //  BOID CLASS ---------------------------------------------------------------------
+    class BOID {
+        constructor(pos, vel, hue) {
+            this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.hue = hue;
+            this.saturation = 0;
+            this.lightness = 0;
+            this.radius = boidRadius;
+            this.angle = 0;
+            this.hueCounter = 0;
+            this.speedAdjust = 0;
+            this.history = [];
+        }
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        simulate() {
+            this.pos.x += this.vel.x * deltaT;
+            this.pos.y += this.vel.y * deltaT;
+            if (doTrails == true) {
+                this.history.push([this.pos.x, this.pos.y])
+                this.history = this.history.slice(boidProps.trailLength);
+            }
+        }
+        draw() {
+            // scale size based on normalized velocity
+            const radScale = this.radius * cScale;
+            this.speedAdjust = this.vel.length() / boidProps.speedLimit;
+
+            // arrow dimensions ----------
+            const arrowLength = Math.max((this.speedAdjust) * 1.5 * radScale, 1 * radScale);
+            const arrowWidth = Math.min((1/this.speedAdjust) * 0.8 * radScale, 1.5 * radScale);
+            const arrowDent = Math.min((1/this.speedAdjust) * 1.0 * radScale, 0.7 * radScale);
+
+            // code hsl based on speed and height ----------
+            /*this.hueCounter += 0.05;
+            if (this.hueCounter >= 360) {
+                this.hueCounter = 0;
+            }*/
+            this.hue = 0 - this.speedAdjust * 40;
+            //this.hue = 160 - this.speedAdjust * 200;
+            //this.hue = 30 - this.speedAdjust * 40;
+            //this.hue = 180 - this.speedAdjust * 360;
+            //this.saturation = 30 + (this.pos.y / simHeight * 50);  
+            this.saturation = 80;  
+            //this.lightness = 100 - (50 + (this.pos.y / simHeight * 30)); 
+            this.lightness = 30 + (1 - (this.pos.y / simHeight)) * 40; 
+
+            // Draw trail ----------
+            if (doTrails == true && this.history.length > 0) {
+                c.beginPath();
+                c.strokeStyle = 'hsla(0, 0%, 0%, 0.3)';
+                c.lineWidth = 1.0;
+                c.moveTo(cX({x: this.history[0][0]}), cY({y: this.history[0][1]}));
+                for (var point of this.history) {
+                    c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
+                    
+                }
+                //c.strokeStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness * 1.2}%, 0.5)`;
+                c.strokeStyle = 'hsla(0, 0%, 0%, 0.3)';
+                c.lineWidth = 1.0;
+                c.stroke();
+            } 
+
+            // Draw boid ----------
+            const angle = Math.atan2(this.vel.y, this.vel.x);
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+            c.rotate(-angle);
+            c.beginPath();
+            
+            /*
+            c.arc(0, 0, 0.5 * arrowWidth, 0, 2 * Math.PI);
+            c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
+            c.fill();
+            */
+
+            // fill arrow shape ----------
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-arrowLength, -arrowWidth / 2);
+            c.lineTo(-arrowLength + arrowDent, 0);
+            c.lineTo(-arrowLength, arrowWidth / 2);
+            c.closePath();
+            c.fillStyle = `hsl(${this.hue + 60}, ${this.saturation}%, ${this.lightness}%)`;
+            c.fill();
+
+            /*
+            // draw body circle ----------
+            c.beginPath();
+            c.arc(-1.5 * arrowLength, 0, 0.4 * radScale, 0, 2 * Math.PI);
+            c.fillStyle = `hsl(${this.hue + 60}, ${this.saturation}%, ${this.lightness * 0.9}%)`;
+            c.fill();
+            */
+            
+            // stroke wings ----------
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-arrowLength, -arrowWidth / 2);
+            c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+            c.lineWidth = 1.0;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(-arrowLength, arrowWidth / 2);
+            c.lineTo(arrowLength, 0);
+            c.stroke();
+
+            /*
+            // draw eye circle ----------
+            c.beginPath();
+            c.arc(0.1 * arrowLength, -0.1 * arrowWidth, 0.005 * cScale, 0, 2 * Math.PI);
+            //c.fillStyle = `blue`;
+            c.fillStyle = `hsl(210, 80%, 30%)`;
+            c.fill();
+            */
+
+            /*// draw beak
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-0.01*arrowLength, arrowWidth / 6);
+            c.strokeStyle = `hsl(0, 0%, 30%)`;
+            c.lineWidth = 1.0;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-0.01*arrowLength, -arrowWidth / 6);
+            c.stroke();*/
+
+            c.restore();
+        }
+    }
+
+    //  MAKE BOIDS  ---------------------------------------------------------------------
+    function makeBoids() {
+        Boids = [];
+        const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
+        let pos, vel, ang;
+        for (var i = 0; i < boidProps.numBoids; i += 1) {
+            if (Math.random() < 0.5) {
+                ang = 0.5 * Math.PI + Math.random() * 0.5 * Math.PI;
+            } else {
+                ang = 1.5 * Math.PI + Math.random() * 0.5 * Math.PI;
+            }
+            pos = new Vector2(
+                0.5 * simWidth + Math.cos(ang) * spawnRadius,
+                0.5 * simHeight + Math.sin(ang) * spawnRadius);
+            vel = new Vector2(0, 0);
+            hue = 320;
+            Boids.push(new BOID(pos, vel, hue));
+        }
+    }
+
+    // HANDLE BOID BOUNDS -------------
+    function handleBounds(boid) {
+        if (boid.pos.x <= boidProps.marginX) {
+            boid.vel.x += boidProps.turnFactor * deltaT;
+        }
+        if (boid.pos.x >= simWidth - boidProps.marginX) {
+            boid.vel.x -= boidProps.turnFactor * deltaT;
+        }
+        if (boid.pos.y <= boidProps.marginY) {
+            boid.vel.y += boidProps.turnFactor * deltaT;
+        }
+        if (boid.pos.y >= simHeight - boidProps.marginY) {
+            boid.vel.y -= boidProps.turnFactor * deltaT;
+        }
+    }
+
+    //  HANDLE OBSTACLES -------------
+    function handleObstacles(boid) {
+        // OBSTACLE AVOIDANCE - loop through all obstacles
+        for (let obstacle of obstacles) {
+            const obsDx = boid.pos.x - obstacle.x;
+            const obsDy = boid.pos.y - obstacle.y;
+            const obsDistSq = obsDx * obsDx + obsDy * obsDy;
+            const obstacleAvoidRadius = obstacle.radius + boidProps.minDistance * 1.5;
+            const radiusSq = obstacleAvoidRadius * obstacleAvoidRadius;
+            
+            if (obsDistSq < radiusSq && obsDistSq > 0) {
+                // Only compute sqrt when we know we need it
+                const obsDist = Math.sqrt(obsDistSq);
+                const obsStrength = boidProps.avoidFactor * 3.0 * (obstacleAvoidRadius - obsDist) / obsDist;
+                boid.vel.x += obsDx * obsStrength * deltaT;
+                boid.vel.y += obsDy * obsStrength * deltaT;
+            }
+        }
+        
+        // MOVING OBSTACLE AVOIDANCE
+        for (let obstacle of movingObstacles) {
+            const obsDx = boid.pos.x - obstacle.x;
+            const obsDy = boid.pos.y - obstacle.y;
+            const obsDistSq = obsDx * obsDx + obsDy * obsDy;
+            const obstacleAvoidRadius = obstacle.radius + boidProps.minDistance * 1.5;
+            const radiusSq = obstacleAvoidRadius * obstacleAvoidRadius;
+            
+            if (obsDistSq < radiusSq && obsDistSq > 0) {
+                const obsDist = Math.sqrt(obsDistSq);
+                const obsStrength = boidProps.avoidFactor * 3.0 * (obstacleAvoidRadius - obsDist) / obsDist;
+                boid.vel.x += obsDx * obsStrength * deltaT;
+                boid.vel.y += obsDy * obsStrength * deltaT;
+            }
+        }
+    }
+
+    //  HANDLE BOID RULES -------------
+    function handleBoidRules(boid) {
+        let separationX = 0;
+        let separationY = 0;
+        let avgVelX = 0;
+        let avgVelY = 0;
+        let centerX = 0;
+        let centerY = 0;
+        let neighborCount = 0;
+        
+        // Get nearby boids from spatial hash
+        const nearbyBoids = spatialGrid.getNearby(boid, boidProps.visualRange);
+        const visualRangeSq = boidProps.visualRange * boidProps.visualRange;
+        const minDistSq = boidProps.minDistance * boidProps.minDistance;
+        
+        for (let otherBoid of nearbyBoids) {
+            if (otherBoid !== boid) {
+                const dx = boid.pos.x - otherBoid.pos.x;
+                const dy = boid.pos.y - otherBoid.pos.y;
+                const distSq = dx * dx + dy * dy;
+                
+                if (distSq < visualRangeSq) {
+                    // RULE #2 - ALIGNMENT: accumulate velocities
+                    avgVelX += otherBoid.vel.x;
+                    avgVelY += otherBoid.vel.y;
+                    
+                    // RULE #3 - COHESION: accumulate positions
+                    centerX += otherBoid.pos.x;
+                    centerY += otherBoid.pos.y;
+                    
+                    if (distSq < minDistSq && distSq > 0) {
+                        // RULE #1 - SEPARATION: only compute sqrt when needed
+                        const dist = Math.sqrt(distSq);
+                        const strength = boidProps.avoidFactor * (boidProps.minDistance - dist) / dist;
+                        separationX += dx * strength;
+                        separationY += dy * strength;
+                    }
+
+                    neighborCount++;
+                }
+            }
+        }
+
+        // RULE #1 - SEPARATION
+        boid.vel.x += separationX * deltaT;
+        boid.vel.y += separationY * deltaT;
+        
+        if (neighborCount > 0) {
+            // RULE #2 - ALIGNMENT
+            avgVelX /= neighborCount;
+            avgVelY /= neighborCount;
+            boid.vel.x += (avgVelX - boid.vel.x) * boidProps.matchingFactor * deltaT;
+            boid.vel.y += (avgVelY - boid.vel.y) * boidProps.matchingFactor * deltaT;
+            
+            // RULE #3 - COHESION
+            centerX /= neighborCount;
+            centerY /= neighborCount;
+            boid.vel.x += (centerX - boid.pos.x) * boidProps.centeringFactor * deltaT;
+            boid.vel.y += (centerY - boid.pos.y) * boidProps.centeringFactor * deltaT;
+        }
+    }
+
+    //  LIMIT SPEED ---------
+    function clampSpeed(boid) {
+    const speed = boid.vel.length();
+    if (speed > boidProps.speedLimit) {
+        boid.vel.normalize();
+        boid.vel.scale(boidProps.speedLimit);
+    }
+    }
+
+    // Main animation loop  ------------
+    function simulateEverything() {
+        // Rebuild spatial grid
+        spatialGrid.clear();
+        for (let boid of Boids) {
+            spatialGrid.insert(boid);
+        }
+        
+        if (doKitty == true) {
+            // Update moving obstacles
+            for (let obstacle of movingObstacles) {
+                obstacle.update(deltaT);
+            }
+        }
+        
+        for (var i = 0; i < Boids.length; i++) {
+            var boid = Boids[i];
+            // handle boid rules
+            handleBoidRules(boid);
+            // handle obstacles
+            handleObstacles(boid);
+            // limit speed
+            clampSpeed(boid);
+            // keep within bounds
+            handleBounds(boid);
+            // update position
+            boid.simulate();
+        }
+    }
+
+    //  DRAW EVERYTHING  ------------
+    function drawEverything() {
+        // Clear canvas
+        c.clearRect(0, 0, width, height);
+        
+        // Draw all obstacles
+        for (let obstacle of obstacles) {
+            obstacle.draw();
+        }
+
+        // Draw boids
+        for (var b = 0; b < Boids.length; b++) {
+            boid = Boids[b];
+            boid.draw();
+        }
+        
+        if (doKitty == true) {
+            // Draw moving obstacles
+            for (let obstacle of movingObstacles) {
+                obstacle.draw();
+            }
+        }
+    }
+
+    //  SETUP SCENE  ------------
+    function setupScene() {
+        boidRadius = 0.02
+        boidProps = {
+            numBoids: 2000,
+            marginX: simWidth * 0.2,
+            marginY: simHeight * 0.2,
+            minDistance: 5.0 * boidRadius, // Rule 1 - The distance to stay away from other Boids
+            avoidFactor: 50.0, // Rule 1 -Adjust velocity by this %
+            matchingFactor: 10.0, // Rule 2 - Adjust velocity by this %
+            visualRange: 10.0 * boidRadius, // How far Boids can see each other
+            centeringFactor: 5.0, // Rule 3 - Adjust velocity by this %
+            speedLimit: 1.1, // clamp speed to this value
+            turnFactor: 1.0, // How strongly Boids turn back when near edge
+            trailLength: -10 // Number of trail points to keep (negative for last N points)
+        }
+        deltaT = 1/60;
+        // Load plane images
+        kittyPlaneImage = new Image();
+        kittyPlaneImage.src = 'kitty_plane.png';
+        kittyPlaneReverseImage = new Image();
+        kittyPlaneReverseImage.src = 'kitty_plane_reverse.png';
+        // make Boids ----------
+        makeBoids();
+        // make Obstacles ----------
+        makeObstacles()
+        // make spatial grid ----------
+        spatialGrid = new SpatialHashGrid(boidProps.visualRange);
+        // decide on trails based on aspect ratio  ---------
+        if (simWidth < simHeight) {
+            doTrails = false;
+        } else {
+            doTrails = true;
+        }
+        doKitty = false;
+    }
+
+    //  RUN  ------------------------------------------------
+    setupScene();
+    function update() {
+        simulateEverything();
+        drawEverything();
+        requestAnimationFrame(update);
+    } 
+    update();
+
+    </script>
+</body>
+</html>

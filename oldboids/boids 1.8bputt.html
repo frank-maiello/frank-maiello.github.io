@@ -1,0 +1,1153 @@
+<!-- 
+BOIDS :: autonomous flocking behavior ::
+copyright 2025 :: Frank Maiello :: maiello.frank@gmail.com ::
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. In no event shall the author or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort or otherwise, arising from, our of or in, connection with the software or the use of other dealings in the Software.
+-->
+
+<!DOCTYPE html>
+<html>
+    <head>
+    <meta name="viewport" content="width=500, initial-scale=1.0">
+    <title>Boids 1.8</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        body {
+            background-image: url('sky.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+    </style>
+    </head>
+<body>
+<canvas id="myCanvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%">
+</canvas>
+<script>
+
+    // Setup canvas and handle window resizing  ------------------
+    canvas = document.getElementById("myCanvas");
+    c = canvas.getContext("2d");
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+
+    simMinWidth = 2.0;
+    cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+    simWidth = canvas.width / cScale;
+    simHeight = canvas.height / cScale;
+
+    // Mouse tracking
+    let mouseX = simWidth / 2;
+    let mouseY = simHeight / 2;
+    let draggedCloud = null;
+    let lastClickTime = 0;
+    let lastClickedCloud = null;
+
+    canvas.addEventListener('mousedown', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = (e.clientX - rect.left) / cScale;
+        mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
+        
+        // Find which cloud was clicked
+        let clickedCloud = null;
+        for (let cloud of Clouds) {
+            if (cloud.contains(mouseX, mouseY)) {
+                clickedCloud = cloud;
+                break;
+            }
+        }
+        
+        if (e.button === 0) { // Left click
+            const currentTime = Date.now();
+            
+            // Check for double-click
+            if (currentTime - lastClickTime < 300) {
+                if (clickedCloud && clickedCloud === lastClickedCloud) {
+                    // Double-click on cloud: create new cloud at this position
+                    Clouds.push(new CLOUD(mouseX, mouseY));
+                } else if (!clickedCloud && lastClickedCloud === null) {
+                    // Double-click on empty canvas: create new cloud
+                    Clouds.push(new CLOUD(mouseX, mouseY));
+                }
+                lastClickTime = 0;
+                lastClickedCloud = null;
+            } else {
+                // Single click: drag cloud if clicked on one
+                draggedCloud = clickedCloud;
+                lastClickTime = currentTime;
+                lastClickedCloud = clickedCloud;
+            }
+        } else if (e.button === 2) { // Right click
+            // Delete the clicked cloud
+            if (clickedCloud) {
+                Clouds = Clouds.filter(cloud => cloud !== clickedCloud);
+            }
+            e.preventDefault();
+        }
+    });
+
+    canvas.addEventListener('mouseup', function(e) {
+        draggedCloud = null;
+    });
+
+    canvas.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = (e.clientX - rect.left) / cScale;
+        mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
+        
+        if (draggedCloud) {
+            draggedCloud.x = mouseX;
+            draggedCloud.y = mouseY;
+        }
+    });
+
+    //  HANDLE WINDOW RESIZING  ------------------
+    function resizeCanvas() {
+        canvas = document.getElementById("myCanvas");
+        c = canvas.getContext("2d");
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+
+        const oldSimWidth = simWidth;
+        const oldSimHeight = simHeight;
+
+        simMinWidth = 2.0;
+        cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+        simWidth = canvas.width / cScale;
+        simHeight = canvas.height / cScale;
+
+        // Calculate scale factors
+        const scaleX = simWidth / oldSimWidth;
+        const scaleY = simHeight / oldSimHeight;
+        
+        // Scale boid positions
+        if (typeof boid !== 'undefined' && boid != null) {
+            for (let boid of Boids) {
+                boid.pos.x *= scaleX;
+                boid.pos.y *= scaleY;
+            }
+        }
+        
+        // Scale Clouds
+        if (typeof Clouds !== 'undefined' && Clouds != null) {
+            for (let cloud of Clouds) {
+                cloud.x *= scaleX;
+                cloud.y *= scaleY;
+            }
+        }
+    }
+    window.addEventListener("resize", resizeCanvas);
+
+    //  VECTOR OPERATIONS ---------------------------------------------------------------------
+    class Vector2 {
+        constructor(x = 0.0, y = 0.0) {
+            this.x = x; 
+            this.y = y;
+        }
+        clone() {
+            return new Vector2(this.x, this.y);
+        }
+        add(v, s=1) {
+            this.x += v.x * s;
+            this.y += v.y * s;
+            return this;
+        }
+        addVectors(a, b) {
+            this.x = a.x + b.x;
+            this.y = a.y + b.y;
+            return this;
+        }
+        subtract(v, s = 1.0) {
+            this.x -= v.x * s;
+            this.y -= v.y * s;
+            return this;
+        }
+        subtractVectors(a, b) {
+            this.x = a.x - b.x;
+            this.y = a.y - b.y;
+            return this;			
+        }
+        length() {
+            return Math.sqrt(this.x * this.x + this.y * this.y);
+        }
+        scale(s) {
+            this.x *= s;
+            this.y *= s;
+        }
+        normalize() {
+            const len = this.length();
+            if (len > 0) {
+                this.x /= len;
+                this.y /= len;
+            }
+            return this;
+        }
+    }
+
+    //  COORDINATE CONVERSION  -----------
+    function cX(pos) {
+        return pos.x * cScale;
+    }
+    function cY(pos) {
+        return canvas.height - pos.y * cScale;
+    }
+
+    //  SPATIAL HASH GRID CLASS ---------------------------------------------------------------------
+    class SpatialHashGrid {
+        constructor(cellSize) {
+            this.cellSize = cellSize;
+            this.grid = new Map();
+        }
+        
+        // Convert position to grid key
+        getKey(x, y) {
+            const gridX = Math.floor(x / this.cellSize);
+            const gridY = Math.floor(y / this.cellSize);
+            return `${gridX},${gridY}`;
+        }
+        
+        // Clear the grid
+        clear() {
+            this.grid.clear();
+        }
+        
+        // Add boid to grid
+        insert(boid) {
+            const key = this.getKey(boid.pos.x, boid.pos.y);
+            if (!this.grid.has(key)) {
+                this.grid.set(key, []);
+            }
+            this.grid.get(key).push(boid);
+        }
+        
+        // Get nearby boids within a radius
+        getNearby(boid, radius) {
+            const nearby = [];
+            const cellRadius = Math.ceil(radius / this.cellSize);
+            const centerX = Math.floor(boid.pos.x / this.cellSize);
+            const centerY = Math.floor(boid.pos.y / this.cellSize);
+            
+            // Check all cells within the radius
+            for (let dx = -cellRadius; dx <= cellRadius; dx++) {
+                for (let dy = -cellRadius; dy <= cellRadius; dy++) {
+                    const key = `${centerX + dx},${centerY + dy}`;
+                    if (this.grid.has(key)) {
+                        nearby.push(...this.grid.get(key));
+                    }
+                }
+            }
+            return nearby;
+        }
+    }
+
+    function makeSpatialGrid() {
+        SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+    }
+    
+
+    //  CLOUD CLASS ---------------------------------------------------------------------
+    class CLOUD {
+        constructor(x, y, radius = 0.15) {
+            this.x = x;
+            this.y = y;
+            this.radius = radius;
+            // Create unique cloud shape using true randomness (changes on refresh)
+            this.seed = Math.random();
+            this.generatePuffs();
+            this.renderToCanvas();
+        }
+        generatePuffs() {
+            const numPuffs = 4;
+            this.puffData = [];
+            
+            // Use seed to create deterministic but varied random values
+            let rng = this.seed;
+            const seededRandom = () => {
+                rng = (rng * 9301 + 49297) % 233280;
+                return rng / 233280;
+            };
+            
+            // Create cloud-like arrangement with horizontal spread
+            for (let i = 0; i < numPuffs; i++) {
+                if (i < 3) {
+                    // First 3 puffs form the base with flat bottom
+                    // Horizontal position: spread across the width with variation
+                    const offsetX = -0.7 + (i / 2) * 1.4 + (seededRandom() - 0.5) * 0.05;
+                    
+                    // Size variation
+                    const size = 0.6 + seededRandom() * 0.3;
+                    
+                    // Vertical position: constrained to be close to the crop line
+                    const offsetY = 0.3 + (seededRandom() - 0.5) * 0.4;
+                    
+                    this.puffData.push({
+                        offsetX: offsetX,
+                        offsetY: offsetY,
+                        size: size
+                    });
+                } else {
+                    // Fourth puff adds height - positioned above the crop line
+                    const offsetX = -0.2 + (seededRandom() - 0.5) * 0.4; // More centered
+                    const size = 0.5 + seededRandom() * 0.25; // Slightly smaller
+                    const offsetY = -0.3 + (seededRandom() - 0.5) * 0.2; // Positioned higher (negative = up)
+                    
+                    this.puffData.push({
+                        offsetX: offsetX,
+                        offsetY: offsetY,
+                        size: size
+                    });
+                }
+            }
+        }
+        contains(x, y) {
+            // Calculate the crop line position
+            const r = this.radius;
+            const cropY = this.y + r * 0.5;
+            
+            // Don't collide below the crop line
+            if (y > cropY) return false;
+            
+            // Elliptical collision - wider horizontally than vertically
+            const dx = (x - this.x) / (r * 1.5); // 1.5x wider horizontally
+            const dy = (y - this.y) / r;
+            return (dx * dx + dy * dy) < 1;
+        }
+        renderToCanvas() {
+            // Create offscreen canvas sized for the cloud
+            const r = this.radius * cScale;
+            const padding = 30;
+            const size = r * 3 + padding * 2;
+            
+            this.offscreenCanvas = document.createElement('canvas');
+            this.offscreenCanvas.width = size;
+            this.offscreenCanvas.height = size;
+            const ctx = this.offscreenCanvas.getContext('2d');
+            
+            // Center position in offscreen canvas
+            const cx = size / 2;
+            const cy = size / 2;
+            
+            // Build puffs array
+            const puffs = this.puffData.map(puff => ({
+                x: cx + r * puff.offsetX,
+                y: cy + r * puff.offsetY,
+                r: r * puff.size,
+                data: puff
+            }));
+            
+            puffs.sort((a, b) => a.x - b.x);
+            
+            const bottomY = Math.max(...puffs.map(puff => puff.y + puff.r * 0.5));
+            
+            ctx.save();
+            
+            // Create clipping region
+            const leftmost = Math.min(...puffs.map(p => p.x - p.r)) - 20;
+            const rightmost = Math.max(...puffs.map(p => p.x + p.r)) + 20;
+            const topmost = Math.min(...puffs.map(p => p.y - p.r)) - 20;
+            
+            ctx.beginPath();
+            ctx.rect(leftmost, topmost, rightmost - leftmost, bottomY - topmost + 2);
+            ctx.clip();
+            
+            // Draw outline strokes
+            ctx.strokeStyle = 'hsla(200, 80%, 80%, 0.8)';
+            ctx.lineWidth = 6;
+            for (let puff of puffs) {
+                ctx.beginPath();
+                ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+            
+            // Fill all puffs
+            ctx.fillStyle = 'white';
+            for (let puff of puffs) {
+                ctx.beginPath();
+                ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+            
+            // Draw bottom edge
+            const bottomTraceY = bottomY + 1.5;
+            ctx.strokeStyle = 'hsla(200, 80%, 80%, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let i = 0; i < puffs.length; i++) {
+                const puff = puffs[i];
+                const dy = bottomY - puff.y;
+                if (dy < puff.r && dy > -puff.r) {
+                    const ratio = Math.min(1, Math.max(-1, dy / puff.r));
+                    const angle = Math.acos(ratio);
+                    const extend = 2;
+                    const leftX = puff.x - puff.r * Math.sin(angle) - (i === 0 ? extend : 0);
+                    const rightX = puff.x + puff.r * Math.sin(angle) + (i === puffs.length - 1 ? extend : 0);
+                    ctx.moveTo(leftX, bottomTraceY);
+                    ctx.lineTo(rightX, bottomTraceY);
+                }
+            }
+            ctx.stroke();
+            
+            // Store the offset for drawing
+            this.offsetX = size / 2;
+            this.offsetY = size / 2;
+        }
+        draw() {
+            // Draw the pre-rendered cloud image
+            const cx = this.x * cScale;
+            const cy = canvas.height - this.y * cScale;
+            c.drawImage(this.offscreenCanvas, cx - this.offsetX, cy - this.offsetY);
+        }
+    }
+
+    //  MOVING AIRPLANE CLASS ---------------------------------------------------------------------
+    class AIRPLANE {
+        constructor(y, speed = 0.5, size = 0.3, respawnDelay = 30.0, isFirstPass = false) {
+            // On first pass, try to spawn above the topmost cloud
+            if (isFirstPass) {
+                this.y = this.pickAltitudeAboveClouds();
+            } else {
+                // Randomize vertical position avoiding cloud elevations
+                this.y = this.pickSafeAltitude();
+            }
+            this.baseY = this.y; // Store initial y for loop calculation
+            this.speed = speed; // Units per second
+            this.baseSpeed = speed; // Store base speed
+            this.size = size; // Width/height of the cloud
+            this.radius = size * 0.7; // Effective radius for collision detection
+            this.respawnDelay = respawnDelay; // Seconds to wait before respawning
+            this.isWaiting = false;
+            this.waitTimer = 0;
+            this.propellerAngle = 0; // For spinning propeller effect
+            this.angle = 0; // Current orientation angle
+            this.isUpsideDown = false; // Whether plane is flying upside-down
+            
+            // Determine if plane should be upside-down (only if in top 30%)
+            const topThreshold = simHeight * 0.7; // 30% from top
+            if (this.y > topThreshold) {
+                this.isUpsideDown = Math.random() < 0.5; // 50% chance
+                if (this.isUpsideDown) {
+                    this.angle = Math.PI; // Start upside-down
+                }
+            }
+            
+            // Direction: 1 = left to right, -1 = right to left
+            this.direction = 1;
+            this.x = -size; // Start position based on direction
+            
+            // Set image based on direction and upside-down state
+            if (this.isUpsideDown) {
+                this.image = kittyPlaneReverseImage; // Use reverse/flipped image when upside-down
+            } else {
+                this.image = kittyPlaneImage;
+            }
+            
+            // Loop-the-loop parameters (clothoid trajectory)
+            this.loopStartX = 0.4 * simWidth; // Where the loop begins
+            this.loopRadius = 0.35 * simHeight; // Radius of the loop
+            this.loopPhase = 0; // Current phase through the loop (0 = before, 1-2 = during, 3+ = after)
+            this.pathDistance = 0; // Total distance traveled
+            this.loopProgress = 0; // Progress through the loop (0 to 1)
+            this.willDoLoop = false; // Whether this pass will do a loop
+            this.loopDecided = false; // Whether we've decided about the loop yet
+        }
+        pickAltitudeAboveClouds() {
+            const minY = simHeight * 0.05;
+            const maxY = simHeight * 0.9;
+            const buffer = 0.15;
+            
+            if (Clouds.length === 0) {
+                // No clouds, use regular method
+                return this.pickSafeAltitude();
+            }
+            
+            // Find the highest cloud (largest y value)
+            let highestCloudBottom = -Infinity;
+            for (let cloud of Clouds) {
+                const cloudBottom = cloud.y + cloud.radius * 0.5;
+                if (cloudBottom > highestCloudBottom) {
+                    highestCloudBottom = cloudBottom;
+                }
+            }
+            
+            // Try to spawn above the highest cloud
+            const targetY = highestCloudBottom + buffer;
+            
+            // Check if there's enough room above
+            if (targetY + 0.1 <= maxY) {
+                // There's room, pick a random position above the highest cloud
+                return targetY + Math.random() * (maxY - targetY);
+            } else {
+                // Not enough room above, use regular method
+                return this.pickSafeAltitude();
+            }
+        }
+        pickSafeAltitude() {
+            const minY = simHeight * 0.05;
+            const maxY = simHeight * 0.9;
+            const buffer = 0.15; // Extra spacing buffer around clouds
+            // Try to find a safe altitude (max 20 attempts)
+            for (let attempt = 0; attempt < 20; attempt++) {
+                const candidateY = minY + Math.random() * (maxY - minY);
+                let isSafe = true;
+                // Check against all cloud Clouds
+                for (let cloud of Clouds) {
+                    // In simulation coordinates: higher y = higher up on screen
+                    const cloudBottom = cloud.y + cloud.radius * 0.5; // Flat bottom (crop line)
+                    const cloudTop = cloud.y - cloud.radius * 1.2; // Approximate top below center
+                    
+                    // Cloud occupies the vertical range from cloudTop (lower y) to cloudBottom (higher y)
+                    const effectiveTop = cloudTop - buffer; // Extend safe zone below cloud
+                    const effectiveBottom = cloudBottom + buffer; // Extend safe zone above cloud
+                    
+                    // Check if candidate altitude conflicts with this cloud
+                    // Plane is unsafe if it's between the cloud's top and bottom
+                    if (candidateY >= effectiveTop && candidateY <= effectiveBottom) {
+                        isSafe = false;
+                        break;
+                    }
+                }
+                if (isSafe) {
+                    return candidateY;
+                }
+            }
+            // If no safe altitude found after attempts, return a default safe position
+            return simHeight * 0.2; // Low altitude as fallback
+        }
+        update(dt) {
+            if (this.isWaiting) {
+                // Count down the respawn timer
+                this.waitTimer -= dt;
+                if (this.waitTimer <= 0) {
+                    // Timer expired, respawn from opposite direction
+                    this.direction *= -1;
+                    if (this.direction === 1) {
+                        this.x = -this.size; // Start from left
+                    } else {
+                        this.x = simWidth + this.size; // Start from right
+                    }
+                    // Randomize vertical position avoiding cloud elevations
+                    this.y = this.pickSafeAltitude();
+                    this.baseY = this.y;
+                    // Determine if plane should be upside-down (only if in top 30%)
+                    const topThreshold = simHeight * 0.7;
+                    this.isUpsideDown = false;
+                    if (this.y > topThreshold) {
+                        this.isUpsideDown = Math.random() < 0.5;
+                    }
+                    // Set image based on direction and upside-down state
+                    if (this.isUpsideDown) {
+                        this.image = this.direction === 1 ? kittyPlaneReverseImage : kittyPlaneImage;
+                    } else {
+                        this.image = this.direction === 1 ? kittyPlaneImage : kittyPlaneReverseImage;
+                    }
+                    // Reset loop parameters
+                    this.pathDistance = 0;
+                    this.loopPhase = 0;
+                    this.loopProgress = 0;
+                    this.angle = this.isUpsideDown ? Math.PI : 0;
+                    this.loopDecided = false;
+                    this.willDoLoop = false;
+                    this.isWaiting = false;
+                }
+            } else {
+                // Check if we've reached the loop start point
+                const loopTrigger = this.direction === 1 ? 
+                    this.x >= this.loopStartX : 
+                    this.x <= (simWidth - this.loopStartX);
+                    
+                if (this.loopPhase === 0 && loopTrigger && !this.isUpsideDown) {
+                    // Decide whether to do a loop (50% chance) - only if not upside-down
+                    // and only if plane is within bottom 25% of screen
+                    const isInBottomQuarter = this.baseY <= simHeight * 0.35;
+                    
+                    if (!this.loopDecided && isInBottomQuarter) {
+                        this.willDoLoop = Math.random() < 0.5;
+                        this.loopDecided = true;
+                    }
+                    
+                    if (this.willDoLoop) {
+                        this.loopPhase = 1;
+                        this.loopProgress = 0;
+                    } else {
+                        // Skip the loop, go straight to phase 2
+                        this.loopPhase = 2;
+                    }
+                }
+                
+                if (this.loopPhase === 0) {
+                    // Before the loop - straight flight
+                    this.x += this.speed * dt * this.direction;
+                    this.y = this.baseY;
+                    this.angle = this.isUpsideDown ? Math.PI : 0;
+                    this.speed = this.baseSpeed;  
+                } else if (this.loopPhase === 1) {
+                    // During the loop - follow circular trajectory
+                    const loopCircumference = 2 * Math.PI * this.loopRadius;
+                    const progressSpeed = this.baseSpeed / loopCircumference;
+                    
+                    // Advance through the loop based on time
+                    this.loopProgress += progressSpeed * dt;
+                    
+                    if (this.loopProgress >= 1.0) {
+                        // Loop complete
+                        this.loopPhase = 2;
+                        this.loopProgress = 0;
+                        this.y = this.baseY;
+                        this.angle = 0;
+                        this.speed = this.baseSpeed;
+                        // Continue moving forward after loop
+                        this.x += this.speed * dt * this.direction;
+                    } else {
+                        // Smooth continuous trajectory
+                        const p = this.loopProgress;
+                        
+                        // Smooth ease-in/ease-out using cosine
+                        const easeProgress = 0.5 - 0.5 * Math.cos(p * Math.PI);
+                        
+                        // Full 2π rotation (base theta is always positive)
+                        const theta = easeProgress * 2 * Math.PI;
+                        
+                        // Smooth speed variation
+                        const speedMult = 0.85 + 0.15 * Math.sin(theta * 0.5);
+                        this.speed = this.baseSpeed * speedMult;
+                        
+                        // Move along the circular path - velocity is tangent to the circle
+                        // X movement direction depends on flight direction
+                        this.x += this.speed * Math.cos(theta) * dt * this.direction;
+                        // Y movement is always upward for the loop
+                        this.y += this.speed * Math.sin(theta) * dt;
+                        
+                        // Plane angle follows the tangent (flip for reverse direction)
+                        this.angle = theta * this.direction;
+                    }
+                } else {
+                    // After the loop - straight flight
+                    this.x += this.speed * dt * this.direction;
+                    this.y = this.baseY;
+                    this.angle = this.isUpsideDown ? Math.PI : 0;
+                    this.speed = this.baseSpeed;
+                }
+                
+                // Check if passed the edge (either direction)
+                const passedEdge = this.direction === 1 ? 
+                    this.x - this.size > simWidth : 
+                    this.x + this.size < 0;
+                if (passedEdge) {
+                    // Start waiting timer
+                    this.isWaiting = true;
+                    this.waitTimer = this.respawnDelay;
+                }
+            }
+            // Spin the propeller (faster when going faster)
+            this.propellerAngle += dt * 20 * (this.speed / this.baseSpeed);
+        }
+        contains(x, y) {
+            // Use rectangular collision for the moving planes
+            return x >= this.x - this.size/2 && x <= this.x + this.size/2 &&
+                   y >= this.y - this.size/2 && y <= this.y + this.size/2;
+        }
+        draw() {
+            if (this.image && this.image.complete) {
+                const drawSize = this.size * cScale;
+                const centerX = this.x * cScale;
+                const centerY = canvas.height - this.y * cScale;
+
+                // Translate to airplane center and rotate
+                c.save();
+                c.translate(centerX, centerY);
+                c.rotate(-this.angle); // Negative because canvas Y is inverted
+
+                // Draw the airplane image centered at origin
+                c.drawImage(
+                    this.image,
+                    -drawSize / 2,
+                    -drawSize / 2,
+                    drawSize,
+                    drawSize
+                );
+                
+                // Draw spinning propeller effect
+                let propX, propY;
+                if (this.isUpsideDown) {
+                    // When upside-down, flip the horizontal position
+                    propX = this.direction === 1 ? -drawSize * 0.452 : drawSize * 0.452;
+                    propY = drawSize * 0.125; // Keep same vertical offset (rotation handles the flip)
+                } else {
+                    propX = this.direction === 1 ? drawSize * 0.452 : -drawSize * 0.452;
+                    propY = drawSize * 0.125; // Slight vertical offset
+                }
+                const propLength = drawSize * 0.25;
+                // Calculate apparent width based on rotation angle (3D effect)
+                const width1 = Math.cos(this.propellerAngle) * propLength;
+                const width2 = Math.cos(this.propellerAngle + Math.PI / 2) * propLength;
+                // Draw propeller blades with varying width (simulating 3D rotation)
+                c.strokeStyle = 'hsla(200, 90%, 70%, 0.6)';
+                c.lineWidth = 6;
+                c.lineCap = 'round';
+                // Vertical blade (appears to change width as it rotates)
+                c.beginPath();
+                c.moveTo(propX, propY - width1);
+                c.lineTo(propX, propY + width1);
+                c.stroke();
+                // Second blade 90 degrees out of phase
+                c.beginPath();
+                c.moveTo(propX, propY - width2);
+                c.lineTo(propX, propY + width2);
+                c.stroke();
+                
+                c.restore();
+            } else {
+                // fallback
+                c.fillStyle = 'rgba(255, 100, 100, 0.5)';
+                c.fillRect(
+                    this.x * cScale - this.size * cScale / 2,
+                    canvas.height - this.y * cScale - this.size * cScale / 2,
+                    this.size * cScale,
+                    this.size * cScale
+                );
+            }
+        }
+    }
+
+    //  MAKE CLOUDS  ---------------------------------------------------------------------
+    function makeClouds() {
+        Clouds = [];
+        Clouds.push(new CLOUD(0.8 * simWidth, 0.45 * simHeight));
+        Clouds.push(new CLOUD(0.25 * simWidth, 0.65 * simHeight));
+    }    
+    
+    //  MAKE AIRPLANE  ---------------------------------------------------------------------
+    function makeAirplane() {
+        Airplane = [];
+        Airplane.push(new AIRPLANE(0.3 * simHeight, 0.6, 0.3, 30.0, true)); // true = isFirstPass
+    }
+
+    //  BOID CLASS ---------------------------------------------------------------------
+    class BOID {
+        constructor(pos, vel, hue, whiteBoid, blackBoid) {
+            this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.hue = hue;
+            this.saturation = 0;
+            this.lightness = 0;
+            this.radius = boidRadius;
+            this.angle = 0;
+            this.hueCounter = 0;
+            this.speedAdjust = 0;
+            this.whiteBoid = whiteBoid
+            this.blackBoid = blackBoid;
+            this.tail = [];
+        }
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        simulate() {
+            // Enforce speed limit
+            if (this.vel.length() > boidProps.speedLimit) {
+                this.vel.normalize();
+                this.vel.scale(boidProps.speedLimit);
+            }
+            // Update position based on velocity
+            this.pos.x += this.vel.x * deltaT;
+            this.pos.y += this.vel.y * deltaT;
+            // Maintain tail 
+            if (boidProps.doTails == true) {
+                this.tail.push([this.pos.x, this.pos.y])
+                this.tail = this.tail.slice(boidProps.tailLength);
+            }
+        }
+        draw() {
+            // scale size based on velocity
+            const radScale = this.radius * cScale;
+            this.speedAdjust = this.vel.length() / boidProps.speedLimit;
+
+            // arrow dimensions ----------
+            const arrowLength = Math.max((this.speedAdjust) * 1.5 * radScale, 1 * radScale);
+            const arrowWidth = Math.min((1/this.speedAdjust) * 0.8 * radScale, 1.5 * radScale);
+            const arrowDent = Math.min((1/this.speedAdjust) * 1.0 * radScale, 0.7 * radScale);
+
+            // code hsl based on speed and height ----------
+            this.hueCounter += 0.01;
+            if (this.hueCounter >= 360) {
+                this.hueCounter = 0;
+            }
+            this.hue = 350 - this.speedAdjust * 40 + this.hueCounter;
+            //this.hue = 160 - this.speedAdjust * 200;
+            //this.hue = 30 - this.speedAdjust * 40;
+            //this.hue = 180 - this.speedAdjust * 360;
+            //this.saturation = 30 + (this.pos.y / simHeight * 50);  
+            this.saturation = 85;  
+            //this.lightness = 100 - (50 + (this.pos.y / simHeight * 30)); 
+            this.lightness = 35 + (1 - (this.pos.y / simHeight)) * 35; 
+
+            // Draw trail ----------
+            if (boidProps.doTails == true && this.tail.length > 0) {
+                c.beginPath();
+                c.moveTo(cX({x: this.tail[0][0]}), cY({y: this.tail[0][1]}));
+                for (var point of this.tail) {
+                    c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
+                    
+                }
+                //c.strokeStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness * 1.2}%, 0.5)`;
+                if (!this.whiteBoid && !this.blackBoid) {
+                    c.strokeStyle = 'hsla(0, 0%, 10%, 0.3)';
+                    c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
+                } else if (this.whiteBoid) {
+                    c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
+                    c.lineWidth = 3;
+                } else {
+                    c.strokeStyle = `hsla(0, 0%, 5%, 0.5)`;
+                    c.lineWidth = 2;
+                }
+                c.stroke();
+            } 
+
+            // Set transform ----------
+            const angle = Math.atan2(this.vel.y, this.vel.x);
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+            c.rotate(-angle);
+            
+            /*
+            c.arc(0, 0, 0.5 * arrowWidth, 0, 2 * Math.PI);
+            c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
+            c.fill();
+            */
+
+            // fill arrow shape ----------
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-arrowLength, -arrowWidth / 2);
+            c.lineTo(-arrowLength + arrowDent, 0);
+            c.lineTo(-arrowLength, arrowWidth / 2);
+            c.closePath();
+            //if (!this.whiteBoid && !this.blackBoid) {
+                c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
+            //} else if (this.whiteBoid) {
+            //    c.fillStyle = `hsl(0, 0%, 90%)`;
+            //} else {
+            //    c.fillStyle = `hsl(0, 0%, 10%)`;
+            //}
+            c.fill();
+
+            /*
+            // draw body circle ----------
+            c.beginPath();
+            c.arc(-1.5 * arrowLength, 0, 0.4 * radScale, 0, 2 * Math.PI);
+            c.fillStyle = `hsl(${this.hue + 60}, ${this.saturation}%, ${this.lightness * 0.9}%)`;
+            c.fill();
+            */
+            
+            // stroke wings ----------
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-arrowLength, -arrowWidth / 2);
+            if (!this.whiteBoid && !this.blackBoid) {
+                c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+            } else if (this.whiteBoid) {
+                c.strokeStyle = `hsl(0, 0%, 100%)`;
+            } else {
+                c.strokeStyle = `hsl(0, 0%, 0%)`;
+            }
+            c.lineWidth = 1.0;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(-arrowLength, arrowWidth / 2);
+            c.lineTo(arrowLength, 0);
+            c.stroke();
+
+            /*
+            // draw eye circle ----------
+            c.beginPath();
+            c.arc(0.1 * arrowLength, -0.1 * arrowWidth, 0.005 * cScale, 0, 2 * Math.PI);
+            //c.fillStyle = `blue`;
+            c.fillStyle = `hsl(210, 80%, 30%)`;
+            c.fill();
+            */
+
+            /*// draw beak
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-0.01*arrowLength, arrowWidth / 6);
+            c.strokeStyle = `hsl(0, 0%, 30%)`;
+            c.lineWidth = 1.0;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-0.01*arrowLength, -arrowWidth / 6);
+            c.stroke();*/
+
+            c.restore();
+        }
+    }
+
+    //  MAKE BOIDS  ---------------------------------------------------------------------
+    function makeBoids() {
+        Boids = [];
+        const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
+        let pos, vel, ang;
+        for (var i = 0; i < boidProps.numBoids; i += 1) {
+            if (Math.random() < 0.5) {
+                ang = 0.5 * Math.PI + Math.random() * 0.5 * Math.PI;
+            } else {
+                ang = 1.5 * Math.PI + Math.random() * 0.5 * Math.PI;
+            }
+            pos = new Vector2(
+                0.5 * simWidth + Math.cos(ang) * spawnRadius,
+                0.5 * simHeight + Math.sin(ang) * spawnRadius);
+            vel = new Vector2(0, 0);
+            hue = 320;
+            if (i == boidProps.numBoids - 1) {
+                // White boid
+                Boids.push(new BOID(pos, vel, hue, true, false));
+            } else if (i == boidProps.numBoids - 2) {
+                // Black boid
+                Boids.push(new BOID(pos, vel, hue, false, true));
+            } else {
+                Boids.push(new BOID(pos, vel, hue, false, false));
+            }
+        }
+    }
+
+    // HANDLE BOID BOUNDS -------------
+    function handleBounds(boid) {
+        if (boid.pos.x <= boidProps.marginX) {
+            boid.vel.x += boidProps.turnFactor * deltaT;
+        }
+        if (boid.pos.x >= simWidth - boidProps.marginX) {
+            boid.vel.x -= boidProps.turnFactor * deltaT;
+        }
+        if (boid.pos.y <= boidProps.marginY) {
+            boid.vel.y += boidProps.turnFactor * deltaT;
+        }
+        if (boid.pos.y >= simHeight - boidProps.marginY) {
+            boid.vel.y -= boidProps.turnFactor * deltaT;
+        }
+    }
+
+    //  HANDLE CLOUDS -------------
+    function handleClouds(boid) {
+        // CLOUD AVOIDANCE - loop through all Clouds
+        for (let cloud of Clouds) {
+            const cloudDx = boid.pos.x - cloud.x;
+            const cloudDy = boid.pos.y - cloud.y;
+            const cloudDistSq = cloudDx * cloudDx + cloudDy * cloudDy;
+            const cloudAvoidRadius = cloud.radius + boidProps.minDistance * 1.5;
+            const radiusSq = cloudAvoidRadius * cloudAvoidRadius;
+            
+            if (cloudDistSq < radiusSq && cloudDistSq > 0) {
+                // Only compute sqrt when we know we need it
+                const cloudDist = Math.sqrt(cloudDistSq);
+                const cloudStrength = boidProps.avoidFactor * 3.0 * (cloudAvoidRadius - cloudDist) / cloudDist;
+                boid.vel.x += cloudDx * cloudStrength * deltaT;
+                boid.vel.y += cloudDy * cloudStrength * deltaT;
+            }
+        }
+        
+        // MOVING AIRPLANE AVOIDANCE
+        for (let plane of Airplane) {
+            const planeDx = boid.pos.x - plane.x;
+            const planeDy = boid.pos.y - plane.y;
+            const planeDistSq = planeDx * planeDx + planeDy * planeDy;
+            const cloudAvoidRadius = plane.radius + boidProps.minDistance * 1.5;
+            const radiusSq = cloudAvoidRadius * cloudAvoidRadius;
+            
+            if (planeDistSq < radiusSq && planeDistSq > 0) {
+                const planeDist = Math.sqrt(planeDistSq);
+                const planeStrength = boidProps.avoidFactor * 3.0 * (cloudAvoidRadius - planeDist) / planeDist;
+                boid.vel.x += planeDx * planeStrength * deltaT;
+                boid.vel.y += planeDy * planeStrength * deltaT;
+            }
+        }
+    }
+
+    //  HANDLE BOID RULES -------------
+    function handleBoidRules(boid) {
+        let separationX = 0;
+        let separationY = 0;
+        let avgVelX = 0;
+        let avgVelY = 0;
+        let centerX = 0;
+        let centerY = 0;
+        let neighborCount = 0;
+        
+        // Get nearby boids from spatial hash
+        const nearbyBoids = SpatialGrid.getNearby(boid, boidProps.visualRange);
+        const visualRangeSq = boidProps.visualRange * boidProps.visualRange;
+        const minDistSq = boidProps.minDistance * boidProps.minDistance;
+        
+        for (let otherBoid of nearbyBoids) {
+            if (otherBoid !== boid) {
+                const dx = boid.pos.x - otherBoid.pos.x;
+                const dy = boid.pos.y - otherBoid.pos.y;
+                const distSq = dx * dx + dy * dy;
+                
+                if (distSq < visualRangeSq) {
+                    // RULE #2 - ALIGNMENT: accumulate velocities
+                    avgVelX += otherBoid.vel.x;
+                    avgVelY += otherBoid.vel.y;
+                    
+                    // RULE #3 - COHESION: accumulate positions
+                    centerX += otherBoid.pos.x;
+                    centerY += otherBoid.pos.y;
+                    
+                    if (distSq < minDistSq && distSq > 0) {
+                        // RULE #1 - SEPARATION: only compute sqrt when needed
+                        const dist = Math.sqrt(distSq);
+                        const strength = boidProps.avoidFactor * (boidProps.minDistance - dist) / dist;
+                        separationX += dx * strength;
+                        separationY += dy * strength;
+                    }
+
+                    neighborCount++;
+                }
+            }
+        }
+
+        // RULE #1 - SEPARATION
+        boid.vel.x += separationX * deltaT;
+        boid.vel.y += separationY * deltaT;
+        
+        if (neighborCount > 0) {
+            // RULE #2 - ALIGNMENT
+            avgVelX /= neighborCount;
+            avgVelY /= neighborCount;
+            boid.vel.x += (avgVelX - boid.vel.x) * boidProps.matchingFactor * deltaT;
+            boid.vel.y += (avgVelY - boid.vel.y) * boidProps.matchingFactor * deltaT;
+            
+            // RULE #3 - COHESION
+            centerX /= neighborCount;
+            centerY /= neighborCount;
+            boid.vel.x += (centerX - boid.pos.x) * boidProps.centeringFactor * deltaT;
+            boid.vel.y += (centerY - boid.pos.y) * boidProps.centeringFactor * deltaT;
+        }
+    }
+
+    // Main animation loop  ------------
+    function simulateEverything() {
+        // Rebuild spatial grid
+        SpatialGrid.clear();
+        for (let boid of Boids) {
+            SpatialGrid.insert(boid);
+        }
+        // Update boids
+        for (var i = 0; i < Boids.length; i++) {
+            var boid = Boids[i];
+            handleBoidRules(boid);
+            handleClouds(boid);
+            handleBounds(boid);
+            boid.simulate();
+        }
+        // Update airplane
+        if (doKitty == true) {
+            for (let plane of Airplane) {
+                plane.update(deltaT);
+            }
+        }
+    }
+
+    //  DRAW EVERYTHING  ------------
+    function drawEverything() {
+        // Clear canvas
+        c.clearRect(0, 0, width, height);
+        
+        // Draw all Clouds
+        for (let cloud of Clouds) {
+            cloud.draw();
+        }
+
+        // Draw boids
+        for (var b = 0; b < Boids.length; b++) {
+            boid = Boids[b];
+            boid.draw();
+        }
+        
+        if (doKitty == true) {
+            // Draw airplane
+            for (let plane of Airplane) {
+                plane.draw();
+            }
+        }
+    }
+
+    //  SETUP SCENE  ------------
+    function setupScene() {
+        deltaT = 1/60;
+        boidRadius = 0.02
+        boidProps = {
+            numBoids: 0,
+            marginX: simWidth * 0.2,
+            marginY: simHeight * 0.2,
+            minDistance: 5.0 * boidRadius, // Rule 1 - The distance to stay away from other Boids
+            avoidFactor: 50.0, // Rule 1 -Adjust velocity by this %
+            matchingFactor: 10.0, // Rule 2 - Adjust velocity by this %
+            visualRange: 10.0 * boidRadius, // How far Boids can see each other
+            centeringFactor: 5.0, // Rule 3 - Adjust velocity by this %
+            speedLimit: 1.1, // clamp speed to this value
+            turnFactor: 1.0, // How strongly Boids turn back when near edge
+            tailLength: -10, // Number of trail points to keep (negative for last N points)
+            doTails: true
+        }
+        if (simWidth < simHeight) {
+            boidProps.numBoids = 500;
+        } else {
+            boidProps.numBoids = 2000;
+        }
+        // decide on trails based on aspect ratio (no trails for phone)  ---------
+        if (simWidth < simHeight) {
+            boidProps.doTails = false;
+        } else {
+            boidProps.doTails = true;
+        }
+        doKitty = true;
+        // Load plane images
+        kittyPlaneImage = new Image();
+        kittyPlaneImage.src = 'kitty_plane.png';
+        kittyPlaneReverseImage = new Image();
+        kittyPlaneReverseImage.src = 'kitty_plane_reverse.png';
+        // make Boids ----------
+        makeBoids();
+        // make Clouds ----------
+        makeClouds()
+        // make Airplane ----------
+        makeAirplane();
+        // make spatial grid ----------
+        makeSpatialGrid();
+        SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+        
+    }
+
+    //  RUN  ------------------------------------------------
+    setupScene();
+    function update() {
+        simulateEverything();
+        drawEverything();
+        requestAnimationFrame(update);
+    } 
+    update();
+
+    </script>
+</body>
+</html>

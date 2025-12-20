@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html>
+    <head>
+    <meta name="viewport" content="width=500, initial-scale=1.0">
+    <title>Boids 1.2</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        body {
+            background-image: url('sky.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+    </style>
+    </head>
+<body>
+<canvas id="myCanvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%">
+</canvas>
+<script>
+
+    // Setup canvas and handle window resizing  ------------------
+    canvas = document.getElementById("myCanvas");
+    c = canvas.getContext("2d");
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+
+    simMinWidth = 2.0;
+    cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+    simWidth = canvas.width / cScale;
+    simHeight = canvas.height / cScale;
+
+    if (simWidth < simHeight) {
+        doTrails = false;
+    } else {
+        doTrails = true;
+    }
+
+    // Mouse tracking
+    let mouseX = simWidth / 2;
+    let mouseY = simHeight / 2;
+    let draggedObstacle = null;
+    let lastClickTime = 0;
+    let lastClickedObstacle = null;
+
+    canvas.addEventListener('mousedown', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = (e.clientX - rect.left) / cScale;
+        mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
+        
+        // Find which obstacle was clicked
+        let clickedObstacle = null;
+        for (let obs of obstacles) {
+            if (obs.contains(mouseX, mouseY)) {
+                clickedObstacle = obs;
+                break;
+            }
+        }
+        
+        if (e.button === 0) { // Left click
+            const currentTime = Date.now();
+            
+            // Check for double-click
+            if (currentTime - lastClickTime < 300) {
+                if (clickedObstacle && clickedObstacle === lastClickedObstacle) {
+                    // Double-click on obstacle: create new obstacle at this position
+                    obstacles.push(new OBSTACLE(mouseX, mouseY));
+                } else if (!clickedObstacle && lastClickedObstacle === null) {
+                    // Double-click on empty canvas: create new obstacle
+                    obstacles.push(new OBSTACLE(mouseX, mouseY));
+                }
+                lastClickTime = 0;
+                lastClickedObstacle = null;
+            } else {
+                // Single click: drag obstacle if clicked on one
+                draggedObstacle = clickedObstacle;
+                lastClickTime = currentTime;
+                lastClickedObstacle = clickedObstacle;
+            }
+        } else if (e.button === 2) { // Right click
+            // Delete the clicked obstacle
+            if (clickedObstacle) {
+                obstacles = obstacles.filter(obs => obs !== clickedObstacle);
+            }
+            e.preventDefault();
+        }
+    });
+
+    canvas.addEventListener('mouseup', function(e) {
+        draggedObstacle = null;
+    });
+
+    canvas.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = (e.clientX - rect.left) / cScale;
+        mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
+        
+        if (draggedObstacle) {
+            draggedObstacle.x = mouseX;
+            draggedObstacle.y = mouseY;
+        }
+    });
+
+    function resizeCanvas() {
+        canvas = document.getElementById("myCanvas");
+        c = canvas.getContext("2d");
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+
+        const oldSimWidth = simWidth;
+        const oldSimHeight = simHeight;
+
+        simMinWidth = 2.0;
+        cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+        simWidth = canvas.width / cScale;
+        simHeight = canvas.height / cScale;
+
+        // Calculate scale factors
+        const scaleX = simWidth / oldSimWidth;
+        const scaleY = simHeight / oldSimHeight;
+        
+        // Scale boid positions
+        if (typeof boid !== 'undefined' && boid != null) {
+            for (let boid of Boids) {
+                boid.pos.x *= scaleX;
+                boid.pos.y *= scaleY;
+            }
+        }
+        
+        // Scale obstacles
+        if (typeof obstacles !== 'undefined' && obstacles != null) {
+            for (let obstacle of obstacles) {
+                obstacle.x *= scaleX;
+                obstacle.y *= scaleY;
+            }
+        }
+    }
+    window.addEventListener("resize", resizeCanvas);
+
+    //  VECTOR OPERATIONS ---------------------------------------------------------------------
+    class Vector2 {
+        constructor(x = 0.0, y = 0.0) {
+            this.x = x; 
+            this.y = y;
+        }
+        clone() {
+            return new Vector2(this.x, this.y);
+        }
+        add(v, s=1) {
+            this.x += v.x * s;
+            this.y += v.y * s;
+            return this;
+        }
+        addVectors(a, b) {
+            this.x = a.x + b.x;
+            this.y = a.y + b.y;
+            return this;
+        }
+        subtract(v, s = 1.0) {
+            this.x -= v.x * s;
+            this.y -= v.y * s;
+            return this;
+        }
+        subtractVectors(a, b) {
+            this.x = a.x - b.x;
+            this.y = a.y - b.y;
+            return this;			
+        }
+        length() {
+            return Math.sqrt(this.x * this.x + this.y * this.y);
+        }
+        scale(s) {
+            this.x *= s;
+            this.y *= s;
+        }
+        normalize() {
+            const len = this.length();
+            if (len > 0) {
+                this.x /= len;
+                this.y /= len;
+            }
+            return this;
+        }
+    }
+
+    function cX(pos) {
+        return pos.x * cScale;
+    }
+
+    function cY(pos) {
+        return canvas.height - pos.y * cScale;
+    }
+
+    //  SPATIAL HASH GRID ---------------------------------------------------------------------
+    class SpatialHashGrid {
+        constructor(cellSize) {
+            this.cellSize = cellSize;
+            this.grid = new Map();
+        }
+        
+        // Convert position to grid key
+        getKey(x, y) {
+            const gridX = Math.floor(x / this.cellSize);
+            const gridY = Math.floor(y / this.cellSize);
+            return `${gridX},${gridY}`;
+        }
+        
+        // Clear the grid
+        clear() {
+            this.grid.clear();
+        }
+        
+        // Add boid to grid
+        insert(boid) {
+            const key = this.getKey(boid.pos.x, boid.pos.y);
+            if (!this.grid.has(key)) {
+                this.grid.set(key, []);
+            }
+            this.grid.get(key).push(boid);
+        }
+        
+        // Get nearby boids within a radius
+        getNearby(boid, radius) {
+            const nearby = [];
+            const cellRadius = Math.ceil(radius / this.cellSize);
+            const centerX = Math.floor(boid.pos.x / this.cellSize);
+            const centerY = Math.floor(boid.pos.y / this.cellSize);
+            
+            // Check all cells within the radius
+            for (let dx = -cellRadius; dx <= cellRadius; dx++) {
+                for (let dy = -cellRadius; dy <= cellRadius; dy++) {
+                    const key = `${centerX + dx},${centerY + dy}`;
+                    if (this.grid.has(key)) {
+                        nearby.push(...this.grid.get(key));
+                    }
+                }
+            }
+            return nearby;
+        }
+    }
+
+    //  OBSTACLE CLASS ---------------------------------------------------------------------
+    class OBSTACLE {
+        constructor(x, y, radius = 0.15) {
+            this.x = x;
+            this.y = y;
+            this.radius = radius;
+        }
+        
+        contains(x, y) {
+            const dist = Math.sqrt((x - this.x) ** 2 + (y - this.y) ** 2);
+            return dist < this.radius;
+        }
+        
+        draw() {
+            c.fillStyle = 'rgba(100, 100, 255, 0.2)';
+            c.strokeStyle = 'rgba(50, 50, 255, 0.5)';
+            c.lineWidth = 2;
+            c.beginPath();
+            c.arc(
+                this.x * cScale, 
+                canvas.height - this.y * cScale, 
+                this.radius * cScale, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+            c.stroke();
+        }
+    }
+
+    //  MOVING OBSTACLE CLASS ---------------------------------------------------------------------
+    class MovingObstacle {
+        constructor(y, speed = 0.5, size = 0.3, respawnDelay = 10.0) {
+            this.x = -size; // Start just off the left edge
+            this.y = y;
+            this.speed = speed; // Units per second
+            this.size = size; // Width/height of the obstacle
+            this.radius = size * 0.7; // Effective radius for collision detection
+            this.image = kittyPlaneImage;
+            this.respawnDelay = respawnDelay; // Seconds to wait before respawning
+            this.isWaiting = false;
+            this.waitTimer = 0;
+            this.propellerAngle = 0; // For spinning propeller effect
+        }
+        
+        update(dt) {
+            if (this.isWaiting) {
+                // Count down the respawn timer
+                this.waitTimer -= dt;
+                if (this.waitTimer <= 0) {
+                    // Timer expired, respawn
+                    this.x = -this.size;
+                    this.isWaiting = false;
+                }
+            } else {
+                // Normal movement
+                this.x += this.speed * dt;
+                
+                // Check if passed the right edge
+                if (this.x - this.size > simWidth) {
+                    // Start waiting timer
+                    this.isWaiting = true;
+                    this.waitTimer = this.respawnDelay;
+                }
+            }
+            
+            // Spin the propeller (fast rotation)
+            this.propellerAngle += dt * 20; // 20 radians per second
+        }
+        
+        contains(x, y) {
+            // Use rectangular collision for the moving obstacle
+            return x >= this.x - this.size/2 && x <= this.x + this.size/2 &&
+                   y >= this.y - this.size/2 && y <= this.y + this.size/2;
+        }
+        
+        draw() {
+            if (this.image && this.image.complete) {
+                c.save();
+                const drawSize = this.size * cScale;
+                const centerX = this.x * cScale;
+                const centerY = canvas.height - this.y * cScale;
+                
+                // Draw the airplane image
+                c.drawImage(
+                    this.image,
+                    centerX - drawSize / 2,
+                    centerY - drawSize / 2,
+                    drawSize,
+                    drawSize
+                );
+                
+                // Draw spinning propeller effect
+                // Propeller rotates perpendicular to movement (around the X-axis in 3D)
+                const propX = centerX + drawSize * 0.45; // Adjust based on your image
+                const propY = centerY + drawSize * 0.12;
+                const propLength = drawSize * 0.25;
+                
+                // Calculate apparent width based on rotation angle (3D effect)
+                const width1 = Math.cos(this.propellerAngle) * propLength;
+                const width2 = Math.cos(this.propellerAngle + Math.PI / 2) * propLength;
+                
+                // Draw propeller blades with varying width (simulating 3D rotation)
+                c.strokeStyle = 'rgba(200, 200, 220, 0.4)';
+                c.lineWidth = 4;
+                c.lineCap = 'round';
+                
+                // Vertical blade (appears to change width as it rotates)
+                c.beginPath();
+                c.moveTo(propX, propY - width1);
+                c.lineTo(propX, propY + width1);
+                c.stroke();
+                
+                // Second blade 90 degrees out of phase
+                c.beginPath();
+                c.moveTo(propX, propY - width2);
+                c.lineTo(propX, propY + width2);
+                c.stroke();
+                
+                c.restore();
+            } else {
+                // Fallback if image not loaded
+                c.fillStyle = 'rgba(255, 100, 100, 0.5)';
+                c.fillRect(
+                    this.x * cScale - this.size * cScale / 2,
+                    canvas.height - this.y * cScale - this.size * cScale / 2,
+                    this.size * cScale,
+                    this.size * cScale
+                );
+            }
+        }
+    }
+
+    // Obstacle setup
+    var spatialGrid; // Spatial hash grid for efficient neighbor finding
+    var kittyPlaneImage; // Image for moving obstacle
+    var movingObstacles = []; // Array for moving obstacles
+    
+    function makeObstacles() {
+        obstacles = [];
+        obstacles.push(new OBSTACLE(0.8 * simWidth, 0.35 * simHeight));
+        obstacles.push(new OBSTACLE(0.25 * simWidth, 0.5 * simHeight));
+        
+        // Create moving obstacles
+        movingObstacles = [];
+        movingObstacles.push(new MovingObstacle(0.8 * simHeight, 0.4, 0.3));
+    }
+
+    class BOID {
+        constructor(pos, vel, hue) {
+            this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.hue = hue;
+            this.radius = boidRadius;
+            this.angle = 0;
+            this.history = [];
+        }
+        get left() {
+            return this.pos.x - this.radius;
+        }
+        get right() {
+            return this.pos.x + this.radius;
+        }
+        simulate(){
+            this.pos.x += this.vel.x * deltaT;
+            this.pos.y += this.vel.y * deltaT;
+            if (doTrails == true) {
+                this.history.push([this.pos.x, this.pos.y])
+                this.history = this.history.slice(boidProps.trailLength);
+            }
+        }
+        draw(){
+            // Draw trail ----------
+            if (doTrails == true && this.history.length > 0) {
+                c.beginPath();
+                c.moveTo(cX({x: this.history[0][0]}), cY({y: this.history[0][1]}));
+                for (const point of this.history) {
+                    c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
+                }
+                //c.strokeStyle = `hsla(${this.hue}, 80%, 80%, 0.4)`;
+                c.strokeStyle = `hsla(${this.hue}, 80%, 50%, 0.5)`;
+                c.lineWidth = 1;
+                c.stroke();
+            }
+
+            // Draw boid ----------
+            const angle = Math.atan2(this.vel.y, this.vel.x);
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+            c.rotate(-angle);
+            const radScale = this.radius * cScale;
+            // scale width based on normalized velocity
+            const speedAdjust = 1 / (this.vel.length() / boidProps.speedLimit);
+            const arrowLength = Math.max((1 / speedAdjust) * 1.5 * radScale, 1 * radScale);
+            const arrowWidth = Math.min(speedAdjust * 0.8 * radScale, 1.8 * radScale);
+            const arrowDent = Math.min(speedAdjust * 1.0 * radScale, 0.7 * radScale);
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-arrowLength, -arrowWidth / 2);
+            c.lineTo(-arrowLength + arrowDent, 0);
+            c.lineTo(-arrowLength, arrowWidth / 2);
+            c.closePath();
+            c.fillStyle = `hsl(45, 80%, 50%)`;
+            c.fill();
+
+            // Draw wings
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-arrowLength, -arrowWidth / 2);
+            c.strokeStyle = `hsl(${this.hue}, 90%, 40%)`;
+            c.lineWidth = 1.0;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(-arrowLength, arrowWidth / 2);
+            c.lineTo(arrowLength, 0);
+            c.stroke();
+
+            /*// draw beak
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-0.01*arrowLength, arrowWidth / 6);
+            c.strokeStyle = `hsl(0, 0%, 30%)`;
+            c.lineWidth = 1.0;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-0.01*arrowLength, -arrowWidth / 6);
+            c.stroke();*/
+
+            c.restore();
+        }
+    }
+
+    function makeBoids() {
+        Boids = [];
+        const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
+        let pos, vel, ang;
+        for (var i = 0; i < boidProps.numBoids; i += 1) {
+            if (Math.random() < 0.5) {
+                ang = 0.5 * Math.PI + Math.random() * 0.5 * Math.PI;
+            } else {
+                ang = 1.5 * Math.PI + Math.random() * 0.5 * Math.PI;
+            }
+            pos = new Vector2(
+                0.5 * simWidth + Math.cos(ang) * spawnRadius,
+                0.5 * simHeight + Math.sin(ang) * spawnRadius);
+            vel = new Vector2(0, 0);
+            hue = 320;
+            Boids.push(new BOID(pos, vel, hue));
+        }
+    }
+
+    // HANDLE BOID BOUNDS -------------
+    function handleBounds(boid) {
+        if (boid.pos.x <= boidProps.marginX) {
+            boid.vel.x += boidProps.turnFactor * deltaT;
+        }
+        if (boid.pos.x >= simWidth - boidProps.marginX) {
+            boid.vel.x -= boidProps.turnFactor * deltaT;
+        }
+        if (boid.pos.y <= boidProps.marginY) {
+            boid.vel.y += boidProps.turnFactor * deltaT;
+        }
+        if (boid.pos.y >= simHeight - boidProps.marginY) {
+            boid.vel.y -= boidProps.turnFactor * deltaT;
+        }
+    }
+
+    function handleObstacles(boid) {
+        // OBSTACLE AVOIDANCE - loop through all obstacles
+        for (let obstacle of obstacles) {
+            const obsDx = boid.pos.x - obstacle.x;
+            const obsDy = boid.pos.y - obstacle.y;
+            const obsDistSq = obsDx * obsDx + obsDy * obsDy;
+            const obstacleAvoidRadius = obstacle.radius + boidProps.minDistance * 1.5;
+            const radiusSq = obstacleAvoidRadius * obstacleAvoidRadius;
+            
+            if (obsDistSq < radiusSq && obsDistSq > 0) {
+                // Only compute sqrt when we know we need it
+                const obsDist = Math.sqrt(obsDistSq);
+                const obsStrength = boidProps.avoidFactor * 3.0 * (obstacleAvoidRadius - obsDist) / obsDist;
+                boid.vel.x += obsDx * obsStrength * deltaT;
+                boid.vel.y += obsDy * obsStrength * deltaT;
+            }
+        }
+        
+        // MOVING OBSTACLE AVOIDANCE
+        for (let obstacle of movingObstacles) {
+            const obsDx = boid.pos.x - obstacle.x;
+            const obsDy = boid.pos.y - obstacle.y;
+            const obsDistSq = obsDx * obsDx + obsDy * obsDy;
+            const obstacleAvoidRadius = obstacle.radius + boidProps.minDistance * 1.5;
+            const radiusSq = obstacleAvoidRadius * obstacleAvoidRadius;
+            
+            if (obsDistSq < radiusSq && obsDistSq > 0) {
+                const obsDist = Math.sqrt(obsDistSq);
+                const obsStrength = boidProps.avoidFactor * 3.0 * (obstacleAvoidRadius - obsDist) / obsDist;
+                boid.vel.x += obsDx * obsStrength * deltaT;
+                boid.vel.y += obsDy * obsStrength * deltaT;
+            }
+        }
+    }
+
+    function handleBoidRules(boid) {
+        let separationX = 0;
+        let separationY = 0;
+        let avgVelX = 0;
+        let avgVelY = 0;
+        let centerX = 0;
+        let centerY = 0;
+        let neighborCount = 0;
+        
+        // Get nearby boids from spatial hash
+        const nearbyBoids = spatialGrid.getNearby(boid, boidProps.visualRange);
+        
+        const visualRangeSq = boidProps.visualRange * boidProps.visualRange;
+        const minDistSq = boidProps.minDistance * boidProps.minDistance;
+        
+        for (let otherBoid of nearbyBoids) {
+            if (otherBoid !== boid) {
+                const dx = boid.pos.x - otherBoid.pos.x;
+                const dy = boid.pos.y - otherBoid.pos.y;
+                const distSq = dx * dx + dy * dy;
+                
+                if (distSq < visualRangeSq) {
+                    // RULE #2 - ALIGNMENT: accumulate velocities
+                    avgVelX += otherBoid.vel.x;
+                    avgVelY += otherBoid.vel.y;
+                    
+                    // RULE #3 - COHESION: accumulate positions
+                    centerX += otherBoid.pos.x;
+                    centerY += otherBoid.pos.y;
+                    
+                    if (distSq < minDistSq && distSq > 0) {
+                        // RULE #1 - SEPARATION: only compute sqrt when needed
+                        const dist = Math.sqrt(distSq);
+                        const strength = boidProps.avoidFactor * (boidProps.minDistance - dist) / dist;
+                        separationX += dx * strength;
+                        separationY += dy * strength;
+                    }
+
+                    neighborCount++;
+                }
+            }
+        }
+
+        // RULE #1 - SEPARATION
+        boid.vel.x += separationX * deltaT;
+        boid.vel.y += separationY * deltaT;
+        
+        if (neighborCount > 0) {
+            // RULE #2 - ALIGNMENT
+            avgVelX /= neighborCount;
+            avgVelY /= neighborCount;
+            boid.vel.x += (avgVelX - boid.vel.x) * boidProps.matchingFactor * deltaT;
+            boid.vel.y += (avgVelY - boid.vel.y) * boidProps.matchingFactor * deltaT;
+            
+            // RULE #3 - COHESION
+            centerX /= neighborCount;
+            centerY /= neighborCount;
+            boid.vel.x += (centerX - boid.pos.x) * boidProps.centeringFactor * deltaT;
+            boid.vel.y += (centerY - boid.pos.y) * boidProps.centeringFactor * deltaT;
+        }
+    }
+
+    //  LIMIT SPEED ---------
+    function clampSpeed(boid) {
+    const speed = boid.vel.length();
+    if (speed > boidProps.speedLimit) {
+        // use vector normalization to clamp speed
+        boid.vel.normalize();
+        boid.vel.scale(boidProps.speedLimit);
+    }
+    }
+
+    // Main animation loop
+    function simulateEverything() {
+        // Rebuild spatial grid
+        spatialGrid.clear();
+        for (let boid of Boids) {
+            spatialGrid.insert(boid);
+        }
+        
+        // Update moving obstacles
+        for (let obstacle of movingObstacles) {
+            obstacle.update(deltaT);
+        }
+        
+        for (var i = 0; i < Boids.length; i++) {
+            var boid = Boids[i];
+            // HANDLE BOID RULES
+            handleBoidRules(boid);
+            // HANDLE OBSTACLES
+            handleObstacles(boid);
+            // Limit Speed
+            clampSpeed(boid);
+            // Keep within bounds
+            handleBounds(boid);
+            //  Update Position
+            boid.simulate();
+        }
+    }
+
+    function drawEverything() {
+        // Clear canvas
+        c.clearRect(0, 0, width, height);
+        
+        // Draw boids
+        for (var b = 0; b < Boids.length; b++) {
+            boid = Boids[b];
+            boid.draw();
+        }
+
+        // Draw all obstacles
+        for (let obstacle of obstacles) {
+            obstacle.draw();
+        }
+        
+        // Draw moving obstacles
+        for (let obstacle of movingObstacles) {
+            obstacle.draw();
+        }
+    }
+
+    function setupScene() {
+        boidRadius = 0.015
+        boidProps = {
+            numBoids: 3000,
+            marginX: simWidth * 0.2,
+            marginY: simHeight * 0.2,
+            minDistance: 5.0 * boidRadius, // Rule 1 - The distance to stay away from other Boids
+            avoidFactor: 50.0, // Rule 1 -Adjust velocity by this %
+            matchingFactor: 10.0, // Rule 2 - Adjust velocity by this %
+            visualRange: 10.0 * boidRadius, // How far Boids can see each other
+            centeringFactor: 5.0, // Rule 3 - Adjust velocity by this %
+            speedLimit: 1.1, // clamp speed to this value
+            turnFactor: 1.0, // How strongly Boids turn back when near edge
+            trailLength: -10 // Number of trail points to keep (negative for last N points)
+        }
+        deltaT = 1/60;
+       
+        // Initialize spatial grid with cell size equal to visual range
+        spatialGrid = new SpatialHashGrid(boidProps.visualRange);
+        
+        // Load kitty plane image
+        kittyPlaneImage = new Image();
+        kittyPlaneImage.src = 'kitty_plane.png';
+        
+        // make Boids ----------
+        makeBoids();
+        // make Obstacles ----------
+        makeObstacles()
+    }
+
+    setupScene();
+    function update() {
+            simulateEverything();
+            drawEverything();
+            requestAnimationFrame(update);
+        } 
+    update();
+
+    </script>
+</body>
+</html>
