@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.7</title>
+    <title>Boids 1.8</title>
     <style>
         html, body {
             margin: 0;
@@ -764,7 +764,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  BOID CLASS ---------------------------------------------------------------------
     class BOID {
-        constructor(pos, vel, hue) {
+        constructor(pos, vel, hue, whiteBoid=false, blackBoid=false) {
             this.pos = pos.clone();
             this.vel = vel.clone();
             this.hue = hue;
@@ -774,6 +774,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.angle = 0;
             this.hueCounter = 0;
             this.speedAdjust = 0;
+            this.whiteBoid = whiteBoid
+            this.blackBoid = blackBoid;
             this.history = [];
         }
         get left() {
@@ -817,25 +819,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Draw trail ----------
             if (doTrails == true && this.history.length > 0) {
                 c.beginPath();
-                c.strokeStyle = 'hsla(0, 0%, 0%, 0.3)';
-                c.lineWidth = 1.0;
                 c.moveTo(cX({x: this.history[0][0]}), cY({y: this.history[0][1]}));
                 for (var point of this.history) {
                     c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
                     
                 }
                 //c.strokeStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness * 1.2}%, 0.5)`;
-                c.strokeStyle = 'hsla(0, 0%, 0%, 0.3)';
-                c.lineWidth = 1.0;
+                if (!this.whiteBoid) {
+                    c.strokeStyle = 'hsla(0, 0%, 10%, 0.3)';
+                } else {
+                    c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
+                }
+                
+                c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
                 c.stroke();
             } 
 
-            // Draw boid ----------
+            // Set transform ----------
             const angle = Math.atan2(this.vel.y, this.vel.x);
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
             c.rotate(-angle);
-            c.beginPath();
             
             /*
             c.arc(0, 0, 0.5 * arrowWidth, 0, 2 * Math.PI);
@@ -850,7 +854,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.lineTo(-arrowLength + arrowDent, 0);
             c.lineTo(-arrowLength, arrowWidth / 2);
             c.closePath();
-            c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
+            if (!this.whiteBoid && !this.blackBoid) {
+                c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
+            } else if (this.whiteBoid) {
+                c.fillStyle = `hsl(0, 0%, 90%)`;
+            } else {
+                c.fillStyle = `hsl(0, 0%, 10%)`;
+            }
             c.fill();
 
             /*
@@ -865,7 +875,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.beginPath();
             c.moveTo(arrowLength, 0);
             c.lineTo(-arrowLength, -arrowWidth / 2);
-            c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+            if (!this.whiteBoid && !this.blackBoid) {
+                c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+            } else if (this.whiteBoid) {
+                c.strokeStyle = `hsl(0, 0%, 100%)`;
+            } else {
+                c.strokeStyle = `hsl(0, 0%, 0%)`;
+            }
             c.lineWidth = 1.0;
             c.stroke();
             c.beginPath();
@@ -914,7 +930,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 0.5 * simHeight + Math.sin(ang) * spawnRadius);
             vel = new Vector2(0, 0);
             hue = 320;
-            Boids.push(new BOID(pos, vel, hue));
+            if (i == 0) {
+                // First boid is white for visibility
+                Boids.push(new BOID(pos, vel, hue, true, false));
+            } else if (i == 1) {
+                Boids.push(new BOID(pos, vel, hue, false, true));
+            } else {
+                Boids.push(new BOID(pos, vel, hue));
+            }
         }
     }
 
