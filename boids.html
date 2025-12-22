@@ -1298,7 +1298,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         if (simWidth < simHeight) {
             boidProps.numBoids = 500;
         } else {
-            boidProps.numBoids = 5000;
+            boidProps.numBoids = 2000;
         }
         // (no trails for phone?)  ---------
         if (simWidth < simHeight) {
@@ -1730,7 +1730,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         // Verification period complete, system is stable at safe count
                         justReverted = false;
                         revertVerificationTimer = 0;
-                        console.log(`Verified stable at ${Boids.length} boids`);
                     }
                 } else {
                     // Still unstable during verification - reset timer to keep waiting
@@ -1749,8 +1748,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         // Remove regular boids from before the special ones
                         Boids.splice(Boids.length - 2 - removeCount, removeCount);
                     }
-                    
-                    console.log(`FPS low/unstable (${currentFPS.toFixed(1)}). Reverted to last safe count: ${Boids.length}`);
                     isRampingUp = false; // Stop ramping up
                     maxBoidsReached = true; // We've found the limit
                     justReverted = true; // Start verification period
@@ -1787,13 +1784,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         Boids.splice(Boids.length - 2, 0, newBoid);
                     }
                     
-                    console.log(`FPS stable (${currentFPS.toFixed(1)}). Increased boids to ${Boids.length}`);
-                    
                     // Check if we've reached the target
                     if (Boids.length >= boidProps.numBoids) {
                         isRampingUp = false;
                         maxBoidsReached = true;
-                        console.log(`Reached target boid count: ${Boids.length}`);
                     }
                 }
             } else if (maxBoidsReached && !safetyMarginApplied && currentFPS >= minStableFPS && isConsistent) {
@@ -1810,7 +1804,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     }
                     
                     safetyMarginApplied = true;
-                    console.log(`Applied safety margin. Final boid count: ${Boids.length}`);
                 }
             }
         }
@@ -1836,11 +1829,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         let y = canvas.height - padding;
         
         // Draw boid count
-        
         // White text
-        c.fillStyle = 'white';
+        if (currentFPS >= 58) {
+            c.fillStyle = '#00ff00'; // Green
+        } else if (currentFPS >= 45) {
+            c.fillStyle = '#ffff00'; // Yellow
+        } else {
+            c.fillStyle = '#ff0000'; // Red
+        }
         c.fillText(boidText, x, y);
         
+        /*
         // Draw FPS above it
         y -= lineHeight;
         // Color based on FPS
@@ -1852,7 +1851,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.fillStyle = '#ff0000'; // Red
         }
         c.fillText(fpsText, x, y);
-        
+        */
         c.restore();
     }
 
