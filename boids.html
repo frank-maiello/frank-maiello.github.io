@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.15</title>
+    <title>Boids 1.16</title>
     <style>
         html, body {
             margin: 0;
@@ -1678,6 +1678,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let justReverted = false; // Track if we just reverted to safe count
     let revertVerificationTimer = 0; // Timer to verify stability after revert
     let revertVerificationPeriod = 5.0; // Wait 5 seconds after reverting before allowing further drops
+    let startupWarmupTimer = 0; // Timer for startup warm-up period
+    let startupWarmupPeriod = 3.0; // Wait 3 seconds after startup before monitoring FPS
+    let isWarmedUp = false; // Track if warm-up period is complete
 
     function updateFPS() {
         const currentTime = performance.now();
@@ -1698,6 +1701,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
 
     function checkAndAdjustBoids() {
+        // Handle startup warm-up period
+        if (!isWarmedUp) {
+            startupWarmupTimer += deltaT;
+            
+            if (startupWarmupTimer >= startupWarmupPeriod) {
+                isWarmedUp = true;
+                // Reset FPS tracking after warm-up to start fresh
+                fpsFrameTimes = [];
+                lastFrameTime = performance.now();
+                currentFPS = 60;
+            } else {
+                // During warm-up, just return without adjusting boids
+                return;
+            }
+        }
+        
         fpsCheckTimer += deltaT;
         
         if (fpsCheckTimer >= fpsCheckInterval) {
