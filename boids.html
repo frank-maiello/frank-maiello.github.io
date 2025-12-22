@@ -1297,7 +1297,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         if (simWidth < simHeight) {
             boidProps.numBoids = 500;
         } else {
-            boidProps.numBoids = 2000;
+            boidProps.numBoids = 3000;
         }
         // (no trails for phone?)  ---------
         if (simWidth < simHeight) {
@@ -1666,18 +1666,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let currentFPS = 60;
     let lastFrameTime = performance.now();
     let fpsCheckTimer = 0;
-    let fpsCheckInterval = 2.0; // Check FPS every 2 seconds
+    let fpsCheckInterval = 0.25; // Check FPS every 0.25 seconds (faster response)
     let minStableFPS = 55; // If FPS drops below this, reduce boids
     let hasReducedBoids = false; // Track if we've started reducing
+    let fpsStableTimer = 0;
+    let fpsStableThreshold = 2.0; // FPS must be stable for 2 seconds
+    let hasAppliedSafetyMargin = false; // Track if we've applied the final 200 reduction
 
     function updateFPS() {
         const currentTime = performance.now();
         const frameTime = currentTime - lastFrameTime;
         lastFrameTime = currentTime;
         
-        // Keep last 60 frame times (1 second at 60fps)
+        // Keep last 30 frame times (0.5 second at 60fps)
         fpsFrameTimes.push(frameTime);
-        if (fpsFrameTimes.length > 60) {
+        if (fpsFrameTimes.length > 30) {
             fpsFrameTimes.shift();
         }
         
@@ -1697,6 +1700,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Check if FPS is unstable or too low
             if (currentFPS < minStableFPS && Boids.length > 100) {
                 hasReducedBoids = true;
+                fpsStableTimer = 0; // Reset stability timer
                 
                 // Calculate how many frames are significantly slower
                 let unstableFrames = 0;
@@ -1707,8 +1711,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     }
                 }
                 
-                // If more than 30% of frames are slow, reduce boids
-                if (unstableFrames > fpsFrameTimes.length * 0.3) {
+                // If more than 20% of frames are slow, reduce boids (more aggressive)
+                if (unstableFrames > fpsFrameTimes.length * 0.2) {
                     // Remove 100 boids
                     const removeCount = Math.min(100, Boids.length - 100);
                     
@@ -1726,6 +1730,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     }
                     
                     console.log(`FPS low (${currentFPS.toFixed(1)}). Reduced boids to ${Boids.length}`);
+                }
+            } else if (hasReducedBoids && !hasAppliedSafetyMargin && currentFPS >= minStableFPS) {
+                // FPS is good, increment stability timer
+                fpsStableTimer += fpsCheckInterval;
+                
+                // Once FPS has been stable for the threshold period, apply safety margin
+                if (fpsStableTimer >= fpsStableThreshold && Boids.length > 200) {
+                    hasAppliedSafetyMargin = true;
+                    
+                    // Remove additional 200 boids as safety margin
+                    const removeCount = Math.min(200, Boids.length - 100);
+                    
+                    if (Boids.length > 2) {
+                        // Save the special boids
+                        const whiteBoid = Boids[Boids.length - 1];
+                        const blackBoid = Boids[Boids.length - 2];
+                        
+                        // Remove regular boids from the end
+                        Boids.splice(Boids.length - 2 - removeCount, removeCount);
+                    }
+                    
+                    console.log(`FPS stabilized at ${currentFPS.toFixed(1)}. Applied safety margin. Final boid count: ${Boids.length}`);
                 }
             }
         }
