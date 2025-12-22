@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.16</title>
+    <title>Boids 1.17</title>
     <style>
         html, body {
             margin: 0;
@@ -53,6 +53,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let draggedCloud = null;
     let lastClickTime = 0;
     let lastClickedCloud = null;
+
+    // Spacebar tracking for balloon spawning
+    let spacebarHeld = false;
+    let spacebarBalloonTimer = 0;
+    let spacebarBalloonInterval = 0.1; // 10 per second = 0.1 seconds per balloon
 
     canvas.addEventListener('mousedown', function(e) {
         const rect = canvas.getBoundingClientRect();
@@ -113,6 +118,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         if (draggedCloud) {
             draggedCloud.x = mouseX;
             draggedCloud.y = mouseY;
+        }
+    });
+
+    // Spacebar event listeners for balloon spawning
+    document.addEventListener('keydown', function(e) {
+        if (e.code === 'Space' && !spacebarHeld) {
+            spacebarHeld = true;
+            spacebarBalloonTimer = 0; // Reset timer to spawn immediately
+            e.preventDefault(); // Prevent page scrolling
+        }
+    });
+
+    document.addEventListener('keyup', function(e) {
+        if (e.code === 'Space') {
+            spacebarHeld = false;
+            e.preventDefault();
         }
     });
 
@@ -291,6 +312,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.vel = vel.clone();
             this.radius = 0.15;
             this.hue = 360 * Math.random();
+            this.saturation = 40 + Math.random() * 60;
+            this.lightness = 40 + Math.random() * 30;
             this.stringPhase = Math.random() * Math.PI * 2; // Random starting phase for wave
         }
         simulate() {
@@ -315,16 +338,50 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
 
-            // Draw string with wave
+            // Draw vertical part of knot at balloon connection
+            c.fillStyle = `hsl(${this.hue}, 40%, 30%)`;
+            c.beginPath();
+            c.ellipse(
+                0, 
+                startY + radScale * 0.15, 
+                radScale * 0.08, 
+                radScale * 0.12, 
+                0, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+            
+            // Draw horizontal part of knot at balloon connection
+            c.fillStyle = `hsl(${this.hue}, 40%, 20%)`;
+            c.beginPath();
+            c.ellipse(
+                0, 
+                startY + radScale * 0.22, 
+                radScale * 0.12, 
+                radScale * 0.06, 
+                0, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+
+            // draw arced string around knot
+            c.beginPath();
+            const squeeze = 0.3 * Math.PI
+            c.arc(0, startY + radScale * 0.02, radScale * 0.15, 0 + squeeze, Math.PI - squeeze, false);
             c.strokeStyle = 'hsl(0, 0%, 80%)';
+            c.lineWidth = 2.0;
+            c.stroke();
+
+            // Draw string with wave
+            c.strokeStyle = 'hsl(0, 0%, 75%)';
             c.lineWidth = 2.0;
             c.beginPath();
             for (let i = 0; i <= segments; i++) {
                 const t = i / segments;
-                const y = startY + stringLength * t;
+                const y = (startY + radScale * 0.18) + stringLength * t;
                 // Wave amplitude increases with distance from balloon (quadratic)
                 const amplitude = radScale * 0.3 * t * t;
-                const x = Math.sin(this.stringPhase + t * Math.PI * 2) * amplitude;
+                const x = radScale * 0.065 + Math.sin(this.stringPhase + t * Math.PI * 2) * amplitude;
                 
                 if (i === 0) {
                     c.moveTo(x, y);
@@ -334,29 +391,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             c.stroke();
             
-            // Draw knot at balloon connection
-            c.fillStyle = `hsl(${this.hue}, 40%, 30%)`;
-            c.beginPath();
-            c.ellipse(
-                0, 
-                startY + radScale * 0.12, 
-                radScale * 0.08, 
-                radScale * 0.12, 
-                0, 
-                0, 
-                2 * Math.PI);
-            c.fill();
-            
             // Draw balloon
             const gradient = c.createRadialGradient(
                 -radScale * 0.25,
-                -radScale * 0.55, 
+                -radScale * 0.9, 
                 0, 
                 0, 
                 -radScale * 0.3, 
-                1.1 *radScale);
-            gradient.addColorStop(0, `hsla(${this.hue}, 80%, 70%, 0.8)`);
-            gradient.addColorStop(1, `hsla(${this.hue}, 60%, 20%, 0.9)`);
+                1.2 *radScale);
+            gradient.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.8)`);
+            gradient.addColorStop(1, `hsla(${this.hue}, ${this.saturation * 0.75}%, 10%, 1.0)`);
             c.fillStyle = gradient;
             c.beginPath();
             c.ellipse(
@@ -368,7 +412,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 0, 
                 2 * Math.PI);
             c.fill();
-            c.strokeStyle = `hsl(${this.hue}, 50%, 40%)`;
+            c.strokeStyle = `hsl(${this.hue}, 50%, 30%)`;
             c.lineWidth = 2;
             c.stroke();
             
@@ -380,7 +424,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     function initBalloon() {
         Balloons = [];
         balloonProps = {
-            balloonInitialDelay: 40.0, // Delay before first balloon spawns (0 = immediate)
+            balloonInitialDelay: 10.0, // Delay before first balloon spawns (0 = immediate)
             balloonSpawnInterval: 50.0 // Time between balloon spawns after first one (seconds)
         } 
         balloonSpawnTimer = -balloonProps.balloonInitialDelay;
@@ -572,9 +616,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  MOVING AIRPLANE CLASS ---------------------------------------------------------------------
     class AIRPLANE {
-        constructor(y, speed, size, respawnDelay, isFirstPass) {
-            // On first pass, try to spawn above the topmost cloud
-            if (isFirstPass) {
+        constructor(y, speed, size, respawnDelay, passNumber) {
+            // On first three passes, try to spawn above the topmost cloud
+            if (passNumber <= 3) {
                 this.y = this.pickAltitudeAboveClouds();
             } else {
                 // Randomize vertical position avoiding cloud elevations
@@ -592,9 +636,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.angle = 0; // Current orientation angle
             this.isUpsideDown = false; // Whether plane is flying upside-down
             
-            // Determine if plane should be upside-down (only if in top 30%)
+            // Determine if plane should be upside-down (only if in top 30% and NOT in first three passes)
             const topThreshold = simHeight * 0.7; // 30% from top
-            if (this.y > topThreshold) {
+            if (passNumber > 3 && this.y > topThreshold) {
                 this.isUpsideDown = Math.random() < 0.5; // 50% chance
                 if (this.isUpsideDown) {
                     this.angle = Math.PI; // Start upside-down
@@ -602,14 +646,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Direction: 1 = left to right, -1 = right to left
-            this.direction = 1;
-            this.x = -size; // Start position based on direction
+            // Pass 1: right to left, Pass 2: left to right, Pass 3: right to left
+            if (passNumber === 1) {
+                this.direction = -1;
+                this.x = simWidth + size; // Start from right
+            } else if (passNumber === 2) {
+                this.direction = 1;
+                this.x = -size; // Start from left
+            } else if (passNumber === 3) {
+                this.direction = -1;
+                this.x = simWidth + size; // Start from right
+            } else {
+                this.direction = 1;
+                this.x = -size; // Start from left
+            }
             
             // Set image based on direction and upside-down state
             if (this.isUpsideDown) {
-                this.image = kittyPlaneReverseImage; // Use reverse/flipped image when upside-down
+                // Upside-down: use reverse image for right-going, normal for left-going
+                this.image = this.direction === 1 ? kittyPlaneReverseImage : kittyPlaneImage;
             } else {
-                this.image = kittyPlaneImage;
+                // Right-side up: use normal image for right-going, reverse for left-going
+                this.image = this.direction === 1 ? kittyPlaneImage : kittyPlaneReverseImage;
             }
             
             // Loop-the-loop parameters (clothoid trajectory)
@@ -625,6 +683,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.propTrail1 = []; // Trail for first blade tip
             this.propTrail2 = []; // Trail for second blade tip
             this.maxTrailLength = 100; // Number of trail points to keep
+            
+            // Banner properties
+            this.passNumber = passNumber; // Track which pass we're on (1, 2, 3, etc.)
+            this.bannerWavePhase = 0; // Animation phase for banner waving
+            this.firstPassBannerText = "Double-click to add clouds";
+            this.secondPassBannerText = "Right-click to remove";
+            this.thirdPassBannerText = "Spacebar to PARTY!!";
+            
+            // Set banner text based on pass number
+            if (this.passNumber === 1) {
+                this.bannerText = this.firstPassBannerText;
+            } else if (this.passNumber === 2) {
+                this.bannerText = this.secondPassBannerText;
+            } else if (this.passNumber === 3) {
+                this.bannerText = this.thirdPassBannerText;
+            } else {
+                this.bannerText = ""; // No banner after third pass
+            }
         }
         pickAltitudeAboveClouds() {
             const minY = simHeight * 0.05;
@@ -695,28 +771,61 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 this.waitTimer -= dt;
                 
                 if (this.waitTimer <= 0) {
-                    // Timer expired, respawn from opposite direction
-                    this.direction *= -1;
-                    if (this.direction === 1) {
-                        this.x = -this.size; // Start from left
+                    // Increment pass number
+                    this.passNumber++;
+                    
+                    // For first three passes: set specific directions for each pass
+                    if (this.passNumber <= 3) {
+                        if (this.passNumber === 1) {
+                            this.direction = -1;
+                            this.x = simWidth + this.size; // Start from right
+                        } else if (this.passNumber === 2) {
+                            this.direction = 1;
+                            this.x = -this.size; // Start from left
+                        } else if (this.passNumber === 3) {
+                            this.direction = -1;
+                            this.x = simWidth + this.size; // Start from right
+                        }
+                        this.y = this.pickAltitudeAboveClouds();
+                        this.isUpsideDown = false;
                     } else {
-                        this.x = simWidth + this.size; // Start from right
+                        // After three passes: alternate directions and allow upside-down
+                        this.direction *= -1;
+                        if (this.direction === 1) {
+                            this.x = -this.size; // Start from left
+                        } else {
+                            this.x = simWidth + this.size; // Start from right
+                        }
+                        this.y = this.pickSafeAltitude();
+                        
+                        // Determine if plane should be upside-down (only if in top 30%)
+                        const topThreshold = simHeight * 0.7;
+                        this.isUpsideDown = false;
+                        if (this.y > topThreshold) {
+                            this.isUpsideDown = Math.random() < 0.5;
+                        }
                     }
-                    // Randomize vertical position avoiding cloud elevations
-                    this.y = this.pickSafeAltitude();
+                    
                     this.baseY = this.y;
-                    // Determine if plane should be upside-down (only if in top 30%)
-                    const topThreshold = simHeight * 0.7;
-                    this.isUpsideDown = false;
-                    if (this.y > topThreshold) {
-                        this.isUpsideDown = Math.random() < 0.5;
-                    }
+                    
                     // Set image based on direction and upside-down state
                     if (this.isUpsideDown) {
                         this.image = this.direction === 1 ? kittyPlaneReverseImage : kittyPlaneImage;
                     } else {
                         this.image = this.direction === 1 ? kittyPlaneImage : kittyPlaneReverseImage;
                     }
+                    
+                    // Set banner text based on pass number
+                    if (this.passNumber === 1) {
+                        this.bannerText = this.firstPassBannerText;
+                    } else if (this.passNumber === 2) {
+                        this.bannerText = this.secondPassBannerText;
+                    } else if (this.passNumber === 3) {
+                        this.bannerText = this.thirdPassBannerText;
+                    } else {
+                        this.bannerText = ""; // No banner after third pass
+                    }
+                    
                     // Reset loop parameters
                     this.pathDistance = 0;
                     this.loopPhase = 0;
@@ -814,13 +923,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     this.x - this.size > simWidth * 2 : 
                     this.x + this.size < -simWidth;
                 if (passedEdge) {
-                    // Start waiting timer
+                    // Start waiting timer (no delay for first three passes)
                     this.isWaiting = true;
-                    this.waitTimer = this.respawnDelay;
+                    this.waitTimer = this.passNumber < 3 ? 0 : this.respawnDelay;
                 }
             }
             // Spin the propeller (faster when going faster)
             this.propellerAngle += dt * 20 * (this.speed / this.baseSpeed);
+            
+            // Animate banner wave for first three passes
+            if (this.passNumber <= 3) {
+                this.bannerWavePhase += dt * 3;
+            }
             
             // Store propeller tip positions for trails (in world coordinates)
             // Continue storing even when off-screen to let trails fade naturally
@@ -871,6 +985,179 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             return x >= this.x - this.size/2 && x <= this.x + this.size/2 &&
                    y >= this.y - this.size/2 && y <= this.y + this.size/2;
         }
+        drawBanner(drawSize) {
+            // Banner parameters
+            const bannerLength = drawSize * 2.8; // Length of the banner
+            const bannerHeight = drawSize * 0.35; // Height of the banner
+            const towLineLength = drawSize * 0.8; // Distance from plane to banner
+            const segments = 30; // Number of segments for wave effect
+            
+            // Calculate attachment point on plane (tail)
+            const attachX = this.x * cScale - drawSize * 0.45 * this.direction;
+            const attachY = canvas.height - this.y * cScale + bannerHeight * 0.5;
+            
+            c.save();
+            
+            // Draw main tow line to Y junction point
+            c.strokeStyle = 'black';
+            c.lineWidth = 1.0;
+            c.beginPath();
+            
+            // Start from plane attachment point
+            c.moveTo(attachX, attachY);
+            
+            // Draw wavy line to Y junction (80% of tow line length)
+            const yJunctionRatio = 0.8;
+            let yJunctionX, yJunctionY;
+            for (let i = 0; i <= 10; i++) {
+                const t = i / 10;
+                const x = attachX - (towLineLength * yJunctionRatio) * t * this.direction;
+                const waveAmp = drawSize * 0.04 * t;
+                const y = attachY + Math.sin(this.bannerWavePhase + t * Math.PI * 2) * waveAmp;
+                c.lineTo(x, y);
+                if (i === 10) {
+                    yJunctionX = x;
+                    yJunctionY = y;
+                }
+            }
+            c.stroke();
+            
+            // Banner start position (right after tow line)
+            const bannerStartX = attachX - towLineLength * this.direction;
+            const bannerStartY = attachY;
+            
+            // Draw banner segments with wave
+            const points = [];
+            for (let i = 0; i <= segments; i++) {
+                const t = i / segments;
+                const x = bannerStartX - (bannerLength * t) * this.direction;
+                // Increased wave frequency and amplitude that grows toward the end (flapping effect)
+                const waveAmp = drawSize * 0.12 * (0.3 + 0.7 * t * t); // More wave at the end
+                const waveFreq = 4; // Waves along the banner
+                const y = bannerStartY + Math.sin(this.bannerWavePhase - t * Math.PI * waveFreq) * waveAmp;
+                
+                // Calculate angle for this segment (tangent to the wave)
+                const prevT = Math.max(t - 0.01, 0);
+                const prevWaveAmp = drawSize * 0.12 * (0.3 + 0.7 * prevT * prevT);
+                const prevY = bannerStartY + Math.sin(this.bannerWavePhase - prevT * Math.PI * waveFreq) * prevWaveAmp;
+                const dy = y - prevY;
+                const dx = (bannerLength * 0.01);
+                const waveAngle = Math.atan2(dy, dx);
+                
+                // Clamp angle to prevent extreme rotations and blend from front to back
+                const maxAngle = Math.PI / 6; // Max 30 degrees
+                const clampedAngle = Math.max(-maxAngle, Math.min(maxAngle, waveAngle));
+                // Negate angle for left-traveling plane to match direction
+                const angle = clampedAngle * (t * t * t) * this.direction;
+                
+                points.push({x, y, t, angle});
+            }
+            
+            // Get the actual top and bottom corners from the first banner point
+            const firstPoint = points[0];
+            const offsetY = bannerHeight / 2;
+            const topCornerX = firstPoint.x - Math.sin(firstPoint.angle) * offsetY;
+            const topCornerY = firstPoint.y - Math.cos(firstPoint.angle) * offsetY;
+            const bottomCornerX = firstPoint.x + Math.sin(firstPoint.angle) * offsetY;
+            const bottomCornerY = firstPoint.y + Math.cos(firstPoint.angle) * offsetY;
+            
+            // Draw Y-yoke lines from junction to banner corners
+            c.strokeStyle = 'black';
+            c.lineWidth = 1.0;
+            
+            // Top yoke line
+            c.beginPath();
+            c.moveTo(yJunctionX, yJunctionY);
+            c.lineTo(topCornerX, topCornerY);
+            c.stroke();
+            
+            // Bottom yoke line
+            c.beginPath();
+            c.moveTo(yJunctionX, yJunctionY);
+            c.lineTo(bottomCornerX, bottomCornerY);
+            c.stroke();
+            
+            // Draw banner background (white with slight transparency)
+            c.fillStyle = 'hsla(0, 0%, 100%, 0.9)';
+            c.strokeStyle = 'hsl(0, 0%, 20%)';
+            c.lineWidth = 3;
+            c.beginPath();
+            
+            // Top edge
+            for (let i = 0; i < points.length; i++) {
+                const p = points[i];
+                const offsetY = bannerHeight / 2;
+                const topX = p.x - Math.sin(p.angle) * offsetY;
+                const topY = p.y - Math.cos(p.angle) * offsetY;
+                
+                if (i === 0) {
+                    c.moveTo(topX, topY);
+                } else {
+                    c.lineTo(topX, topY);
+                }
+            }
+            
+            // Bottom edge (reverse)
+            for (let i = points.length - 1; i >= 0; i--) {
+                const p = points[i];
+                const offsetY = bannerHeight / 2;
+                const bottomX = p.x + Math.sin(p.angle) * offsetY;
+                const bottomY = p.y + Math.cos(p.angle) * offsetY;
+                c.lineTo(bottomX, bottomY);
+            }
+            
+            c.closePath();
+            c.fill();
+            c.stroke();
+            
+            // Draw text on banner - warp each character along the banner curve
+            c.fillStyle = 'hsl(0, 90%, 50%)';
+            c.font = `bold ${drawSize * 0.2}px comic sans ms, sans-serif`;
+            c.textAlign = 'center';
+            c.textBaseline = 'middle';
+            
+            // Calculate total text width to center it on banner
+            const totalTextWidth = c.measureText(this.bannerText).width;
+            const startOffset = 0.5 - (totalTextWidth / (bannerLength * 2)); // Center on banner
+            
+            // Draw each character individually along the banner curve
+            let currentOffset = startOffset;
+            for (let charIndex = 0; charIndex < this.bannerText.length; charIndex++) {
+                const char = this.bannerText[charIndex];
+                const charWidth = c.measureText(char).width;
+                
+                // Find position along banner (as fraction from 0 to 1)
+                const rawT = currentOffset + (charWidth / (bannerLength * 2));
+                // Reverse t based on direction so text always reads correctly
+                const t = this.direction === -1 ? rawT : (1 - rawT);
+                
+                // Make sure we're within banner bounds
+                if (t >= 0 && t <= 1) {
+                    // Interpolate position and angle from points array
+                    const segmentIndex = Math.floor(t * (points.length - 1));
+                    const segmentT = (t * (points.length - 1)) - segmentIndex;
+                    const p1 = points[segmentIndex];
+                    const p2 = points[Math.min(segmentIndex + 1, points.length - 1)];
+                    
+                    // Interpolate position
+                    const charX = p1.x + (p2.x - p1.x) * segmentT;
+                    const charY = p1.y + (p2.y - p1.y) * segmentT;
+                    const charAngle = p1.angle + (p2.angle - p1.angle) * segmentT;
+                    
+                    // Draw the character
+                    c.save();
+                    c.translate(charX, charY);
+                    c.rotate(-charAngle); // Rotate to follow banner (same for both directions)
+                    c.fillText(char, 0, drawSize * 0.02); // Offset down slightly
+                    c.restore();
+                }
+                
+                // Move to next character position
+                currentOffset += charWidth / bannerLength;
+            }
+            
+            c.restore();
+        }
         draw() {
             /*// Draw propeller trails first (even if plane is off-screen)
             if (this.propTrail1.length > 1) {
@@ -893,8 +1180,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
                 
                 // Draw trail 2
-                for (let i = 0; i < this.propTrail2.length - 1; i++) {
-                    const alpha = (i / this.propTrail2.length) * 0.6;
+                for (let i = 0; i < thisthree passes
+                if (this.passNumber <= 3 / this.propTrail2.length) * 0.6;
                     const width = (i / this.propTrail2.length) * 4;
                     const point1 = this.propTrail2[i];
                     const point2 = this.propTrail2[i + 1];
@@ -914,6 +1201,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 const drawSize = this.size * cScale;
                 const centerX = this.x * cScale;
                 const centerY = canvas.height - this.y * cScale;
+                
+                // Draw banner on first three passes
+                if (this.passNumber <= 3) {
+                    this.drawBanner(drawSize);
+                }
                 
                 // Draw propeller trail 1 behind the airplane
                 if (this.propTrail1.length > 1) {
@@ -1058,8 +1350,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const speed = 0.6;
         const size = 0.3;
         const respawnDelay = 30.0;
-        const isFirstPass = true;
-        Airplane.push(new AIRPLANE(y, speed, size, respawnDelay, isFirstPass));
+        const passNumber = 1; // Start with pass 1
+        Airplane.push(new AIRPLANE(y, speed, size, respawnDelay, passNumber));
     }
 
     //  BOID CLASS ---------------------------------------------------------------------
@@ -1319,10 +1611,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 0.5 * simHeight + Math.sin(ang) * spawnRadius);
             vel = new Vector2(0, 0);
             hue = 320;
-            if (i == boidProps.numBoids - 1) {
+            if (i == 0) {
                 // White boid
                 Boids.push(new BOID(pos, vel, hue, true, false));
-            } else if (i == boidProps.numBoids - 2) {
+            } else if (i == 1) {
                 // Black boid
                 Boids.push(new BOID(pos, vel, hue, false, true));
             } else {
@@ -1598,13 +1890,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         // Update balloon ---------
-        // Timer starts at -initialDelay, reaches 0 after initialDelay time
-        // After each spawn, resets to -spawnInterval
-        balloonSpawnTimer += deltaT;
-        
-        if (balloonSpawnTimer >= 0) {
-            spawnBalloon();
-            balloonSpawnTimer = -balloonProps.balloonSpawnInterval;
+        // Handle spacebar rapid spawning
+        if (spacebarHeld) {
+            spacebarBalloonTimer += deltaT;
+            if (spacebarBalloonTimer >= spacebarBalloonInterval) {
+                spawnBalloon();
+                spacebarBalloonTimer = 0;
+            }
+        } else {
+            // Normal timer-based spawning
+            // Timer starts at -initialDelay, reaches 0 after initialDelay time
+            // After each spawn, resets to -spawnInterval
+            balloonSpawnTimer += deltaT;
+            
+            if (balloonSpawnTimer >= 0) {
+                spawnBalloon();
+                balloonSpawnTimer = -balloonProps.balloonSpawnInterval;
+            }
         }
         
         for (let balloon of Balloons) {
@@ -1640,6 +1942,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             boid.draw();
         }
         
+        // Draw airplane
         if (doKitty == true) {
             // Draw airplane
             for (let plane of Airplane) {
@@ -1657,7 +1960,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             cloud.draw();
         }
         
-        // Draw stats (FPS and boid count)
+        // Draw stats
         drawStats();
     }
 
@@ -1682,9 +1985,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let startupWarmupPeriod = 3.0; // Wait 3 seconds after startup before monitoring FPS
     let isWarmedUp = false; // Track if warm-up period is complete
     let runtimeTimer = 0; // Track total runtime
-    let runtimeLockPeriod = 40.0; // Lock boid count after 60 seconds
+    let runtimeLockPeriod = 30.0; // Lock boid count after 30 seconds
     let boidCountLocked = false; // Track if boid count is locked
-    let fadeOutDuration = 2.0; // Fade out over 2 seconds
+    let fadeOutDuration = 5.0; // Fade out over 5 seconds
     let fadeOutTimer = 0; // Track fade out progress
 
     function updateFPS() {
@@ -1703,6 +2006,63 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const avgFrameTime = fpsFrameTimes.reduce((a, b) => a + b) / fpsFrameTimes.length;
             currentFPS = 1000 / avgFrameTime;
         }
+    }
+
+    // Helper function to remove boids, prioritizing those outside visible canvas
+    function cullBoids(removeCount) {
+        if (removeCount <= 0 || Boids.length <= 2) return;
+        
+        // Identify boids outside the visible canvas (excluding last 2 special boids)
+        const regularBoids = Boids.slice(0, -2);
+        const specialBoids = Boids.slice(-2);
+        
+        const outsideBoids = [];
+        const insideBoids = [];
+        
+        for (let i = 0; i < regularBoids.length; i++) {
+            const boid = regularBoids[i];
+            
+            // Never cull whiteBoid or blackBoid
+            if (boid.whiteBoid || boid.blackBoid) {
+                continue;
+            }
+            
+            const isOutside = boid.pos.x < 0 || boid.pos.x > simWidth || 
+                            boid.pos.y < 0 || boid.pos.y > simHeight;
+            
+            if (isOutside) {
+                outsideBoids.push(i);
+            } else {
+                insideBoids.push(i);
+            }
+        }
+        
+        // Build list of indices to remove (prioritize outside boids)
+        const toRemove = [];
+        let removed = 0;
+        
+        // First remove outside boids
+        for (let i = outsideBoids.length - 1; i >= 0 && removed < removeCount; i--) {
+            toRemove.push(outsideBoids[i]);
+            removed++;
+        }
+        
+        // If we need to remove more, take from inside boids (from the end)
+        for (let i = insideBoids.length - 1; i >= 0 && removed < removeCount; i--) {
+            toRemove.push(insideBoids[i]);
+            removed++;
+        }
+        
+        // Sort indices in descending order to remove from end first (prevents index shifting issues)
+        toRemove.sort((a, b) => b - a);
+        
+        // Remove the boids
+        for (let idx of toRemove) {
+            regularBoids.splice(idx, 1);
+        }
+        
+        // Reconstruct the Boids array
+        Boids = [...regularBoids, ...specialBoids];
     }
 
     function checkAndAdjustBoids() {
@@ -1785,10 +2145,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (!justReverted && Boids.length > lastSafeBoidCount && lastSafeBoidCount >= 100) {
                     const removeCount = Boids.length - lastSafeBoidCount;
                     
-                    // Remove from the end, but keep the special boids (last 2)
-                    if (Boids.length > 2 && removeCount > 0) {
-                        // Remove regular boids from before the special ones
-                        Boids.splice(Boids.length - 2 - removeCount, removeCount);
+                    // Remove boids, prioritizing those outside canvas
+                    if (removeCount > 0) {
+                        cullBoids(removeCount);
                     }
                     isRampingUp = false; // Stop ramping up
                     maxBoidsReached = true; // We've found the limit
@@ -1840,9 +2199,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     // Remove 200 boids as safety margin
                     const removeCount = Math.min(200, Boids.length - 100);
                     
-                    if (Boids.length > 2) {
-                        // Remove regular boids from before the special ones
-                        Boids.splice(Boids.length - 2 - removeCount, removeCount);
+                    if (removeCount > 0) {
+                        cullBoids(removeCount);
                     }
                     
                     safetyMarginApplied = true;
@@ -1871,8 +2229,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.globalAlpha = opacity; // Apply fade opacity
         
         // Prepare text
-        const fpsText = `${currentFPS.toFixed(0)} fps`;
-        const boidText = `${Boids.length} boids`;
+        //const fpsText = `${currentFPS.toFixed(0)} fps`;
+        const boidText = `initializing ${Boids.length} boids`;
+        const boidLockedText = `settled on ${Boids.length} boids`;
         
         // Position at bottom right with padding
         const padding = 10;
@@ -1889,7 +2248,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         } else {
             c.fillStyle = '#ff0000'; // Red
         }
-        c.fillText(boidText, x, y);
+        // Use different text based on whether boid count is locked
+        const displayText = boidCountLocked ? boidLockedText : boidText;
+        c.fillText(displayText, x, y);
         
         /*
         // Draw FPS above it
