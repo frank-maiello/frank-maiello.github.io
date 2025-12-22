@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.12</title>
+    <title>Boids 1.14</title>
     <style>
         html, body {
             margin: 0;
@@ -1656,11 +1656,125 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         for (let cloud of ForegroundClouds) {
             cloud.draw();
         }
+        
+        // Draw stats (FPS and boid count)
+        drawStats();
+    }
+
+    //  FPS MONITORING  ------------
+    let fpsFrameTimes = [];
+    let currentFPS = 60;
+    let lastFrameTime = performance.now();
+    let fpsCheckTimer = 0;
+    let fpsCheckInterval = 2.0; // Check FPS every 2 seconds
+    let minStableFPS = 55; // If FPS drops below this, reduce boids
+    let hasReducedBoids = false; // Track if we've started reducing
+
+    function updateFPS() {
+        const currentTime = performance.now();
+        const frameTime = currentTime - lastFrameTime;
+        lastFrameTime = currentTime;
+        
+        // Keep last 60 frame times (1 second at 60fps)
+        fpsFrameTimes.push(frameTime);
+        if (fpsFrameTimes.length > 60) {
+            fpsFrameTimes.shift();
+        }
+        
+        // Calculate average FPS
+        if (fpsFrameTimes.length > 0) {
+            const avgFrameTime = fpsFrameTimes.reduce((a, b) => a + b) / fpsFrameTimes.length;
+            currentFPS = 1000 / avgFrameTime;
+        }
+    }
+
+    function checkAndReduceBoids() {
+        fpsCheckTimer += deltaT;
+        
+        if (fpsCheckTimer >= fpsCheckInterval) {
+            fpsCheckTimer = 0;
+            
+            // Check if FPS is unstable or too low
+            if (currentFPS < minStableFPS && Boids.length > 100) {
+                hasReducedBoids = true;
+                
+                // Calculate how many frames are significantly slower
+                let unstableFrames = 0;
+                for (let frameTime of fpsFrameTimes) {
+                    const fps = 1000 / frameTime;
+                    if (fps < minStableFPS) {
+                        unstableFrames++;
+                    }
+                }
+                
+                // If more than 30% of frames are slow, reduce boids
+                if (unstableFrames > fpsFrameTimes.length * 0.3) {
+                    // Remove 100 boids
+                    const removeCount = Math.min(100, Boids.length - 100);
+                    
+                    // Remove from the end, but keep the special boids (last 2)
+                    if (Boids.length > 2) {
+                        // Save the special boids
+                        const whiteBoid = Boids[Boids.length - 1];
+                        const blackBoid = Boids[Boids.length - 2];
+                        
+                        // Remove regular boids from the end
+                        Boids.splice(Boids.length - 2 - removeCount, removeCount);
+                        
+                        // Ensure special boids are still at the end
+                        // (they should still be there, but just to be safe)
+                    }
+                    
+                    console.log(`FPS low (${currentFPS.toFixed(1)}). Reduced boids to ${Boids.length}`);
+                }
+            }
+        }
+    }
+
+    function drawStats() {
+        // Draw FPS and boid count at bottom right
+        c.save();
+        
+        // Set text properties
+        c.font = '16px monospace';
+        c.textAlign = 'right';
+        c.textBaseline = 'bottom';
+        
+        // Prepare text
+        const fpsText = `${currentFPS.toFixed(1)} fps`;
+        const boidText = `${Boids.length} boids`;
+        
+        // Position at bottom right with padding
+        const padding = 10;
+        const lineHeight = 20;
+        const x = canvas.width - padding;
+        let y = canvas.height - padding;
+        
+        // Draw boid count
+        
+        // White text
+        c.fillStyle = 'white';
+        c.fillText(boidText, x, y);
+        
+        // Draw FPS above it
+        y -= lineHeight;
+        // Color based on FPS
+        if (currentFPS >= 58) {
+            c.fillStyle = '#00ff00'; // Green
+        } else if (currentFPS >= 45) {
+            c.fillStyle = '#ffff00'; // Yellow
+        } else {
+            c.fillStyle = '#ff0000'; // Red
+        }
+        c.fillText(fpsText, x, y);
+        
+        c.restore();
     }
 
     //  SETUP SCENE  ------------
     function setupScene() {
         deltaT = 1/60;
+        lastFrameTime = performance.now();
         
         doKitty = true;
         // Load plane images
@@ -1705,6 +1819,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     setupScene();
     
     function update() {
+        updateFPS();
+        checkAndReduceBoids();
         simulateEverything();
         drawEverything();
         requestAnimationFrame(update);
