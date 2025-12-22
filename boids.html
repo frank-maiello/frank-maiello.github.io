@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.14</title>
+    <title>Boids 1.15</title>
     <style>
         html, body {
             margin: 0;
@@ -1294,10 +1294,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             currentFlashCycle: 0, // Track which flash cycle we're in
         };
 
+        // Set target boid count based on screen size
         if (simWidth < simHeight) {
             boidProps.numBoids = 500;
         } else {
-            boidProps.numBoids = 3000;
+            boidProps.numBoids = 5000;
         }
         // (no trails for phone?)  ---------
         if (simWidth < simHeight) {
@@ -1306,14 +1307,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             boidProps.doTails = true;
         }
 
+        // Start with only 100 boids (will ramp up gradually)
+        const initialBoidCount = 100;
         const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
         let pos, vel, ang;
-        for (var i = 0; i < boidProps.numBoids; i += 1) {
-            if (Math.random() < 0.5) {
-                ang = 0.5 * Math.PI + Math.random() * 0.5 * Math.PI;
-            } else {
-                ang = 1.5 * Math.PI + Math.random() * 0.5 * Math.PI;
-            }
+        for (var i = 0; i < initialBoidCount; i += 1) {
+            // Spawn from anywhere around the circle
+            ang = Math.random() * 2 * Math.PI;
             pos = new Vector2(
                 0.5 * simWidth + Math.cos(ang) * spawnRadius,
                 0.5 * simHeight + Math.sin(ang) * spawnRadius);
@@ -1661,26 +1661,32 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         drawStats();
     }
 
-    //  FPS MONITORING  ------------
+    //  FPS MONITORING WITH RAMP-UP  ------------
     let fpsFrameTimes = [];
     let currentFPS = 60;
     let lastFrameTime = performance.now();
     let fpsCheckTimer = 0;
-    let fpsCheckInterval = 0.25; // Check FPS every 0.25 seconds (faster response)
-    let minStableFPS = 55; // If FPS drops below this, reduce boids
-    let hasReducedBoids = false; // Track if we've started reducing
+    let fpsCheckInterval = 0.25; // Check FPS every 0.25 seconds
+    let minStableFPS = 57; // Target FPS threshold (stricter)
     let fpsStableTimer = 0;
-    let fpsStableThreshold = 2.0; // FPS must be stable for 2 seconds
-    let hasAppliedSafetyMargin = false; // Track if we've applied the final 200 reduction
+    let fpsStableThreshold = 2.0; // FPS must be stable for 2 seconds before increasing (stricter)
+    let isRampingUp = true; // Track if we're still ramping up
+    let maxBoidsReached = false; // Track if we've hit the limit
+    let safetyMarginApplied = false; // Track if we've applied the 200 boid safety reduction
+    let stabilityTimerAfterMax = 0; // Timer to wait before applying safety margin
+    let lastSafeBoidCount = 100; // Track the last known safe boid count
+    let justReverted = false; // Track if we just reverted to safe count
+    let revertVerificationTimer = 0; // Timer to verify stability after revert
+    let revertVerificationPeriod = 5.0; // Wait 5 seconds after reverting before allowing further drops
 
     function updateFPS() {
         const currentTime = performance.now();
         const frameTime = currentTime - lastFrameTime;
         lastFrameTime = currentTime;
         
-        // Keep last 30 frame times (0.5 second at 60fps)
+        // Keep last 60 frame times (1 second at 60fps) - longer window for better stability check
         fpsFrameTimes.push(frameTime);
-        if (fpsFrameTimes.length > 30) {
+        if (fpsFrameTimes.length > 60) {
             fpsFrameTimes.shift();
         }
         
@@ -1691,67 +1697,120 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
 
-    function checkAndReduceBoids() {
+    function checkAndAdjustBoids() {
         fpsCheckTimer += deltaT;
         
         if (fpsCheckTimer >= fpsCheckInterval) {
             fpsCheckTimer = 0;
             
-            // Check if FPS is unstable or too low
-            if (currentFPS < minStableFPS && Boids.length > 100) {
-                hasReducedBoids = true;
-                fpsStableTimer = 0; // Reset stability timer
-                
-                // Calculate how many frames are significantly slower
-                let unstableFrames = 0;
-                for (let frameTime of fpsFrameTimes) {
-                    const fps = 1000 / frameTime;
-                    if (fps < minStableFPS) {
-                        unstableFrames++;
-                    }
+            // Calculate how many frames are significantly slower
+            let unstableFrames = 0;
+            let maxFrameTime = 0;
+            let minFrameTime = Infinity;
+            
+            for (let frameTime of fpsFrameTimes) {
+                const fps = 1000 / frameTime;
+                if (fps < minStableFPS) {
+                    unstableFrames++;
                 }
-                
-                // If more than 20% of frames are slow, reduce boids (more aggressive)
-                if (unstableFrames > fpsFrameTimes.length * 0.2) {
-                    // Remove 100 boids
-                    const removeCount = Math.min(100, Boids.length - 100);
+                maxFrameTime = Math.max(maxFrameTime, frameTime);
+                minFrameTime = Math.min(minFrameTime, frameTime);
+            }
+            
+            // Calculate variance to check consistency
+            const variance = maxFrameTime - minFrameTime;
+            const isConsistent = variance < 5; // Less than 5ms variance between frames
+            
+            // Update revert verification timer if we just reverted
+            if (justReverted) {
+                if (currentFPS >= minStableFPS && isConsistent) {
+                    revertVerificationTimer += fpsCheckInterval;
+                    
+                    if (revertVerificationTimer >= revertVerificationPeriod) {
+                        // Verification period complete, system is stable at safe count
+                        justReverted = false;
+                        revertVerificationTimer = 0;
+                        console.log(`Verified stable at ${Boids.length} boids`);
+                    }
+                } else {
+                    // Still unstable during verification - reset timer to keep waiting
+                    revertVerificationTimer = 0;
+                }
+            }
+            
+            // Check if FPS is unstable or too low (stricter criteria)
+            if (currentFPS < minStableFPS || unstableFrames > fpsFrameTimes.length * 0.1 || !isConsistent) {
+                // Only revert if not currently in verification period
+                if (!justReverted && Boids.length > lastSafeBoidCount && lastSafeBoidCount >= 100) {
+                    const removeCount = Boids.length - lastSafeBoidCount;
                     
                     // Remove from the end, but keep the special boids (last 2)
-                    if (Boids.length > 2) {
-                        // Save the special boids
-                        const whiteBoid = Boids[Boids.length - 1];
-                        const blackBoid = Boids[Boids.length - 2];
-                        
-                        // Remove regular boids from the end
+                    if (Boids.length > 2 && removeCount > 0) {
+                        // Remove regular boids from before the special ones
                         Boids.splice(Boids.length - 2 - removeCount, removeCount);
-                        
-                        // Ensure special boids are still at the end
-                        // (they should still be there, but just to be safe)
                     }
                     
-                    console.log(`FPS low (${currentFPS.toFixed(1)}). Reduced boids to ${Boids.length}`);
+                    console.log(`FPS low/unstable (${currentFPS.toFixed(1)}). Reverted to last safe count: ${Boids.length}`);
+                    isRampingUp = false; // Stop ramping up
+                    maxBoidsReached = true; // We've found the limit
+                    justReverted = true; // Start verification period
+                    revertVerificationTimer = 0;
                 }
-            } else if (hasReducedBoids && !hasAppliedSafetyMargin && currentFPS >= minStableFPS) {
+                fpsStableTimer = 0; // Reset stability timer
+                stabilityTimerAfterMax = 0; // Reset stability timer for safety margin
+            } else if (isRampingUp && !maxBoidsReached && currentFPS >= minStableFPS && isConsistent && !justReverted) {
                 // FPS is good, increment stability timer
                 fpsStableTimer += fpsCheckInterval;
                 
-                // Once FPS has been stable for the threshold period, apply safety margin
-                if (fpsStableTimer >= fpsStableThreshold && Boids.length > 200) {
-                    hasAppliedSafetyMargin = true;
+                // Once FPS has been stable for the threshold period, add more boids
+                if (fpsStableTimer >= fpsStableThreshold && Boids.length < boidProps.numBoids) {
+                    fpsStableTimer = 0; // Reset timer
                     
-                    // Remove additional 200 boids as safety margin
+                    // Save current count as last safe before adding more
+                    lastSafeBoidCount = Boids.length;
+                    
+                    // Add 100 more boids
+                    const addCount = Math.min(100, boidProps.numBoids - Boids.length);
+                    const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
+                    
+                    for (let i = 0; i < addCount; i++) {
+                        // Spawn from anywhere around the circle
+                        const ang = Math.random() * 2 * Math.PI;
+                        const pos = new Vector2(
+                            0.5 * simWidth + Math.cos(ang) * spawnRadius,
+                            0.5 * simHeight + Math.sin(ang) * spawnRadius);
+                        const vel = new Vector2(0, 0);
+                        const hue = 320;
+                        
+                        // Insert before the last 2 special boids
+                        const newBoid = new BOID(pos, vel, hue, false, false);
+                        Boids.splice(Boids.length - 2, 0, newBoid);
+                    }
+                    
+                    console.log(`FPS stable (${currentFPS.toFixed(1)}). Increased boids to ${Boids.length}`);
+                    
+                    // Check if we've reached the target
+                    if (Boids.length >= boidProps.numBoids) {
+                        isRampingUp = false;
+                        maxBoidsReached = true;
+                        console.log(`Reached target boid count: ${Boids.length}`);
+                    }
+                }
+            } else if (maxBoidsReached && !safetyMarginApplied && currentFPS >= minStableFPS && isConsistent) {
+                // Max reached, wait for stability then apply safety margin
+                stabilityTimerAfterMax += fpsCheckInterval;
+                
+                if (stabilityTimerAfterMax >= 3.0 && Boids.length > 200) {
+                    // Remove 200 boids as safety margin
                     const removeCount = Math.min(200, Boids.length - 100);
                     
                     if (Boids.length > 2) {
-                        // Save the special boids
-                        const whiteBoid = Boids[Boids.length - 1];
-                        const blackBoid = Boids[Boids.length - 2];
-                        
-                        // Remove regular boids from the end
+                        // Remove regular boids from before the special ones
                         Boids.splice(Boids.length - 2 - removeCount, removeCount);
                     }
                     
-                    console.log(`FPS stabilized at ${currentFPS.toFixed(1)}. Applied safety margin. Final boid count: ${Boids.length}`);
+                    safetyMarginApplied = true;
+                    console.log(`Applied safety margin. Final boid count: ${Boids.length}`);
                 }
             }
         }
@@ -1767,7 +1826,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.textBaseline = 'bottom';
         
         // Prepare text
-        const fpsText = `${currentFPS.toFixed(1)} fps`;
+        const fpsText = `${currentFPS.toFixed(0)} fps`;
         const boidText = `${Boids.length} boids`;
         
         // Position at bottom right with padding
@@ -1846,7 +1905,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     function update() {
         updateFPS();
-        checkAndReduceBoids();
+        checkAndAdjustBoids();
         simulateEverything();
         drawEverything();
         requestAnimationFrame(update);
