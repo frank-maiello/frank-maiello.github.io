@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.11</title>
+    <title>Boids 1.12</title>
     <style>
         html, body {
             margin: 0;
@@ -284,6 +284,113 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
     }
     
+    // BALLOON CLASS ---------------------------------------------------------------------
+    class BALLOON {
+        constructor (pos, vel) {
+            this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.radius = 0.15;
+            this.hue = 360 * Math.random();
+            this.stringPhase = Math.random() * Math.PI * 2; // Random starting phase for wave
+        }
+        simulate() {
+            this.vel.y += 0.001;
+            this.pos.add(this.vel, deltaT);
+            this.stringPhase += deltaT * 3; // Animate the wave
+            
+            if (this.pos.y > simHeight + 5 * this.radius) {
+                // remove balloon from array when it goes off top
+                const index = Balloons.indexOf(this);
+                if (index > -1) {
+                    Balloons.splice(index, 1);
+                }
+            }
+        }
+        draw() {
+            const radScale = this.radius * cScale;
+            const stringLength = radScale * 3.5;
+            const startY = 0.6 * radScale;
+            const segments = 20;
+
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+
+            // Draw string with wave
+            c.strokeStyle = 'hsl(0, 0%, 80%)';
+            c.lineWidth = 2.0;
+            c.beginPath();
+            for (let i = 0; i <= segments; i++) {
+                const t = i / segments;
+                const y = startY + stringLength * t;
+                // Wave amplitude increases with distance from balloon (quadratic)
+                const amplitude = radScale * 0.3 * t * t;
+                const x = Math.sin(this.stringPhase + t * Math.PI * 2) * amplitude;
+                
+                if (i === 0) {
+                    c.moveTo(x, y);
+                } else {
+                    c.lineTo(x, y);
+                }
+            }
+            c.stroke();
+            
+            // Draw knot at balloon connection
+            c.fillStyle = `hsl(${this.hue}, 40%, 30%)`;
+            c.beginPath();
+            c.ellipse(
+                0, 
+                startY + radScale * 0.12, 
+                radScale * 0.08, 
+                radScale * 0.12, 
+                0, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+            
+            // Draw balloon
+            const gradient = c.createRadialGradient(
+                -radScale * 0.25,
+                -radScale * 0.55, 
+                0, 
+                0, 
+                -radScale * 0.3, 
+                1.1 *radScale);
+            gradient.addColorStop(0, `hsla(${this.hue}, 80%, 70%, 0.8)`);
+            gradient.addColorStop(1, `hsla(${this.hue}, 60%, 20%, 0.9)`);
+            c.fillStyle = gradient;
+            c.beginPath();
+            c.ellipse(
+                0, 
+                -radScale * 0.3, 
+                radScale * 0.8, 
+                radScale, 
+                0, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+            c.strokeStyle = `hsl(${this.hue}, 50%, 40%)`;
+            c.lineWidth = 2;
+            c.stroke();
+            
+            c.restore();
+        }
+    }
+
+    // make balloon --------------------------------
+    function initBalloon() {
+        Balloons = [];
+        balloonProps = {
+            balloonInitialDelay: 40.0, // Delay before first balloon spawns (0 = immediate)
+            balloonSpawnInterval: 50.0 // Time between balloon spawns after first one (seconds)
+        } 
+        balloonSpawnTimer = -balloonProps.balloonInitialDelay;
+    }
+    
+    function spawnBalloon() {
+        const pos = new Vector2(.1 * simWidth + Math.random() * 0.8 *simWidth, -0.3);
+        const vel = new Vector2((Math.random() - 0.5) * 0.3, Math.random() * 0.3);
+        Balloons.push(new BALLOON(pos, vel));
+    }   
 
     //  CLOUD CLASS ---------------------------------------------------------------------
     class CLOUD {
@@ -969,6 +1076,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.speedAdjust = 0;
             this.whiteBoid = whiteBoid
             this.blackBoid = blackBoid;
+            this.flashing = false;
+            this.flashTimer = 0; // Timer for flash duration
+            this.flashDuration = 0.1; // How long the flash lasts (100ms)
+            this.flashCooldown = 0; // Cooldown timer to prevent immediate re-flashing
+            this.flashCooldownDuration = 0.3; // Must wait this long before flashing again (300ms)
+            this.lastFlashCycle = -1; // Track which cycle last triggered this boid
             this.tail = [];
         }
         get left() {
@@ -1008,15 +1121,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 this.hueCounter = 0;
             }
             this.hue = 350 - this.speedAdjust * 40 + this.hueCounter;
-            //this.hue = 160 - this.speedAdjust * 200;
-            //this.hue = 30 - this.speedAdjust * 40;
-            //this.hue = 180 - this.speedAdjust * 360;
-            //this.saturation = 30 + (this.pos.y / simHeight * 50);  
             this.saturation = 85;  
-            //this.lightness = 100 - (50 + (this.pos.y / simHeight * 30)); 
             this.lightness = 35 + (1 - (this.pos.y / simHeight)) * 35; 
 
-            // Draw trail ----------
+            // Draw tail ----------
             if (boidProps.doTails == true && this.tail.length > 0) {
                 c.beginPath();
                 c.moveTo(cX({x: this.tail[0][0]}), cY({y: this.tail[0][1]}));
@@ -1024,17 +1132,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
                     
                 }
-                //c.strokeStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness * 1.2}%, 0.5)`;
-                if (!this.whiteBoid && !this.blackBoid) {
+                if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
                     c.strokeStyle = 'hsla(0, 0%, 10%, 0.3)';
                     c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
                 } else if (this.whiteBoid) {
                     c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
-                    c.lineWidth = 3;
-                } else {
+                    c.lineWidth = 4;
+                } else if (this.blackBoid && !this.flashing) {
                     c.strokeStyle = `hsla(0, 0%, 5%, 0.5)`;
-                    c.lineWidth = 2;
+                    c.lineWidth = 4;
+                } else if (this.flashing && !this.blackBoid) {
+                    c.strokeStyle = `hsla(0, 0%, ${this.lightness * 1.5}%, 1.0)`;
+                    c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
+                } else if (this.flashing && this.blackBoid) {
+                    c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
+                    c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
                 }
+                c.lineCap = 'round';
                 c.stroke();
             } 
 
@@ -1042,29 +1156,89 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const angle = Math.atan2(this.vel.y, this.vel.x);
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
-            c.rotate(-angle);
+            //c.rotate(.5 * Math.PI - angle); // for teadrops
+            c.rotate(-angle); // for arrows
             
-            /*
-            c.arc(0, 0, 0.5 * arrowWidth, 0, 2 * Math.PI);
-            c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
-            c.fill();
-            */
-
-            // fill arrow shape ----------
+            // fill body ----------
             c.beginPath();
             c.moveTo(arrowLength, 0);
             c.lineTo(-arrowLength, -arrowWidth / 2);
             c.lineTo(-arrowLength + arrowDent, 0);
             c.lineTo(-arrowLength, arrowWidth / 2);
             c.closePath();
-            //if (!this.whiteBoid && !this.blackBoid) {
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
                 c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
-            //} else if (this.whiteBoid) {
-            //    c.fillStyle = `hsl(0, 0%, 90%)`;
-            //} else {
-            //    c.fillStyle = `hsl(0, 0%, 10%)`;
-            //}
+            } else if (this.whiteBoid) {
+                c.fillStyle = `hsl(0, 0%, 90%)`;
+            } else if (this.blackBoid && !this.flashing) {
+                c.fillStyle = `hsl(0, 0%, 10%)`;
+            } else if (this.flashing && !this.blackBoid) {
+                c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+            } else if (this.flashing && this.blackBoid) {
+                c.fillStyle = `hsl(0, 0%, 90%)`;
+            }
             c.fill();
+
+            // draw arrow edges/wings ----------
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-arrowLength, -arrowWidth / 2);
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+            } else if (this.whiteBoid) {
+                c.strokeStyle = `hsl(0, 0%, 100%)`;
+            } else if (this.blackBoid) {
+                c.strokeStyle = `hsl(0, 0%, 0%)`;
+            } else if (this.flashing && !this.blackBoid) {
+                c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+            } else if (this.flashing && this.blackBoid) {
+                c.strokeStyle = `hsl(0, 0%, 100%)`;
+            }
+            c.lineWidth = 1.0;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(-arrowLength, arrowWidth / 2);
+            c.lineTo(arrowLength, 0);
+            c.stroke();
+            
+            /*
+            // Draw teardrop  -----------
+            const numPoints = 32; 
+            const a = 0.2;
+            const b = 1.5;
+            const pivotOffsetX = 0;
+            const pivotOffsetY = -b * radScale;  // Centroid of bulb head
+            c.beginPath();  
+            for (let i = 0; i <= numPoints; i++) {
+                const t = Math.PI / 2 + (i / numPoints) * (2 * Math.PI);
+                const x = (2 * a * Math.cos(t) - a * Math.sin(2 * t)) * radScale;
+                const y = b * Math.sin(t) * radScale;
+                if (i === 0) {
+                    c.moveTo(x - pivotOffsetX, y - pivotOffsetY);
+                } else {
+                    c.lineTo(x - pivotOffsetX, y - pivotOffsetY);
+                }
+            }  
+            c.closePath();
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
+                c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+            } else if (this.whiteBoid) {
+                c.fillStyle = `hsl(0, 0%, 90%)`;
+                c.strokeStyle = `hsl(0, 0%, 100%)`;
+            } else if (this.blackBoid) {
+                c.fillStyle = `hsl(0, 0%, 10%)`;
+                c.strokeStyle = `hsl(0, 0%, 0%)`;
+            } else if (this.flashing) {
+                c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+            }
+            c.fill();
+            c.lineWidth = 1.0;
+            c.stroke();
+            */
+
+            c.restore();
 
             /*
             // draw body circle ----------
@@ -1073,24 +1247,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.fillStyle = `hsl(${this.hue + 60}, ${this.saturation}%, ${this.lightness * 0.9}%)`;
             c.fill();
             */
-            
-            // stroke wings ----------
-            c.beginPath();
-            c.moveTo(arrowLength, 0);
-            c.lineTo(-arrowLength, -arrowWidth / 2);
-            if (!this.whiteBoid && !this.blackBoid) {
-                c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
-            } else if (this.whiteBoid) {
-                c.strokeStyle = `hsl(0, 0%, 100%)`;
-            } else {
-                c.strokeStyle = `hsl(0, 0%, 0%)`;
-            }
-            c.lineWidth = 1.0;
-            c.stroke();
-            c.beginPath();
-            c.moveTo(-arrowLength, arrowWidth / 2);
-            c.lineTo(arrowLength, 0);
-            c.stroke();
 
             /*
             // draw eye circle ----------
@@ -1112,14 +1268,44 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.moveTo(arrowLength, 0);
             c.lineTo(-0.01*arrowLength, -arrowWidth / 6);
             c.stroke();*/
-
-            c.restore();
         }
     }
 
     //  MAKE BOIDS  ---------------------------------------------------------------------
     function makeBoids() {
         Boids = [];
+        boidRadius = 0.02;
+
+        boidProps = {
+            numBoids: 0,
+            marginX: simWidth * 0.2,
+            marginY: simHeight * 0.2,
+            minDistance: 5.0 * boidRadius, // Rule 1 - The distance to stay away from other Boids
+            avoidFactor: 50.0, // Rule 1 -Adjust velocity by this %
+            matchingFactor: 10.0, // Rule 2 - Adjust velocity by this %
+            visualRange: 10.0 * boidRadius, // How far Boids can see each other
+            centeringFactor: 5.0, // Rule 3 - Adjust velocity by this %
+            speedLimit: 1.1, // clamp speed to this value
+            turnFactor: 1.0, // How strongly Boids turn back when near edge
+            tailLength: -10, // Number of trail points to keep (negative for last N points)
+            doTails: true,
+            blackBoidFlashInterval: 5.0, // Flash every 5 seconds
+            blackBoidFlashTimer: 0,
+            currentFlashCycle: 0, // Track which flash cycle we're in
+        };
+
+        if (simWidth < simHeight) {
+            boidProps.numBoids = 500;
+        } else {
+            boidProps.numBoids = 2000;
+        }
+        // (no trails for phone?)  ---------
+        if (simWidth < simHeight) {
+            boidProps.doTails = true;
+        } else {
+            boidProps.doTails = true;
+        }
+
         const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
         let pos, vel, ang;
         for (var i = 0; i < boidProps.numBoids; i += 1) {
@@ -1193,6 +1379,69 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 const planeStrength = boidProps.avoidFactor * 3.0 * (cloudAvoidRadius - planeDist) / planeDist;
                 boid.vel.x += planeDx * planeStrength * deltaT;
                 boid.vel.y += planeDy * planeStrength * deltaT;
+            }
+        }
+
+        // BALLOON AVOIDANCE
+        for (let balloon of Balloons) {
+            const balloonDx = boid.pos.x - balloon.pos.x;
+            const balloonDy = boid.pos.y - balloon.pos.y;
+            const balloonDistSq = balloonDx * balloonDx + balloonDy * balloonDy;
+            const balloonAvoidRadius = balloon.radius + boidProps.minDistance * 1.5;
+            const radiusSq = balloonAvoidRadius * balloonAvoidRadius;
+            
+            if (balloonDistSq < radiusSq && balloonDistSq > 0) {
+                const balloonDist = Math.sqrt(balloonDistSq);
+                const balloonStrength = boidProps.avoidFactor * 3.0 * (balloonAvoidRadius - balloonDist) / balloonDist;
+                boid.vel.x += balloonDx * balloonStrength * deltaT;
+                boid.vel.y += balloonDy * balloonStrength * deltaT;
+            }
+        }
+    }
+
+    //  HANDLE FLASHING -------------
+    function handleFlashing(boid) {
+        // Update flash timer
+        if (boid.flashing) {
+            boid.flashTimer += deltaT;
+            if (boid.flashTimer >= boid.flashDuration) {
+                boid.flashing = false;
+                boid.flashTimer = 0;
+                boid.flashCooldown = boid.flashCooldownDuration; // Start cooldown
+            }
+        }
+        
+        // Update cooldown timer
+        if (boid.flashCooldown > 0) {
+            boid.flashCooldown -= deltaT;
+            if (boid.flashCooldown < 0) {
+                boid.flashCooldown = 0;
+            }
+        }
+        
+        // Check if nearby boids are flashing and respond
+        // Only respond if not currently flashing, not in cooldown, not the blackBoid,
+        // and hasn't already flashed in this cycle
+        if (!boid.flashing && boid.flashCooldown <= 0 && !boid.blackBoid && boid.lastFlashCycle < boidProps.currentFlashCycle) {
+            const nearbyBoids = SpatialGrid.getNearby(boid, boidProps.visualRange);
+            const flashRangeSq = boidProps.visualRange * boidProps.visualRange;
+            
+            for (let otherBoid of nearbyBoids) {
+                if (otherBoid !== boid && otherBoid.flashing && otherBoid.flashTimer > 0) {
+                    const dx = boid.pos.x - otherBoid.pos.x;
+                    const dy = boid.pos.y - otherBoid.pos.y;
+                    const distSq = dx * dx + dy * dy;
+                    
+                    if (distSq < flashRangeSq) {
+                        // Trigger flash with a small random delay
+                        //const delay = Math.random() * 0.05; // 0-50ms delay
+                        const delay = 0.01 + Math.random() * 0.04;
+                        boid.flashTimer = -delay;
+                        boid.flashing = true;
+                        boid.lastFlashCycle = boidProps.currentFlashCycle; // Mark this cycle as processed
+                        break;
+                    }
+                }
             }
         }
     }
@@ -1310,14 +1559,58 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         for (let boid of Boids) {
             SpatialGrid.insert(boid);
         }
+        
+        // Trigger blackBoid flash periodically
+        boidProps.blackBoidFlashTimer += deltaT;
+        if (boidProps.blackBoidFlashTimer >= boidProps.blackBoidFlashInterval) {
+            // Find the blackBoid and check if it's in the central 25% of screen
+            for (let boid of Boids) {
+                if (boid.blackBoid) {
+                    // Check if blackBoid is within central 25% of screen
+                    const centerMinX = simWidth * 0.375;
+                    const centerMaxX = simWidth * 0.625;
+                    const centerMinY = simHeight * 0.375;
+                    const centerMaxY = simHeight * 0.625;
+                    
+                    if (boid.pos.x >= centerMinX && boid.pos.x <= centerMaxX &&
+                        boid.pos.y >= centerMinY && boid.pos.y <= centerMaxY) {
+                        // BlackBoid is in central area, trigger flash
+                        boidProps.blackBoidFlashTimer = 0; // Reset timer
+                        boidProps.currentFlashCycle++; // Start a new flash cycle
+                        boid.flashing = true;
+                        boid.flashTimer = 0;
+                        boid.lastFlashCycle = boidProps.currentFlashCycle;
+                    }
+                    // If not in center, timer stays at max and waits for blackBoid to enter center
+                    break;
+                }
+            }
+        }
+        
         // Update boids
         for (var i = 0; i < Boids.length; i++) {
             var boid = Boids[i];
+            handleFlashing(boid);
             handleBoidRules(boid);
             handleClouds(boid);
             handleBounds(boid);
             boid.simulate();
         }
+
+        // Update balloon ---------
+        // Timer starts at -initialDelay, reaches 0 after initialDelay time
+        // After each spawn, resets to -spawnInterval
+        balloonSpawnTimer += deltaT;
+        
+        if (balloonSpawnTimer >= 0) {
+            spawnBalloon();
+            balloonSpawnTimer = -balloonProps.balloonSpawnInterval;
+        }
+        
+        for (let balloon of Balloons) {
+            balloon.simulate();
+        }
+
         // Update airplane
         if (doKitty == true) {
             for (let plane of Airplane) {
@@ -1353,6 +1646,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 plane.draw();
             }
         }
+
+        // Draw balloon ---------
+        for (let balloon of Balloons) {
+            balloon.draw();
+        }
         
         // Draw large foreground clouds (non-interactive) last
         for (let cloud of ForegroundClouds) {
@@ -1363,32 +1661,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     //  SETUP SCENE  ------------
     function setupScene() {
         deltaT = 1/60;
-        boidRadius = 0.02
-        boidProps = {
-            numBoids: 0,
-            marginX: simWidth * 0.2,
-            marginY: simHeight * 0.2,
-            minDistance: 5.0 * boidRadius, // Rule 1 - The distance to stay away from other Boids
-            avoidFactor: 50.0, // Rule 1 -Adjust velocity by this %
-            matchingFactor: 10.0, // Rule 2 - Adjust velocity by this %
-            visualRange: 10.0 * boidRadius, // How far Boids can see each other
-            centeringFactor: 5.0, // Rule 3 - Adjust velocity by this %
-            speedLimit: 1.1, // clamp speed to this value
-            turnFactor: 1.0, // How strongly Boids turn back when near edge
-            tailLength: -10, // Number of trail points to keep (negative for last N points)
-            doTails: true
-        }
-        if (simWidth < simHeight) {
-            boidProps.numBoids = 500;
-        } else {
-            boidProps.numBoids = 2000;
-        }
-        // decide on trails based on aspect ratio (no trails for phone)  ---------
-        if (simWidth < simHeight) {
-            boidProps.doTails = false;
-        } else {
-            boidProps.doTails = true;
-        }
+        
         doKitty = true;
         // Load plane images
         kittyPlaneImage = new Image();
@@ -1405,30 +1678,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         makeInitialClouds();
         // make Airplane ----------
         makeAirplane();
+        // make balloon ----------
+        initBalloon();
         // make spatial grid ----------
         makeSpatialGrid();
         SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+
+        /*
+        // Load and play audio from GitHub LFS
+        const audio = new Audio('https://media.githubusercontent.com/media/frank-maiello/frank-maiello.github.io/main/audio.mp3');
+        audio.loop = true; // Loop the audio
+        audio.volume = 0.5; // Set volume to 50%
         
+        // Try to play audio immediately, or wait for user interaction if blocked
+        audio.play().catch(function(error) {
+            console.log('Audio autoplay blocked. Waiting for user interaction...');
+            // Play on first click anywhere on the page
+            document.addEventListener('click', function() {
+                audio.play();
+            }, { once: true });
+        });
+        */
     }
 
     //  RUN  ------------------------------------------------
     setupScene();
-    
-    /*
-    // Load and play audio from GitHub LFS
-    const audio = new Audio('https://media.githubusercontent.com/media/frank-maiello/frank-maiello.github.io/main/audio.mp3');
-    audio.loop = true; // Loop the audio
-    audio.volume = 0.5; // Set volume to 50%
-    
-    // Try to play audio immediately, or wait for user interaction if blocked
-    audio.play().catch(function(error) {
-        console.log('Audio autoplay blocked. Waiting for user interaction...');
-        // Play on first click anywhere on the page
-        document.addEventListener('click', function() {
-            audio.play();
-        }, { once: true });
-    });
-    */
     
     function update() {
         simulateEverything();
