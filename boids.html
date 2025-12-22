@@ -1667,9 +1667,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let lastFrameTime = performance.now();
     let fpsCheckTimer = 0;
     let fpsCheckInterval = 0.25; // Check FPS every 0.25 seconds
-    let minStableFPS = 57; // Target FPS threshold (stricter)
+    let minStableFPS = 55; // Target FPS threshold
     let fpsStableTimer = 0;
-    let fpsStableThreshold = 2.0; // FPS must be stable for 2 seconds before increasing (stricter)
+    let fpsStableThreshold = 1.0; // FPS must be stable for 1 second before increasing
     let isRampingUp = true; // Track if we're still ramping up
     let maxBoidsReached = false; // Track if we've hit the limit
     let safetyMarginApplied = false; // Track if we've applied the 200 boid safety reduction
@@ -1681,6 +1681,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let startupWarmupTimer = 0; // Timer for startup warm-up period
     let startupWarmupPeriod = 3.0; // Wait 3 seconds after startup before monitoring FPS
     let isWarmedUp = false; // Track if warm-up period is complete
+    let runtimeTimer = 0; // Track total runtime
+    let runtimeLockPeriod = 40.0; // Lock boid count after 60 seconds
+    let boidCountLocked = false; // Track if boid count is locked
+    let fadeOutDuration = 2.0; // Fade out over 2 seconds
+    let fadeOutTimer = 0; // Track fade out progress
 
     function updateFPS() {
         const currentTime = performance.now();
@@ -1701,6 +1706,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
 
     function checkAndAdjustBoids() {
+        // Track runtime and lock after specified period
+        runtimeTimer += deltaT;
+        if (runtimeTimer >= runtimeLockPeriod && !boidCountLocked) {
+            boidCountLocked = true;
+            isRampingUp = false;
+            fadeOutTimer = 0; // Start fade out
+        }
+        
+        // Update fade out timer if locked
+        if (boidCountLocked && fadeOutTimer < fadeOutDuration) {
+            fadeOutTimer += deltaT;
+        }
+        
+        // If locked, don't adjust boids anymore
+        if (boidCountLocked) {
+            return;
+        }
+        
         // Handle startup warm-up period
         if (!isWarmedUp) {
             startupWarmupTimer += deltaT;
@@ -1738,7 +1761,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             // Calculate variance to check consistency
             const variance = maxFrameTime - minFrameTime;
-            const isConsistent = variance < 5; // Less than 5ms variance between frames
+            const isConsistent = variance < 10; // Less than 10ms variance between frames
             
             // Update revert verification timer if we just reverted
             if (justReverted) {
@@ -1756,8 +1779,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
             }
             
-            // Check if FPS is unstable or too low (stricter criteria)
-            if (currentFPS < minStableFPS || unstableFrames > fpsFrameTimes.length * 0.1 || !isConsistent) {
+            // Check if FPS is unstable or too low
+            if (currentFPS < minStableFPS || unstableFrames > fpsFrameTimes.length * 0.15) {
                 // Only revert if not currently in verification period
                 if (!justReverted && Boids.length > lastSafeBoidCount && lastSafeBoidCount >= 100) {
                     const removeCount = Boids.length - lastSafeBoidCount;
@@ -1829,6 +1852,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
 
     function drawStats() {
+        // Calculate opacity based on fade out
+        let opacity = 1.0;
+        if (boidCountLocked) {
+            if (fadeOutTimer >= fadeOutDuration) {
+                return; // Completely faded out, don't draw
+            }
+            opacity = 1.0 - (fadeOutTimer / fadeOutDuration);
+        }
+        
         // Draw FPS and boid count at bottom right
         c.save();
         
@@ -1836,6 +1868,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.font = '16px monospace';
         c.textAlign = 'right';
         c.textBaseline = 'bottom';
+        c.globalAlpha = opacity; // Apply fade opacity
         
         // Prepare text
         const fpsText = `${currentFPS.toFixed(0)} fps`;
