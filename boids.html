@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.18</title>
+    <title>Boids 1.19</title>
     <style>
         html, body {
             margin: 0;
@@ -303,6 +303,187 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     function makeSpatialGrid() {
         SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+    }
+
+    //  HOT AIR BALLOON CLASS  -----------------------------------------------------
+    class HOTAIRBALLOON {
+        constructor (radius, pos, vel) {
+            this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.radius = radius;
+        }
+        simulate() {
+            this.pos.add(this.vel, deltaT);
+            if (this.pos.x < 0) {
+                this.pos.x = simWidth + 2 * this.radius;
+                this.pos.y = 0.6 * simHeight + Math.random() * 0.3 * simHeight;
+            }
+        }
+        draw() {
+            const radScale = this.radius * cScale;
+            const balloonRadius = 0.3 * radScale
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+           
+            // draw balloon as spherical with a net over the top half, like a vintage hot air balloon
+            // Sphere is centered at (0, -0.5 * balloonRadius) with radius balloonRadius
+            const sphereCenterY = -0.5 * balloonRadius;
+            
+            const gradient = c.createRadialGradient(
+                -balloonRadius * 0.3,
+                sphereCenterY - balloonRadius * 0.4, 
+                0, 
+                0, 
+                sphereCenterY, 
+                balloonRadius * 1.2);
+            gradient.addColorStop(0, `hsla(60, 80%, 60%, 0.8)`);
+            gradient.addColorStop(1, `hsla(60, 60%, 20%, 1.0)`);
+            c.fillStyle = gradient;
+            c.beginPath();
+            c.arc(
+                0,
+                sphereCenterY,
+                balloonRadius,   
+                0, 
+                2 * Math.PI);
+            c.fill();
+            c.strokeStyle = `hsl(30, 60%, 30%)`;
+            c.lineWidth = 1;
+            c.stroke();
+            
+            // Draw net over top half of balloon (viewed from horizontal side angle)
+            const sphereTop = sphereCenterY - balloonRadius;
+            const sphereEquator = sphereCenterY;
+            
+            // Vertical meridian lines - evenly spaced from equator, from top to equator
+            const verticalLines = 8;
+            c.strokeStyle = `hsla(30, 50%, 20%, 0.7)`;
+            c.lineWidth = 1;
+            for (let i = 0; i <= verticalLines; i++) {
+                // Evenly space along visible arc of equator (from -π/2 to +π/2)
+                const angle = (i / verticalLines - 0.5) * Math.PI; // -π/2 to +π/2
+                c.beginPath();
+                for (let j = 0; j <= 20; j++) {
+                    const t = j / 20; // 0 at top, 1 at equator
+                    const currentAngle = -Math.PI / 2 + t * (Math.PI / 2); // -90° to 0°
+                    const cosCurrentAngle = Math.cos(currentAngle);
+                    const x = balloonRadius * Math.sin(angle) * cosCurrentAngle;
+                    const y = sphereCenterY + balloonRadius * Math.sin(currentAngle);
+                    if (j === 0) {
+                        c.moveTo(x, y);
+                    } else {
+                        c.lineTo(x, y);
+                    }
+                }
+                // Calculate intersection with equator ellipse
+                const equatorX = balloonRadius * Math.sin(angle);
+                const equatorEllipseY = sphereEquator + balloonRadius * 0.3 * Math.sqrt(1 - (equatorX / balloonRadius) ** 2);
+                c.lineTo(equatorX, equatorEllipseY);
+                c.stroke();
+            }
+            
+            // Horizontal latitude lines - circular arcs at different heights
+            const horizontalLines = 5;
+            c.lineWidth = 1.5;
+            for (let i = 1; i <= horizontalLines; i++) {
+                const t = i / (horizontalLines + 1); // Position from top to equator
+                const currentAngle = -Math.PI / 2 + t * (Math.PI / 2); // -90° to 0°
+                const yPos = sphereCenterY + balloonRadius * Math.sin(currentAngle);
+                const circleRadius = balloonRadius * Math.cos(currentAngle);
+                
+                // Draw front half of ellipse only (omit rear arcs)
+                c.beginPath();
+                c.ellipse(0, yPos, circleRadius, circleRadius * 0.3, 0, -0.1, Math.PI + 0.1);
+                c.stroke();
+            }
+            
+            // Draw thicker equator band
+            c.lineWidth = 1;
+            c.beginPath();
+            c.ellipse(0, sphereEquator, balloonRadius, balloonRadius * 0.3, 0, -0.1, Math.PI + 0.1);
+            c.stroke();
+            
+            // Draw basket with rounded corners and cylindrical shading
+            const basketWidth = balloonRadius * 0.5;
+            const basketHeight = balloonRadius * 0.4;
+            const basketY = 1.0 * balloonRadius + basketHeight * 0.5;
+            const cornerRadius = basketWidth * 0.15;
+            
+            // Create linear gradient for cylindrical appearance
+            const basketGradient = c.createLinearGradient(
+                -basketWidth / 2, 0,
+                basketWidth / 2, 0
+            );
+            basketGradient.addColorStop(0, `hsl(30, 60%, 25%)`);
+            basketGradient.addColorStop(0.3, `hsl(30, 70%, 35%)`);
+            basketGradient.addColorStop(0.7, `hsl(30, 70%, 30%)`);
+            basketGradient.addColorStop(1, `hsl(30, 60%, 20%)`);
+            
+            c.fillStyle = basketGradient;
+            c.beginPath();
+            c.roundRect(-basketWidth / 2, basketY - basketHeight / 2, basketWidth, basketHeight, cornerRadius);
+            c.fill();
+            c.strokeStyle = `hsl(30, 50%, 20%)`;
+            c.lineWidth = 2;
+            c.stroke();
+
+            // Connect meridian line endpoints to basket with draped cables
+            c.strokeStyle = `hsla(30, 50%, 10%, 0.7)`;
+            c.lineWidth = 1;
+            const basketTop = basketY - basketHeight / 2;
+            for (let i = 0; i <= verticalLines; i++) {
+                const angle = (i / verticalLines - 0.5) * Math.PI;
+                
+                const normalizedPos = Math.abs(i / verticalLines - 0.5) * 2; // 0 at center, 1 at edges
+                
+                // For only the outermost cables, attach below the equator
+                let connectionX, connectionY;
+                if (normalizedPos > 0.8) {
+                    // Only the very outer cables attach progressively lower
+                    const verticalOffset = (normalizedPos - 0.8) / 0.2 * (Math.PI / 12); // Up to 15° below equator for outermost
+                    const connectionAngle = verticalOffset; // below equator
+                    const connY = sphereCenterY + balloonRadius * Math.sin(connectionAngle);
+                    const circleRadiusAtHeight = balloonRadius * Math.cos(connectionAngle);
+                    connectionX = circleRadiusAtHeight * Math.sin(angle);
+                    // Project onto ellipse for side view
+                    connectionY = connY + circleRadiusAtHeight * 0.3 * Math.sqrt(Math.max(0, 1 - (Math.sin(angle)) ** 2));
+                } else {
+                    // Most cables attach at equator
+                    const equatorX = balloonRadius * Math.sin(angle);
+                    connectionX = equatorX;
+                    connectionY = sphereEquator + balloonRadius * 0.3 * Math.sqrt(Math.max(0, 1 - (equatorX / balloonRadius) ** 2));
+                }
+                
+                // Connect to basket - distribute connections evenly along basket width
+                const basketX = (i / verticalLines - 0.5) * basketWidth;
+                
+                // Draw draped cable using quadratic curve
+                c.beginPath();
+                c.moveTo(connectionX, connectionY);
+                
+                // Create draping curve with control point offset
+                const midX = (connectionX + basketX) / 2;
+                const midY = (connectionY + basketTop) / 2;
+                // Add drape - how much the cable sags (much more for outer cables)
+                const drape = balloonRadius * 0.25 * (1 + normalizedPos * normalizedPos * 1.5);
+                const controlY = midY + drape; // Drape downward (positive Y is down from balloon)
+                
+                c.quadraticCurveTo(midX, controlY, basketX, basketTop);
+                c.stroke();
+            }
+            c.restore();
+        }
+    }
+
+    // make hot air balloon --------------------------------
+    function makeHotAirBalloon() {
+        HotAirBalloon = [];
+        const radius = 0.25;
+        const pos = new Vector2(
+            0.9 * simWidth, 
+            0.6 * simHeight + Math.random() * 0.3 *simHeight); 
+        const vel = new Vector2(-0.01, 0);
+        HotAirBalloon.push(new HOTAIRBALLOON(radius, pos, vel));
     }
     
     // BALLOON CLASS ---------------------------------------------------------------------
@@ -716,7 +897,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.firstPassBannerText = "Double-click to add clouds";
             this.secondPassBannerText = "Right-click to remove";
             this.thirdPassBannerText = "Spacebar to PARTY!!";
-            this.fourthPassBannerText = "I love you all!";
+            this.fourthPassBannerText = "Miss Kitty sends love";
             
             // Set banner text based on pass number
             if (this.passNumber === 1) {
@@ -1606,7 +1787,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         boidRadius = 0.02;
 
         boidProps = {
-            numBoids: 0,
+            numBoids: 6000,
             marginX: simWidth * 0.2,
             marginY: simHeight * 0.2,
             minDistance: 5.0 * boidRadius, // Rule 1 - The distance to stay away from other Boids
@@ -1623,12 +1804,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             currentFlashCycle: 0, // Track which flash cycle we're in
         };
 
-        // Set target boid count based on screen size
-        if (simWidth < simHeight) {
-            boidProps.numBoids = 500;
-        } else {
-            boidProps.numBoids = 2000;
-        }
         // (no trails for phone?)  ---------
         if (simWidth < simHeight) {
             boidProps.doTails = true;
@@ -1839,6 +2014,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     // Main animation loop  ------------
     function simulateEverything() {
+        // Draw hot air balloon 
+        for (let hotAirBalloon of HotAirBalloon) {
+            hotAirBalloon.simulate();
+        }
+
         // Update background clouds
         for (let i = BackgroundClouds.length - 1; i >= 0; i--) {
             const cloud = BackgroundClouds[i];
@@ -1963,6 +2143,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     function drawEverything() {
         // Clear canvas
         c.clearRect(0, 0, width, height);
+
+        // Draw hot air balloon 
+        for (let hotAirBalloon of HotAirBalloon) {
+            hotAirBalloon.draw();
+        }
         
         // Draw background clouds first
         for (let cloud of BackgroundClouds) {
@@ -2023,7 +2208,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let startupWarmupPeriod = 3.0; // Wait 3 seconds after startup before monitoring FPS
     let isWarmedUp = false; // Track if warm-up period is complete
     let runtimeTimer = 0; // Track total runtime
-    let runtimeLockPeriod = 30.0; // Lock boid count after 30 seconds
+    let runtimeLockPeriod = 60.0; // Lock boid count after 30 seconds
     let boidCountLocked = false; // Track if boid count is locked
     let fadeOutDuration = 5.0; // Fade out over 5 seconds
     let fadeOutTimer = 0; // Track fade out progress
@@ -2329,6 +2514,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         makeAirplane();
         // make balloon ----------
         initBalloon();
+        // make hot air balloon ----------
+        makeHotAirBalloon()
         // make spatial grid ----------
         makeSpatialGrid();
         SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
