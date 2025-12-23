@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.17</title>
+    <title>Boids 1.18</title>
     <style>
         html, body {
             margin: 0;
@@ -373,7 +373,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.stroke();
 
             // Draw string with wave
-            c.strokeStyle = 'hsl(0, 0%, 75%)';
+            c.strokeStyle = 'hsl(0, 0%, 80%)';
             c.lineWidth = 2.0;
             c.beginPath();
             for (let i = 0; i <= segments; i++) {
@@ -544,16 +544,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             ctx.beginPath();
             ctx.rect(leftmost, topmost, rightmost - leftmost, bottomY - topmost + 2);
             ctx.clip();
+
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
             
             // Draw outline strokes (darker for background clouds, lighter for foreground)
             if (this.isForeground) {
                 ctx.strokeStyle = 'hsl(200, 85%, 85%)';
+                ctx.lineWidth = 16;
             } else if (this.isBackground) {
                 ctx.strokeStyle = 'hsl(200, 30%, 50%)';
+                ctx.lineWidth = 6;
             } else {
                 ctx.strokeStyle = 'hsl(200, 80%, 80%)';
+                ctx.lineWidth = 12;
             }
-            ctx.lineWidth = 6;
+            
             for (let puff of puffs) {
                 ctx.beginPath();
                 ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
@@ -563,8 +569,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Fill all puffs (darker for background clouds, white for others)
             if (this.isBackground) {
                 ctx.fillStyle = 'hsl(0, 0%, 65%)';
-            } else {
+            } else if (this.isForeground){
                 ctx.fillStyle = 'hsl(0, 0%, 100%)';
+            } else {
+                ctx.fillStyle = 'hsl(0, 0%, 95%)';
             }
             for (let puff of puffs) {
                 ctx.beginPath();
@@ -575,13 +583,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             ctx.restore();
             
             // Draw bottom edge (darker for background clouds)
-            const bottomTraceY = bottomY + 1.5;
+            const bottomTraceY = bottomY + 1;
             if (this.isBackground) {
-                ctx.strokeStyle = 'hsla(200, 30%, 50%, 0.6)';
+                ctx.strokeStyle = 'hsla(200, 30%, 50%, 1)';
+                ctx.lineWidth = 3;
+            } else if (this.isForeground) {
+                ctx.strokeStyle = 'hsla(200, 80%, 80%, 1)';
+                ctx.lineWidth = 7;
             } else {
-                ctx.strokeStyle = 'hsla(200, 80%, 80%, 0.8)';
+                ctx.strokeStyle = 'hsla(200, 80%, 80%, 1)';
+                ctx.lineWidth = 5;
             }
-            ctx.lineWidth = 3;
+            
             ctx.beginPath();
             for (let i = 0; i < puffs.length; i++) {
                 const puff = puffs[i];
@@ -589,7 +602,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (dy < puff.r && dy > -puff.r) {
                     const ratio = Math.min(1, Math.max(-1, dy / puff.r));
                     const angle = Math.acos(ratio);
-                    const extend = 2;
+                    const extend = puff.r * 0.1;
                     const leftX = puff.x - puff.r * Math.sin(angle) - (i === 0 ? extend : 0);
                     const rightX = puff.x + puff.r * Math.sin(angle) + (i === puffs.length - 1 ? extend : 0);
                     ctx.moveTo(leftX, bottomTraceY);
@@ -611,14 +624,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const cx = this.x * cScale;
             const cy = canvas.height - this.y * cScale;
             c.drawImage(this.offscreenCanvas, cx - this.offsetX, cy - this.offsetY);
+            
+            // Draw text only on initial foreground cloud during its first pass
+            if (this.isForeground && initialForegroundCloudTextVisible) {
+                const r = this.radius * cScale;
+                c.fillStyle = 'hsl(200, 60%, 30%)';
+                c.font = `bold ${r * 0.4}px monospace`;
+                c.textAlign = 'center';
+                c.textBaseline = 'middle';
+                c.fillText("B 0 I D S", cx, cy + r * 0.25);
+            }
         }
     }
 
     //  MOVING AIRPLANE CLASS ---------------------------------------------------------------------
     class AIRPLANE {
         constructor(y, speed, size, respawnDelay, passNumber) {
-            // On first three passes, try to spawn above the topmost cloud
-            if (passNumber <= 3) {
+            // On first four passes, try to spawn above the topmost cloud
+            if (passNumber <= 4) {
                 this.y = this.pickAltitudeAboveClouds();
             } else {
                 // Randomize vertical position avoiding cloud elevations
@@ -636,9 +659,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.angle = 0; // Current orientation angle
             this.isUpsideDown = false; // Whether plane is flying upside-down
             
-            // Determine if plane should be upside-down (only if in top 30% and NOT in first three passes)
+            // Determine if plane should be upside-down (only if in top 30% and NOT in first four passes)
             const topThreshold = simHeight * 0.7; // 30% from top
-            if (passNumber > 3 && this.y > topThreshold) {
+            if (passNumber > 4 && this.y > topThreshold) {
                 this.isUpsideDown = Math.random() < 0.5; // 50% chance
                 if (this.isUpsideDown) {
                     this.angle = Math.PI; // Start upside-down
@@ -646,7 +669,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Direction: 1 = left to right, -1 = right to left
-            // Pass 1: right to left, Pass 2: left to right, Pass 3: right to left
+            // Pass 1: right to left, Pass 2: left to right, Pass 3: right to left, Pass 4: left to right
             if (passNumber === 1) {
                 this.direction = -1;
                 this.x = simWidth + size; // Start from right
@@ -656,6 +679,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             } else if (passNumber === 3) {
                 this.direction = -1;
                 this.x = simWidth + size; // Start from right
+            } else if (passNumber === 4) {
+                this.direction = 1;
+                this.x = -size; // Start from left
             } else {
                 this.direction = 1;
                 this.x = -size; // Start from left
@@ -685,11 +711,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.maxTrailLength = 100; // Number of trail points to keep
             
             // Banner properties
-            this.passNumber = passNumber; // Track which pass we're on (1, 2, 3, etc.)
+            this.passNumber = passNumber; // Track which pass we're on (1, 2, 3, 4, etc.)
             this.bannerWavePhase = 0; // Animation phase for banner waving
             this.firstPassBannerText = "Double-click to add clouds";
             this.secondPassBannerText = "Right-click to remove";
             this.thirdPassBannerText = "Spacebar to PARTY!!";
+            this.fourthPassBannerText = "I love you all!";
             
             // Set banner text based on pass number
             if (this.passNumber === 1) {
@@ -698,8 +725,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 this.bannerText = this.secondPassBannerText;
             } else if (this.passNumber === 3) {
                 this.bannerText = this.thirdPassBannerText;
+            } else if (this.passNumber === 4) {
+                this.bannerText = this.fourthPassBannerText;
             } else {
-                this.bannerText = ""; // No banner after third pass
+                this.bannerText = ""; // No banner after fourth pass
             }
         }
         pickAltitudeAboveClouds() {
@@ -774,8 +803,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     // Increment pass number
                     this.passNumber++;
                     
-                    // For first three passes: set specific directions for each pass
-                    if (this.passNumber <= 3) {
+                    // For first four passes: set specific directions for each pass
+                    if (this.passNumber <= 4) {
                         if (this.passNumber === 1) {
                             this.direction = -1;
                             this.x = simWidth + this.size; // Start from right
@@ -785,11 +814,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         } else if (this.passNumber === 3) {
                             this.direction = -1;
                             this.x = simWidth + this.size; // Start from right
+                        } else if (this.passNumber === 4) {
+                            this.direction = 1;
+                            this.x = -this.size; // Start from left
                         }
                         this.y = this.pickAltitudeAboveClouds();
                         this.isUpsideDown = false;
                     } else {
-                        // After three passes: alternate directions and allow upside-down
+                        // After four passes: alternate directions and allow upside-down
                         this.direction *= -1;
                         if (this.direction === 1) {
                             this.x = -this.size; // Start from left
@@ -822,8 +854,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         this.bannerText = this.secondPassBannerText;
                     } else if (this.passNumber === 3) {
                         this.bannerText = this.thirdPassBannerText;
+                    } else if (this.passNumber === 4) {
+                        this.bannerText = this.fourthPassBannerText;
                     } else {
-                        this.bannerText = ""; // No banner after third pass
+                        this.bannerText = ""; // No banner after fourth pass
                     }
                     
                     // Reset loop parameters
@@ -923,16 +957,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     this.x - this.size > simWidth * 2 : 
                     this.x + this.size < -simWidth;
                 if (passedEdge) {
-                    // Start waiting timer (no delay for first three passes)
+                    // Start waiting timer (no delay for first four passes)
                     this.isWaiting = true;
-                    this.waitTimer = this.passNumber < 3 ? 0 : this.respawnDelay;
+                    this.waitTimer = this.passNumber < 4 ? 0 : this.respawnDelay;
                 }
             }
             // Spin the propeller (faster when going faster)
             this.propellerAngle += dt * 20 * (this.speed / this.baseSpeed);
             
-            // Animate banner wave for first three passes
-            if (this.passNumber <= 3) {
+            // Animate banner wave for first four passes
+            if (this.passNumber <= 4) {
                 this.bannerWavePhase += dt * 3;
             }
             
@@ -1202,8 +1236,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 const centerX = this.x * cScale;
                 const centerY = canvas.height - this.y * cScale;
                 
-                // Draw banner on first three passes
-                if (this.passNumber <= 3) {
+                // Draw banner on first four passes
+                if (this.passNumber <= 4) {
                     this.drawBanner(drawSize);
                 }
                 
@@ -1344,6 +1378,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }    
     
     //  MAKE AIRPLANE  ---------------------------------------------------------------------
+    let initialForegroundCloudTextVisible = true; // Track if initial cloud text should show
+    
     function makeAirplane() {
         Airplane = [];
         const y = 0.3 * simHeight;
@@ -1841,6 +1877,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (cloud.x + cloud.radius * 2 < 0) {
                 // Remove this cloud and spawn a new one on the right
                 ForegroundClouds.splice(i, 1);
+                initialForegroundCloudTextVisible = false; // Text only on first cloud
                 const newY = findSafeCloudAltitude(false, [...BackgroundClouds, ...Clouds, ...ForegroundClouds]);
                 ForegroundClouds.push(new CLOUD(simWidth + cloud.radius * 2, newY, false, true));
             }
