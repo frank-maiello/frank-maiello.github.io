@@ -882,9 +882,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (this.loopPhase === 0 && loopTrigger && !this.isUpsideDown) {
                     // Decide whether to do a loop (50% chance) - only if not upside-down
                     // and only if plane is within bottom 25% of screen
+                    // No loops during first four passes
                     const isInBottomQuarter = this.baseY <= simHeight * 0.35;
                     
-                    if (!this.loopDecided && isInBottomQuarter) {
+                    if (!this.loopDecided && isInBottomQuarter && this.passNumber > 4) {
                         this.willDoLoop = Math.random() < 0.5;
                         this.loopDecided = true;
                     }
@@ -1145,7 +1146,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.stroke();
             
             // Draw text on banner - warp each character along the banner curve
-            c.fillStyle = 'hsl(0, 90%, 50%)';
+            c.fillStyle = 'hsl(320, 90%, 50%)';
             c.font = `bold ${drawSize * 0.2}px comic sans ms, sans-serif`;
             c.textAlign = 'center';
             c.textBaseline = 'middle';
