@@ -2081,7 +2081,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     this.drawBanner(drawSize);
                 }
                 
-                /*
                 // Draw propeller trail 1 behind the airplane
                 if (this.propTrail1.length > 1) {
                     c.lineCap = 'round';
@@ -2089,18 +2088,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     for (let i = 0; i < this.propTrail1.length - 1; i++) {
                         const alpha = (i / this.propTrail1.length) * 0.3;
                         const width = Math.min(10, 5 / (i / this.propTrail1.length));
-                        //const maxWidth = Math.min(30, 5 / (i / this.propTrail1.length));
+                        const maxWidth = Math.min(30, 5 / (i / this.propTrail1.length));
                         const point1 = this.propTrail1[i];
                         const point2 = this.propTrail1[i + 1];
                         c.strokeStyle = `hsla(200, 20%, 70%, ${alpha})`;
                         c.lineWidth = width;
                         c.beginPath();
-                        c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale + width);
-                        c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale - width);
+                        c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale + maxWidth);
+                        c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale - maxWidth);
                         c.stroke();
                     }
                 }
-                    */
 
                 // Translate to airplane center and rotate
                 c.save();
@@ -2147,10 +2145,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 
                 c.restore();
 
-                /*
                 // Draw propeller trail 2 in front of airplane
                 if (this.propTrail1.length > 1) {
-                    //c.save();
                     c.lineCap = 'round';
                     c.lineJoin = 'round';
                     
@@ -2158,18 +2154,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     for (let i = 0; i < this.propTrail2.length - 1; i++) {
                         const alpha = (i / this.propTrail2.length) * 0.3;
                         const width = Math.min(10, 5 / (i / this.propTrail1.length));
-                        //const maxWidth = Math.min(30, 5 / (i / this.propTrail1.length));
+                        const maxWidth = Math.min(30, 5 / (i / this.propTrail1.length));
                         const point1 = this.propTrail2[i];
                         const point2 = this.propTrail2[i + 1];
                         c.strokeStyle = `hsla(200, 20%, 70%, ${alpha})`;
                         c.lineWidth = width;
                         c.beginPath();
-                        c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale + width);
-                        c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale - width);
+                        c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale + maxWidth);
+                        c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale - maxWidth);
                         c.stroke();
                     }
-                    //c.restore();
-                }*/
+                }
             }
         }
     }
