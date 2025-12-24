@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.19</title>
+    <title>Boids 1.20</title>
     <style>
         html, body {
             margin: 0;
@@ -314,31 +314,33 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         simulate() {
             this.pos.add(this.vel, deltaT);
-            if (this.pos.x < 0) {
+            if (this.pos.x < -2 * this.radius) {
                 this.pos.x = simWidth + 2 * this.radius;
                 this.pos.y = 0.6 * simHeight + Math.random() * 0.3 * simHeight;
             }
         }
         draw() {
             const radScale = this.radius * cScale;
-            const balloonRadius = 0.3 * radScale
+            const balloonRadius = 0.2 * radScale + (this.pos.x / simWidth) * 0.3 * radScale;
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
            
             // draw balloon as spherical with a net over the top half, like a vintage hot air balloon
             // Sphere is centered at (0, -0.5 * balloonRadius) with radius balloonRadius
             const sphereCenterY = -0.5 * balloonRadius;
-            
+            const balloonLightness = 30 + (this.pos.x / simWidth) * 30;
             const gradient = c.createRadialGradient(
                 -balloonRadius * 0.3,
-                sphereCenterY - balloonRadius * 0.4, 
+                sphereCenterY + balloonRadius * 0.4, 
                 0, 
                 0, 
                 sphereCenterY, 
                 balloonRadius * 1.2);
-            gradient.addColorStop(0, `hsla(60, 80%, 60%, 0.8)`);
-            gradient.addColorStop(1, `hsla(60, 60%, 20%, 1.0)`);
+            gradient.addColorStop(0, `hsl(180, 80%, ${balloonLightness}%)`);
+            gradient.addColorStop(1, `hsl(220, 60%, ${0.60 * balloonLightness}%)`);
             c.fillStyle = gradient;
+
+            // Draw round top
             c.beginPath();
             c.arc(
                 0,
@@ -347,18 +349,35 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 0, 
                 2 * Math.PI);
             c.fill();
-            c.strokeStyle = `hsl(30, 60%, 30%)`;
-            c.lineWidth = 1;
+            c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+            c.lineWidth = 0.03 * balloonRadius;
             c.stroke();
-            
+
+            // draw bottom ellipse
+            c.beginPath();
+            c.ellipse(
+                0,
+                sphereCenterY,
+                balloonRadius,
+                balloonRadius * 1.3,
+                0,
+                Math.PI,
+                2 * Math.PI,
+                true);
+                
+            c.lineWidth = 0.022 * balloonRadius;
+            c.fill();
+            c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+            c.stroke();
+
             // Draw net over top half of balloon (viewed from horizontal side angle)
             const sphereTop = sphereCenterY - balloonRadius;
             const sphereEquator = sphereCenterY;
             
             // Vertical meridian lines - evenly spaced from equator, from top to equator
             const verticalLines = 8;
-            c.strokeStyle = `hsla(30, 50%, 20%, 0.7)`;
-            c.lineWidth = 1;
+            //c.strokeStyle = `hsla(30, 50%, 10%, 0.7)`;
+            //c.lineWidth = 0.75;
             for (let i = 0; i <= verticalLines; i++) {
                 // Evenly space along visible arc of equator (from -π/2 to +π/2)
                 const angle = (i / verticalLines - 0.5) * Math.PI; // -π/2 to +π/2
@@ -383,8 +402,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Horizontal latitude lines - circular arcs at different heights
-            const horizontalLines = 5;
-            c.lineWidth = 1.5;
+            const horizontalLines = 3;
+            c.lineWidth = 0.03 * balloonRadius;
             for (let i = 1; i <= horizontalLines; i++) {
                 const t = i / (horizontalLines + 1); // Position from top to equator
                 const currentAngle = -Math.PI / 2 + t * (Math.PI / 2); // -90° to 0°
@@ -398,38 +417,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Draw thicker equator band
-            c.lineWidth = 1;
             c.beginPath();
             c.ellipse(0, sphereEquator, balloonRadius, balloonRadius * 0.3, 0, -0.1, Math.PI + 0.1);
+            //c.strokeStyle = `hsla(30, 0%, 10%, 0.7)`;
+            //c.lineWidth = 0.03 * balloonRadius;
             c.stroke();
             
             // Draw basket with rounded corners and cylindrical shading
             const basketWidth = balloonRadius * 0.5;
             const basketHeight = balloonRadius * 0.4;
-            const basketY = 1.0 * balloonRadius + basketHeight * 0.5;
+            const basketY = 1.4 * balloonRadius + basketHeight * 0.5;
             const cornerRadius = basketWidth * 0.15;
-            
-            // Create linear gradient for cylindrical appearance
-            const basketGradient = c.createLinearGradient(
-                -basketWidth / 2, 0,
-                basketWidth / 2, 0
-            );
-            basketGradient.addColorStop(0, `hsl(30, 60%, 25%)`);
-            basketGradient.addColorStop(0.3, `hsl(30, 70%, 35%)`);
-            basketGradient.addColorStop(0.7, `hsl(30, 70%, 30%)`);
-            basketGradient.addColorStop(1, `hsl(30, 60%, 20%)`);
-            
-            c.fillStyle = basketGradient;
-            c.beginPath();
-            c.roundRect(-basketWidth / 2, basketY - basketHeight / 2, basketWidth, basketHeight, cornerRadius);
-            c.fill();
-            c.strokeStyle = `hsl(30, 50%, 20%)`;
-            c.lineWidth = 2;
-            c.stroke();
 
             // Connect meridian line endpoints to basket with draped cables
-            c.strokeStyle = `hsla(30, 50%, 10%, 0.7)`;
-            c.lineWidth = 1;
+            c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+            c.lineWidth = 0.022 * balloonRadius;
             const basketTop = basketY - basketHeight / 2;
             for (let i = 0; i <= verticalLines; i++) {
                 const angle = (i / verticalLines - 0.5) * Math.PI;
@@ -471,6 +473,340 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.quadraticCurveTo(midX, controlY, basketX, basketTop);
                 c.stroke();
             }
+
+            // draw bottom ellipse
+            c.beginPath();
+            c.ellipse(
+                0,
+                sphereCenterY,
+                balloonRadius,
+                balloonRadius * 1.3,
+                0,
+                Math.PI,
+                2 * Math.PI,
+                true);
+                
+            c.lineWidth = 0.03 * balloonRadius;
+            c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+            c.stroke();
+
+            // Draw basket as 3D cylinder with elliptical top and bottom
+            const basketTopRadiusX = basketWidth / 1.8;
+            const basketTopRadiusY = basketTopRadiusX * 0.3; // Ellipse compression for 3D view
+            const basketBottomRadiusX = basketTopRadiusX * 0.8; // Bottom 90% as wide
+            const basketBottomRadiusY = basketTopRadiusY * 0.8;
+            //const basketTop = basketY - basketHeight / 2;
+            const basketBottom = basketY + basketHeight / 2;
+            
+            // Create linear gradient for cylindrical appearance
+            const basketGradient = c.createLinearGradient(
+                -basketWidth / 2, 0,
+                basketWidth / 2, 0
+            );
+            basketGradient.addColorStop(0, `hsl(30, 60%, 20%)`);
+            basketGradient.addColorStop(0.4, `hsl(30, 70%, 35%)`);
+            basketGradient.addColorStop(0.45, `hsl(30, 70%, 35%)`);
+            basketGradient.addColorStop(1, `hsl(30, 60%, 20%)`);
+ 
+            // Draw bottom ellipse (darkest - furthest from light)
+            c.fillStyle = `hsl(30, 50%, 15%)`;
+            c.beginPath();
+            c.ellipse(
+                0, 
+                basketBottom, 
+                basketBottomRadiusX, 
+                basketBottomRadiusY, 
+                0, 
+                Math.PI, 
+                Math.PI * 2,
+                true);
+            c.fill();
+            c.beginPath();
+            c.ellipse(
+                0, 
+                basketBottom, 
+                basketBottomRadiusX, 
+                basketBottomRadiusY, 
+                0, 
+                0, 
+                Math.PI * 2,
+                true);
+            c.strokeStyle = `hsl(30, 40%, 10%)`;
+            c.lineWidth = 0.05 * balloonRadius;
+            c.stroke();
+
+            // Draw basket as filled shape
+            c.fillStyle = basketGradient;
+            c.beginPath();
+            c.moveTo(-basketTopRadiusX, basketTop + basketTopRadiusY);
+            c.lineTo(-basketBottomRadiusX, basketBottom);
+            c.ellipse(0, basketBottom, basketBottomRadiusX, basketBottomRadiusY, 0, Math.PI, 0, true);
+            c.lineTo(basketBottomRadiusX, basketBottom);
+            c.lineTo(basketTopRadiusX, basketTop + basketTopRadiusY);
+            c.ellipse(0, basketTop, basketTopRadiusX, basketTopRadiusY, 0, 0, Math.PI, true);
+            c.closePath();
+            c.fill();
+            
+            // Draw top ellipse stroke (interior visible edge)
+            c.beginPath();
+            c.ellipse(
+                0, 
+                basketTop, 
+                basketTopRadiusX, 
+                basketTopRadiusY, 
+                0, 
+                0, 
+                Math.PI * 2);
+            c.fillStyle = `hsl(30, 30%, 15%)`;
+            c.fill();
+            
+            // Draw top front ellipse stroke 
+            c.beginPath();
+            c.ellipse(
+                0, 
+                basketTop, 
+                basketTopRadiusX, 
+                basketTopRadiusY, 
+                0, 
+                0, 
+                Math.PI * 2);
+            c.strokeStyle = `hsl(30, 40%, 40%)`;
+            c.lineWidth = 0.03 * balloonRadius;
+            c.stroke();
+
+            // Draw wicker pattern on basket
+            c.strokeStyle = `hsl(30, 70%, 20%)`;
+            c.lineWidth = 0.01 * balloonRadius;
+            
+            // Horizontal wicker strands
+            const wickerRows = 7;
+            for (let i = 0; i <= wickerRows; i++) {
+                const t = i / wickerRows;
+                const y = basketTop + basketHeight * t;
+                const topRadius = basketTopRadiusX - (basketTopRadiusX - basketBottomRadiusX) * t;
+                const vertRadius = (basketTopRadiusY - (basketTopRadiusY - basketBottomRadiusY) * t) * 0.95;
+                
+                c.beginPath();
+                c.ellipse(0, y, topRadius * 0.95, vertRadius, 0, 0.02, Math.PI - 0.02);
+                c.stroke();
+            }
+            
+            // Vertical wicker strands
+            const wickerColumns = 9;
+            for (let i = 0; i <= wickerColumns; i++) {
+                const angle = (i / wickerColumns) * Math.PI;
+                const xTop = Math.cos(angle) * basketTopRadiusX * 0.95;
+                const xBottom = Math.cos(angle) * basketBottomRadiusX * 0.95;
+                
+                // Calculate starting y position on the visible top rim ellipse
+                const topRimOffset = basketTopRadiusY * Math.sin(angle);
+                const startY = basketTop + topRimOffset;
+                
+                // Calculate ending y position on the visible bottom rim ellipse
+                const bottomRimOffset = basketBottomRadiusY * Math.sin(angle);
+                const endY = basketBottom + bottomRimOffset;
+                
+                c.beginPath();
+                c.moveTo(xTop, startY);
+                
+                for (let j = 1; j <= 10; j++) {
+                    const t = j / 10;
+                    const y = basketTop + basketHeight * t;
+                    const x = xTop + (xBottom - xTop) * t;
+                    const offsetY = (basketTopRadiusY - (basketTopRadiusY - basketBottomRadiusY) * t) * 0.6;
+                    const waveFactor = Math.sin(t * Math.PI) * 0.15;
+                    
+                    c.lineTo(x, y + offsetY * waveFactor);
+                }
+                
+                c.lineTo(xBottom, endY);
+                c.stroke();
+            }
+            
+            
+
+            // Draw bunny in basket
+            const bunnyScale = basketTopRadiusX;
+            const maxEarHeight = bunnyScale * 1.2;
+            const earHeight = maxEarHeight;
+            const headRadius = bunnyScale * 0.48;
+            const earWidth = bunnyScale * 0.12;
+            const earSpacing = bunnyScale * 0.15;
+            
+            // Position bunny head inside basket
+            const headY = basketTop + basketHeight * 0.1;
+            
+            const earBottomY = headY - headRadius * 0.3;
+            const earTopY = earBottomY - earHeight;
+            const earCenterY = (earBottomY + earTopY) / 2;
+            
+            // Draw left ear
+            const leftEarGradient = c.createLinearGradient(0, earTopY, 0, earBottomY);
+            leftEarGradient.addColorStop(0, 'hsl(195, 75%, 85%)');
+            leftEarGradient.addColorStop(0.5, 'hsl(200, 70%, 75%)');
+            leftEarGradient.addColorStop(1, 'hsl(205, 65%, 65%)');
+            c.fillStyle = leftEarGradient;
+            c.beginPath();
+            const leftEarX = -earSpacing * 2.0;
+            const leftEarW = earWidth * 1.5;
+            const leftEarH = earHeight / 2;
+            c.save();
+            c.translate(leftEarX, earCenterY);
+            c.rotate(-0.18);
+            // Create teardrop shape - rounded tip at top, wider at bottom
+            c.moveTo(0, -leftEarH);
+            c.bezierCurveTo(leftEarW * 0.6, -leftEarH, leftEarW * 0.85, -leftEarH * 0.6, leftEarW * 0.9, -leftEarH * 0.2);
+            c.bezierCurveTo(leftEarW, leftEarH * 0.3, leftEarW * 0.7, leftEarH * 0.85, 0, leftEarH);
+            c.bezierCurveTo(-leftEarW * 0.7, leftEarH * 0.85, -leftEarW, leftEarH * 0.3, -leftEarW * 0.9, -leftEarH * 0.2);
+            c.bezierCurveTo(-leftEarW * 0.85, -leftEarH * 0.6, -leftEarW * 0.6, -leftEarH, 0, -leftEarH);
+            c.closePath();
+            c.fill();
+            c.strokeStyle = 'hsl(200, 50%, 55%)';
+            c.lineWidth = 0.003 * cScale;
+            c.stroke();
+            c.restore();
+            
+            // Draw left inner ear
+            c.fillStyle = 'hsl(195, 65%, 90%)';
+            c.beginPath();
+            const leftInnerW = earWidth * 0.75;
+                const leftInnerH = earHeight / 2 * 0.7;
+                
+            c.save();
+
+            c.translate(leftEarX, earCenterY);
+            c.rotate(-0.18);
+            c.moveTo(0, -leftInnerH);
+            c.bezierCurveTo(leftInnerW * 0.6, -leftInnerH, leftInnerW * 0.85, -leftInnerH * 0.6, leftInnerW * 0.9, -leftInnerH * 0.2);
+            c.bezierCurveTo(leftInnerW, leftInnerH * 0.3, leftInnerW * 0.7, leftInnerH * 0.85, 0, leftInnerH);
+            c.bezierCurveTo(-leftInnerW * 0.7, leftInnerH * 0.85, -leftInnerW, leftInnerH * 0.3, -leftInnerW * 0.9, -leftInnerH * 0.2);
+            c.bezierCurveTo(-leftInnerW * 0.85, -leftInnerH * 0.6, -leftInnerW * 0.6, -leftInnerH, 0, -leftInnerH);
+            c.closePath();
+            c.fill();
+
+            c.restore();
+                
+            // Draw right ear
+            const rightEarGradient = c.createLinearGradient(0, earTopY, 0, earBottomY);
+            rightEarGradient.addColorStop(0, 'hsl(195, 75%, 85%)');
+            rightEarGradient.addColorStop(0.5, 'hsl(200, 70%, 75%)');
+            rightEarGradient.addColorStop(1, 'hsl(205, 65%, 65%)');
+            c.fillStyle = rightEarGradient;
+            c.beginPath();
+            const rightEarX = earSpacing * 2.0;
+            const rightEarW = earWidth * 1.5;
+            const rightEarH = earHeight / 2;
+
+            c.save();
+
+            c.translate(rightEarX, earCenterY);
+            c.rotate(0.18);
+            // Create teardrop shape - rounded tip at top, wider at bottom
+            c.moveTo(0, -rightEarH);
+            c.bezierCurveTo(rightEarW * 0.6, -rightEarH, rightEarW * 0.85, -rightEarH * 0.6, rightEarW * 0.9, -rightEarH * 0.2);
+            c.bezierCurveTo(rightEarW, rightEarH * 0.3, rightEarW * 0.7, rightEarH * 0.85, 0, rightEarH);
+            c.bezierCurveTo(-rightEarW * 0.7, rightEarH * 0.85, -rightEarW, rightEarH * 0.3, -rightEarW * 0.9, -rightEarH * 0.2);
+            c.bezierCurveTo(-rightEarW * 0.85, -rightEarH * 0.6, -rightEarW * 0.6, -rightEarH, 0, -rightEarH);
+            c.closePath();
+            c.fill();
+            c.strokeStyle = 'hsl(200, 50%, 55%)';
+            c.lineWidth = 0.003 * cScale;
+            c.stroke();
+            c.restore();
+            
+            // Draw right inner ear
+            c.fillStyle = 'hsl(195, 65%, 90%)';
+            c.beginPath();
+            const rightInnerW = earWidth * 0.75;
+            const rightInnerH = earHeight / 2 * 0.7;
+            c.save();
+            c.translate(rightEarX, earCenterY);
+            c.rotate(0.18);
+            c.moveTo(0, -rightInnerH);
+            c.bezierCurveTo(rightInnerW * 0.6, -rightInnerH, rightInnerW * 0.85, -rightInnerH * 0.6, rightInnerW * 0.9, -rightInnerH * 0.2);
+            c.bezierCurveTo(rightInnerW, rightInnerH * 0.3, rightInnerW * 0.7, rightInnerH * 0.85, 0, rightInnerH);
+            c.bezierCurveTo(-rightInnerW * 0.7, rightInnerH * 0.85, -rightInnerW, rightInnerH * 0.3, -rightInnerW * 0.9, -rightInnerH * 0.2);
+            c.bezierCurveTo(-rightInnerW * 0.85, -rightInnerH * 0.6, -rightInnerW * 0.6, -rightInnerH, 0, -rightInnerH);
+            c.closePath();
+            c.fill();
+
+            c.restore();
+            
+            // Draw bunny head
+            const headGradient = c.createRadialGradient(-headRadius * 0.3, headY - headRadius * 0.3, 0, 0, headY, headRadius);
+            headGradient.addColorStop(0, 'hsl(195, 70%, 85%)');
+            headGradient.addColorStop(0.7, 'hsl(200, 65%, 75%)');
+            headGradient.addColorStop(1, 'hsl(205, 60%, 65%)');
+            
+            c.fillStyle = headGradient;
+            c.beginPath();
+            c.arc(
+                0, 
+                headY, 
+                headRadius, 
+                Math.PI * 0.9, 
+                Math.PI * 2.1,
+            false);
+            c.fill();
+            
+            // Draw eyes
+            const eyeY = headY - headRadius * 0.22;
+            const eyeSpacing = headRadius * 0.4;
+            const eyeWidth = headRadius * 0.2;
+            const eyeHeight = headRadius * 0.35;
+            const pupilWidth = headRadius * 0.1014;
+            const pupilHeight = headRadius * 0.2028;
+            const eyeAngle = 0.15;
+            const pupilOffsetY = headRadius * 0.05;
+            const pupilOffsetX = headRadius * 0.02;
+            
+            // Left eye
+            c.fillStyle = 'white';
+            c.beginPath();
+            c.ellipse(-eyeSpacing, eyeY, eyeWidth, eyeHeight, -eyeAngle, 0, Math.PI * 2);
+            c.fill();
+            
+            c.fillStyle = 'hsl(210, 60%, 30%)';
+            c.beginPath();
+            c.ellipse(-eyeSpacing + pupilOffsetX, eyeY + pupilOffsetY, pupilWidth, pupilHeight, -eyeAngle, 0, Math.PI * 2);
+            c.fill();
+            
+            c.fillStyle = 'white';
+            c.beginPath();
+            c.arc(-eyeSpacing + pupilOffsetX - pupilWidth * 0.3, eyeY + pupilOffsetY - pupilHeight * 0.6, headRadius * 0.04, 0, Math.PI * 2);
+            c.fill();
+            
+            // Right eye
+            c.fillStyle = 'white';
+            c.beginPath();
+            c.ellipse(eyeSpacing, eyeY, eyeWidth, eyeHeight, eyeAngle, 0, Math.PI * 2);
+            c.fill();
+            
+            c.fillStyle = 'hsl(210, 60%, 30%)';
+            c.beginPath();
+            c.ellipse(eyeSpacing - pupilOffsetX, eyeY + pupilOffsetY, pupilWidth, pupilHeight, eyeAngle, 0, Math.PI * 2);
+            c.fill();
+            
+            c.fillStyle = 'white';
+            c.beginPath();
+            c.arc(eyeSpacing - pupilOffsetX + pupilWidth * 0.3, eyeY + pupilOffsetY - pupilHeight * 0.6, headRadius * 0.04, 0, Math.PI * 2);
+            c.fill();
+
+            // Draw top front ellipse stroke 
+            c.beginPath();
+            c.ellipse(
+                0, 
+                basketTop, 
+                basketTopRadiusX, 
+                basketTopRadiusY, 
+                0, 
+                Math.PI, 
+                Math.PI * 2,
+                true);
+            c.strokeStyle = `hsl(30, 40%, 60%)`;
+            c.lineWidth = 0.03 * balloonRadius;
+            c.stroke();
+            
             c.restore();
         }
     }
@@ -480,9 +816,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         HotAirBalloon = [];
         const radius = 0.25;
         const pos = new Vector2(
-            0.9 * simWidth, 
-            0.6 * simHeight + Math.random() * 0.3 *simHeight); 
-        const vel = new Vector2(-0.01, 0);
+            1.2 * simWidth, 
+            //0.6 * simHeight + Math.random() * 0.3 *simHeight); 
+            0.1 * simHeight + 0.8 * Math.random() * simHeight);
+        const vel = new Vector2(
+            -0.01, 
+            (Math.random() - 0.5) * 0.007);
         HotAirBalloon.push(new HOTAIRBALLOON(radius, pos, vel));
     }
     
@@ -575,7 +914,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Draw balloon
             const gradient = c.createRadialGradient(
                 -radScale * 0.25,
-                -radScale * 0.9, 
+                -radScale * 0.7, 
                 0, 
                 0, 
                 -radScale * 0.3, 
@@ -894,10 +1233,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Banner properties
             this.passNumber = passNumber; // Track which pass we're on (1, 2, 3, 4, etc.)
             this.bannerWavePhase = 0; // Animation phase for banner waving
-            this.firstPassBannerText = "Double-click to add clouds";
-            this.secondPassBannerText = "Right-click to remove";
-            this.thirdPassBannerText = "Spacebar to PARTY!!";
-            this.fourthPassBannerText = "Miss Kitty sends love";
+            this.firstPassBannerText = "Merry Christmas!";
+            this.secondPassBannerText = "Double-click to add clouds";
+            this.thirdPassBannerText = "Right-click to remove";
+            this.fourthPassBannerText = "Spacebar to PARTY!";
             
             // Set banner text based on pass number
             if (this.passNumber === 1) {
@@ -1787,7 +2126,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         boidRadius = 0.02;
 
         boidProps = {
-            numBoids: 6000,
+            numBoids: 2200,
             marginX: simWidth * 0.2,
             marginY: simHeight * 0.2,
             minDistance: 5.0 * boidRadius, // Rule 1 - The distance to stay away from other Boids
@@ -2208,7 +2547,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let startupWarmupPeriod = 3.0; // Wait 3 seconds after startup before monitoring FPS
     let isWarmedUp = false; // Track if warm-up period is complete
     let runtimeTimer = 0; // Track total runtime
-    let runtimeLockPeriod = 60.0; // Lock boid count after 30 seconds
+    let runtimeLockPeriod = 30.0; // Lock boid count after 30 seconds
     let boidCountLocked = false; // Track if boid count is locked
     let fadeOutDuration = 5.0; // Fade out over 5 seconds
     let fadeOutTimer = 0; // Track fade out progress
@@ -2453,7 +2792,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         // Prepare text
         //const fpsText = `${currentFPS.toFixed(0)} fps`;
-        const boidText = `initializing ${Boids.length} boids`;
+        const boidText = `making ${Boids.length} boids`;
         const boidLockedText = `settled on ${Boids.length} boids`;
         
         // Position at bottom right with padding
