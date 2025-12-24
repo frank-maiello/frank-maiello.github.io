@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.20</title>
+    <title>Boids 1.21</title>
     <style>
         html, body {
             margin: 0;
@@ -188,8 +188,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         
         // Scale Foreground Clouds
-        if (typeof ForegroundClouds !== 'undefined' && ForegroundClouds != null) {
-            for (let cloud of ForegroundClouds) {
+        if (typeof ForegroundCloud !== 'undefined' && ForegroundCloud != null) {
+            for (let cloud of ForegroundCloud) {
                 cloud.x *= scaleX;
                 cloud.y *= scaleY;
                 cloud.radius *= Math.min(scaleX, scaleY);
@@ -303,6 +303,84 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     function makeSpatialGrid() {
         SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+    }
+
+    // RAINDROP CLASS  -----------------------------------------------------
+    class RAINDROP {
+        constructor (pos, vel) {
+            this.pos = pos.clone();
+            this.vel = vel.clone();
+            this.hue = 200;
+            this.saturation = 80;
+            this.lightness = 60;
+        }
+        simulate() {
+            this.vel.y -= 1 * deltaT;  // gravity effect
+            this.pos.add(this.vel, deltaT);
+            if (this.pos.y < 0) {
+                for (let i = 0; i < Rain.length; i++) {
+                    if (Rain[i] === this) {
+                        Rain.splice(i, 1);
+                        break;
+                    }
+                }
+            }
+        }
+        draw() {
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+            const radScale = 0.035 * cScale;
+
+            // Draw teardrop  -----------
+            const numPoints = 14; 
+            const a = 0.2;
+            const b = 1.5;
+            const pivotOffsetX = 0;
+            const pivotOffsetY = -b * radScale;  // Centroid of bulb head
+            c.beginPath();  
+            for (let i = 0; i <= numPoints; i++) {
+                const t = Math.PI / 2 + (i / numPoints) * (2 * Math.PI);
+                const x = (2 * a * Math.cos(t) - a * Math.sin(2 * t)) * radScale;
+                const y = b * Math.sin(t) * radScale;
+                if (i === 0) {
+                    c.moveTo(x - pivotOffsetX, -y - pivotOffsetY);
+                } else {
+                    c.lineTo(x - pivotOffsetX, -y - pivotOffsetY);
+                }
+            }  
+            c.closePath();
+            const gradient = c.createRadialGradient(
+                -a * radScale * 0.5,
+                b * radScale * 1.5,
+                0,
+                -a * radScale * 0.5,
+                b * radScale * 1.5,
+                b * radScale  * 3.0);
+            gradient.addColorStop(0, 'hsla(180, 100%, 90%, 0.9)');
+            gradient.addColorStop(0.05, 'hsla(180, 100%, 40%, 0.7)');
+            gradient.addColorStop(1, 'hsla(180, 50%, 20%, 0.4)');
+            
+            c.fillStyle = gradient;
+            
+            c.fill();
+            c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.7}%)`;
+            c.lineWidth = 1.0;
+            c.stroke();
+
+            c.restore();
+        }
+    }
+
+    // Make it rain at specified position -----------------------------------------------------
+    Rain = [];
+    function makeItRain(cloud) {
+        const pos = new Vector2(
+            cloud.x + (Math.random() - 0.5) * 1.9 * cloud.radius,
+            cloud.y - (Math.random() - 0.5) * 0.2 * cloud.radius);
+        const vel = new Vector2(
+            -cloud.speed,
+            -0);
+        Rain.push(new RAINDROP(pos, vel));
     }
 
     //  HOT AIR BALLOON CLASS  -----------------------------------------------------
@@ -818,7 +896,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const pos = new Vector2(
             1.2 * simWidth, 
             //0.6 * simHeight + Math.random() * 0.3 *simHeight); 
-            0.1 * simHeight + 0.8 * Math.random() * simHeight);
+            0.15 * simHeight + 0.75 * Math.random() * simHeight);
         const vel = new Vector2(
             -0.01, 
             (Math.random() - 0.5) * 0.007);
@@ -958,11 +1036,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     //  CLOUD CLASS ---------------------------------------------------------------------
     class CLOUD {
-        constructor(x, y, isBackground = false, isForeground = false) {
+        constructor(x, y, isBackground = false, isForeground = false, isRaining = false) {
             this.x = x;
             this.y = y;
             this.isBackground = isBackground;
             this.isForeground = isForeground;
+            this.isRaining = isRaining;
             // Foreground clouds are largest, background smallest, normal in between
             this.radius = isForeground ? 0.20 : (isBackground ? 0.07 : 0.15);
             this.speed = isForeground ? 0.08 : (isBackground ? 0.02 : 0.04); // Foreground fastest, background slowest
@@ -1069,8 +1148,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             ctx.lineCap = 'round';
             
             // Draw outline strokes (darker for background clouds, lighter for foreground)
-            if (this.isForeground) {
+            if (this.isForeground && !this.isRaining) {
                 ctx.strokeStyle = 'hsl(200, 85%, 85%)';
+                ctx.lineWidth = 16;
+            } else if (this.isForeground && this.isRaining) {
+                ctx.strokeStyle = 'hsl(200, 30%, 20%)';
                 ctx.lineWidth = 16;
             } else if (this.isBackground) {
                 ctx.strokeStyle = 'hsl(200, 30%, 50%)';
@@ -1089,8 +1171,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Fill all puffs (darker for background clouds, white for others)
             if (this.isBackground) {
                 ctx.fillStyle = 'hsl(0, 0%, 65%)';
-            } else if (this.isForeground){
+            } else if (this.isForeground && !this.isRaining) {
                 ctx.fillStyle = 'hsl(0, 0%, 100%)';
+            } else if (this.isForeground && this.isRaining) {
+                ctx.fillStyle = 'hsl(0, 0%, 50%)';
             } else {
                 ctx.fillStyle = 'hsl(0, 0%, 95%)';
             }
@@ -1107,8 +1191,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (this.isBackground) {
                 ctx.strokeStyle = 'hsla(200, 30%, 50%, 1)';
                 ctx.lineWidth = 3;
-            } else if (this.isForeground) {
-                ctx.strokeStyle = 'hsla(200, 80%, 80%, 1)';
+            } else if (this.isForeground && !this.isRaining) {
+                ctx.strokeStyle = 'hsl(200, 85%, 85%)';
+                ctx.lineWidth = 7;
+            } else if (this.isForeground && this.isRaining) {
+                ctx.strokeStyle = 'hsla(200, 30%, 20%, 1)';
                 ctx.lineWidth = 7;
             } else {
                 ctx.strokeStyle = 'hsla(200, 80%, 80%, 1)';
@@ -1233,7 +1320,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Banner properties
             this.passNumber = passNumber; // Track which pass we're on (1, 2, 3, 4, etc.)
             this.bannerWavePhase = 0; // Animation phase for banner waving
-            this.firstPassBannerText = "Merry Christmas!";
+            this.firstPassBannerText = "Fly with me to Cutetopia";
             this.secondPassBannerText = "Double-click to add clouds";
             this.thirdPassBannerText = "Right-click to remove";
             this.fourthPassBannerText = "Spacebar to PARTY!";
@@ -1762,23 +1849,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     this.drawBanner(drawSize);
                 }
                 
+                /*
                 // Draw propeller trail 1 behind the airplane
                 if (this.propTrail1.length > 1) {
-                    c.lineCap = 'butt';
-                    c.lineJoin = 'butt';
+                    c.lineCap = 'round';
+                    c.lineJoin = 'round';
                     for (let i = 0; i < this.propTrail1.length - 1; i++) {
-                        const alpha = (i / this.propTrail1.length) * 0.7;
-                        const width = (i / this.propTrail1.length) * 6;
+                        const alpha = (i / this.propTrail1.length) * 0.3;
+                        const width = Math.min(10, 5 / (i / this.propTrail1.length));
+                        //const maxWidth = Math.min(30, 5 / (i / this.propTrail1.length));
                         const point1 = this.propTrail1[i];
                         const point2 = this.propTrail1[i + 1];
                         c.strokeStyle = `hsla(200, 20%, 70%, ${alpha})`;
                         c.lineWidth = width;
                         c.beginPath();
-                        c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale);
-                        c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale);
+                        c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale + width);
+                        c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale - width);
                         c.stroke();
                     }
                 }
+                    */
 
                 // Translate to airplane center and rotate
                 c.save();
@@ -1825,26 +1915,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 
                 c.restore();
 
+                /*
                 // Draw propeller trail 2 in front of airplane
                 if (this.propTrail1.length > 1) {
                     //c.save();
-                    c.lineCap = 'butt';
-                    c.lineJoin = 'butt';
+                    c.lineCap = 'round';
+                    c.lineJoin = 'round';
+                    
                     // Draw 
                     for (let i = 0; i < this.propTrail2.length - 1; i++) {
-                        const alpha = (i / this.propTrail2.length) * 0.7;
-                        const width = (i / this.propTrail2.length) * 6;
+                        const alpha = (i / this.propTrail2.length) * 0.3;
+                        const width = Math.min(10, 5 / (i / this.propTrail1.length));
+                        //const maxWidth = Math.min(30, 5 / (i / this.propTrail1.length));
                         const point1 = this.propTrail2[i];
                         const point2 = this.propTrail2[i + 1];
                         c.strokeStyle = `hsla(200, 20%, 70%, ${alpha})`;
                         c.lineWidth = width;
                         c.beginPath();
-                        c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale);
-                        c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale);
+                        c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale + width);
+                        c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale - width);
                         c.stroke();
                     }
                     //c.restore();
-                }
+                }*/
             }
         }
     }
@@ -1880,22 +1973,36 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     function makeBackgroundClouds() {
         BackgroundClouds = [];
+        const isBackground = true;
+        const isForeGround = false;
+        const raining = false;
         // Spawn in upper 75% of screen (25% to 90% height)
-        BackgroundClouds.push(new CLOUD(0.3 * simWidth, simHeight * (0.25 + Math.random() * 0.65), true, false));
-        BackgroundClouds.push(new CLOUD(0.6 * simWidth, simHeight * (0.25 + Math.random() * 0.65), true, false));
-        BackgroundClouds.push(new CLOUD(0.85 * simWidth, simHeight * (0.25 + Math.random() * 0.65), true, false));
+        BackgroundClouds.push(new CLOUD(0.3 * simWidth, simHeight * (0.25 + Math.random() * 0.65), 
+            isBackground, isForeGround, raining));
+        BackgroundClouds.push(new CLOUD(0.6 * simWidth, simHeight * (0.25 + Math.random() * 0.65), 
+            isBackground, isForeGround, raining));
+        BackgroundClouds.push(new CLOUD(0.85 * simWidth, simHeight * (0.25 + Math.random() * 0.65), 
+            isBackground, isForeGround, raining));
     }
     
     function makeForegroundClouds() {
-        ForegroundClouds = [];
-        // Spawn one large foreground cloud in upper 75% of screen
-        ForegroundClouds.push(new CLOUD(0.5 * simWidth, simHeight * (0.25 + Math.random() * 0.6), false, true));
+        ForegroundCloud = [];
+        const isBackground = false;
+        const isForeGround = true;
+        const raining = false;
+
+        ForegroundCloud.push(new CLOUD(
+            0.5 * simWidth, simHeight * (0.25 + Math.random() * 0.6), 
+            isBackground, isForeGround, raining));
     }
     
     function makeInitialClouds() {
         Clouds = [];
-        Clouds.push(new CLOUD(0.8 * simWidth, 0.45 * simHeight, false, false));
-        Clouds.push(new CLOUD(0.25 * simWidth, 0.65 * simHeight, false, false));
+        const isBackground = false;
+        const isForeGround = false;
+        const raining = false;
+        Clouds.push(new CLOUD(0.8 * simWidth, 0.45 * simHeight, isBackground, isForeGround, raining));
+        Clouds.push(new CLOUD(0.25 * simWidth, 0.65 * simHeight, isBackground, isForeGround, raining));
     }    
     
     //  MAKE AIRPLANE  ---------------------------------------------------------------------
@@ -2126,7 +2233,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         boidRadius = 0.02;
 
         boidProps = {
-            numBoids: 2200,
+            numBoids: 2000,
             marginX: simWidth * 0.2,
             marginY: simHeight * 0.2,
             minDistance: 5.0 * boidRadius, // Rule 1 - The distance to stay away from other Boids
@@ -2383,23 +2490,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (cloud.x + cloud.radius * 2 < 0) {
                 // Remove this cloud and spawn a new one on the right
                 Clouds.splice(i, 1);
-                const newY = findSafeCloudAltitude(false, [...BackgroundClouds, ...Clouds, ...ForegroundClouds]);
+                const newY = findSafeCloudAltitude(false, [...BackgroundClouds, ...Clouds, ...ForegroundCloud]);
                 Clouds.push(new CLOUD(simWidth + cloud.radius * 2, newY, false, false));
             }
         }
         
         // Update foreground (non-interactive) clouds
-        for (let i = ForegroundClouds.length - 1; i >= 0; i--) {
-            const cloud = ForegroundClouds[i];
+        for (let i = ForegroundCloud.length - 1; i >= 0; i--) {
+            const cloud = ForegroundCloud[i];
             cloud.update(deltaT);
             
             // Check if cloud has moved off-screen to the left
             if (cloud.x + cloud.radius * 2 < 0) {
                 // Remove this cloud and spawn a new one on the right
-                ForegroundClouds.splice(i, 1);
+                ForegroundCloud.splice(i, 1);
                 initialForegroundCloudTextVisible = false; // Text only on first cloud
-                const newY = findSafeCloudAltitude(false, [...BackgroundClouds, ...Clouds, ...ForegroundClouds]);
-                ForegroundClouds.push(new CLOUD(simWidth + cloud.radius * 2, newY, false, true));
+                const newY = findSafeCloudAltitude(false, [...BackgroundClouds, ...Clouds, ...ForegroundCloud]);
+                if (Math.random() < 0.1) { // 10% chance of rain
+                    var raining = true;
+                } else {
+                    var raining = false;
+                }
+                ForegroundCloud.push(new CLOUD(simWidth + cloud.radius * 2, newY, false, true, raining));
             }
         }
         
@@ -2476,6 +2588,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 plane.update(deltaT);
             }
         }
+
+        // Update Rain --------
+        for (let rainDrop of Rain) {
+            rainDrop.simulate();
+        }
     }
 
     //  DRAW EVERYTHING  ------------
@@ -2517,11 +2634,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             balloon.draw();
         }
         
-        // Draw large foreground clouds (non-interactive) last
-        for (let cloud of ForegroundClouds) {
-            cloud.draw();
+        // Draw Rain --------
+        for (let rainDrop of Rain) {
+            rainDrop.draw();
         }
-        
+
+        // Draw big foreground cloud (non-interactive) last
+        for (let cloud of ForegroundCloud) {
+            cloud.draw();
+            if (cloud.isRaining) {
+                makeItRain(cloud);
+            }
+        }
+
         // Draw stats
         drawStats();
     }
@@ -2531,10 +2656,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let currentFPS = 60;
     let lastFrameTime = performance.now();
     let fpsCheckTimer = 0;
-    let fpsCheckInterval = 0.25; // Check FPS every 0.25 seconds
-    let minStableFPS = 55; // Target FPS threshold
+    let fpsCheckInterval = 0.5; // Check FPS every 0.25 seconds
+    let minStableFPS = 58; // Target FPS threshold
     let fpsStableTimer = 0;
-    let fpsStableThreshold = 1.0; // FPS must be stable for 1 second before increasing
+    let fpsStableThreshold = 1.0; // FPS must be stable for 0.5 seconds before increasing
     let isRampingUp = true; // Track if we're still ramping up
     let maxBoidsReached = false; // Track if we've hit the limit
     let safetyMarginApplied = false; // Track if we've applied the 200 boid safety reduction
@@ -2547,7 +2672,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let startupWarmupPeriod = 3.0; // Wait 3 seconds after startup before monitoring FPS
     let isWarmedUp = false; // Track if warm-up period is complete
     let runtimeTimer = 0; // Track total runtime
-    let runtimeLockPeriod = 30.0; // Lock boid count after 30 seconds
+    let runtimeLockPeriod = 30.0; // Lock boid count after 60 seconds
     let boidCountLocked = false; // Track if boid count is locked
     let fadeOutDuration = 5.0; // Fade out over 5 seconds
     let fadeOutTimer = 0; // Track fade out progress
@@ -2683,7 +2808,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             // Calculate variance to check consistency
             const variance = maxFrameTime - minFrameTime;
-            const isConsistent = variance < 10; // Less than 10ms variance between frames
+            const isConsistent = variance < 15; // Less than 15ms variance between frames
             
             // Update revert verification timer if we just reverted
             if (justReverted) {
@@ -2702,7 +2827,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Check if FPS is unstable or too low
-            if (currentFPS < minStableFPS || unstableFrames > fpsFrameTimes.length * 0.15) {
+            if (currentFPS < minStableFPS || unstableFrames > fpsFrameTimes.length * 0.25) {
                 // Only revert if not currently in verification period
                 if (!justReverted && Boids.length > lastSafeBoidCount && lastSafeBoidCount >= 100) {
                     const removeCount = Boids.length - lastSafeBoidCount;
@@ -2718,7 +2843,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
                 fpsStableTimer = 0; // Reset stability timer
                 stabilityTimerAfterMax = 0; // Reset stability timer for safety margin
-            } else if (isRampingUp && !maxBoidsReached && currentFPS >= minStableFPS && isConsistent && !justReverted) {
+            } else if (isRampingUp && !maxBoidsReached && currentFPS >= minStableFPS && !justReverted) {
                 // FPS is good, increment stability timer
                 fpsStableTimer += fpsCheckInterval;
                 
