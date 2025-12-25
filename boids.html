@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.22</title>
+    <title>Boids 1.23</title>
     <style>
         html, body {
             margin: 0;
@@ -80,6 +80,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let menuDragStartY = 0;
     let menuStartX = 0;
     let menuStartY = 0;
+    
+    // Boid type selection (0=arrows, 1=circles, 2=airfoils)
+    let selectedBoidType = 0;
 
     canvas.addEventListener('mousedown', function(e) {
         const rect = canvas.getBoundingClientRect();
@@ -109,6 +112,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const menuOriginX = menuUpperLeftX + knobSpacing;
             const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
             
+            // Declare click coordinates once for all checks
+            const clickCanvasX = mouseX * cScale;
+            const clickCanvasY = canvas.height - mouseY * cScale;
+            
+            // Check close icon (upper left corner - round button)
+            const closeIconRadius = knobRadius * 0.25;
+            const closeIconX = menuOriginX - padding + closeIconRadius + 0.2 * knobRadius;
+            const closeIconY = menuOriginY - padding + closeIconRadius + 0.2 * knobRadius;
+            const cdx = clickCanvasX - closeIconX;
+            const cdy = clickCanvasY - closeIconY;
+            
+            if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+                menuVisible = false;
+                return;
+            }
+            
             // Check individual knobs first
             for (let knob = 0; knob < 10; knob++) {
                 const row = Math.floor(knob / 4);
@@ -117,8 +136,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 const knobCanvasY = menuOriginY + row * knobSpacing;
                 
                 // Check in canvas space for accurate hit detection
-                const clickCanvasX = mouseX * cScale;
-                const clickCanvasY = canvas.height - mouseY * cScale;
                 const kdx = clickCanvasX - knobCanvasX;
                 const kdy = clickCanvasY - knobCanvasY;
                 if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
@@ -132,6 +149,46 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         boidProps.minDistance, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
                         boidProps.turnFactor, boidProps.tailLength];
                     dragStartValue = menuItems[knob];
+                    return;
+                }
+            }
+            
+            // Check radio buttons (vertically stacked in column 2)
+            const radioButtonRadius = knobRadius * 0.3;
+            const radioCol = 2;
+            
+            // Check reset button (round button in blank area - row 2, column 3)
+            const resetButtonRadius = knobRadius * 0.5;
+            const resetButtonX = menuOriginX + 3 * knobSpacing;
+            const resetButtonY = menuOriginY + 2 * knobSpacing;
+            const rdx = clickCanvasX - resetButtonX;
+            const rdy = clickCanvasY - resetButtonY;
+            
+            if (rdx * rdx + rdy * rdy < resetButtonRadius * resetButtonRadius) {
+                // Reset all parameters to defaults
+                resetParameters();
+                return;
+            }
+            
+            // Three radio buttons vertically stacked
+            for (let i = 0; i < 4; i++) {
+                const buttonX = menuOriginX + radioCol * knobSpacing - 0.5 * knobRadius;
+                const buttonY = menuOriginY + (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius);
+                const rdx = clickCanvasX - buttonX;
+                const rdy = clickCanvasY - buttonY;
+                
+                if (rdx * rdx + rdy * rdy < radioButtonRadius * radioButtonRadius) {
+                    selectedBoidType = i;
+                    // Call the appropriate function
+                    if (i === 0) {
+                        doArrowBoids();
+                    } else if (i === 1) {
+                        doCircleBoids();
+                    } else if (i === 2) {
+                        doAirfoilBoids();
+                    } else if (i === 3) {
+                        doNoneBoids();
+                    }
                     return;
                 }
             }
@@ -230,7 +287,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             // Calculate drag delta (combined horizontal and vertical)
             const dragDeltaX = mouseX - dragStartMouseX;
-            const dragDeltaY = -(mouseY - dragStartMouseY); // Invert Y for intuitive up=increase
+            const dragDeltaY = (mouseY - dragStartMouseY); // Up=decrease, down=increase
             const dragDelta = dragDeltaX + dragDeltaY; // Combined drag in world units
             
             // Sensitivity: how much world units equals full range
@@ -317,6 +374,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                             const vel = new Vector2(0, 0);
                             const hue = 320;
                             const newBoid = new BOID(pos, vel, hue, false, false);
+                            
+                            // Set boid type based on selectedBoidType
+                            newBoid.arrow = selectedBoidType === 0;
+                            newBoid.circle = selectedBoidType === 1;
+                            newBoid.airfoil = selectedBoidType === 2;
                             
                             // Insert before the last 2 special boids
                             Boids.splice(Boids.length - 2, 0, newBoid);
@@ -564,7 +626,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.translate(cX(this.pos), cY(this.pos));
             const radScale = 0.035 * cScale;
 
-            // Draw teardrop  -----------
+            // Draw airfoil  -----------
             const numPoints = 14; 
             const a = 0.2;
             const b = 1.5;
@@ -932,8 +994,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.lineTo(xBottom, endY);
                 c.stroke();
             }
-            
-            
 
             // Draw bunny in basket
             const bunnyScale = basketTopRadiusX;
@@ -963,7 +1023,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.save();
             c.translate(leftEarX, earCenterY);
             c.rotate(-0.18);
-            // Create teardrop shape - rounded tip at top, wider at bottom
+            // Create airfoil shape - rounded tip at top, wider at bottom
             c.moveTo(0, -leftEarH);
             c.bezierCurveTo(leftEarW * 0.6, -leftEarH, leftEarW * 0.85, -leftEarH * 0.6, leftEarW * 0.9, -leftEarH * 0.2);
             c.bezierCurveTo(leftEarW, leftEarH * 0.3, leftEarW * 0.7, leftEarH * 0.85, 0, leftEarH);
@@ -1011,7 +1071,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
             c.translate(rightEarX, earCenterY);
             c.rotate(0.18);
-            // Create teardrop shape - rounded tip at top, wider at bottom
+            // Create airfoil shape - rounded tip at top, wider at bottom
             c.moveTo(0, -rightEarH);
             c.bezierCurveTo(rightEarW * 0.6, -rightEarH, rightEarW * 0.85, -rightEarH * 0.6, rightEarW * 0.9, -rightEarH * 0.2);
             c.bezierCurveTo(rightEarW, rightEarH * 0.3, rightEarW * 0.7, rightEarH * 0.85, 0, rightEarH);
@@ -2243,7 +2303,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const respawnDelay = 30.0;
         const passNumber = 1; // Start with pass 1
         Airplane.push(new AIRPLANE(y, speed, size, respawnDelay, passNumber));
-    }
+    } 
 
     //  BOID CLASS ---------------------------------------------------------------------
     class BOID {
@@ -2257,8 +2317,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.angle = 0;
             this.hueCounter = 0;
             this.speedAdjust = 0;
-            this.whiteBoid = whiteBoid
+            this.whiteBoid = whiteBoid;
             this.blackBoid = blackBoid;
+            this.arrow = true;
+            this.circle = false;
+            this.airfoil = false;
             this.flashing = false;
             this.flashTimer = 0; // Timer for flash duration
             this.flashDuration = 0.1; // How long the flash lasts (100ms)
@@ -2333,95 +2396,130 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
                 c.lineCap = 'round';
                 c.stroke();
-            } 
-
-            // Set transform ----------
-            const angle = Math.atan2(this.vel.y, this.vel.x);
-            c.save();
-            c.translate(cX(this.pos), cY(this.pos));
-            //c.rotate(.5 * Math.PI - angle); // for teadrops
-            c.rotate(-angle); // for arrows
-            
-            // fill body ----------
-            c.beginPath();
-            c.moveTo(arrowLength, 0);
-            c.lineTo(-arrowLength, -arrowWidth / 2);
-            c.lineTo(-arrowLength + arrowDent, 0);
-            c.lineTo(-arrowLength, arrowWidth / 2);
-            c.closePath();
-            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
-            } else if (this.whiteBoid) {
-                c.fillStyle = `hsl(0, 0%, 90%)`;
-            } else if (this.blackBoid && !this.flashing) {
-                c.fillStyle = `hsl(0, 0%, 10%)`;
-            } else if (this.flashing && !this.blackBoid) {
-                c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
-            } else if (this.flashing && this.blackBoid) {
-                c.fillStyle = `hsl(0, 0%, 90%)`;
             }
-            c.fill();
 
-            // draw arrow edges/wings ----------
-            c.beginPath();
-            c.moveTo(arrowLength, 0);
-            c.lineTo(-arrowLength, -arrowWidth / 2);
-            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
-            } else if (this.whiteBoid) {
-                c.strokeStyle = `hsl(0, 0%, 100%)`;
-            } else if (this.blackBoid) {
-                c.strokeStyle = `hsl(0, 0%, 0%)`;
-            } else if (this.flashing && !this.blackBoid) {
-                c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
-            } else if (this.flashing && this.blackBoid) {
-                c.strokeStyle = `hsl(0, 0%, 100%)`;
-            }
-            c.lineWidth = 1.0;
-            c.stroke();
-            c.beginPath();
-            c.moveTo(-arrowLength, arrowWidth / 2);
-            c.lineTo(arrowLength, 0);
-            c.stroke();
-            
-            /*
-            // Draw teardrop  -----------
-            const numPoints = 32; 
-            const a = 0.2;
-            const b = 1.5;
-            const pivotOffsetX = 0;
-            const pivotOffsetY = -b * radScale;  // Centroid of bulb head
-            c.beginPath();  
-            for (let i = 0; i <= numPoints; i++) {
-                const t = Math.PI / 2 + (i / numPoints) * (2 * Math.PI);
-                const x = (2 * a * Math.cos(t) - a * Math.sin(2 * t)) * radScale;
-                const y = b * Math.sin(t) * radScale;
-                if (i === 0) {
-                    c.moveTo(x - pivotOffsetX, y - pivotOffsetY);
-                } else {
-                    c.lineTo(x - pivotOffsetX, y - pivotOffsetY);
+            // Draw arrow boid --------------------------------------------
+            if (this.arrow && !this.circle && !this.airfoil) {
+                const angle = Math.atan2(this.vel.y, this.vel.x);
+                c.save();
+                c.translate(cX(this.pos), cY(this.pos));
+                c.rotate(-angle); // for arrows
+                
+                // fill body ----------
+                c.beginPath();
+                c.moveTo(arrowLength, 0);
+                c.lineTo(-arrowLength, -arrowWidth / 2);
+                c.lineTo(-arrowLength + arrowDent, 0);
+                c.lineTo(-arrowLength, arrowWidth / 2);
+                c.closePath();
+                if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
+                } else if (this.whiteBoid) {
+                    c.fillStyle = `hsl(0, 0%, 90%)`;
+                } else if (this.blackBoid && !this.flashing) {
+                    c.fillStyle = `hsl(0, 0%, 10%)`;
+                } else if (this.flashing && !this.blackBoid) {
+                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                } else if (this.flashing && this.blackBoid) {
+                    c.fillStyle = `hsl(0, 0%, 90%)`;
                 }
-            }  
-            c.closePath();
-            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
-                c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
-            } else if (this.whiteBoid) {
-                c.fillStyle = `hsl(0, 0%, 90%)`;
-                c.strokeStyle = `hsl(0, 0%, 100%)`;
-            } else if (this.blackBoid) {
-                c.fillStyle = `hsl(0, 0%, 10%)`;
-                c.strokeStyle = `hsl(0, 0%, 0%)`;
-            } else if (this.flashing) {
-                c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
-                c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
-            }
-            c.fill();
-            c.lineWidth = 1.0;
-            c.stroke();
-            */
+                c.fill();
 
-            c.restore();
+                // draw arrow edges/wings ----------
+                c.beginPath();
+                c.moveTo(arrowLength, 0);
+                c.lineTo(-arrowLength, -arrowWidth / 2);
+                if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+                } else if (this.whiteBoid) {
+                    c.strokeStyle = `hsl(0, 0%, 100%)`;
+                } else if (this.blackBoid) {
+                    c.strokeStyle = `hsl(0, 0%, 0%)`;
+                } else if (this.flashing && !this.blackBoid) {
+                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                } else if (this.flashing && this.blackBoid) {
+                    c.strokeStyle = `hsl(0, 0%, 100%)`;
+                }
+                c.lineWidth = 1.0;
+                c.stroke();
+                c.beginPath();
+                c.moveTo(-arrowLength, arrowWidth / 2);
+                c.lineTo(arrowLength, 0);
+                c.stroke();
+                c.restore();
+            }
+                
+            // Draw airfoil boid --------------------------------------------
+            if (!this.arrow && !this.circle && this.airfoil) {
+                const angle = Math.atan2(this.vel.y, this.vel.x);
+                c.save();
+                c.translate(cX(this.pos), cY(this.pos));
+                c.rotate(.5 * Math.PI - angle); // for teadrops
+            
+                const numPoints = 32; 
+                const a = 0.2;
+                const b = 1.5;
+                const pivotOffsetX = 0;
+                const pivotOffsetY = -b * radScale;  // Centroid of bulb head
+                c.beginPath();  
+                for (let i = 0; i <= numPoints; i++) {
+                    const t = Math.PI / 2 + (i / numPoints) * (2 * Math.PI);
+                    const x = (2 * a * Math.cos(t) - a * Math.sin(2 * t)) * radScale;
+                    const y = b * Math.sin(t) * radScale;
+                    if (i === 0) {
+                        c.moveTo(x - pivotOffsetX, y - pivotOffsetY);
+                    } else {
+                        c.lineTo(x - pivotOffsetX, y - pivotOffsetY);
+                    }
+                }  
+                c.closePath();
+                if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
+                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+                } else if (this.whiteBoid) {
+                    c.fillStyle = `hsl(0, 0%, 90%)`;
+                    c.strokeStyle = `hsl(0, 0%, 100%)`;
+                } else if (this.blackBoid) {
+                    c.fillStyle = `hsl(0, 0%, 10%)`;
+                    c.strokeStyle = `hsl(0, 0%, 0%)`;
+                } else if (this.flashing) {
+                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                }
+                c.fill();
+                c.lineWidth = 1.0;
+                c.stroke();
+                c.restore();
+            }
+
+            // Draw circle boid --------------------------------------------
+            if (!this.arrow && this.circle && !this.airfoil) {
+                c.save();
+                c.translate(cX(this.pos), cY(this.pos));
+                c.beginPath();
+                c.arc(0, 0, radScale, 0, 2 * Math.PI);
+                if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
+                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+                } else if (this.whiteBoid) {
+                    c.fillStyle = `hsl(0, 0%, 90%)`;
+                    c.strokeStyle = `hsl(0, 0%, 100%)`;
+                } else if (this.blackBoid) {
+                    c.fillStyle = `hsl(0, 0%, 10%)`;
+                    c.strokeStyle = `hsl(0, 0%, 0%)`;
+                } else if (this.flashing && !this.blackBoid) {
+                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                } else if (this.flashing && this.blackBoid) {
+                    c.fillStyle = `hsl(0, 0%, 90%)`;
+                    c.strokeStyle = `hsl(0, 0%, 100%)`;
+                }
+                c.fill();
+                c.lineWidth = 1.0;
+                c.stroke();
+                c.restore();
+            }
+
 
             /*
             // draw body circle ----------
@@ -2454,7 +2552,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
 
-    function showMenu() {
+    //  CHANGE BOID TYPES ---------------------------------------------------------------------
+    function doArrowBoids() {
+        for (let boid of Boids) {
+            boid.arrow = true;
+            boid.circle = false;
+            boid.airfoil = false;
+        }
+    }   
+
+    function doCircleBoids() {
+        for (let boid of Boids) {
+            boid.arrow = false;
+            boid.circle = true;
+            boid.airfoil = false;
+        }
+    }   
+
+    function doAirfoilBoids() {
+        for (let boid of Boids) {
+            boid.arrow = false;
+            boid.circle = false;
+            boid.airfoil = true;
+        }
+    }  
+
+    function doNoneBoids() {
+        for (let boid of Boids) {
+            boid.arrow = false;
+            boid.circle = false;
+            boid.airfoil = false;
+        }
+    }  
+
+    function drawMenu() {
         // Draw ellipsis button (in world coordinates)
         const ellipsisWorldX = 0.05;
         const ellipsisWorldY = simHeight - 0.05;
@@ -2526,8 +2657,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const padding = 1.7 * knobRadius;
         c.fillStyle = `hsla(210, 80%, 10%, ${0.4 * menuOpacity})`;
         c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-        c.lineWidth = 0.01 * cScale;
-        const cornerRadius = 0.1 * cScale;
+        c.lineWidth = 0.007 * cScale;
+        const cornerRadius = 0.05 * cScale;
         c.beginPath();
         c.moveTo(-padding + cornerRadius, -padding);
         c.lineTo(menuWidth + padding - cornerRadius, -padding);
@@ -2540,6 +2671,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
         c.closePath();
         c.fill();
+        c.stroke();
+        
+        // Draw close icon in upper left corner (round button)
+        const closeIconRadius = knobRadius * 0.25;
+        const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+        const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+        
+        // Red background circle
+        c.beginPath();
+        c.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 70%, 40%, ${menuOpacity})`;
+        c.fill();
+        
+        // Black X
+        c.strokeStyle = `hsla(0, 0%, 0%, ${menuOpacity})`;
+        c.lineWidth = 0.05 * knobRadius;
+        c.lineCap = 'round';
+        const xSize = closeIconRadius * 0.4;
+        c.beginPath();
+        c.moveTo(closeIconX - xSize, closeIconY - xSize);
+        c.lineTo(closeIconX + xSize, closeIconY + xSize);
+        c.moveTo(closeIconX + xSize, closeIconY - xSize);
+        c.lineTo(closeIconX - xSize, closeIconY + xSize);
         c.stroke();
         
         c.lineCap = 'round';
@@ -2566,7 +2720,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             // Normalize the value based on its range
             let normalizedValue;
-            if (knob === 1) {
+            if (knob === 0) {
+                // numBoids: use actual count instead of target
+                normalizedValue = (Boids.length - ranges[knob].min) / (ranges[knob].max - ranges[knob].min);
+            } else if (knob === 1) {
                 // boidRadius needs to be scaled by 100
                 normalizedValue = (boidRadius * 100 - ranges[knob].min) / (ranges[knob].max - ranges[knob].min);
             } else {
@@ -2585,13 +2742,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.lineTo(indicatorX, indicatorY);
             c.strokeStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
             c.lineWidth = 0.2 * knobRadius;
+            c.shadowColor = `hsla(0, 0%, 0%, ${0.9 * menuOpacity})`;
+            c.shadowBlur = 0.1 * knobRadius;
             c.stroke();
+            c.shadowBlur = 0;
 
             // draw knob label
-            
             c.lineWidth = 0.03 * knobRadius;
             c.lineJoin = 'round';
-            c.font = `${0.25 * knobRadius}px verdana`;
+            c.font = `${0.27 * knobRadius}px verdana`;
             c.textAlign = 'center';
             c.textBaseline = 'middle';
             let label = '';
@@ -2601,43 +2760,161 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 case 2: label = 'Visual Range'; break;
                 case 3: label = 'Speed Limit'; break;
                 case 4: label = 'Rule 1a: Separation'; break;
-                case 5: label = 'Rule 1b: Sep. Urgency'; break;
+                case 5: label = 'Rule 1b: Strength'; break;
                 case 6: label = 'Rule 2: Alignment'; break;
                 case 7: label = 'Rule 3: Cohesion'; break;
                 case 8: label = 'Confinement'; break;
                 case 9: label = 'Tail Length'; break;
             }
             c.strokeStyle = `hsla(210, 80%, 0%, ${menuOpacity})`;
-            c.strokeText(label, knobX, knobY + 1.3 * knobRadius + 0.0 * cScale);
-            c.font = ` ${0.25 * knobRadius}px verdana`;
+            c.strokeText(label, 0.05 * knobRadius + knobX, 0.05 * knobRadius + (knobY + 1.35 * knobRadius));
+            c.font = ` ${0.27 * knobRadius}px verdana`;
             c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-            c.fillText(label, knobX, knobY + 1.3 * knobRadius + 0.0 * cScale);
+            c.fillText(label, knobX, knobY + 1.35 * knobRadius);
 
             // draw knob value
             let valueText = '';
             switch (knob) {
-                case 0: valueText = Math.floor(boidProps.numBoids); break;
+                case 0: valueText = Boids.length; break;
                 case 1: valueText = (boidRadius * 100).toFixed(1); break;
-                case 2: valueText = (boidProps.visualRange).toFixed(1); break;
+                case 2: valueText = (boidProps.visualRange).toFixed(2); break;
                 case 3: valueText = (boidProps.speedLimit).toFixed(1); break;
-                case 4: valueText = (boidProps.minDistance).toFixed(1); break;
-                case 5: valueText = (boidProps.avoidFactor).toFixed(1); break;
+                case 4: valueText = (boidProps.minDistance).toFixed(2); break;
+                case 5: valueText = (boidProps.avoidFactor).toFixed(0); break;
                 case 6: valueText = (boidProps.matchingFactor).toFixed(1); break;
                 case 7: valueText = (boidProps.centeringFactor).toFixed(1); break;
                 case 8: valueText = (boidProps.turnFactor).toFixed(1); break;
                 case 9: valueText = boidProps.tailLength.toString(); break;
             }
             c.font = `${0.3 * knobRadius}px verdana`;
-            c.fillStyle = `hsla(210, 80%, 0%, ${menuOpacity})`;
-            c.fillText(valueText, knobX, knobY + 0.45 * knobRadius);
+            c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
+            c.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
         }
-        c.closePath();
-        c.restore();
-
         
+        // Draw radio buttons for boid type selection (vertically stacked)
+        const radioButtonRadius = knobRadius * 0.3;
+        const radioCol = 2;
+        const radioLabels = ['Arrows', 'Circles', 'Airfoils', 'None'];
+        
+        for (let i = 0; i < 4; i++) {
+            const buttonX = radioCol * knobSpacing - 0.5 * knobRadius;
+            const buttonY = (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius);
+            
+            // Draw outer circle
+            c.beginPath();
+            c.arc(buttonX, buttonY, radioButtonRadius, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
+            c.fill();
+            c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+            c.lineWidth = 0.05 * knobRadius;
+            c.stroke();
+            
+            // Draw filled center if selected
+            if (selectedBoidType === i) {
+                c.beginPath();
+                c.arc(buttonX, buttonY, radioButtonRadius * 0.5, 0, 2 * Math.PI);
+                c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
+                c.fill();
+            }
+
+            c.textAlign = 'left';
+            c.textBaseline = 'middle';
+            c.font = ` ${0.27 * knobRadius}px verdana`;
+            c.strokeStyle = `hsla(210, 80%, 0%, ${menuOpacity})`;
+            c.strokeText(radioLabels[i], 0.05 * knobRadius + buttonX + radioButtonRadius + 0.2 * knobRadius, 0.05 * knobRadius + buttonY);
+  
+            // Draw label to the right of button
+            //c.font = `${0.25 * knobRadius}px verdana`;
+            c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
+            c.fillText(radioLabels[i], buttonX + radioButtonRadius + 0.2 * knobRadius, buttonY);
+        }
+        
+        // Draw FPS counter in bottom right of menu
+        c.font = `${0.35 * knobRadius}px verdana`;
+        c.textAlign = 'right';
+        c.textBaseline = 'bottom';
+        const fpsText = `${currentFPS.toFixed(0)} fps`;
+        
+        // Color code based on FPS: green (57+) to yellow to red
+        let fpsHue;
+        if (currentFPS >= 57) {
+            fpsHue = 120; // Green
+        } else if (currentFPS >= 45) {
+            // Interpolate from red (0) to yellow (60)
+            const t = (currentFPS - 45) / (57 - 45);
+            fpsHue = t * 60;
+        } else {
+            // Full red for very low FPS
+            fpsHue = 0;
+        }
+        c.fillStyle = `hsla(${fpsHue}, 90%, 60%, ${menuOpacity})`;
+        c.fillText(fpsText, menuWidth + padding - 0.7 * knobRadius, menuHeight + padding - 0.2 * knobRadius);
+        
+        // Draw reset button (round button in blank area - row 2, column 3)
+        const resetButtonRadius = knobRadius * 0.5;
+        const resetButtonX = 3 * knobSpacing;
+        const resetButtonY = 2.1 * knobSpacing;
+        
+        c.beginPath();
+        c.arc(resetButtonX, resetButtonY, resetButtonRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(60, 80%, 50%, ${0.5 * menuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+        c.lineWidth = 0.08 * knobRadius;
+        c.stroke();
+        
+        // Draw "RESET" text in arc above button
+        const resetText = "RESET";
+        const arcRadius = resetButtonRadius * 1.8;
+        const totalArcAngle = Math.PI * 0.6; // 60 degrees total arc
+        const startAngle = -Math.PI / 2 - totalArcAngle / 2; // Center the arc above
+        
+        c.font = `bold ${0.3 * knobRadius}px verdana`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        for (let i = 0; i < resetText.length; i++) {
+            const angle = startAngle + (i / (resetText.length - 1)) * totalArcAngle;
+            const x = resetButtonX + Math.cos(angle) * arcRadius;
+            const y = resetButtonY + Math.sin(angle) * arcRadius;
+            c.save();
+            c.translate(x, y);
+            c.rotate(angle + Math.PI / 2); // Rotate to follow arc
+            c.fillStyle = `hsla(210, 80%, 0%, ${menuOpacity})`;
+            c.fillText(resetText[i], 0.08 * knobRadius, 0.06 * knobRadius);
+            c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
+            c.fillText(resetText[i], 0, 0);
+            c.restore();
+        }
+        
+        c.closePath();
+
+        c.restore();
     }
 
     //  MAKE BOIDS  ---------------------------------------------------------------------
+    function resetParameters() {
+        // Reset all parameters to defaults
+        boidRadius = 0.02;
+        boidProps.numBoids = 2200;
+        boidProps.minDistance = 5.0 * boidRadius;
+        boidProps.avoidFactor = 50.0;
+        boidProps.matchingFactor = 10.0;
+        boidProps.visualRange = 10.0 * boidRadius;
+        boidProps.centeringFactor = 5.0;
+        boidProps.speedLimit = 1.1;
+        boidProps.turnFactor = 1.0;
+        boidProps.tailLength = 10;
+        
+        // Reset boid type to arrows
+        selectedBoidType = 0;
+        doArrowBoids();
+        
+        // Update all boid radii
+        for (let i = 0; i < Boids.length; i++) {
+            Boids[i].radius = boidRadius;
+        }
+    }
+    
     function makeBoids() {
         Boids = [];
         boidRadius = 0.02;
@@ -3036,6 +3313,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         for (var b = 0; b < Boids.length; b++) {
             boid = Boids[b];
             boid.draw();
+            
+            // Draw visual range circle for white and black boids when menu is active
+            if (menuVisible && (boid.whiteBoid || boid.blackBoid)) {
+                c.beginPath();
+                c.arc(cX(boid.pos), cY(boid.pos), boidProps.visualRange * cScale, 0, 2 * Math.PI);
+                c.strokeStyle = boid.whiteBoid ? 'hsla(0, 0%, 90%, 0.5)' : 'hsla(0, 0%, 10%, 0.5)';
+                c.lineWidth = 2;
+                c.stroke();
+            }
         }
         
         // Draw airplane
@@ -3064,7 +3350,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
 
-        showMenu()
+        drawMenu()
 
         // Draw stats
         drawStats();
@@ -3286,8 +3572,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         const vel = new Vector2(0, 0);
                         const hue = 320;
                         
-                        // Insert before the last 2 special boids
+                        // Create new boid and set type based on selectedBoidType
                         const newBoid = new BOID(pos, vel, hue, false, false);
+                        newBoid.arrow = selectedBoidType === 0;
+                        newBoid.circle = selectedBoidType === 1;
+                        newBoid.airfoil = selectedBoidType === 2;
+                        
+                        // Insert before the last 2 special boids
                         Boids.splice(Boids.length - 2, 0, newBoid);
                     }
                     
