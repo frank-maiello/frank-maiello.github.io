@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.23</title>
+    <title>Boids 1.24</title>
     <style>
         html, body {
             margin: 0;
@@ -22,8 +22,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         body {
             background-image: url('sky.png');
+            background-color: black;
             background-size: cover;
-            background-position: center;
+            background-position: bottom;
             background-repeat: no-repeat;
             background-attachment: fixed;
         }
@@ -145,7 +146,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     
                     // Store the starting value
                     const menuItems = [
-                        boidProps.numBoids, boidRadius, boidProps.visualRange, boidProps.speedLimit,
+                        boidProps.numBoids, boidRadius * 100, boidProps.visualRange, boidProps.speedLimit,
                         boidProps.minDistance, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
                         boidProps.turnFactor, boidProps.tailLength];
                     dragStartValue = menuItems[knob];
@@ -667,6 +668,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     // Make it rain at specified position -----------------------------------------------------
     Rain = [];
+    
+    // Image variables
+    let kittyPlaneImage;
+    let kittyPlaneReverseImage;
+    let kittyLampImage;
+    
     function makeItRain(cloud) {
         const pos = new Vector2(
             cloud.x + (Math.random() - 0.5) * 1.9 * cloud.radius,
@@ -2593,6 +2600,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const ellipsisY = canvas.height - ellipsisWorldY * cScale;
         const dotRadius = 0.006 * cScale;
         const dotSpacing = 0.016 * cScale;
+
+         
         
         c.fillStyle = `hsla(210, 60%, 80%, 0.8)`;
         for (let i = 0; i < 3; i++) {
@@ -2649,7 +2658,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
         c.save();
         c.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
-        c.beginPath();
+        //drawKittyLamp(
+        //    menuUpperLeftX + 3.3 * knobRadius, 
+        //    menuUpperLeftY + 4.5 * knobRadius,
+        //    menuOpacity);
 
         // draw overall menu background with rounded corners
         const menuWidth = knobSpacing * 3;
@@ -2705,19 +2717,35 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const knobY = row * knobSpacing;
             c.beginPath();
             c.arc(knobX, knobY, knobRadius, 0, 2 * Math.PI, false);
-            c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
+            c.fillStyle = `hsla(210, 80%, 10%, ${0.3 * menuOpacity})`;
             c.fill();
 
             // draw knobs in rows of four
             c.beginPath();
             c.arc(knobX, knobY, knobRadius, meterStart, meterStart + fullMeterSweep, false);
-            c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+            //c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+            const gradient = c.createLinearGradient(
+                knobX + Math.cos(meterStart) * knobRadius,
+                knobY + Math.sin(meterStart) * knobRadius,
+                knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+                knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+            );
+            gradient.addColorStop(0, `hsla(200, 50%, 45%, ${menuOpacity})`);
+            gradient.addColorStop(1, `hsla(210, 60%, 60%, ${menuOpacity})`);
+            c.strokeStyle = gradient;
             c.lineWidth = 0.4 * knobRadius;
             c.stroke();
+
+            /*
+            // draw needle hub 
+            c.beginPath();
+            c.arc(knobX, knobY, 0.2 * knobRadius, 0, 2 * Math.PI, false);
+            c.fillStyle = `hsla(210, 80%, 0%, ${menuOpacity})`;
+            c.fill();
+            */
             
             // draw needle / knob indicator
             let knobValue = menuItems[knob];
-            
             // Normalize the value based on its range
             let normalizedValue;
             if (knob === 0) {
@@ -2740,6 +2768,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.beginPath();
             c.moveTo(knobX, knobY);
             c.lineTo(indicatorX, indicatorY);
+            
+            c.strokeStyle = `hsla(120, 80%, 0%, ${menuOpacity})`;
+            c.lineWidth = 0.25 * knobRadius;
+            c.stroke();
+            
             c.strokeStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
             c.lineWidth = 0.2 * knobRadius;
             c.shadowColor = `hsla(0, 0%, 0%, ${0.9 * menuOpacity})`;
@@ -2750,26 +2783,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // draw knob label
             c.lineWidth = 0.03 * knobRadius;
             c.lineJoin = 'round';
-            c.font = `${0.27 * knobRadius}px verdana`;
+            
             c.textAlign = 'center';
             c.textBaseline = 'middle';
             let label = '';
             switch (knob) {
-                case 0: label = 'Number of Boids'; break;
+                case 0: label = "Number'a Boids"; break;
                 case 1: label = 'Size'; break;
                 case 2: label = 'Visual Range'; break;
                 case 3: label = 'Speed Limit'; break;
-                case 4: label = 'Rule 1a: Separation'; break;
-                case 5: label = 'Rule 1b: Strength'; break;
+                case 4: label = 'Rule 1: Separation'; break;
+                case 5: label = 'Separation Strength'; break;
                 case 6: label = 'Rule 2: Alignment'; break;
                 case 7: label = 'Rule 3: Cohesion'; break;
                 case 8: label = 'Confinement'; break;
                 case 9: label = 'Tail Length'; break;
             }
-            c.strokeStyle = `hsla(210, 80%, 0%, ${menuOpacity})`;
-            c.strokeText(label, 0.05 * knobRadius + knobX, 0.05 * knobRadius + (knobY + 1.35 * knobRadius));
-            c.font = ` ${0.27 * knobRadius}px verdana`;
-            c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
+            c.font = `${0.28 * knobRadius}px verdana`;
+            c.strokeStyle = `hsla(210, 80%, 0%, ${0.6 * menuOpacity})`;
+            c.strokeText(label, 0.04 * knobRadius + knobX, 0.04 * knobRadius + (knobY + 1.35 * knobRadius));
+            c.font = ` ${0.28 * knobRadius}px verdana`;
+            c.fillStyle = `hsla(210, 80%, 95%, ${menuOpacity})`;
             c.fillText(label, knobX, knobY + 1.35 * knobRadius);
 
             // draw knob value
@@ -2817,11 +2851,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.fill();
             }
 
+            // Draw label to the right of button - shadow for contrast
             c.textAlign = 'left';
             c.textBaseline = 'middle';
-            c.font = ` ${0.27 * knobRadius}px verdana`;
-            c.strokeStyle = `hsla(210, 80%, 0%, ${menuOpacity})`;
-            c.strokeText(radioLabels[i], 0.05 * knobRadius + buttonX + radioButtonRadius + 0.2 * knobRadius, 0.05 * knobRadius + buttonY);
+            c.font = ` ${0.3 * knobRadius}px verdana`;
+            c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
+            c.strokeText(radioLabels[i], 0.04 * knobRadius + buttonX + radioButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + buttonY);
   
             // Draw label to the right of button
             //c.font = `${0.25 * knobRadius}px verdana`;
@@ -2830,10 +2865,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         
         // Draw FPS counter in bottom right of menu
-        c.font = `${0.35 * knobRadius}px verdana`;
+        c.font = `${0.5 * knobRadius}px monospace`;
         c.textAlign = 'right';
         c.textBaseline = 'bottom';
-        const fpsText = `${currentFPS.toFixed(0)} fps`;
+        const fpsText = `${currentFPS.toFixed(0)} FPS`;
         
         // Color code based on FPS: green (57+) to yellow to red
         let fpsHue;
@@ -2847,19 +2882,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Full red for very low FPS
             fpsHue = 0;
         }
+        //c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
+        c.fillStyle = `hsla(${fpsHue}, 0%, 0%, ${0.5 *menuOpacity})`;
+        c.fillText(fpsText, menuWidth + padding - 0.75 * knobRadius, menuHeight + padding - 0.95 * knobRadius);
         c.fillStyle = `hsla(${fpsHue}, 90%, 60%, ${menuOpacity})`;
-        c.fillText(fpsText, menuWidth + padding - 0.7 * knobRadius, menuHeight + padding - 0.2 * knobRadius);
+        c.fillText(fpsText, menuWidth + padding - 0.8 * knobRadius, menuHeight + padding - 1.0 * knobRadius);
         
-        // Draw reset button (round button in blank area - row 2, column 3)
+        // Draw reset button (round button in blank area - row 2, column 3)  -------------------
         const resetButtonRadius = knobRadius * 0.5;
         const resetButtonX = 3 * knobSpacing;
         const resetButtonY = 2.1 * knobSpacing;
         
         c.beginPath();
         c.arc(resetButtonX, resetButtonY, resetButtonRadius, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(60, 80%, 50%, ${0.5 * menuOpacity})`;
+        c.fillStyle = `hsla(60, 100%, 50%, ${0.7 * menuOpacity})`;
         c.fill();
-        c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+        c.strokeStyle = `hsla(210, 80%, 60%, ${menuOpacity})`;
         c.lineWidth = 0.08 * knobRadius;
         c.stroke();
         
@@ -2869,7 +2907,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const totalArcAngle = Math.PI * 0.6; // 60 degrees total arc
         const startAngle = -Math.PI / 2 - totalArcAngle / 2; // Center the arc above
         
-        c.font = `bold ${0.3 * knobRadius}px verdana`;
+        c.font = `bold ${0.4 * knobRadius}px verdana`;
         c.textAlign = 'center';
         c.textBaseline = 'middle';
         for (let i = 0; i < resetText.length; i++) {
@@ -2879,7 +2917,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.save();
             c.translate(x, y);
             c.rotate(angle + Math.PI / 2); // Rotate to follow arc
-            c.fillStyle = `hsla(210, 80%, 0%, ${menuOpacity})`;
+            c.fillStyle = `hsla(210, 80%, 0%, ${0.7 *menuOpacity})`;
             c.fillText(resetText[i], 0.08 * knobRadius, 0.06 * knobRadius);
             c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
             c.fillText(resetText[i], 0, 0);
@@ -3145,6 +3183,33 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
 
+    function drawKittyLamp(lampX, lampY, menuOpacity) {
+        // Draw kitty lamp last (on top of everything)
+        if (kittyLampImage && kittyLampImage.complete) {
+            const targetHeight = simHeight * 0.22 * cScale; // Size in canvas pixels
+            const aspectRatio = kittyLampImage.width / kittyLampImage.height;
+            const lampWidth = targetHeight * aspectRatio;
+            const lampHeight = targetHeight;
+            //const lampX = 0.5 * canvas.width; // Bottom right in canvas coords
+            //const lampY = canvas.height - 0.5 * lampHeight;
+            
+            c.save();
+            //c.rotate(-0.2); // Slight tilt for effect
+            c.globalAlpha = 0.2 * menuOpacity;
+            c.drawImage(
+                kittyLampImage,
+                lampX - lampWidth / 2,
+                lampY - lampHeight / 2,
+                lampWidth,
+                lampHeight
+            );
+            c.restore();
+        } else if (kittyLampImage) {
+            // Debug: show if image is still loading
+            console.log('Kitty lamp image loading...', kittyLampImage.complete, kittyLampImage.src);
+        }
+    }
+
     // Main animation loop  ------------
     function simulateEverything() {
         // Update menu opacity for fade in/out
@@ -3294,6 +3359,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Clear canvas
         c.clearRect(0, 0, width, height);
 
+       
+
+        // Draw black background
+        //c.fillStyle = 'hsl(0, 0%, 0%)';
+        //.fillRect(0, 0, width, height);
+
         // Draw hot air balloon 
         for (let hotAirBalloon of HotAirBalloon) {
             hotAirBalloon.draw();
@@ -3354,6 +3425,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         // Draw stats
         drawStats();
+        
+        
     }
 
     //  FPS MONITORING WITH RAMP-UP  ------------
@@ -3670,12 +3743,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         deltaT = 1/60;
         lastFrameTime = performance.now();
         
-        doKitty = true;
         // Load plane images
+        doKitty = true;
         kittyPlaneImage = new Image();
         kittyPlaneImage.src = 'kitty_plane.png';
         kittyPlaneReverseImage = new Image();
         kittyPlaneReverseImage.src = 'kitty_plane_reverse.png';
+        // Load kitty lamp image
+        kittyLampImage = new Image();
+        kittyLampImage.src = 'kitty_lamp.png';
+
         // make Boids ----------
         makeBoids();
         // make Background Clouds ----------
