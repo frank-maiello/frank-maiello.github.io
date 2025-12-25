@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.24</title>
+    <title>Boids 1.25</title>
     <style>
         html, body {
             margin: 0;
@@ -2592,7 +2592,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }  
 
-    function drawMenu() {
+    function drawSimMenu() {
         // Draw ellipsis button (in world coordinates)
         const ellipsisWorldX = 0.05;
         const ellipsisWorldY = simHeight - 0.05;
@@ -2601,8 +2601,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const dotRadius = 0.006 * cScale;
         const dotSpacing = 0.016 * cScale;
 
-         
-        
         c.fillStyle = `hsla(210, 60%, 80%, 0.8)`;
         for (let i = 0; i < 3; i++) {
             c.beginPath();
@@ -2658,10 +2656,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
         c.save();
         c.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
-        //drawKittyLamp(
-        //    menuUpperLeftX + 3.3 * knobRadius, 
-        //    menuUpperLeftY + 4.5 * knobRadius,
-        //    menuOpacity);
+        /*
+        drawKittyLamp(
+            menuUpperLeftX + 3.3 * knobRadius, 
+            menuUpperLeftY + 4.5 * knobRadius,
+            menuOpacity);
+        */
 
         // draw overall menu background with rounded corners
         const menuWidth = knobSpacing * 3;
@@ -2716,7 +2716,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const knobX = col * knobSpacing;
             const knobY = row * knobSpacing;
             c.beginPath();
-            c.arc(knobX, knobY, knobRadius, 0, 2 * Math.PI, false);
+            c.arc(knobX, knobY, 1.05 *knobRadius, 0, 2 * Math.PI, false);
             c.fillStyle = `hsla(210, 80%, 10%, ${0.3 * menuOpacity})`;
             c.fill();
 
@@ -2730,7 +2730,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
                 knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
             );
-            gradient.addColorStop(0, `hsla(200, 50%, 45%, ${menuOpacity})`);
+            gradient.addColorStop(0, `hsla(190, 40%, 50%, ${menuOpacity})`);
             gradient.addColorStop(1, `hsla(210, 60%, 60%, ${menuOpacity})`);
             c.strokeStyle = gradient;
             c.lineWidth = 0.4 * knobRadius;
@@ -2762,23 +2762,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             normalizedValue = Math.max(0, Math.min(1, normalizedValue));
             
             const angle = meterStart + normalizedValue * fullMeterSweep;
-            const indicatorLength = knobRadius * 0.9;
+            const indicatorLength = knobRadius * 1.0;
             const indicatorX = knobX + Math.cos(angle) * indicatorLength;
             const indicatorY = knobY + Math.sin(angle) * indicatorLength;
+        
+            // draw needle shadow
             c.beginPath();
             c.moveTo(knobX, knobY);
             c.lineTo(indicatorX, indicatorY);
-            
             c.strokeStyle = `hsla(120, 80%, 0%, ${menuOpacity})`;
             c.lineWidth = 0.25 * knobRadius;
             c.stroke();
-            
+            // draw needle indicator circle shadow
+            c.beginPath();
+            c.arc(indicatorX, indicatorY, 0.21 * knobRadius, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(120, 80%, 0%, ${menuOpacity})`;
+            c.fill();
+
+            // draw needle
+            c.beginPath();
+            c.moveTo(knobX, knobY);
+            c.lineTo(indicatorX, indicatorY);
             c.strokeStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
             c.lineWidth = 0.2 * knobRadius;
             c.shadowColor = `hsla(0, 0%, 0%, ${0.9 * menuOpacity})`;
             c.shadowBlur = 0.1 * knobRadius;
             c.stroke();
+            c.closePath();
             c.shadowBlur = 0;
+
+            // draw needle indicator circle
+            c.beginPath();
+            c.arc(indicatorX, indicatorY, 0.18 * knobRadius, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(120, 0%, 90%, ${menuOpacity})`;
+            c.fill();
 
             // draw knob label
             c.lineWidth = 0.03 * knobRadius;
@@ -2788,7 +2805,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.textBaseline = 'middle';
             let label = '';
             switch (knob) {
-                case 0: label = "Number'a Boids"; break;
+                case 0: label = "Number of Boids"; break;
                 case 1: label = 'Size'; break;
                 case 2: label = 'Visual Range'; break;
                 case 3: label = 'Speed Limit'; break;
@@ -2799,10 +2816,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 case 8: label = 'Confinement'; break;
                 case 9: label = 'Tail Length'; break;
             }
-            c.font = `${0.28 * knobRadius}px verdana`;
+            c.font = `${0.29 * knobRadius}px verdana`;
             c.strokeStyle = `hsla(210, 80%, 0%, ${0.6 * menuOpacity})`;
             c.strokeText(label, 0.04 * knobRadius + knobX, 0.04 * knobRadius + (knobY + 1.35 * knobRadius));
-            c.font = ` ${0.28 * knobRadius}px verdana`;
+            c.font = ` ${0.29 * knobRadius}px verdana`;
             c.fillStyle = `hsla(210, 80%, 95%, ${menuOpacity})`;
             c.fillText(label, knobX, knobY + 1.35 * knobRadius);
 
@@ -2865,7 +2882,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         
         // Draw FPS counter in bottom right of menu
-        c.font = `${0.5 * knobRadius}px monospace`;
         c.textAlign = 'right';
         c.textBaseline = 'bottom';
         const fpsText = `${currentFPS.toFixed(0)} FPS`;
@@ -2883,23 +2899,32 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             fpsHue = 0;
         }
         //c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
+
+        c.font = `${0.3 * knobRadius}px monospace`;
         c.fillStyle = `hsla(${fpsHue}, 0%, 0%, ${0.5 *menuOpacity})`;
-        c.fillText(fpsText, menuWidth + padding - 0.75 * knobRadius, menuHeight + padding - 0.95 * knobRadius);
+        c.fillText('running at', menuWidth + padding - 0.75 * knobRadius, menuHeight + padding - 1.15 * knobRadius);
         c.fillStyle = `hsla(${fpsHue}, 90%, 60%, ${menuOpacity})`;
-        c.fillText(fpsText, menuWidth + padding - 0.8 * knobRadius, menuHeight + padding - 1.0 * knobRadius);
+        c.fillText('running at', menuWidth + padding - 0.8 * knobRadius, menuHeight + padding - 1.2 * knobRadius);
         
-        // Draw reset button (round button in blank area - row 2, column 3)  -------------------
+        c.font = `${0.5 * knobRadius}px monospace`;
+        c.fillStyle = `hsla(${fpsHue}, 0%, 0%, ${0.5 *menuOpacity})`;
+        c.fillText(fpsText, menuWidth + padding - 0.75 * knobRadius, menuHeight + padding - 0.55 * knobRadius);
+        c.fillStyle = `hsla(${fpsHue}, 90%, 60%, ${menuOpacity})`;
+        c.fillText(fpsText, menuWidth + padding - 0.8 * knobRadius, menuHeight + padding - 0.6 * knobRadius);
+        
+        // Draw reset button (universal recycling symbol - row 2, column 3)  --------------6----
         const resetButtonRadius = knobRadius * 0.5;
         const resetButtonX = 3 * knobSpacing;
-        const resetButtonY = 2.1 * knobSpacing;
+        const resetButtonY = 2.05 * knobSpacing;
         
-        c.beginPath();
-        c.arc(resetButtonX, resetButtonY, resetButtonRadius, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(60, 100%, 50%, ${0.7 * menuOpacity})`;
-        c.fill();
-        c.strokeStyle = `hsla(210, 80%, 60%, ${menuOpacity})`;
-        c.lineWidth = 0.08 * knobRadius;
-        c.stroke();
+        // Draw recycling symbol (Unicode ♻)
+        c.font = `bold ${2.3 * resetButtonRadius}px Arial`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillStyle = `hsla(0, 0%, 0%, ${0.7 * menuOpacity})`;
+        c.fillText('♻', resetButtonX + 0.05 * knobRadius, resetButtonY + 0.25 * knobRadius);
+        c.fillStyle = `hsla(60, 80%, 50%, ${menuOpacity})`;
+        c.fillText('♻', resetButtonX, resetButtonY + 0.2 * knobRadius);
         
         // Draw "RESET" text in arc above button
         const resetText = "RESET";
@@ -2917,7 +2942,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.save();
             c.translate(x, y);
             c.rotate(angle + Math.PI / 2); // Rotate to follow arc
-            c.fillStyle = `hsla(210, 80%, 0%, ${0.7 *menuOpacity})`;
+            c.fillStyle = `hsla(0, 80%, 0%, ${0.7 *menuOpacity})`;
             c.fillText(resetText[i], 0.08 * knobRadius, 0.06 * knobRadius);
             c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
             c.fillText(resetText[i], 0, 0);
@@ -3195,7 +3220,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             c.save();
             //c.rotate(-0.2); // Slight tilt for effect
-            c.globalAlpha = 0.2 * menuOpacity;
+            c.globalAlpha = 0.8 * menuOpacity;
             c.drawImage(
                 kittyLampImage,
                 lampX - lampWidth / 2,
@@ -3421,15 +3446,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
 
-        drawMenu()
+        drawSimMenu()
 
-        // Draw stats
         drawStats();
-        
-        
     }
 
-    //  FPS MONITORING WITH RAMP-UP  ------------
+    //  FPS MONITORING WITH RAMP-UP  ------------------------------------------------
     let fpsFrameTimes = [];
     let currentFPS = 60;
     let lastFrameTime = performance.now();
