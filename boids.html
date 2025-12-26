@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.25</title>
+    <title>Boids 1.26</title>
     <style>
         html, body {
             margin: 0;
@@ -66,8 +66,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let menuFadeSpeed = 3.0; // Fade speed (0 to 1 per second)
     
     // Menu position
-    let menuX = 0.4; // World coordinates
-    let menuY = simHeight - 0.2; // World coordinates
+    let menuX = 0.1; // World coordinates
+    let menuY = simHeight - 0.4; // World coordinates
     
     // Menu knob dragging state
     let draggedKnob = null; // Index of the knob being dragged
@@ -84,6 +84,85 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     // Boid type selection (0=arrows, 1=circles, 2=airfoils)
     let selectedBoidType = 0;
+    let tailColorMode = 0; // 0 = black, 1 = white, 2 = selected hue
+
+    // Color menu visibility state
+    let colorMenuVisible = false;
+    let colorMenuOpacity = 0;
+    
+    // Color menu position
+    let colorMenuX = 1.6; // World coordinates
+    let colorMenuY = simHeight - 0.6; // World coordinates
+    
+    // Color menu dragging state
+    let isDraggingColorMenu = false;
+    let colorMenuDragStartX = 0;
+    let colorMenuDragStartY = 0;
+    let colorMenuStartX = 0;
+    let colorMenuStartY = 0;
+    
+    // Spraypaint tool state
+    let spraypaintActive = false;
+    let spraypaintRadius = 0.15; // Radius in world units
+    let selectedHue = 0;
+    let selectedSaturation = 100;
+    let selectedLightness = 50;
+    let isSpraying = false;
+    let sprayParticles = []; // Array to hold spray effect particles
+    
+    // Offscreen canvas for color wheel
+    let colorWheelCanvas = null;
+    let colorWheelContext = null;
+    
+    // Color selection dragging
+    let isDraggingColorWheel = false;
+    let isDraggingLightness = false;
+    let isDraggingHueSensitivity = false;
+    let isDraggingHueTicker = false;
+    let isDraggingSpraySlider = false;
+    let hueSensitivityDragStart = 0;
+    let hueTickerDragStart = 0;
+    
+    // Create offscreen canvas for color wheel
+    function createColorWheel() {
+        const size = 200; // Size in pixels
+        colorWheelCanvas = document.createElement('canvas');
+        colorWheelCanvas.width = size;
+        colorWheelCanvas.height = size;
+        colorWheelContext = colorWheelCanvas.getContext('2d');
+        
+        const centerX = size / 2;
+        const centerY = size / 2;
+        const radius = size / 2;
+        
+        // Draw color wheel using wedges to avoid moiré artifacts
+        const numWedges = 360;
+        const wedgeAngle = (2 * Math.PI) / numWedges;
+        
+        for (let i = 0; i < numWedges; i++) {
+            const hue = (i / numWedges) * 360;
+            const startAngle = i * wedgeAngle;
+            const endAngle = (i + 1) * wedgeAngle;
+            
+            // Create radial gradient for saturation
+            const gradient = colorWheelContext.createRadialGradient(
+                centerX, centerY, 0,
+                centerX, centerY, radius
+            );
+            gradient.addColorStop(0, `hsl(${hue}, 0%, 50%)`);
+            gradient.addColorStop(1, `hsl(${hue}, 100%, 50%)`);
+            
+            // Draw wedge
+            colorWheelContext.fillStyle = gradient;
+            colorWheelContext.beginPath();
+            colorWheelContext.moveTo(centerX, centerY);
+            colorWheelContext.arc(centerX, centerY, radius, startAngle, endAngle);
+            colorWheelContext.closePath();
+            colorWheelContext.fill();
+        }
+    }
+    
+    createColorWheel();
 
     canvas.addEventListener('mousedown', function(e) {
         const rect = canvas.getBoundingClientRect();
@@ -98,7 +177,212 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const dy = mouseY - ellipsisWorldY;
         if (dx * dx + dy * dy < ellipsisRadius * ellipsisRadius) {
             menuVisible = !menuVisible;
+            // Also toggle color menu
+            colorMenuVisible = !colorMenuVisible;
             return;
+        }
+        
+        // Check color menu interactions (independent of sim menu)
+        if (colorMenuVisible && colorMenuOpacity > 0.5) {
+            const knobRadius = 0.1 * cScale;
+            const colorWheelRadius = knobRadius * 1.7;
+            const sliderWidth = knobRadius * 0.6;
+            const sliderHeight = colorWheelRadius * 2;
+            const spacing = knobRadius * 0.5;
+            const buttonRowHeight = spacing * 2;
+            const knobRowHeight = knobRadius * 3;
+            const colorMenuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 1.5;
+            const colorMenuHeight = colorWheelRadius * 2 + buttonRowHeight + knobRowHeight + knobRadius * 0.5;
+            const colorPadding = 0.8 * knobRadius;
+            const colorMenuOriginX = colorMenuX * cScale;
+            const colorMenuOriginY = canvas.height - colorMenuY * cScale;
+            
+            const clickCanvasX = mouseX * cScale;
+            const clickCanvasY = canvas.height - mouseY * cScale;
+            
+            // Check close icon
+            const closeIconRadius = knobRadius * 0.25;
+            const colorCloseIconX = colorMenuOriginX - colorPadding + closeIconRadius + 0.2 * knobRadius;
+            const colorCloseIconY = colorMenuOriginY - colorPadding + closeIconRadius + 0.2 * knobRadius;
+            const ccdx = clickCanvasX - colorCloseIconX;
+            const ccdy = clickCanvasY - colorCloseIconY;
+            
+            if (ccdx * ccdx + ccdy * ccdy < closeIconRadius * closeIconRadius) {
+                colorMenuVisible = false;
+                return;
+            }
+            
+            // Check color wheel click
+            const wheelCenterX = colorMenuOriginX + colorWheelRadius;
+            const wheelCenterY = colorMenuOriginY + colorWheelRadius;
+            const wheelDx = clickCanvasX - wheelCenterX;
+            const wheelDy = clickCanvasY - wheelCenterY;
+            const wheelDist = Math.sqrt(wheelDx * wheelDx + wheelDy * wheelDy);
+            
+            if (wheelDist <= colorWheelRadius) {
+                isDraggingColorWheel = true;
+                // Calculate hue and saturation
+                selectedHue = (Math.atan2(wheelDy, wheelDx) * 180 / Math.PI + 360) % 360;
+                selectedSaturation = Math.min(100, (wheelDist / colorWheelRadius) * 100);
+                return;
+            }
+            
+            // Check lightness slider click
+            const sliderX = colorMenuOriginX + colorWheelRadius * 2 + spacing;
+            const sliderY = colorMenuOriginY;
+            
+            if (clickCanvasX >= sliderX && clickCanvasX <= sliderX + sliderWidth &&
+                clickCanvasY >= sliderY && clickCanvasY <= sliderY + sliderHeight) {
+                isDraggingLightness = true;
+                // Calculate lightness
+                const relativeY = clickCanvasY - sliderY;
+                selectedLightness = Math.max(0, Math.min(100, 100 - (relativeY / sliderHeight) * 100));
+                return;
+            }
+            
+            // Check spraypaint icon click
+            const spraypaintX = sliderX + sliderWidth + spacing + knobRadius * 0.85;
+            const spraypaintY = colorMenuOriginY + colorWheelRadius;
+            const canRadius = knobRadius * 1.2; // 2x larger
+            
+            if (clickCanvasX >= spraypaintX - canRadius * 0.45 && clickCanvasX <= spraypaintX + canRadius * 0.45 &&
+                clickCanvasY >= spraypaintY - canRadius * 0.95 && clickCanvasY <= spraypaintY + canRadius * 0.65) {
+                spraypaintActive = !spraypaintActive;
+                return;
+            }
+            
+            // Check preset color buttons
+            const buttonRadius = knobRadius * 0.35;
+            const buttonY = colorMenuOriginY + colorWheelRadius * 2 + spacing * 1.5;
+            const buttonSpacing = knobRadius * 1.2;
+            // Position fourth button centered below lightness slider
+            const lightnessSliderCenterX = sliderX + sliderWidth / 2;
+            const buttonStartX = lightnessSliderCenterX - buttonSpacing * 3;
+            
+            // Black button
+            const blackDx = clickCanvasX - buttonStartX;
+            const blackDy = clickCanvasY - buttonY;
+            if (blackDx * blackDx + blackDy * blackDy < buttonRadius * buttonRadius) {
+                for (let i = 0; i < Boids.length; i++) {
+                    Boids[i].saturation = 0;
+                    Boids[i].lightness = 0;
+                    Boids[i].manualSaturation = true;
+                    Boids[i].manualLightness = true;
+                }
+                return;
+            }
+            
+            // Gray button
+            const grayDx = clickCanvasX - (buttonStartX + buttonSpacing);
+            const grayDy = clickCanvasY - buttonY;
+            if (grayDx * grayDx + grayDy * grayDy < buttonRadius * buttonRadius) {
+                for (let i = 0; i < Boids.length; i++) {
+                    Boids[i].saturation = 0;
+                    Boids[i].lightness = 60;
+                    Boids[i].manualSaturation = true;
+                    Boids[i].manualLightness = true;
+                }
+                return;
+            }
+            
+            // White button
+            const whiteDx = clickCanvasX - (buttonStartX + buttonSpacing * 2);
+            const whiteDy = clickCanvasY - buttonY;
+            if (whiteDx * whiteDx + whiteDy * whiteDy < buttonRadius * buttonRadius) {
+                for (let i = 0; i < Boids.length; i++) {
+                    Boids[i].saturation = 0;
+                    Boids[i].lightness = 100;
+                    Boids[i].manualSaturation = true;
+                    Boids[i].manualLightness = true;
+                }
+                return;
+            }
+            
+            // Selected color button
+            const selectedDx = clickCanvasX - (buttonStartX + buttonSpacing * 3);
+            const selectedDy = clickCanvasY - buttonY;
+            if (selectedDx * selectedDx + selectedDy * selectedDy < buttonRadius * buttonRadius) {
+                for (let i = 0; i < Boids.length; i++) {
+                    Boids[i].hue = selectedHue;
+                    Boids[i].saturation = selectedSaturation;
+                    Boids[i].lightness = selectedLightness;
+                    Boids[i].manualHue = true;
+                    Boids[i].manualSaturation = true;
+                    Boids[i].manualLightness = true;
+                }
+                return;
+            }
+            
+            // Check spray radius slider
+            const spraySliderWidth = canRadius * 1.4;
+            const spraySliderX = spraypaintX - spraySliderWidth / 2;
+            // Bottom aligned with lightness slider bottom
+            const spraySliderBottomY = spraypaintY + colorWheelRadius * 0.9;
+            const leftHeight = knobRadius * 0.25; // Shorter on left
+            const rightHeight = knobRadius * 0.25 * 1.8; // Taller on right
+            const spraySliderKnobRadius = knobRadius * 0.3;
+            
+            // Expand hit area to include the full trapezoid shape (use rightHeight which is taller)
+            const sliderHitYTop = spraySliderBottomY - rightHeight - spraySliderKnobRadius;
+            const sliderHitYBottom = spraySliderBottomY - spraySliderKnobRadius * 0.3; // Stop above the bottom edge
+            const sliderHitXLeft = spraySliderX - spraySliderKnobRadius;
+            const sliderHitXRight = spraySliderX + spraySliderWidth + spraySliderKnobRadius;
+            
+            if (clickCanvasX >= sliderHitXLeft && clickCanvasX <= sliderHitXRight &&
+                clickCanvasY >= sliderHitYTop && clickCanvasY <= sliderHitYBottom) {
+                // Calculate new value from click position
+                const clickRatio = (clickCanvasX - spraySliderX) / spraySliderWidth;
+                spraypaintRadius = 0.05 + clickRatio * (0.5 - 0.05);
+                spraypaintRadius = Math.max(0.05, Math.min(0.5, spraypaintRadius)); // Clamp
+                isDraggingSpraySlider = true;
+                return;
+            }
+            
+            // Check hueSensitivity knob
+            const lightnessSldrX = colorMenuOriginX + colorWheelRadius * 2 + spacing;
+            const hueTickerTargetX = lightnessSldrX + sliderWidth / 2; // Center below lightness slider
+            const hueTickerOriginalX = colorMenuOriginX + colorWheelRadius + knobRadius * 2.4;
+            const knobOffset = hueTickerTargetX - hueTickerOriginalX; // Calculate offset
+            const hueSensitivityKnobX = colorMenuOriginX + knobRadius + knobOffset; // Move by same offset
+            const hueSensitivityKnobY = colorMenuOriginY + colorWheelRadius * 2 + buttonRowHeight + knobRadius * 1.5 + knobRadius / 3;
+            const hsKnobDx = clickCanvasX - hueSensitivityKnobX;
+            const hsKnobDy = clickCanvasY - hueSensitivityKnobY;
+            if (hsKnobDx * hsKnobDx + hsKnobDy * hsKnobDy < knobRadius * knobRadius) {
+                isDraggingHueSensitivity = true;
+                dragStartMouseX = mouseX;
+                dragStartMouseY = mouseY;
+                hueSensitivityDragStart = boidProps.hueSensitivity;
+                return;
+            }
+            
+            // Check hueTicker knob
+            const hueTickerKnobX = hueTickerTargetX; // Centered below lightness slider
+            const hueTickerKnobY = hueSensitivityKnobY;
+            const htKnobDx = clickCanvasX - hueTickerKnobX;
+            const htKnobDy = clickCanvasY - hueTickerKnobY;
+            if (htKnobDx * htKnobDx + htKnobDy * htKnobDy < knobRadius * knobRadius) {
+                isDraggingHueTicker = true;
+                dragStartMouseX = mouseX;
+                dragStartMouseY = mouseY;
+                hueTickerDragStart = boidProps.hueTicker;
+                return;
+            }
+            
+            // Check if color menu background was clicked (for dragging entire menu)
+            if (clickCanvasX >= colorMenuOriginX - colorPadding && clickCanvasX <= colorMenuOriginX + colorMenuWidth + colorPadding &&
+                clickCanvasY >= colorMenuOriginY - colorPadding && clickCanvasY <= colorMenuOriginY + colorMenuHeight + colorPadding) {
+                isDraggingColorMenu = true;
+                colorMenuDragStartX = mouseX;
+                colorMenuDragStartY = mouseY;
+                colorMenuStartX = colorMenuX;
+                colorMenuStartY = colorMenuY;
+                return;
+            }
+        }
+        
+        // Handle spraypaint tool
+        if (spraypaintActive && e.button === 0) {
+            isSpraying = true;
         }
         
         // Check if a menu knob was clicked
@@ -150,6 +434,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         boidProps.minDistance, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
                         boidProps.turnFactor, boidProps.tailLength];
                     dragStartValue = menuItems[knob];
+                    return;
+                }
+            }
+            
+            // Check tail color radio buttons (below tail length knob)
+            const tailColorRadioRadius = knobRadius * 0.25;
+            const tailKnobCol = 1;
+            const tailKnobRow = 2;
+            
+            for (let i = 0; i < 3; i++) {
+                const buttonX = menuOriginX + tailKnobCol * knobSpacing + (i - 1) * knobRadius * 1.0;
+                const buttonY = menuOriginY + tailKnobRow * knobSpacing + knobRadius * 2.2;
+                const rdx = clickCanvasX - buttonX;
+                const rdy = clickCanvasY - buttonY;
+                
+                if (rdx * rdx + rdy * rdy < tailColorRadioRadius * tailColorRadioRadius) {
+                    tailColorMode = i;
                     return;
                 }
             }
@@ -251,6 +552,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         draggedCloud = null;
         draggedKnob = null;
         isDraggingMenu = false;
+        isDraggingColorMenu = false;
+        isDraggingColorWheel = false;
+        isDraggingLightness = false;
+        isDraggingHueSensitivity = false;
+        isDraggingHueTicker = false;
+        isDraggingSpraySlider = false;
+        isSpraying = false;
     });
 
     canvas.addEventListener('contextmenu', function(e) {
@@ -269,6 +577,140 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             menuX = menuStartX + deltaX;
             menuY = menuStartY + deltaY;
             return;
+        }
+        
+        // Handle color menu dragging
+        if (isDraggingColorMenu) {
+            const deltaX = mouseX - colorMenuDragStartX;
+            const deltaY = mouseY - colorMenuDragStartY;
+            colorMenuX = colorMenuStartX + deltaX;
+            colorMenuY = colorMenuStartY + deltaY;
+            return;
+        }
+        
+        // Handle color wheel dragging
+        if (isDraggingColorWheel) {
+            const knobRadius = 0.1 * cScale;
+            const colorWheelRadius = knobRadius * 1.7;
+            const wheelCenterX = (colorMenuX * cScale) + colorWheelRadius;
+            const wheelCenterY = (canvas.height - colorMenuY * cScale) + colorWheelRadius;
+            const clickCanvasX = mouseX * cScale;
+            const clickCanvasY = canvas.height - mouseY * cScale;
+            const wheelDx = clickCanvasX - wheelCenterX;
+            const wheelDy = clickCanvasY - wheelCenterY;
+            const wheelDist = Math.sqrt(wheelDx * wheelDx + wheelDy * wheelDy);
+            
+            selectedHue = (Math.atan2(wheelDy, wheelDx) * 180 / Math.PI + 360) % 360;
+            selectedSaturation = Math.min(100, (wheelDist / colorWheelRadius) * 100);
+            return;
+        }
+        
+        // Handle lightness slider dragging
+        if (isDraggingLightness) {
+            const knobRadius = 0.1 * cScale;
+            const colorWheelRadius = knobRadius * 1.7;
+            const spacing = knobRadius * 0.5;
+            const sliderHeight = colorWheelRadius * 2;
+            const sliderY = canvas.height - colorMenuY * cScale;
+            const clickCanvasY = canvas.height - mouseY * cScale;
+            const relativeY = clickCanvasY - sliderY;
+            selectedLightness = Math.max(0, Math.min(100, 100 - (relativeY / sliderHeight) * 100));
+            return;
+        }
+        
+        // Handle hueSensitivity knob dragging
+        if (isDraggingHueSensitivity) {
+            const dragDeltaX = mouseX - dragStartMouseX;
+            const dragDeltaY = mouseY - dragStartMouseY;
+            const dragDelta = dragDeltaX + dragDeltaY;
+            
+            const dragSensitivity = 0.5;
+            const normalizedDelta = dragDelta / dragSensitivity;
+            const rangeSize = 360 - 0;
+            let newValue = hueSensitivityDragStart + normalizedDelta * rangeSize;
+            
+            newValue = Math.max(0, Math.min(360, newValue));
+            boidProps.hueSensitivity = newValue;
+            return;
+        }
+        
+        // Handle hueTicker knob dragging with logarithmic scale
+        if (isDraggingHueTicker) {
+            const dragDeltaX = mouseX - dragStartMouseX;
+            const dragDeltaY = mouseY - dragStartMouseY;
+            const dragDelta = dragDeltaX + dragDeltaY;
+            
+            // Convert current value to normalized position (0-1) using log scale
+            const logMin = Math.log(0.01);
+            const logMax = Math.log(10.0);
+            const startLogValue = Math.log(Math.max(0.01, Math.min(10.0, hueTickerDragStart)));
+            const startNormalized = (startLogValue - logMin) / (logMax - logMin);
+            
+            // Apply drag delta
+            const dragSensitivity = 0.5;
+            const normalizedDelta = dragDelta / dragSensitivity;
+            let newNormalized = startNormalized + normalizedDelta;
+            newNormalized = Math.max(0, Math.min(1, newNormalized));
+            
+            // Convert back to log scale value
+            const newLogValue = logMin + newNormalized * (logMax - logMin);
+            const newValue = Math.exp(newLogValue);
+            
+            boidProps.hueTicker = Math.max(0.01, Math.min(10.0, newValue));
+            return;
+        }
+        
+        // Handle spray slider dragging
+        if (isDraggingSpraySlider) {
+            const knobRadius = 0.1 * cScale;
+            const canRadius = knobRadius * 1.2;
+            const spacing = knobRadius * 0.5;
+            const colorWheelRadius = knobRadius * 1.7;
+            const lightnessSldrWidth = knobRadius * 0.6;
+            const sliderWidth = lightnessSldrWidth;
+            
+            // Calculate spraypaint icon position
+            const sliderX = (colorMenuX * cScale) + colorWheelRadius * 2 + spacing;
+            const spraypaintX = sliderX + sliderWidth + spacing + knobRadius * 0.85;
+            
+            const spraySliderWidth = canRadius * 1.4;
+            const spraySliderX = spraypaintX - spraySliderWidth / 2;
+            const clickCanvasX = mouseX * cScale;
+            const clickRatio = (clickCanvasX - spraySliderX) / spraySliderWidth;
+            
+            spraypaintRadius = 0.05 + clickRatio * (0.5 - 0.05);
+            spraypaintRadius = Math.max(0.05, Math.min(0.5, spraypaintRadius));
+            return;
+        }
+        
+        // Handle spraypaint tool
+        if (isSpraying && spraypaintActive) {
+            // Generate spray particles
+            const particlesPerFrame = 20;
+            for (let i = 0; i < particlesPerFrame; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * spraypaintRadius;
+                const px = mouseX + Math.cos(angle) * distance;
+                const py = mouseY + Math.sin(angle) * distance;
+                sprayParticles.push(new SprayParticle(px, py, selectedHue, selectedSaturation, selectedLightness));
+            }
+            
+            // Apply color to boids within radius
+            for (let i = 0; i < Boids.length; i++) {
+                const boid = Boids[i];
+                const dx = boid.pos.x - mouseX;
+                const dy = boid.pos.y - mouseY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < spraypaintRadius) {
+                    boid.hue = selectedHue;
+                    boid.saturation = selectedSaturation;
+                    boid.lightness = selectedLightness;
+                    boid.manualHue = true;
+                    boid.manualSaturation = true;
+                    boid.manualLightness = true;
+                }
+            }
         }
         
         // Handle knob dragging
@@ -373,7 +815,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                                 0.5 * simWidth + Math.cos(ang) * spawnRadius,
                                 0.5 * simHeight + Math.sin(ang) * spawnRadius);
                             const vel = new Vector2(0, 0);
-                            const hue = 320;
+                            const hue = 0;
                             const newBoid = new BOID(pos, vel, hue, false, false);
                             
                             // Set boid type based on selectedBoidType
@@ -539,6 +981,42 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
 
+    //  SPRAY PARTICLE CLASS ---------------------------------------------------------------------
+    class SprayParticle {
+        constructor(x, y, hue, saturation, lightness) {
+            this.x = x;
+            this.y = y;
+            this.vx = (Math.random() - 0.5) * 0.3; // Random velocity
+            this.vy = (Math.random() - 0.5) * 0.3;
+            this.hue = hue;
+            this.saturation = saturation;
+            this.lightness = lightness;
+            this.size = Math.random() * 0.002 + 0.001; // Start small
+            this.maxSize = Math.random() * 0.006 + 0.004; // Max size to grow to
+            this.life = 1.0; // Full life
+            this.decay = 0.5 + Math.random() * 0.5; // Decay speed
+        }
+        
+        update(dt) {
+            this.x += this.vx * dt;
+            this.y += this.vy * dt;
+            this.life -= this.decay * dt;
+            // Grow the particle
+            if (this.size < this.maxSize) {
+                this.size += 0.08 * dt;
+            }
+            return this.life > 0; // Return true if still alive
+        }
+        
+        draw() {
+            const alpha = Math.max(0, this.life);
+            c.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${alpha * 0.6})`;
+            c.beginPath();
+            c.arc(cX({x: this.x}), cY({y: this.y}), this.size * cScale, 0, 2 * Math.PI);
+            c.fill();
+        }
+    }
+
     //  COORDINATE CONVERSION  -----------
     function cX(pos) {
         return pos.x * cScale;
@@ -581,13 +1059,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const cellRadius = Math.ceil(radius / this.cellSize);
             const centerX = Math.floor(boid.pos.x / this.cellSize);
             const centerY = Math.floor(boid.pos.y / this.cellSize);
+            const cellRadiusSq = cellRadius * cellRadius;
             
-            // Check all cells within the radius
+            // Check cells in circular pattern (skip corners)
             for (let dx = -cellRadius; dx <= cellRadius; dx++) {
                 for (let dy = -cellRadius; dy <= cellRadius; dy++) {
+                    // Skip cells outside circular radius
+                    if (dx * dx + dy * dy > cellRadiusSq) continue;
+                    
                     const key = `${centerX + dx},${centerY + dy}`;
                     if (this.grid.has(key)) {
-                        nearby.push(...this.grid.get(key));
+                        const cellBoids = this.grid.get(key);
+                        // Direct iteration instead of spread for better performance
+                        for (let i = 0; i < cellBoids.length; i++) {
+                            nearby.push(cellBoids[i]);
+                        }
                     }
                 }
             }
@@ -1614,7 +2100,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Propeller trails
             this.propTrail1 = []; // Trail for first blade tip
             this.propTrail2 = []; // Trail for second blade tip
-            this.maxTrailLength = 100; // Number of trail points to keep
+            this.maxTrailLength = 120; // Number of trail points to keep
             
             // Banner properties
             this.passNumber = passNumber; // Track which pass we're on (1, 2, 3, 4, etc.)
@@ -2154,12 +2640,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.lineJoin = 'round';
                     for (let i = 0; i < this.propTrail1.length - 1; i++) {
                         const alpha = (i / this.propTrail1.length) * 0.3;
-                        const width = Math.min(10, 5 / (i / this.propTrail1.length));
+                        //const width = Math.min(10, 5 / (i / this.propTrail1.length));
                         const maxWidth = Math.min(30, 5 / (i / this.propTrail1.length));
                         const point1 = this.propTrail1[i];
                         const point2 = this.propTrail1[i + 1];
-                        c.strokeStyle = `hsla(200, 20%, 70%, ${alpha})`;
-                        c.lineWidth = width;
+                        c.strokeStyle = `hsla(200, 15%, 50%, ${alpha})`;
+                        c.lineWidth = maxWidth;
                         c.beginPath();
                         c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale + maxWidth);
                         c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale - maxWidth);
@@ -2216,16 +2702,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (this.propTrail1.length > 1) {
                     c.lineCap = 'round';
                     c.lineJoin = 'round';
-                    
+                    let width;
                     // Draw 
                     for (let i = 0; i < this.propTrail2.length - 1; i++) {
                         const alpha = (i / this.propTrail2.length) * 0.3;
-                        const width = Math.min(10, 5 / (i / this.propTrail1.length));
-                        const maxWidth = Math.min(30, 5 / (i / this.propTrail1.length));
+                        //const width = Math.min(10, 50 / (i / this.propTrail1.length));
+                        //width += 10;
+                        const maxWidth = Math.min(20, 7 / (i / this.propTrail1.length));
                         const point1 = this.propTrail2[i];
                         const point2 = this.propTrail2[i + 1];
                         c.strokeStyle = `hsla(200, 20%, 70%, ${alpha})`;
-                        c.lineWidth = width;
+                        c.lineWidth = maxWidth;
                         c.beginPath();
                         c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale + maxWidth);
                         c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale - maxWidth);
@@ -2320,9 +2807,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.hue = hue;
             this.saturation = 0;
             this.lightness = 0;
+            this.manualHue = false; // Flag to control if hue is manually set
+            this.manualLightness = false; // Flag to control if lightness is manually set
+            this.manualSaturation = false; // Flag to control if saturation is manually set
             this.radius = boidRadius;
             this.angle = 0;
-            this.hueCounter = 0;
+            this.hueCounter = 70;
             this.speedAdjust = 0;
             this.whiteBoid = whiteBoid;
             this.blackBoid = blackBoid;
@@ -2368,14 +2858,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const arrowWidth = Math.min((1/this.speedAdjust) * 0.8 * radScale, 1.5 * radScale);
             const arrowDent = Math.min((1/this.speedAdjust) * 1.0 * radScale, 0.7 * radScale);
 
-            // code hsl based on speed and height ----------
-            this.hueCounter += 0.01;
-            if (this.hueCounter >= 360) {
-                this.hueCounter = 0;
+            // Update hue counter for cycling after making boids ----------
+            if (boidCountLocked) {
+                //this.hueCounter += 0.01;
+                this.hueCounter += boidProps.hueTicker;
+                if (this.hueCounter >= 360) {
+                    this.hueCounter = 0;
+                }
             }
-            this.hue = 350 - this.speedAdjust * 40 + this.hueCounter;
-            this.saturation = 85;  
-            this.lightness = 35 + (1 - (this.pos.y / simHeight)) * 35; 
+
+            // code hsl based on speed and height ----------
+            // Only auto-calculate hue if not manually controlled
+            if (!this.manualHue) {
+                this.hue = 360 - this.speedAdjust * boidProps.hueSensitivity + this.hueCounter;
+            } 
+            // Only auto-calculate saturation if not manually controlled
+            if (!this.manualSaturation) {
+                this.saturation = 85;
+            }
+            // Only auto-calculate lightness if not manually controlled
+            if (!this.manualLightness) {
+                this.lightness = 35 + (1 - (this.pos.y / simHeight)) * 35;
+            } 
 
             // Draw tail ----------
             if (boidProps.doTails == true && boidProps.tailLength > 0 && this.tail.length > 0) {
@@ -2385,10 +2889,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
                     
                 }
-                if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                
+                // Apply tail color based on tailColorMode
+                if (tailColorMode === 0) {
+                    // Black tail
                     c.strokeStyle = 'hsla(0, 0%, 10%, 0.3)';
                     c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
-                } else if (this.whiteBoid) {
+                } else if (tailColorMode === 1) {
+                    // White tail
+                    c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
+                    c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
+                } else if (tailColorMode === 2) {
+                    // Selected hue tail
+                    c.strokeStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, 0.5)`;
+                    c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
+                }
+                
+                // Override for special boids
+                if (this.whiteBoid) {
                     c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
                     c.lineWidth = 4;
                 } else if (this.blackBoid && !this.flashing) {
@@ -2420,7 +2938,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.lineTo(-arrowLength, arrowWidth / 2);
                 c.closePath();
                 if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
+                    c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
                 } else if (this.whiteBoid) {
                     c.fillStyle = `hsl(0, 0%, 90%)`;
                 } else if (this.blackBoid && !this.flashing) {
@@ -2437,7 +2955,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.moveTo(arrowLength, 0);
                 c.lineTo(-arrowLength, -arrowWidth / 2);
                 if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+                    c.strokeStyle = `hsl(${this.hue - 70}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
                 } else if (this.whiteBoid) {
                     c.strokeStyle = `hsl(0, 0%, 100%)`;
                 } else if (this.blackBoid) {
@@ -2481,8 +2999,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }  
                 c.closePath();
                 if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
-                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+                    c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
+                    c.strokeStyle = `hsl(${this.hue - 70}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
                 } else if (this.whiteBoid) {
                     c.fillStyle = `hsl(0, 0%, 90%)`;
                     c.strokeStyle = `hsl(0, 0%, 100%)`;
@@ -2490,8 +3008,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.fillStyle = `hsl(0, 0%, 10%)`;
                     c.strokeStyle = `hsl(0, 0%, 0%)`;
                 } else if (this.flashing) {
-                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
-                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                    c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                    c.strokeStyle = `hsl(${this.hue - 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
                 }
                 c.fill();
                 c.lineWidth = 1.0;
@@ -2501,13 +3019,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
             // Draw circle boid --------------------------------------------
             if (!this.arrow && this.circle && !this.airfoil) {
-                c.save();
-                c.translate(cX(this.pos), cY(this.pos));
+                //c.save();
+                //c.translate(cX(this.pos), cY(this.pos));
                 c.beginPath();
-                c.arc(0, 0, radScale, 0, 2 * Math.PI);
+                //c.arc(0, 0, radScale, 0, 2 * Math.PI);
+                c.arc(cX(this.pos), cY(this.pos), radScale, 0, 2 * Math.PI);
                 if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness}%)`;
-                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+                    c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
+                    c.strokeStyle = `hsl(${this.hue - 70}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
                 } else if (this.whiteBoid) {
                     c.fillStyle = `hsl(0, 0%, 90%)`;
                     c.strokeStyle = `hsl(0, 0%, 100%)`;
@@ -2524,7 +3043,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.fill();
                 c.lineWidth = 1.0;
                 c.stroke();
-                c.restore();
+                //c.restore();
+
+
+
             }
 
 
@@ -2601,6 +3123,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const dotRadius = 0.006 * cScale;
         const dotSpacing = 0.016 * cScale;
 
+        // Draw three dots for ellipsis
         c.fillStyle = `hsla(210, 60%, 80%, 0.8)`;
         for (let i = 0; i < 3; i++) {
             c.beginPath();
@@ -2626,7 +3149,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // turnFactor - range from 0 to 100, integer
         // trailLength - range from 0 to 100, integer
 
-        // fps display toggle
+        // fps display
 
         const menuItems = [
             boidProps.numBoids, boidProps.boidRadius, boidProps.visualRange, boidProps.speedLimit,
@@ -2663,13 +3186,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             menuOpacity);
         */
 
-        // draw overall menu background with rounded corners
+        // Draw overall menu background with rounded corners
         const menuWidth = knobSpacing * 3;
-        const menuHeight = knobSpacing * 2 + knobRadius * 1.0;
+        const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
         const padding = 1.7 * knobRadius;
-        c.fillStyle = `hsla(210, 80%, 10%, ${0.4 * menuOpacity})`;
-        c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-        c.lineWidth = 0.007 * cScale;
+        
         const cornerRadius = 0.05 * cScale;
         c.beginPath();
         c.moveTo(-padding + cornerRadius, -padding);
@@ -2682,6 +3203,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.lineTo(-padding, -padding + cornerRadius);
         c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
         c.closePath();
+        //c.fillStyle = `hsla(210, 80%, 10%, ${0.4 * menuOpacity})`;
+        c.strokeStyle = `hsla(210, 60%, 80%, ${menuOpacity})`;
+        c.lineWidth = 0.004 * cScale;
+        const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
+        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.6 * menuOpacity})`);
+        menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.6 * menuOpacity})`);
+        c.fillStyle = menuGradient;
         c.fill();
         c.stroke();
         
@@ -2842,6 +3370,44 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
         }
         
+        // Draw tail color radio buttons below tail length knob (knob 9)
+        const tailColorRadioRadius = knobRadius * 0.25;
+        const tailKnobCol = 1;
+        const tailKnobRow = 2;
+        const tailRadioLabels = ['Black', 'White', 'Hue'];
+        
+        for (let i = 0; i < 3; i++) {
+            const buttonX = tailKnobCol * knobSpacing + (i - 1) * knobRadius * 1.0;
+            const buttonY = tailKnobRow * knobSpacing + knobRadius * 2.2;
+            
+            // Draw outer circle
+            c.beginPath();
+            c.arc(buttonX, buttonY, tailColorRadioRadius, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
+            c.fill();
+            c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+            c.lineWidth = 0.04 * knobRadius;
+            c.stroke();
+            
+            // Draw filled center if selected
+            if (tailColorMode === i) {
+                c.beginPath();
+                c.arc(buttonX, buttonY, tailColorRadioRadius * 0.5, 0, 2 * Math.PI);
+                c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
+                c.fill();
+            }
+
+            // Draw label below button
+            c.textAlign = 'center';
+            c.textBaseline = 'top';
+            c.font = `${0.24 * knobRadius}px verdana`;
+            c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
+            c.lineWidth = 0.02 * knobRadius;
+            c.strokeText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
+            c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
+            c.fillText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
+        }
+        
         // Draw radio buttons for boid type selection (vertically stacked)
         const radioButtonRadius = knobRadius * 0.3;
         const radioCol = 2;
@@ -2881,11 +3447,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.fillText(radioLabels[i], buttonX + radioButtonRadius + 0.2 * knobRadius, buttonY);
         }
         
-        // Draw FPS counter in bottom right of menu
+        // Draw FPS counter in bottom right of menu -------------------------------
         c.textAlign = 'right';
         c.textBaseline = 'bottom';
-        const fpsText = `${currentFPS.toFixed(0)} FPS`;
-        
+        const fpsText = `${currentFPS.toFixed(0)}`;
         // Color code based on FPS: green (57+) to yellow to red
         let fpsHue;
         if (currentFPS >= 57) {
@@ -2900,19 +3465,38 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         //c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
 
+        // Draw "running at" text
         c.font = `${0.3 * knobRadius}px monospace`;
-        c.fillStyle = `hsla(${fpsHue}, 0%, 0%, ${0.5 *menuOpacity})`;
-        c.fillText('running at', menuWidth + padding - 0.75 * knobRadius, menuHeight + padding - 1.15 * knobRadius);
-        c.fillStyle = `hsla(${fpsHue}, 90%, 60%, ${menuOpacity})`;
-        c.fillText('running at', menuWidth + padding - 0.8 * knobRadius, menuHeight + padding - 1.2 * knobRadius);
+        c.fillStyle = `hsla(0, 0%, 0%, ${0.5 *menuOpacity})`;
+        c.fillText('running at', menuWidth + padding - 0.75 * knobRadius, menuHeight + padding - 1.25 * knobRadius);
+        c.fillStyle = `hsla(${fpsHue}, 0%, 85%, ${menuOpacity})`;
+        c.fillText('running at', menuWidth + padding - 0.8 * knobRadius, menuHeight + padding - 1.3 * knobRadius);
         
+        // draw dark heavy background line for FPS text
+        const fpsTextWidth = c.measureText(fpsText).width;
+        c.beginPath();
+        c.moveTo(menuWidth + padding - 2.7 * knobRadius, menuHeight + padding - 0.92 * knobRadius);
+        c.lineTo(menuWidth + padding - 0.7 *knobRadius, menuHeight + padding - 0.92 * knobRadius);
+        c.lineWidth = 0.6 * knobRadius;
+        c.strokeStyle = `hsla(0, 0%, 0%, ${0.7 * menuOpacity})`;
+        c.lineCap = 'round';
+        c.stroke();
+
+        // Draw FPS text
         c.font = `${0.5 * knobRadius}px monospace`;
-        c.fillStyle = `hsla(${fpsHue}, 0%, 0%, ${0.5 *menuOpacity})`;
-        c.fillText(fpsText, menuWidth + padding - 0.75 * knobRadius, menuHeight + padding - 0.55 * knobRadius);
+        c.fillStyle = `hsla(0, 0%, 0%, ${0.5 *menuOpacity})`;
+        c.fillText(fpsText, menuWidth + padding - 1.95 * knobRadius, menuHeight + padding - 0.55 * knobRadius);
         c.fillStyle = `hsla(${fpsHue}, 90%, 60%, ${menuOpacity})`;
-        c.fillText(fpsText, menuWidth + padding - 0.8 * knobRadius, menuHeight + padding - 0.6 * knobRadius);
+        c.fillText(fpsText, menuWidth + padding - 2.0 * knobRadius, menuHeight + padding - 0.6 * knobRadius);
         
-        // Draw reset button (universal recycling symbol - row 2, column 3)  --------------6----
+        // Draw FPS text
+        c.font = `${0.5 * knobRadius}px monospace`;
+        c.fillStyle = `hsla(0, 0%, 0%, ${0.5 *menuOpacity})`;
+        c.fillText('FPS', menuWidth + padding - 0.75 * knobRadius, menuHeight + padding - 0.55 * knobRadius);
+        c.fillStyle = `hsla(0, 0%, 80%, ${menuOpacity})`;
+        c.fillText('FPS', menuWidth + padding - 0.8 * knobRadius, menuHeight + padding - 0.6 * knobRadius);
+        
+        // Draw reset button (universal recycling symbol - row 2, column 3)  -------------------
         const resetButtonRadius = knobRadius * 0.5;
         const resetButtonX = 3 * knobSpacing;
         const resetButtonY = 2.05 * knobSpacing;
@@ -2954,6 +3538,588 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.restore();
     }
 
+    //  DRAW COLOR MENU  ---------------------------------------------------------------------
+    function drawColorMenu() {
+        // Only draw menu if it has some opacity
+        if (colorMenuOpacity <= 0) return;
+        
+        const knobRadius = 0.1 * cScale;
+        const colorWheelRadius = knobRadius * 1.7;
+        const sliderWidth = knobRadius * 0.6;
+        const sliderHeight = colorWheelRadius * 2;
+        const spacing = knobRadius * 0.5;
+        
+        const menuUpperLeftX = colorMenuX * cScale;
+        const menuUpperLeftY = canvas.height - colorMenuY * cScale;
+        
+        c.save();
+        c.translate(menuUpperLeftX, menuUpperLeftY);
+        
+        // Calculate menu dimensions (include space for preset buttons and knob)
+        const buttonRowHeight = spacing * 2;
+        const knobRowHeight = knobRadius * 3;
+        const menuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 1.5;
+        const menuHeight = colorWheelRadius * 2 + buttonRowHeight + knobRowHeight + knobRadius * 0.5;
+        const padding = 0.8 * knobRadius;
+        
+        const cornerRadius = 0.05 * cScale;
+        c.beginPath();
+        c.moveTo(-padding + cornerRadius, -padding);
+        c.lineTo(menuWidth + padding - cornerRadius, -padding);
+        c.quadraticCurveTo(menuWidth + padding, -padding, menuWidth + padding, -padding + cornerRadius);
+        c.lineTo(menuWidth + padding, menuHeight + padding - cornerRadius);
+        c.quadraticCurveTo(menuWidth + padding, menuHeight + padding, menuWidth + padding - cornerRadius, menuHeight + padding);
+        c.lineTo(-padding + cornerRadius, menuHeight + padding);
+        c.quadraticCurveTo(-padding, menuHeight + padding, -padding, menuHeight + padding - cornerRadius);
+        c.lineTo(-padding, -padding + cornerRadius);
+        c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
+        c.closePath();
+        
+        const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
+        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.6 * colorMenuOpacity})`);
+        menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.6 * colorMenuOpacity})`);
+        c.fillStyle = menuGradient;
+        c.fill();
+        c.strokeStyle = `hsla(210, 60%, 80%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.004 * cScale;
+        c.stroke();
+        
+        // Draw close icon in upper left corner
+        const closeIconRadius = knobRadius * 0.25;
+        const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+        const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+        
+        // Red background circle
+        c.beginPath();
+        c.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 70%, 40%, ${colorMenuOpacity})`;
+        c.fill();
+        
+        // Black X
+        c.strokeStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.05 * knobRadius;
+        c.lineCap = 'round';
+        const xSize = closeIconRadius * 0.4;
+        c.beginPath();
+        c.moveTo(closeIconX - xSize, closeIconY - xSize);
+        c.lineTo(closeIconX + xSize, closeIconY + xSize);
+        c.moveTo(closeIconX + xSize, closeIconY - xSize);
+        c.lineTo(closeIconX - xSize, closeIconY + xSize);
+        c.stroke();
+        
+        // Draw color wheel from offscreen canvas
+        const wheelCenterX = colorWheelRadius;
+        const wheelCenterY = colorWheelRadius;
+        
+        c.save();
+        c.globalAlpha = colorMenuOpacity;
+        c.drawImage(colorWheelCanvas, 
+            0, 0, colorWheelCanvas.width, colorWheelCanvas.height,
+            wheelCenterX - colorWheelRadius, wheelCenterY - colorWheelRadius,
+            colorWheelRadius * 2, colorWheelRadius * 2);
+        c.restore();
+        
+        // Draw selection indicator on color wheel
+        const angle = selectedHue * Math.PI / 180;
+        const radius = (selectedSaturation / 100) * colorWheelRadius;
+        const selectorX = wheelCenterX + radius * Math.cos(angle);
+        const selectorY = wheelCenterY + radius * Math.sin(angle);
+        
+        c.beginPath();
+        c.arc(selectorX, selectorY, knobRadius * 0.2, 0, 2 * Math.PI);
+        c.strokeStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.005 * cScale;
+        c.stroke();
+        
+        // Draw lightness slider
+        const lightnessSliderX = colorWheelRadius * 2 + spacing;
+        const lightnessSliderY = 0;
+        // Draw gradient for lightness
+        const lightnessGradient = c.createLinearGradient(lightnessSliderX, lightnessSliderY, lightnessSliderX, lightnessSliderY + sliderHeight);
+        lightnessGradient.addColorStop(0, `hsla(${selectedHue}, ${selectedSaturation}%, 100%, ${colorMenuOpacity})`);
+        lightnessGradient.addColorStop(0.5, `hsla(${selectedHue}, ${selectedSaturation}%, 50%, ${colorMenuOpacity})`);
+        lightnessGradient.addColorStop(1, `hsla(${selectedHue}, ${selectedSaturation}%, 0%, ${colorMenuOpacity})`);
+        c.fillStyle = lightnessGradient;
+        c.fillRect(lightnessSliderX, lightnessSliderY, sliderWidth, sliderHeight);
+        
+        // Draw border around slider
+        c.strokeStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity * 0.5})`;
+        c.lineWidth = 0.005 * cScale;
+        c.strokeRect(lightnessSliderX, lightnessSliderY, sliderWidth, sliderHeight);
+        
+        // Draw lightness selector
+        const lightnessIndicatorY = lightnessSliderY + (1 - selectedLightness / 100) * sliderHeight;
+        c.beginPath();
+        c.moveTo(lightnessSliderX, lightnessIndicatorY);
+        c.lineTo(lightnessSliderX + sliderWidth, lightnessIndicatorY);
+        c.strokeStyle = `hsla(0, 0%, ${selectedLightness > 90 ? 50 : 100}%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.007 * cScale;
+        c.stroke();
+        
+        // Draw spraypaint icon (aerosol can in profile) ---------
+        const spraypaintX = lightnessSliderX + sliderWidth + spacing + knobRadius * 0.85;
+        const spraypaintY = colorWheelRadius * 0.8;
+        const canRadius = knobRadius * 1.2; // 2x larger
+        
+        c.save();
+        c.translate(spraypaintX, spraypaintY);
+        
+        // Main cylinder body with gradient for 3D effect
+        const bodyGradient = c.createLinearGradient(-canRadius * 0.35, 0, canRadius * 0.35, 0);
+        const bodyColor = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity})`;
+        const darkBodyColor = `hsla(${selectedHue}, ${selectedSaturation}%, ${Math.max(0, selectedLightness - 20)}%, ${colorMenuOpacity})`;
+        const lightBodyColor = `hsla(${selectedHue}, ${selectedSaturation}%, ${Math.min(100, selectedLightness + 15)}%, ${colorMenuOpacity})`;
+        bodyGradient.addColorStop(0, darkBodyColor);
+        bodyGradient.addColorStop(0.25, lightBodyColor);
+        bodyGradient.addColorStop(0.5, bodyColor);
+        bodyGradient.addColorStop(1, darkBodyColor);
+        c.fillStyle = bodyGradient;
+        c.beginPath();
+        c.moveTo(-canRadius * 0.35, canRadius * 0.7);
+        c.lineTo(-canRadius * 0.35, -canRadius * 0.48);
+        c.quadraticCurveTo(-canRadius * 0.35, -canRadius * 0.53, -canRadius * 0.32, -canRadius * 0.55);
+        c.lineTo(canRadius * 0.32, -canRadius * 0.55);
+        c.quadraticCurveTo(canRadius * 0.35, -canRadius * 0.53, canRadius * 0.35, -canRadius * 0.48);
+        c.lineTo(canRadius * 0.35, canRadius * 0.7);
+        c.fill();
+
+        // Valve stem
+        c.fillStyle = `hsla(0, 0%, 75%, ${colorMenuOpacity})`;
+        c.fillRect(-canRadius * 0.04, -canRadius * 0.88, canRadius * 0.08, canRadius * 0.22);
+        
+        // Spray cap and paint  
+        if (spraypaintActive) {
+            // Draw spray particles inside the wedge
+            const nozzleX = canRadius * 0.15;
+            const nozzleY = -canRadius * 0.93 * 0.93;
+            const lineLength = canRadius * 1.0;
+            const angleSpread = 30 * Math.PI / 180; // 15 degrees = half of 30 degree spread
+            const particleCount = 22;
+            for (let i = 0; i < particleCount; i++) {
+                const t = (i + 1) / particleCount; // Distance from nozzle (0 to 1)
+                const distance = t * lineLength * 0.85;
+                const angle = (Math.random() - 0.5) * 2 * angleSpread; // Random angle within spread
+                const spread = Math.random() * 0.2; // Random lateral spread
+                
+                const particleX = nozzleX + distance * Math.cos(angle) + spread * (Math.random() - 0.5) * canRadius;
+                const particleY = nozzleY - distance * Math.sin(angle) + spread * (Math.random() - 0.5) * canRadius;
+                
+                const particleSize = canRadius * 0.05 * (1 - t * 0.5); // Smaller as distance increases
+                const particleAlpha = colorMenuOpacity * (1 - t * 0.7); // Fade as distance increases
+                
+                c.fillStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${particleAlpha})`;
+                c.beginPath();
+                c.arc(particleX, particleY, particleSize, 0, 2 * Math.PI);
+                c.fill();
+            }            
+            // Black spray cap
+            const capGradient = c.createLinearGradient(
+                -canRadius * 0.1, 
+                0, 
+                canRadius * 0.1, 
+                0);
+            capGradient.addColorStop(0, `hsla(0, 0%, 5%, ${colorMenuOpacity})`);
+            capGradient.addColorStop(0.3, `hsla(0, 0%, 25%, ${colorMenuOpacity})`);
+            capGradient.addColorStop(0.7, `hsla(0, 0%, 15%, ${colorMenuOpacity})`);
+            capGradient.addColorStop(1, `hsla(0, 0%, 5%, ${colorMenuOpacity})`);
+            c.fillStyle = capGradient;
+            c.fillRect(
+                -canRadius * 0.1, 
+                -canRadius * 1.025 * 0.93, 
+                canRadius * 0.2, 
+                canRadius * 0.195);
+            
+            // White spray orifice 
+            c.fillStyle = `hsla(0, 0%, 95%, ${colorMenuOpacity})`;
+            c.beginPath();
+            c.ellipse(
+                canRadius * 0.08, 
+                -canRadius * 0.93 * 0.93, 
+                canRadius * 0.025, 
+                canRadius * 0.045, 
+                0, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+        } else {
+            // button not pushed: draw cap and orifice only
+            // Black spray cap
+            const capGradient = c.createLinearGradient(
+                -canRadius * 0.1, 
+                0, 
+                canRadius * 0.1, 
+                0);
+            capGradient.addColorStop(0, `hsla(0, 0%, 5%, ${colorMenuOpacity})`);
+            capGradient.addColorStop(0.3, `hsla(0, 0%, 25%, ${colorMenuOpacity})`);
+            capGradient.addColorStop(0.7, `hsla(0, 0%, 15%, ${colorMenuOpacity})`);
+            capGradient.addColorStop(1, `hsla(0, 0%, 5%, ${colorMenuOpacity})`);
+            c.fillStyle = capGradient;
+            c.fillRect(
+                -canRadius * 0.1, 
+                -canRadius * 1.025, 
+                canRadius * 0.2, 
+                canRadius * 0.195);
+            
+            // White spray orifice 
+            c.fillStyle = `hsla(0, 0%, 95%, ${colorMenuOpacity})`;
+            c.beginPath();
+            c.ellipse(
+                canRadius * 0.08, 
+                -canRadius * 0.93, 
+                canRadius * 0.025, 
+                canRadius * 0.045, 
+                0, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+            
+        }
+
+        // Domed valve cup
+        const domeGradient = c.createRadialGradient(
+            -canRadius * 0.1, 
+            -canRadius * 0.68, 
+            0, 
+            0, 
+            -canRadius * 0.68, 
+            canRadius * 0.45);
+        domeGradient.addColorStop(0, `hsla(0, 0%, 85%, ${colorMenuOpacity})`);
+        domeGradient.addColorStop(0.3, `hsla(0, 0%, 30%, ${colorMenuOpacity})`);
+        //domeGradient.addColorStop(0.35, `hsla(0, 0%, 30%, ${colorMenuOpacity})`);
+        domeGradient.addColorStop(1, `hsla(0, 0%, 0%, ${colorMenuOpacity})`);
+        c.fillStyle = domeGradient;
+        c.beginPath();
+        c.ellipse(
+            0, 
+            -1.0 * canRadius * 0.58, 
+            canRadius * 0.2, 
+            canRadius * 0.16, 
+            0, 
+            Math.PI,
+            0);
+        c.fill();
+        
+        // Valve cup rim (metallic flange)
+        const rimGradient = c.createLinearGradient(
+            -canRadius * 0.5, 
+            0, 
+            canRadius * 0.5, 
+            0);
+        rimGradient.addColorStop(0, `hsla(0, 0%, 20%, ${colorMenuOpacity})`);
+        rimGradient.addColorStop(0.35, `hsla(0, 0%, 75%, ${colorMenuOpacity})`);
+        rimGradient.addColorStop(0.45, `hsla(0, 0%, 40%, ${colorMenuOpacity})`);
+        rimGradient.addColorStop(1, `hsla(0, 0%, 10%, ${colorMenuOpacity})`);
+        // Draw rim
+        c.fillStyle = rimGradient;
+        c.beginPath();
+        c.ellipse(
+            0, 
+            -canRadius * 0.54, 
+            canRadius * 0.31, 
+            canRadius * 0.1, 
+            0, 
+            Math.PI, 
+            0);
+        c.fill();
+
+        
+        // top cap with a line
+        c.strokeStyle = rimGradient;
+        c.beginPath();
+        c.lineWidth = 0.005 * cScale;
+        c.moveTo(-canRadius * 0.34, -canRadius * 0.53);
+        c.lineTo(canRadius * 0.34, -canRadius * 0.53);
+        c.lineCap = 'round';
+        c.lineJoin = 'round';
+        c.stroke();
+
+        // Bottom cap with a line
+        c.strokeStyle = rimGradient;
+        c.beginPath();
+        c.lineWidth = 0.005 * cScale;
+        c.moveTo(-canRadius * 0.34, canRadius * 0.7);
+        c.lineTo(canRadius * 0.34, canRadius * 0.7);
+        c.stroke();
+        
+        // Draw spray radius slider below the can
+        const spraySldrWidth = canRadius * 1.4;
+        const spraySldrHeight = knobRadius * 0.25;
+        // Bottom aligned with lightness slider bottom (lightness slider is at Y=0 to colorWheelRadius*2)
+        // Spraypaint icon is at Y=colorWheelRadius*0.8, so bottom should be at colorWheelRadius*2 - colorWheelRadius*0.8 = colorWheelRadius*1.2
+        const spraySldrBottomY = colorWheelRadius * 0.9;
+        const spraySldrX = -spraySldrWidth / 2;
+        
+        // Draw trapezoid slider background - wedge shape (shorter on left, taller on right)
+        // Left and right sides are vertical, bottom is horizontal, top angles downward from left to right
+        c.fillStyle = `hsla(210, 80%, 10%, ${0.5 * colorMenuOpacity})`;
+        c.beginPath();
+        const leftHeight = spraySldrHeight; // Shorter on left
+        const rightHeight = spraySldrHeight * 1.8; // Taller on right
+        c.moveTo(spraySldrX, spraySldrBottomY - leftHeight); // Top left
+        c.lineTo(spraySldrX + spraySldrWidth, spraySldrBottomY - rightHeight); // Top right (angled top line)
+        c.lineTo(spraySldrX + spraySldrWidth, spraySldrBottomY); // Bottom right (vertical)
+        c.lineTo(spraySldrX, spraySldrBottomY); // Bottom left (horizontal)
+        c.closePath();
+        c.fill();
+        c.strokeStyle = `hsla(210, 60%, 80%, ${colorMenuOpacity * 0.3})`;
+        c.lineWidth = 0.004 * cScale;
+        c.stroke();
+        
+        // Calculate slider position (0.05 to 0.5 range)
+        const sliderValue = (spraypaintRadius - 0.05) / (0.5 - 0.05);
+        const sliderKnobX = spraySldrX + sliderValue * spraySldrWidth;
+        // Knob Y should follow the angled top line
+        const knobHeightAtPos = leftHeight - (leftHeight - rightHeight) * sliderValue;
+        const sliderKnobRadius = knobRadius * 0.25;
+        const sliderKnobY = spraySldrBottomY - knobHeightAtPos / 2;
+        
+        // Draw slider knob
+        c.beginPath();
+        c.arc(sliderKnobX, sliderKnobY, sliderKnobRadius, 0, 2 * Math.PI);
+        const sliderKnobGradient = c.createRadialGradient(
+            sliderKnobX - sliderKnobRadius * 0.3,
+            sliderKnobY - sliderKnobRadius * 0.3,
+            0,
+            sliderKnobX,
+            sliderKnobY,
+            sliderKnobRadius
+        );
+        sliderKnobGradient.addColorStop(0, `hsla(210, 60%, 80%, ${colorMenuOpacity})`);
+        sliderKnobGradient.addColorStop(1, `hsla(210, 60%, 50%, ${colorMenuOpacity})`);
+        c.fillStyle = sliderKnobGradient;
+        c.fill();
+        c.strokeStyle = `hsla(210, 60%, 90%, ${colorMenuOpacity})`; 
+        c.lineWidth = 0.005 * cScale;
+        c.stroke();
+        
+        // Draw value label
+        c.font = `${0.28 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+        c.textAlign = 'center';
+        c.textBaseline = 'top';
+        c.fillText('Spray', 0, spraySldrBottomY + 0.27 * knobRadius);
+        
+        c.restore();
+        
+        // Draw three color preset buttons below the color wheel ---------
+        const buttonRadius = knobRadius * 0.35;
+        const buttonY = colorWheelRadius * 2 + spacing * 1.5;
+        const buttonSpacing = knobRadius * 1.2;
+        // Position fourth button centered below lightness slider
+        const lightnessSliderCenterX = lightnessSliderX + sliderWidth / 2;
+        const buttonStartX = lightnessSliderCenterX - buttonSpacing * 3;
+        
+        // Black button
+        c.beginPath();
+        c.arc(buttonStartX, buttonY, buttonRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(210, 60%, 80%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.01 * cScale;
+        c.stroke();
+        
+        // Gray button
+        c.beginPath();
+        c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 60%, ${colorMenuOpacity})`;
+        c.fill();
+        
+        c.stroke();
+        
+        // White button
+        c.beginPath();
+        c.arc(buttonStartX + buttonSpacing * 2, buttonY, buttonRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 100%, ${colorMenuOpacity})`;
+        c.fill();
+        
+        c.stroke();
+        
+        // Selected color button
+        c.beginPath();
+        c.arc(buttonStartX + buttonSpacing * 3, buttonY, buttonRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity})`;
+        c.fill();
+        
+        c.stroke();
+        
+        // Draw hueSensitivity knob
+        const hueTickerTargetX = lightnessSliderX + sliderWidth / 2; // Center below lightness slider
+        const hueTickerOriginalX = colorWheelRadius + knobRadius * 2.4;
+        const knobOffset = hueTickerTargetX - hueTickerOriginalX; // Calculate offset
+        const hueSensitivityKnobX = knobRadius + knobOffset; // Move by same offset
+        const hueSensitivityKnobY = colorWheelRadius * 2 + buttonRowHeight + knobRadius * 1.5 + knobRadius / 3;
+        const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - 1.6 * Math.PI);
+        const fullMeterSweep = 1.6 * Math.PI;
+        
+        // Draw background circle
+        c.beginPath();
+        c.arc(hueSensitivityKnobX, hueSensitivityKnobY, 1.05 * knobRadius, 0, 2 * Math.PI, false);
+        c.fillStyle = `hsla(210, 80%, 10%, ${0.3 * colorMenuOpacity})`;
+        c.fill();
+        
+        // Draw arc meter
+        c.beginPath();
+        c.arc(hueSensitivityKnobX, hueSensitivityKnobY, knobRadius, meterStart, meterStart + fullMeterSweep, false);
+        const gradient = c.createLinearGradient(
+            hueSensitivityKnobX + Math.cos(meterStart) * knobRadius,
+            hueSensitivityKnobY + Math.sin(meterStart) * knobRadius,
+            hueSensitivityKnobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+            hueSensitivityKnobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+        );
+        gradient.addColorStop(0, `hsla(190, 40%, 50%, ${colorMenuOpacity})`);
+        gradient.addColorStop(1, `hsla(210, 60%, 60%, ${colorMenuOpacity})`);
+        c.strokeStyle = gradient;
+        c.lineWidth = 0.4 * knobRadius;
+        c.stroke();
+        
+        // Draw needle indicator
+        const normalizedValue = (boidProps.hueSensitivity - 0) / (360 - 0);
+        const needleAngle = meterStart + normalizedValue * fullMeterSweep;
+        const indicatorLength = knobRadius * 1.0;
+        const indicatorX = hueSensitivityKnobX + Math.cos(needleAngle) * indicatorLength;
+        const indicatorY = hueSensitivityKnobY + Math.sin(needleAngle) * indicatorLength;
+        
+        // Draw needle shadow
+        c.beginPath();
+        c.moveTo(hueSensitivityKnobX, hueSensitivityKnobY);
+        c.lineTo(indicatorX, indicatorY);
+        c.strokeStyle = `hsla(120, 80%, 0%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.25 * knobRadius;
+        c.stroke();
+        
+        // Draw needle indicator circle shadow
+        c.beginPath();
+        c.arc(indicatorX, indicatorY, 0.21 * knobRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(120, 80%, 0%, ${colorMenuOpacity})`;
+        c.fill();
+        
+        // Draw needle
+        c.beginPath();
+        c.moveTo(hueSensitivityKnobX, hueSensitivityKnobY);
+        c.lineTo(indicatorX, indicatorY);
+        c.strokeStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.2 * knobRadius;
+        c.shadowColor = `hsla(0, 0%, 0%, ${0.9 * colorMenuOpacity})`;
+        c.shadowBlur = 0.1 * knobRadius;
+        c.stroke();
+        c.closePath();
+        c.shadowBlur = 0;
+        
+        // Draw needle indicator circle
+        c.beginPath();
+        c.arc(indicatorX, indicatorY, 0.18 * knobRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(120, 0%, 90%, ${colorMenuOpacity})`;
+        c.fill();
+        
+        // Draw value display (divided by 3.6 to show 0-100 range)
+        const displayValue = (boidProps.hueSensitivity / 3.6).toFixed(1);
+        c.font = `${0.3 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(160, 80%, 50%, ${colorMenuOpacity})`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText(displayValue, hueSensitivityKnobX, hueSensitivityKnobY + 0.6 * knobRadius);
+        
+        // Draw label
+        c.font = `${0.29 * knobRadius}px verdana`;
+        c.strokeStyle = `hsla(210, 80%, 0%, ${0.6 * colorMenuOpacity})`;
+        c.lineWidth = 0.03 * knobRadius;
+        c.lineJoin = 'round';
+        c.strokeText('Speed', 0.04 * knobRadius + hueSensitivityKnobX, 0.04 * knobRadius + (hueSensitivityKnobY + 1.35 * knobRadius));
+        c.strokeText('Sensitivity', 0.04 * knobRadius + hueSensitivityKnobX, 0.04 * knobRadius + (hueSensitivityKnobY + 1.7 * knobRadius));
+        c.fillStyle = `hsla(210, 80%, 95%, ${colorMenuOpacity})`;
+        c.fillText('Speed', hueSensitivityKnobX, hueSensitivityKnobY + 1.35 * knobRadius);
+        c.fillText('Sensitivity', hueSensitivityKnobX, hueSensitivityKnobY + 1.7 * knobRadius);
+        
+        // Draw hueTicker knob (to the right of hueSensitivity knob)
+        const hueTickerKnobX = hueTickerTargetX; // Centered below lightness slider
+        const hueTickerKnobY = hueSensitivityKnobY;
+        
+        // Draw background circle
+        c.beginPath();
+        c.arc(hueTickerKnobX, hueTickerKnobY, 1.05 * knobRadius, 0, 2 * Math.PI, false);
+        c.fillStyle = `hsla(210, 80%, 10%, ${0.3 * colorMenuOpacity})`;
+        c.fill();
+        
+        // Draw arc meter
+        c.beginPath();
+        c.arc(hueTickerKnobX, hueTickerKnobY, knobRadius, meterStart, meterStart + fullMeterSweep, false);
+        const tickerGradient = c.createLinearGradient(
+            hueTickerKnobX + Math.cos(meterStart) * knobRadius,
+            hueTickerKnobY + Math.sin(meterStart) * knobRadius,
+            hueTickerKnobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+            hueTickerKnobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+        );
+        tickerGradient.addColorStop(0, `hsla(190, 40%, 50%, ${colorMenuOpacity})`);
+        tickerGradient.addColorStop(1, `hsla(210, 60%, 60%, ${colorMenuOpacity})`);
+        c.strokeStyle = tickerGradient;
+        c.lineWidth = 0.4 * knobRadius;
+        c.stroke();
+        
+        // Convert hueTicker to normalized value using logarithmic scale
+        // hueTicker range: 0.01 to 10.0 (log scale)
+        const tickerLogMin = Math.log(0.01);
+        const tickerLogMax = Math.log(10.0);
+        const tickerLogValue = Math.log(Math.max(0.01, Math.min(10.0, boidProps.hueTicker)));
+        const tickerNormalized = (tickerLogValue - tickerLogMin) / (tickerLogMax - tickerLogMin);
+        const tickerNeedleAngle = meterStart + tickerNormalized * fullMeterSweep;
+        const tickerIndicatorLength = knobRadius * 1.0;
+        const tickerIndicatorX = hueTickerKnobX + Math.cos(tickerNeedleAngle) * tickerIndicatorLength;
+        const tickerIndicatorY = hueTickerKnobY + Math.sin(tickerNeedleAngle) * tickerIndicatorLength;
+        
+        // Draw needle shadow
+        c.beginPath();
+        c.moveTo(hueTickerKnobX, hueTickerKnobY);
+        c.lineTo(tickerIndicatorX, tickerIndicatorY);
+        c.strokeStyle = `hsla(120, 80%, 0%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.25 * knobRadius;
+        c.stroke();
+        
+        // Draw needle indicator circle shadow
+        c.beginPath();
+        c.arc(tickerIndicatorX, tickerIndicatorY, 0.21 * knobRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(120, 80%, 0%, ${colorMenuOpacity})`;
+        c.fill();
+        
+        // Draw needle
+        c.beginPath();
+        c.moveTo(hueTickerKnobX, hueTickerKnobY);
+        c.lineTo(tickerIndicatorX, tickerIndicatorY);
+        c.strokeStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.2 * knobRadius;
+        c.shadowColor = `hsla(0, 0%, 0%, ${0.9 * colorMenuOpacity})`;
+        c.shadowBlur = 0.1 * knobRadius;
+        c.stroke();
+        c.closePath();
+        c.shadowBlur = 0;
+        
+        // Draw needle indicator circle
+        c.beginPath();
+        c.arc(tickerIndicatorX, tickerIndicatorY, 0.18 * knobRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(120, 0%, 90%, ${colorMenuOpacity})`;
+        c.fill();
+        
+        // Draw value display
+        const tickerDisplayValue = boidProps.hueTicker.toFixed(2);
+        c.font = `${0.3 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(160, 80%, 50%, ${colorMenuOpacity})`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText(tickerDisplayValue, hueTickerKnobX, hueTickerKnobY + 0.6 * knobRadius);
+        
+        // Draw label
+        c.font = `${0.29 * knobRadius}px verdana`;
+        c.strokeStyle = `hsla(210, 80%, 0%, ${0.6 * colorMenuOpacity})`;
+        c.lineWidth = 0.03 * knobRadius;
+        c.lineJoin = 'round';
+        c.strokeText('Color', 0.04 * knobRadius + hueTickerKnobX, 0.04 * knobRadius + (hueTickerKnobY + 1.35 * knobRadius));
+        c.strokeText('Cycling', 0.04 * knobRadius + hueTickerKnobX, 0.04 * knobRadius + (hueTickerKnobY + 1.7 * knobRadius));
+        c.fillStyle = `hsla(210, 80%, 95%, ${colorMenuOpacity})`;
+        c.fillText('Color', hueTickerKnobX, hueTickerKnobY + 1.35 * knobRadius);
+        c.fillText('Cycling', hueTickerKnobX, hueTickerKnobY + 1.7 * knobRadius);
+        
+        c.restore();
+    }
+
     //  MAKE BOIDS  ---------------------------------------------------------------------
     function resetParameters() {
         // Reset all parameters to defaults
@@ -2975,6 +4141,38 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Update all boid radii
         for (let i = 0; i < Boids.length; i++) {
             Boids[i].radius = boidRadius;
+        }
+        
+        // Reset boid count to the final count established during startup
+        if (finalBoidCount > 0) {
+            const currentCount = Boids.length;
+            
+            if (currentCount > finalBoidCount) {
+                // Remove excess boids
+                const removeCount = currentCount - finalBoidCount;
+                cullBoids(removeCount);
+            } else if (currentCount < finalBoidCount) {
+                // Add boids to reach final count
+                const addCount = finalBoidCount - currentCount;
+                const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
+                
+                for (let i = 0; i < addCount; i++) {
+                    const ang = Math.random() * 2 * Math.PI;
+                    const pos = new Vector2(
+                        0.5 * simWidth + Math.cos(ang) * spawnRadius,
+                        0.5 * simHeight + Math.sin(ang) * spawnRadius);
+                    const vel = new Vector2(0, 0);
+                    const hue = 0;
+                    
+                    const newBoid = new BOID(pos, vel, hue, false, false);
+                    newBoid.arrow = selectedBoidType === 0;
+                    newBoid.circle = selectedBoidType === 1;
+                    newBoid.airfoil = selectedBoidType === 2;
+                    
+                    // Insert before the last 2 special boids
+                    Boids.splice(Boids.length - 2, 0, newBoid);
+                }
+            }
         }
     }
     
@@ -2998,6 +4196,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             blackBoidFlashInterval: 5.0, // Flash every 5 seconds
             blackBoidFlashTimer: 0,
             currentFlashCycle: 0, // Track which flash cycle we're in
+            hueSensitivity: 40, // How much the hue changes based on speed
+            hueTicker: 0.01, // How fast the hue cycles
         };
 
         // (no trails for phone?)  ---------
@@ -3018,7 +4218,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 0.5 * simWidth + Math.cos(ang) * spawnRadius,
                 0.5 * simHeight + Math.sin(ang) * spawnRadius);
             vel = new Vector2(0, 0);
-            hue = 320;
+            hue = 0;
             if (i == 0) {
                 // White boid
                 Boids.push(new BOID(pos, vel, hue, true, false));
@@ -3160,14 +4360,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const nearbyBoids = SpatialGrid.getNearby(boid, boidProps.visualRange);
         const visualRangeSq = boidProps.visualRange * boidProps.visualRange;
         const minDistSq = boidProps.minDistance * boidProps.minDistance;
+        const avoidFactor = boidProps.avoidFactor;
+        const minDistance = boidProps.minDistance;
         
-        for (let otherBoid of nearbyBoids) {
+        // Use traditional for loop for better performance
+        for (let i = 0; i < nearbyBoids.length; i++) {
+            const otherBoid = nearbyBoids[i];
             if (otherBoid !== boid) {
                 const dx = boid.pos.x - otherBoid.pos.x;
                 const dy = boid.pos.y - otherBoid.pos.y;
                 const distSq = dx * dx + dy * dy;
                 
-                if (distSq < visualRangeSq) {
+                if (distSq < visualRangeSq && distSq > 0) {
                     // RULE #2 - ALIGNMENT: accumulate velocities
                     avgVelX += otherBoid.vel.x;
                     avgVelY += otherBoid.vel.y;
@@ -3176,10 +4380,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     centerX += otherBoid.pos.x;
                     centerY += otherBoid.pos.y;
                     
-                    if (distSq < minDistSq && distSq > 0) {
-                        // RULE #1 - SEPARATION: only compute sqrt when needed
+                    if (distSq < minDistSq) {
+                        // RULE #1 - SEPARATION: keep sqrt for correct physics
                         const dist = Math.sqrt(distSq);
-                        const strength = boidProps.avoidFactor * (boidProps.minDistance - dist) / dist;
+                        const strength = avoidFactor * (minDistance - dist) / dist;
                         separationX += dx * strength;
                         separationY += dy * strength;
                     }
@@ -3195,14 +4399,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         if (neighborCount > 0) {
             // RULE #2 - ALIGNMENT
-            avgVelX /= neighborCount;
-            avgVelY /= neighborCount;
+            const invNeighborCount = 1.0 / neighborCount;
+            avgVelX *= invNeighborCount;
+            avgVelY *= invNeighborCount;
             boid.vel.x += (avgVelX - boid.vel.x) * boidProps.matchingFactor * deltaT;
             boid.vel.y += (avgVelY - boid.vel.y) * boidProps.matchingFactor * deltaT;
             
             // RULE #3 - COHESION
-            centerX /= neighborCount;
-            centerY /= neighborCount;
+            centerX *= invNeighborCount;
+            centerY *= invNeighborCount;
             boid.vel.x += (centerX - boid.pos.x) * boidProps.centeringFactor * deltaT;
             boid.vel.y += (centerY - boid.pos.y) * boidProps.centeringFactor * deltaT;
         }
@@ -3242,6 +4447,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             menuOpacity = Math.min(1, menuOpacity + menuFadeSpeed * deltaT);
         } else if (!menuVisible && menuOpacity > 0) {
             menuOpacity = Math.max(0, menuOpacity - menuFadeSpeed * deltaT);
+        }
+        
+        // Update color menu opacity for fade in/out
+        if (colorMenuVisible && colorMenuOpacity < 1) {
+            colorMenuOpacity = Math.min(1, colorMenuOpacity + menuFadeSpeed * deltaT);
+        } else if (!colorMenuVisible && colorMenuOpacity > 0) {
+            colorMenuOpacity = Math.max(0, colorMenuOpacity - menuFadeSpeed * deltaT);
+        }
+        
+        // Update spray particles
+        for (let i = sprayParticles.length - 1; i >= 0; i--) {
+            if (!sprayParticles[i].update(deltaT)) {
+                sprayParticles.splice(i, 1); // Remove dead particles
+            }
+        }
+        
+        // Update spray particles
+        for (let i = sprayParticles.length - 1; i >= 0; i--) {
+            if (!sprayParticles[i].update(deltaT)) {
+                sprayParticles.splice(i, 1); // Remove dead particles
+            }
         }
         
         // Draw hot air balloon 
@@ -3445,8 +4671,48 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 makeItRain(cloud);
             }
         }
+        
+        // Draw spray particles
+        for (let particle of sprayParticles) {
+            particle.draw();
+        }
 
         drawSimMenu()
+        
+        drawColorMenu();
+        
+        // Draw spraypaint cursor
+        if (spraypaintActive) {
+            const cursorX = mouseX * cScale;
+            const cursorY = canvas.height - mouseY * cScale;
+            const canSize = 0.04 * cScale;
+            
+            // Draw spray radius indicator
+            c.beginPath();
+            c.arc(cursorX, cursorY, spraypaintRadius * cScale, 0, 2 * Math.PI);
+            c.strokeStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, 0.5)`;
+            c.lineWidth = 2;
+            c.stroke();
+            
+            /*
+            // Draw spraypaint can cursor
+            c.fillStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, 0.9)`;
+            c.fillRect(cursorX - canSize * 0.4, cursorY - canSize * 0.6, canSize * 0.8, canSize * 1.2);
+            
+            c.fillStyle = `hsla(0, 0%, 20%, 0.9)`;
+            c.fillRect(cursorX - canSize * 0.25, cursorY - canSize * 0.8, canSize * 0.5, canSize * 0.3);
+            
+            c.fillStyle = `hsla(0, 0%, 10%, 0.9)`;
+            c.beginPath();
+            c.arc(cursorX, cursorY - canSize * 0.65, canSize * 0.15, 0, 2 * Math.PI);
+            c.fill();
+            
+            // Border
+            c.strokeStyle = `hsla(0, 0%, 0%, 0.8)`;
+            c.lineWidth = 1;
+            c.strokeRect(cursorX - canSize * 0.4, cursorY - canSize * 0.6, canSize * 0.8, canSize * 1.2);
+            */
+        }
 
         drawStats();
     }
@@ -3476,6 +4742,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let boidCountLocked = false; // Track if boid count is locked
     let fadeOutDuration = 5.0; // Fade out over 5 seconds
     let fadeOutTimer = 0; // Track fade out progress
+    let finalBoidCount = 0; // Store the final boid count after startup completes
 
     function updateFPS() {
         const currentTime = performance.now();
@@ -3559,6 +4826,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             boidCountLocked = true;
             isRampingUp = false;
             fadeOutTimer = 0; // Start fade out
+            finalBoidCount = Boids.length; // Store the final boid count
         }
         
         // Update fade out timer if locked
@@ -3665,7 +4933,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                             0.5 * simWidth + Math.cos(ang) * spawnRadius,
                             0.5 * simHeight + Math.sin(ang) * spawnRadius);
                         const vel = new Vector2(0, 0);
-                        const hue = 320;
+                        const hue = 0;
                         
                         // Create new boid and set type based on selectedBoidType
                         const newBoid = new BOID(pos, vel, hue, false, false);
