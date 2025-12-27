@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.26</title>
+    <title>Boids 1.28</title>
     <style>
         html, body {
             margin: 0;
@@ -21,18 +21,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             overflow: hidden;
         }
         body {
-            background-image: url('sky.png');
             background-color: black;
-            background-size: cover;
-            background-position: bottom;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
+        }
+        #skyCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        #myCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
         }
     </style>
     </head>
 <body>
+<canvas id="skyCanvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%">
+</canvas>
 <canvas id="myCanvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%">
 </canvas>
+<script src="sky_integration.js"></script>
 <script>
 
     // Setup canvas and handle window resizing  ------------------
@@ -65,12 +78,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let menuOpacity = 0;
     let menuFadeSpeed = 3.0; // Fade speed (0 to 1 per second)
     
+    // Sky menu visibility
+    let skyMenuVisible = false;
+    let skyMenuOpacity = 0;
+    
+    // Menu z-order (higher number = on top)
+    let menuZOrder = 2;
+    let colorMenuZOrder = 1;
+    let skyMenuZOrder = 0;
+    
     // Menu position
     let menuX = 0.1; // World coordinates
     let menuY = simHeight - 0.4; // World coordinates
     
+    // Sky menu position
+    let skyMenuX = 0.6; // World coordinates
+    let skyMenuY = simHeight - 0.3; // World coordinates
+    
     // Menu knob dragging state
     let draggedKnob = null; // Index of the knob being dragged
+    let draggedSkyKnob = null; // Index of the sky knob being dragged
     let dragStartMouseX = 0;
     let dragStartMouseY = 0;
     let dragStartValue = 0;
@@ -84,7 +111,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     
     // Boid type selection (0=arrows, 1=circles, 2=airfoils)
     let selectedBoidType = 0;
-    let tailColorMode = 0; // 0 = black, 1 = white, 2 = selected hue
+    let tailColorMode = 0; // 0 = black, 1 = white, 2 = selected hue, 3 = hue2
 
     // Color menu visibility state
     let colorMenuVisible = false;
@@ -101,6 +128,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let colorMenuStartX = 0;
     let colorMenuStartY = 0;
     
+    // Sky menu dragging state
+    let isDraggingSkyMenu = false;
+    let skyMenuDragStartX = 0;
+    let skyMenuDragStartY = 0;
+    let skyMenuStartX = 0;
+    let skyMenuStartY = 0;
+    
     // Spraypaint tool state
     let spraypaintActive = false;
     let spraypaintRadius = 0.15; // Radius in world units
@@ -109,6 +143,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let selectedLightness = 50;
     let isSpraying = false;
     let sprayParticles = []; // Array to hold spray effect particles
+    let segregationMode = 0; // 0 = normal, 1 = segregate (all rules only apply to same hue), 2 = segregate2 (rule 1 all, rules 2&3 same hue)
+    
+    // Sky hand mode state
+    let skyHandActive = false;
+    let isDraggingSky = false;
+    let skyDragStartX = 0;
+    let skyDragStartY = 0;
+    let skyCameraPitchStart = 0;
+    let skyCameraYawStart = 0;
     
     // Offscreen canvas for color wheel
     let colorWheelCanvas = null;
@@ -177,13 +220,34 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const dy = mouseY - ellipsisWorldY;
         if (dx * dx + dy * dy < ellipsisRadius * ellipsisRadius) {
             menuVisible = !menuVisible;
-            // Also toggle color menu
+            // Also toggle color menu and sky menu
             colorMenuVisible = !colorMenuVisible;
+            skyMenuVisible = !skyMenuVisible;
             return;
         }
         
-        // Check color menu interactions (independent of sim menu)
-        if (colorMenuVisible && colorMenuOpacity > 0.5) {
+        // Check menus in reverse z-order (highest priority first)
+        const menuChecks = [
+            {check: checkSkyMenuClick, z: skyMenuZOrder, name: 'sky'},
+            {check: checkColorMenuClick, z: colorMenuZOrder, name: 'color'},
+            {check: checkSimMenuClick, z: menuZOrder, name: 'sim'}
+        ];
+        menuChecks.sort((a, b) => b.z - a.z); // Sort highest to lowest
+        
+        for (let menuCheck of menuChecks) {
+            if (menuCheck.check()) {
+                // Bring this menu to front
+                const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder);
+                if (menuCheck.name === 'sim') menuZOrder = maxZ + 1;
+                else if (menuCheck.name === 'color') colorMenuZOrder = maxZ + 1;
+                else if (menuCheck.name === 'sky') skyMenuZOrder = maxZ + 1;
+                return; // Stop checking other menus
+            }
+        }
+        
+        // Helper function for color menu clicks
+        function checkColorMenuClick() {
+            if (!colorMenuVisible || colorMenuOpacity <= 0.5) return false;
             const knobRadius = 0.1 * cScale;
             const colorWheelRadius = knobRadius * 1.7;
             const sliderWidth = knobRadius * 0.6;
@@ -209,7 +273,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             if (ccdx * ccdx + ccdy * ccdy < closeIconRadius * closeIconRadius) {
                 colorMenuVisible = false;
-                return;
+                return true;
             }
             
             // Check color wheel click
@@ -224,7 +288,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 // Calculate hue and saturation
                 selectedHue = (Math.atan2(wheelDy, wheelDx) * 180 / Math.PI + 360) % 360;
                 selectedSaturation = Math.min(100, (wheelDist / colorWheelRadius) * 100);
-                return;
+                return true;
             }
             
             // Check lightness slider click
@@ -237,7 +301,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 // Calculate lightness
                 const relativeY = clickCanvasY - sliderY;
                 selectedLightness = Math.max(0, Math.min(100, 100 - (relativeY / sliderHeight) * 100));
-                return;
+                return true;
             }
             
             // Check spraypaint icon click
@@ -248,7 +312,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (clickCanvasX >= spraypaintX - canRadius * 0.45 && clickCanvasX <= spraypaintX + canRadius * 0.45 &&
                 clickCanvasY >= spraypaintY - canRadius * 0.95 && clickCanvasY <= spraypaintY + canRadius * 0.65) {
                 spraypaintActive = !spraypaintActive;
-                return;
+                return true;
             }
             
             // Check preset color buttons
@@ -264,12 +328,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const blackDy = clickCanvasY - buttonY;
             if (blackDx * blackDx + blackDy * blackDy < buttonRadius * buttonRadius) {
                 for (let i = 0; i < Boids.length; i++) {
+                    Boids[i].hue = 0;
                     Boids[i].saturation = 0;
                     Boids[i].lightness = 0;
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
                 }
-                return;
+                return true;
             }
             
             // Gray button
@@ -277,12 +342,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const grayDy = clickCanvasY - buttonY;
             if (grayDx * grayDx + grayDy * grayDy < buttonRadius * buttonRadius) {
                 for (let i = 0; i < Boids.length; i++) {
+                    Boids[i].hue = 180;
                     Boids[i].saturation = 0;
                     Boids[i].lightness = 60;
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
                 }
-                return;
+                return true;
             }
             
             // White button
@@ -290,12 +356,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const whiteDy = clickCanvasY - buttonY;
             if (whiteDx * whiteDx + whiteDy * whiteDy < buttonRadius * buttonRadius) {
                 for (let i = 0; i < Boids.length; i++) {
+                    Boids[i].hue = 360;
                     Boids[i].saturation = 0;
                     Boids[i].lightness = 100;
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
                 }
-                return;
+                return true;
             }
             
             // Selected color button
@@ -310,7 +377,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
                 }
-                return;
+                return true;
+            }
+            
+            // Check segregation radio buttons (below knobs)
+            const hueTickerY = colorMenuOriginY + colorWheelRadius * 2 + spacing * 2 + knobRadius * 1.5 + knobRadius / 3;
+            const segRadioRadius = knobRadius * 0.25;
+            const segButtonY = hueTickerY + knobRadius * 2.6;
+            const segButtonSpacing = knobRadius * 1.3;
+            const segButtonStartX = colorMenuOriginX + colorWheelRadius - segButtonSpacing * 0.5;
+            const segModeMap = [0, 2, 1]; // Map visual position to segregationMode value
+            
+            for (let i = 0; i < 3; i++) {
+                const segBtnX = segButtonStartX + i * segButtonSpacing;
+                const sdx = clickCanvasX - segBtnX;
+                const sdy = clickCanvasY - segButtonY;
+                if (sdx * sdx + sdy * sdy < segRadioRadius * segRadioRadius) {
+                    segregationMode = segModeMap[i];
+                    return true;
+                }
             }
             
             // Check spray radius slider
@@ -335,7 +420,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 spraypaintRadius = 0.05 + clickRatio * (0.5 - 0.05);
                 spraypaintRadius = Math.max(0.05, Math.min(0.5, spraypaintRadius)); // Clamp
                 isDraggingSpraySlider = true;
-                return;
+                return true;
             }
             
             // Check hueSensitivity knob
@@ -352,7 +437,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 dragStartMouseX = mouseX;
                 dragStartMouseY = mouseY;
                 hueSensitivityDragStart = boidProps.hueSensitivity;
-                return;
+                return true;
             }
             
             // Check hueTicker knob
@@ -365,7 +450,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 dragStartMouseX = mouseX;
                 dragStartMouseY = mouseY;
                 hueTickerDragStart = boidProps.hueTicker;
-                return;
+                return true;
             }
             
             // Check if color menu background was clicked (for dragging entire menu)
@@ -376,19 +461,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 colorMenuDragStartY = mouseY;
                 colorMenuStartX = colorMenuX;
                 colorMenuStartY = colorMenuY;
-                return;
+                return true;
             }
+            
+            return false; // Click was not on color menu
         }
         
-        // Handle spraypaint tool
-        if (spraypaintActive && e.button === 0) {
-            isSpraying = true;
-        }
-        
-        // Check if a menu knob was clicked
-        if (menuVisible && menuOpacity > 0.5) {
+        // Helper function for sim menu clicks
+        function checkSimMenuClick() {
+            if (!menuVisible || menuOpacity <= 0.5) return false;
             const knobRadius = 0.1 * cScale;
             const knobSpacing = knobRadius * 3;
+            const menuTopMargin = 0; // Must match the margin in drawSimMenu
             const menuWidth = knobSpacing * 3;
             const menuHeight = knobSpacing * 2 + knobRadius * 1.0;
             const padding = 1.7 * knobRadius;
@@ -410,7 +494,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
                 menuVisible = false;
-                return;
+                return true;
             }
             
             // Check individual knobs first
@@ -418,7 +502,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 const row = Math.floor(knob / 4);
                 const col = knob % 4;
                 const knobCanvasX = menuOriginX + col * knobSpacing;
-                const knobCanvasY = menuOriginY + row * knobSpacing;
+                const knobCanvasY = menuOriginY + row * knobSpacing + menuTopMargin;
                 
                 // Check in canvas space for accurate hit detection
                 const kdx = clickCanvasX - knobCanvasX;
@@ -434,7 +518,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         boidProps.minDistance, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
                         boidProps.turnFactor, boidProps.tailLength];
                     dragStartValue = menuItems[knob];
-                    return;
+                    return true;
                 }
             }
             
@@ -443,39 +527,39 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const tailKnobCol = 1;
             const tailKnobRow = 2;
             
-            for (let i = 0; i < 3; i++) {
-                const buttonX = menuOriginX + tailKnobCol * knobSpacing + (i - 1) * knobRadius * 1.0;
-                const buttonY = menuOriginY + tailKnobRow * knobSpacing + knobRadius * 2.2;
+            for (let i = 0; i < 4; i++) {
+                const buttonX = menuOriginX + tailKnobCol * knobSpacing + (i - 1.5) * knobRadius * 1.0;
+                const buttonY = menuOriginY + tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin;
                 const rdx = clickCanvasX - buttonX;
                 const rdy = clickCanvasY - buttonY;
                 
                 if (rdx * rdx + rdy * rdy < tailColorRadioRadius * tailColorRadioRadius) {
                     tailColorMode = i;
-                    return;
+                    return true;
                 }
             }
             
             // Check radio buttons (vertically stacked in column 2)
-            const radioButtonRadius = knobRadius * 0.3;
+            const radioButtonRadius = knobRadius * 0.25;
             const radioCol = 2;
             
             // Check reset button (round button in blank area - row 2, column 3)
             const resetButtonRadius = knobRadius * 0.5;
             const resetButtonX = menuOriginX + 3 * knobSpacing;
-            const resetButtonY = menuOriginY + 2 * knobSpacing;
+            const resetButtonY = menuOriginY + 2 * knobSpacing + menuTopMargin;
             const rdx = clickCanvasX - resetButtonX;
             const rdy = clickCanvasY - resetButtonY;
             
             if (rdx * rdx + rdy * rdy < resetButtonRadius * resetButtonRadius) {
                 // Reset all parameters to defaults
                 resetParameters();
-                return;
+                return true;
             }
             
             // Three radio buttons vertically stacked
             for (let i = 0; i < 4; i++) {
                 const buttonX = menuOriginX + radioCol * knobSpacing - 0.5 * knobRadius;
-                const buttonY = menuOriginY + (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius);
+                const buttonY = menuOriginY + (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius) + menuTopMargin;
                 const rdx = clickCanvasX - buttonX;
                 const rdy = clickCanvasY - buttonY;
                 
@@ -491,7 +575,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     } else if (i === 3) {
                         doNoneBoids();
                     }
-                    return;
+                    return true;
                 }
             }
             
@@ -506,8 +590,136 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 menuDragStartY = mouseY;
                 menuStartX = menuX;
                 menuStartY = menuY;
-                return;
+                return true;
             }
+            
+            return false; // Click was not on sim menu
+        }
+        
+        // Helper function for sky menu clicks
+        function checkSkyMenuClick() {
+            if (!skyMenuVisible || skyMenuOpacity <= 0.5 || !window.skyRenderer) return false;
+            const knobRadius = 0.1 * cScale;
+            const knobSpacing = knobRadius * 3;
+            const menuWidth = knobSpacing * 3;
+            const menuHeight = knobSpacing * 1 + knobRadius * 2.5;
+            const padding = 1.7 * knobRadius;
+            const menuUpperLeftX = skyMenuX * cScale;
+            const menuUpperLeftY = (canvas.height - skyMenuY * cScale);
+            const menuOriginX = menuUpperLeftX + knobSpacing;
+            const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+            
+            const clickCanvasX = mouseX * cScale;
+            const clickCanvasY = canvas.height - mouseY * cScale;
+            
+            // Check close icon
+            const closeIconRadius = knobRadius * 0.25;
+            const closeIconX = menuOriginX - padding + closeIconRadius + 0.2 * knobRadius;
+            const closeIconY = menuOriginY - padding + closeIconRadius + 0.2 * knobRadius;
+            const cdx = clickCanvasX - closeIconX;
+            const cdy = clickCanvasY - closeIconY;
+            
+            if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+                skyMenuVisible = false;
+                return true;
+            }
+            
+            // Check individual knobs
+            for (let knob = 0; knob < 8; knob++) {
+                const row = Math.floor(knob / 4);
+                const col = knob % 4;
+                const knobCanvasX = menuOriginX + col * knobSpacing;
+                const knobCanvasY = menuOriginY + row * knobSpacing;
+                
+                const kdx = clickCanvasX - knobCanvasX;
+                const kdy = clickCanvasY - knobCanvasY;
+                if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
+                    draggedSkyKnob = knob;
+                    dragStartMouseX = mouseX;
+                    dragStartMouseY = mouseY;
+                    
+                    // Store the starting value
+                    const skyCtrl = window.skyRenderer.effectController;
+                    const menuItems = [
+                        skyCtrl.turbidity,
+                        skyCtrl.rayleigh,
+                        skyCtrl.mieCoefficient,
+                        skyCtrl.mieDirectionalG,
+                        skyCtrl.azimuth,
+                        skyCtrl.rotationSpeed,
+                        skyCtrl.elevation,
+                        skyCtrl.exposure
+                    ];
+                    dragStartValue = menuItems[knob];
+                    return true;
+                }
+            }
+            
+            // Check toggle buttons
+            const buttonY = knobSpacing * 2 - knobRadius * 0.2;
+            const checkboxSize = knobRadius * 0.4;
+            
+            // Auto Rotate checkbox (centered under Rotation Speed knob at col 1)
+            const autoRotateX = menuOriginX + knobSpacing * 1.0;
+            const autoRotateY = menuOriginY + buttonY;
+            const ardx = clickCanvasX - autoRotateX;
+            const ardy = clickCanvasY - autoRotateY;
+            
+            if (Math.abs(ardx) < checkboxSize && Math.abs(ardy) < checkboxSize) {
+                const skyCtrl = window.skyRenderer.effectController;
+                skyCtrl.autoRotate = !skyCtrl.autoRotate;
+                return true;
+            }
+            
+            // Show Grid checkbox
+            const showGridX = menuOriginX + knobSpacing * 0.0;
+            const showGridY = menuOriginY + buttonY;
+            const sgdx = clickCanvasX - showGridX;
+            const sgdy = clickCanvasY - showGridY;
+            
+            if (Math.abs(sgdx) < checkboxSize && Math.abs(sgdy) < checkboxSize) {
+                const skyCtrl = window.skyRenderer.effectController;
+                skyCtrl.showGrid = !skyCtrl.showGrid;
+                return true;
+            }
+            
+            // Camera icon (column 3, below exposure knob)
+            const handX = menuOriginX + knobSpacing * 3.0;
+            const handY = menuOriginY + buttonY;
+            const hdx = clickCanvasX - handX;
+            const hdy = clickCanvasY - handY;
+            
+            if (Math.abs(hdx) < checkboxSize && Math.abs(hdy) < checkboxSize) {
+                skyHandActive = !skyHandActive;
+                return true;
+            }
+            
+            // Check if sky menu background was clicked (for dragging entire menu)
+            if (clickCanvasX >= menuOriginX - padding && clickCanvasX <= menuOriginX + menuWidth + padding &&
+                clickCanvasY >= menuOriginY - padding && clickCanvasY <= menuOriginY + menuHeight + padding) {
+                isDraggingSkyMenu = true;
+                skyMenuDragStartX = mouseX;
+                skyMenuDragStartY = mouseY;
+                skyMenuStartX = skyMenuX;
+                skyMenuStartY = skyMenuY;
+                return true;
+            }
+            
+            return false; // Click was not on sky menu
+        }
+        
+        // Handle spraypaint tool
+        if (spraypaintActive && e.button === 0) {
+            isSpraying = true;
+        }
+        
+        // Handle sky hand tool
+        if (skyHandActive && e.button === 0 && window.skyRenderer) {
+            isDraggingSky = true;
+            skyDragStartX = mouseX;
+            skyDragStartY = mouseY;
+            skyCameraPitchStart = window.skyRenderer.effectController.cameraPitch;
+            skyCameraYawStart = window.skyRenderer.effectController.cameraYaw;
         }
         
         // Find which cloud was clicked (only foreground clouds)
@@ -549,10 +761,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     });
 
     canvas.addEventListener('mouseup', function(e) {
+        // Log camera position if we were dragging the sky
+        if (isDraggingSky && window.skyRenderer) {
+            console.log('Sky Camera Position - Pitch:', window.skyRenderer.effectController.cameraPitch, 'Yaw:', window.skyRenderer.effectController.cameraYaw);
+        }
+        
         draggedCloud = null;
         draggedKnob = null;
+        draggedSkyKnob = null;
         isDraggingMenu = false;
         isDraggingColorMenu = false;
+        isDraggingSkyMenu = false;
+        isDraggingSky = false;
         isDraggingColorWheel = false;
         isDraggingLightness = false;
         isDraggingHueSensitivity = false;
@@ -585,6 +805,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const deltaY = mouseY - colorMenuDragStartY;
             colorMenuX = colorMenuStartX + deltaX;
             colorMenuY = colorMenuStartY + deltaY;
+            return;
+        }
+        
+        // Handle sky menu dragging
+        if (isDraggingSkyMenu) {
+            const deltaX = mouseX - skyMenuDragStartX;
+            const deltaY = mouseY - skyMenuDragStartY;
+            skyMenuX = skyMenuStartX + deltaX;
+            skyMenuY = skyMenuStartY + deltaY;
+            return;
+        }
+        
+        // Handle sky camera dragging
+        if (isDraggingSky && window.skyRenderer) {
+            const deltaX = (mouseX - skyDragStartX) * 2; // Horizontal drag
+            const deltaY = (mouseY - skyDragStartY) * 2; // Vertical drag
+            window.skyRenderer.effectController.cameraYaw = skyCameraYawStart + deltaX;
+            window.skyRenderer.effectController.cameraPitch = skyCameraPitchStart - deltaY;
+            // Clamp pitch to avoid flipping
+            window.skyRenderer.effectController.cameraPitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, window.skyRenderer.effectController.cameraPitch));
             return;
         }
         
@@ -851,6 +1091,50 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             return;
         }
         
+        // Handle sky knob dragging
+        if (draggedSkyKnob !== null && window.skyRenderer) {
+            const ranges = [
+                {min: 0, max: 20},           // turbidity
+                {min: 0, max: 4},             // rayleigh
+                {min: 0, max: 0.1},           // mieCoefficient
+                {min: 0, max: 1},             // mieDirectionalG
+                {min: -180, max: 180},        // azimuth
+                {min: -2, max: 2},            // rotationSpeed
+                {min: -1, max: 10},           // elevation
+                {min: 0, max: 1}              // exposure
+            ];
+            
+            // Calculate drag delta
+            const dragDeltaX = mouseX - dragStartMouseX;
+            const dragDeltaY = (mouseY - dragStartMouseY);
+            const dragDelta = dragDeltaX + dragDeltaY;
+            
+            // Sensitivity
+            const dragSensitivity = 0.5;
+            const normalizedDelta = dragDelta / dragSensitivity;
+            
+            const range = ranges[draggedSkyKnob];
+            const rangeSize = range.max - range.min;
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            
+            // Clamp to range
+            newValue = Math.max(range.min, Math.min(range.max, newValue));
+            
+            // Apply the new value
+            const skyCtrl = window.skyRenderer.effectController;
+            switch (draggedSkyKnob) {
+                case 0: skyCtrl.turbidity = newValue; break;
+                case 1: skyCtrl.rayleigh = newValue; break;
+                case 2: skyCtrl.mieCoefficient = newValue; break;
+                case 3: skyCtrl.mieDirectionalG = newValue; break;
+                case 4: skyCtrl.azimuth = newValue; break;
+                case 5: skyCtrl.rotationSpeed = newValue; break;
+                case 6: skyCtrl.elevation = newValue; break;
+                case 7: skyCtrl.exposure = newValue; break;
+            }
+            return;
+        }
+        
         if (draggedCloud) {
             draggedCloud.x = mouseX;
             draggedCloud.y = mouseY;
@@ -1059,14 +1343,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const cellRadius = Math.ceil(radius / this.cellSize);
             const centerX = Math.floor(boid.pos.x / this.cellSize);
             const centerY = Math.floor(boid.pos.y / this.cellSize);
-            const cellRadiusSq = cellRadius * cellRadius;
             
-            // Check cells in circular pattern (skip corners)
+            // Check all cells in square pattern - actual distance filtering happens later
             for (let dx = -cellRadius; dx <= cellRadius; dx++) {
                 for (let dy = -cellRadius; dy <= cellRadius; dy++) {
-                    // Skip cells outside circular radius
-                    if (dx * dx + dy * dy > cellRadiusSq) continue;
-                    
                     const key = `${centerX + dx},${centerY + dy}`;
                     if (this.grid.has(key)) {
                         const cellBoids = this.grid.get(key);
@@ -1082,7 +1362,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
 
     function makeSpatialGrid() {
-        SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+        // Optimal cell size: visualRange/2 ensures 3x3 cell queries with good boid distribution
+        SpatialGrid = new SpatialHashGrid(boidProps.visualRange / 2);
     }
 
     
@@ -2894,17 +3175,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 if (tailColorMode === 0) {
                     // Black tail
                     c.strokeStyle = 'hsla(0, 0%, 10%, 0.3)';
-                    c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
                 } else if (tailColorMode === 1) {
                     // White tail
                     c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
-                    c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
                 } else if (tailColorMode === 2) {
                     // Selected hue tail
-                    c.strokeStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, 0.5)`;
-                    c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
+                    //c.strokeStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, 0.5)`;
+                    c.strokeStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.5)`;
+                } else if (tailColorMode === 3) {
+                    // Selected hue tail
+                    //c.strokeStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, 0.5)`;
+                    c.strokeStyle = `hsla(${this.hue - 70}, ${this.saturation}%, ${this.lightness}%, 0.5)`;
                 }
-                
+
+                //c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
+                // line width scales with boid size and inversely with speed
+                c.lineWidth = (0.3 + (1 - this.speedAdjust)) * radScale * 0.5;
                 // Override for special boids
                 if (this.whiteBoid) {
                     c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
@@ -2919,6 +3205,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
                     c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
                 }
+                
+                c.lineJoin = 'butt';
                 c.lineCap = 'round';
                 c.stroke();
             }
@@ -3172,6 +3460,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         const knobRadius = 0.1 * cScale;
         const knobSpacing = knobRadius * 3;
+        const menuTopMargin = 0.2 * knobRadius; // Control vertical offset of elements within the menu
         const menuUpperLeftX = menuX * cScale;
         const menuUpperLeftY = canvas.height - menuY * cScale;
         const fullMeterSweep = 1.6 * Math.PI;
@@ -3207,11 +3496,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.strokeStyle = `hsla(210, 60%, 80%, ${menuOpacity})`;
         c.lineWidth = 0.004 * cScale;
         const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
-        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.6 * menuOpacity})`);
-        menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.6 * menuOpacity})`);
+        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.8 * menuOpacity})`);
+        menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.8 * menuOpacity})`);
         c.fillStyle = menuGradient;
         c.fill();
         c.stroke();
+
+        // Draw title
+        c.fillStyle = `hsla(210, 80%, 80%, ${menuOpacity})`;
+        c.font = `bold ${0.05 * cScale}px verdana`;
+        c.textAlign = 'center';
+        c.fillText('SIMULATION', menuWidth / 2, -padding + 0.04 * cScale);
         
         // Draw close icon in upper left corner (round button)
         const closeIconRadius = knobRadius * 0.25;
@@ -3242,7 +3537,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const row = Math.floor(knob / 4);
             const col = knob % 4;
             const knobX = col * knobSpacing;
-            const knobY = row * knobSpacing;
+            const knobY = row * knobSpacing + menuTopMargin;
             c.beginPath();
             c.arc(knobX, knobY, 1.05 *knobRadius, 0, 2 * Math.PI, false);
             c.fillStyle = `hsla(210, 80%, 10%, ${0.3 * menuOpacity})`;
@@ -3374,11 +3669,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const tailColorRadioRadius = knobRadius * 0.25;
         const tailKnobCol = 1;
         const tailKnobRow = 2;
-        const tailRadioLabels = ['Black', 'White', 'Hue'];
+        const tailRadioLabels = ['Black', 'White', 'Hue', 'Hue2'];
         
-        for (let i = 0; i < 3; i++) {
-            const buttonX = tailKnobCol * knobSpacing + (i - 1) * knobRadius * 1.0;
-            const buttonY = tailKnobRow * knobSpacing + knobRadius * 2.2;
+        for (let i = 0; i < 4; i++) {
+            const buttonX = tailKnobCol * knobSpacing + (i - 1.5) * knobRadius * 1.0;
+            const buttonY = tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin;
             
             // Draw outer circle
             c.beginPath();
@@ -3409,13 +3704,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         
         // Draw radio buttons for boid type selection (vertically stacked)
-        const radioButtonRadius = knobRadius * 0.3;
+        const radioButtonRadius = knobRadius * 0.25;
         const radioCol = 2;
-        const radioLabels = ['Arrows', 'Circles', 'Airfoils', 'None'];
+        const radioLabels = ['Arrows', 'Circles', 'Teardrops', 'None'];
         
         for (let i = 0; i < 4; i++) {
             const buttonX = radioCol * knobSpacing - 0.5 * knobRadius;
-            const buttonY = (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius);
+            const buttonY = (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius) + menuTopMargin;
             
             // Draw outer circle
             c.beginPath();
@@ -3499,7 +3794,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Draw reset button (universal recycling symbol - row 2, column 3)  -------------------
         const resetButtonRadius = knobRadius * 0.5;
         const resetButtonX = 3 * knobSpacing;
-        const resetButtonY = 2.05 * knobSpacing;
+        const resetButtonY = 2.05 * knobSpacing + menuTopMargin;
         
         // Draw recycling symbol (Unicode ♻)
         c.font = `bold ${2.3 * resetButtonRadius}px Arial`;
@@ -3555,11 +3850,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.save();
         c.translate(menuUpperLeftX, menuUpperLeftY);
         
-        // Calculate menu dimensions (include space for preset buttons and knob)
+        // Calculate menu dimensions (include space for preset buttons, knobs, and segregation buttons)
         const buttonRowHeight = spacing * 2;
         const knobRowHeight = knobRadius * 3;
+        const segRadioRowHeight = knobRadius * 3.0 + spacing * 2; // Space for radio buttons, labels, and bottom margin
         const menuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 1.5;
-        const menuHeight = colorWheelRadius * 2 + buttonRowHeight + knobRowHeight + knobRadius * 0.5;
+        const menuHeight = spacing * 20;
         const padding = 0.8 * knobRadius;
         
         const cornerRadius = 0.05 * cScale;
@@ -3576,13 +3872,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.closePath();
         
         const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
-        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.6 * colorMenuOpacity})`);
-        menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.6 * colorMenuOpacity})`);
+        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.8 * colorMenuOpacity})`);
+        menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.8 * colorMenuOpacity})`);
         c.fillStyle = menuGradient;
         c.fill();
         c.strokeStyle = `hsla(210, 60%, 80%, ${colorMenuOpacity})`;
         c.lineWidth = 0.004 * cScale;
         c.stroke();
+
+        // Draw title
+        c.fillStyle = `hsla(210, 80%, 80%, ${colorMenuOpacity})`;
+        c.font = `bold ${0.05 * cScale}px verdana`;
+        c.textAlign = 'center';
+        c.fillText('PAINT', menuWidth / 2, -padding + 0.04 * cScale);
+        
         
         // Draw close icon in upper left corner
         const closeIconRadius = knobRadius * 0.25;
@@ -3942,12 +4245,64 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         c.stroke();
         
-        // Draw hueSensitivity knob
+        // Calculate knob positions first (needed for segregation button placement)
         const hueTickerTargetX = lightnessSliderX + sliderWidth / 2; // Center below lightness slider
         const hueTickerOriginalX = colorWheelRadius + knobRadius * 2.4;
         const knobOffset = hueTickerTargetX - hueTickerOriginalX; // Calculate offset
         const hueSensitivityKnobX = knobRadius + knobOffset; // Move by same offset
         const hueSensitivityKnobY = colorWheelRadius * 2 + buttonRowHeight + knobRadius * 1.5 + knobRadius / 3;
+        const hueTickerKnobX = hueTickerTargetX;
+        const hueTickerKnobY = hueSensitivityKnobY;
+        
+        // Draw segregation radio buttons below the knobs
+        const segRadioRadius = knobRadius * 0.25;
+        const segButtonY = hueTickerKnobY + knobRadius * 2.6;
+        const segButtonSpacing = knobRadius * 1.3;
+        const segButtonStartX = colorWheelRadius - segButtonSpacing * 0.5;
+        const segLabels = ['None', 'Moderate', 'Heavy'];
+        const segModeMap = [0, 2, 1]; // Map visual position to segregationMode value
+        
+        for (let i = 0; i < 3; i++) {
+            const segBtnX = segButtonStartX + i * segButtonSpacing;
+            
+            // Draw outer circle
+            c.beginPath();
+            c.arc(segBtnX, segButtonY, segRadioRadius, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * colorMenuOpacity})`;
+            c.fill();
+            c.strokeStyle = `hsla(210, 80%, 70%, ${colorMenuOpacity})`;
+            c.lineWidth = 0.04 * knobRadius;
+            c.stroke();
+            
+            // Draw filled center if selected
+            if (segregationMode === segModeMap[i]) {
+                c.beginPath();
+                c.arc(segBtnX, segButtonY, segRadioRadius * 0.5, 0, 2 * Math.PI);
+                c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+                c.fill();
+            }
+            
+            // Draw label below button
+            c.textAlign = 'center';
+            c.textBaseline = 'top';
+            
+            // Stroke and fill text for better visibility
+            c.font = `${0.24 * knobRadius}px verdana`;
+            c.fillStyle = `hsla(0, 0%, 0%, ${0.5 * colorMenuOpacity})`;
+            c.fillText(segLabels[i], segBtnX + 2, segButtonY + segRadioRadius + 0.15 * knobRadius + 2);
+            c.fillStyle = `hsla(210, 80%, 90%, ${colorMenuOpacity})`;
+            c.fillText(segLabels[i], segBtnX, segButtonY + segRadioRadius + 0.15 * knobRadius);
+        }
+        // Draw "Color Separation" label above buttons
+        c.font = `${0.3 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(0, 0%, 0%, ${0.5 * colorMenuOpacity})`;
+        //c.lineWidth = 0.02 * knobRadius;
+        c.fillText('Color Separation', (segButtonStartX + segButtonSpacing) + 2, (segButtonY + 3.3 * segRadioRadius) + 2);
+        c.fillStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.02 * knobRadius;
+        c.fillText('Color Separation', segButtonStartX + segButtonSpacing, segButtonY + 3.3 * segRadioRadius);
+              
+        // Draw hueSensitivity knob
         const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - 1.6 * Math.PI);
         const fullMeterSweep = 1.6 * Math.PI;
         
@@ -4031,8 +4386,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.fillText('Sensitivity', hueSensitivityKnobX, hueSensitivityKnobY + 1.7 * knobRadius);
         
         // Draw hueTicker knob (to the right of hueSensitivity knob)
-        const hueTickerKnobX = hueTickerTargetX; // Centered below lightness slider
-        const hueTickerKnobY = hueSensitivityKnobY;
+        // (hueTickerKnobX and hueTickerKnobY already defined above)
         
         // Draw background circle
         c.beginPath();
@@ -4372,23 +4726,34 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 const distSq = dx * dx + dy * dy;
                 
                 if (distSq < visualRangeSq && distSq > 0) {
-                    // RULE #2 - ALIGNMENT: accumulate velocities
-                    avgVelX += otherBoid.vel.x;
-                    avgVelY += otherBoid.vel.y;
+                    // Check if segregation mode is active and hues match (within tolerance)
+                    const hueMatch = segregationMode === 0 || Math.abs(boid.hue - otherBoid.hue) < 30;
                     
-                    // RULE #3 - COHESION: accumulate positions
-                    centerX += otherBoid.pos.x;
-                    centerY += otherBoid.pos.y;
+                    // RULE #2 - ALIGNMENT: accumulate velocities (only if hue matches in segregate modes)
+                    if (hueMatch) {
+                        avgVelX += otherBoid.vel.x;
+                        avgVelY += otherBoid.vel.y;
+                    }
                     
-                    if (distSq < minDistSq) {
-                        // RULE #1 - SEPARATION: keep sqrt for correct physics
+                    // RULE #3 - COHESION: accumulate positions (only if hue matches in segregate modes)
+                    if (hueMatch) {
+                        centerX += otherBoid.pos.x;
+                        centerY += otherBoid.pos.y;
+                    }
+                    
+                    // RULE #1 - SEPARATION: depends on mode (mode 1: same hue only, mode 2: all boids)
+                    const applyRule1 = (segregationMode === 0) || (segregationMode === 1 && hueMatch) || (segregationMode === 2);
+                    if (applyRule1 && distSq < minDistSq) {
                         const dist = Math.sqrt(distSq);
                         const strength = avoidFactor * (minDistance - dist) / dist;
                         separationX += dx * strength;
                         separationY += dy * strength;
                     }
 
-                    neighborCount++;
+                    // Only count as neighbor for alignment/cohesion if hue matches in segregate modes
+                    if (hueMatch) {
+                        neighborCount++;
+                    }
                 }
             }
         }
@@ -4411,6 +4776,264 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             boid.vel.x += (centerX - boid.pos.x) * boidProps.centeringFactor * deltaT;
             boid.vel.y += (centerY - boid.pos.y) * boidProps.centeringFactor * deltaT;
         }
+    }
+
+    function drawSkyMenu() {
+        // Only draw menu if it has some opacity
+        if (skyMenuOpacity <= 0 || !window.skyRenderer) return;
+        
+        const skyCtrl = window.skyRenderer.effectController;
+        
+        const menuItems = [
+            skyCtrl.turbidity,
+            skyCtrl.rayleigh,
+            skyCtrl.mieCoefficient,
+            skyCtrl.mieDirectionalG,
+            skyCtrl.azimuth,
+            skyCtrl.rotationSpeed,
+            skyCtrl.elevation,
+            skyCtrl.exposure
+        ];
+        
+        const ranges = [
+            {min: 0, max: 20},           // turbidity
+            {min: 0, max: 4},             // rayleigh
+            {min: 0, max: 0.1},           // mieCoefficient
+            {min: 0, max: 1},             // mieDirectionalG
+            {min: -180, max: 180},        // azimuth
+            {min: -2, max: 2},            // rotationSpeed
+            {min: -1, max: 10},           // elevation
+            {min: 0, max: 1}              // exposure
+        ];
+        
+        const labels = ['Turbidity', 'Rayleigh', 'Mie Coef', 'Mie Dir G', 'Azimuth', 'Rot Speed', 'Elevation', 'Exposure'];
+        
+        const knobRadius = 0.1 * cScale;
+        const knobSpacing = knobRadius * 3;
+        const menuUpperLeftX = skyMenuX * cScale;
+        const menuUpperLeftY = canvas.height - skyMenuY * cScale;
+        const fullMeterSweep = 1.6 * Math.PI;
+        const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+        
+        c.save();
+        c.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
+        
+        // Draw overall menu background with rounded corners
+        const menuWidth = knobSpacing * 3;
+        const menuHeight = knobSpacing * 1 + knobRadius * 2.5;
+        const padding = 1.7 * knobRadius;
+        
+        const cornerRadius = 0.05 * cScale;
+        c.beginPath();
+        c.moveTo(-padding + cornerRadius, -padding);
+        c.lineTo(menuWidth + padding - cornerRadius, -padding);
+        c.quadraticCurveTo(menuWidth + padding, -padding, menuWidth + padding, -padding + cornerRadius);
+        c.lineTo(menuWidth + padding, menuHeight + padding - cornerRadius);
+        c.quadraticCurveTo(menuWidth + padding, menuHeight + padding, menuWidth + padding - cornerRadius, menuHeight + padding);
+        c.lineTo(-padding + cornerRadius, menuHeight + padding);
+        c.quadraticCurveTo(-padding, menuHeight + padding, -padding, menuHeight + padding - cornerRadius);
+        c.lineTo(-padding, -padding + cornerRadius);
+        c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
+        c.closePath();
+        c.strokeStyle = `hsla(30, 80%, 60%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.004 * cScale;
+        const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
+        menuGradient.addColorStop(0, `hsla(30, 70%, 25%, ${0.8 * skyMenuOpacity})`);
+        menuGradient.addColorStop(1, `hsla(30, 70%, 10%, ${0.8 * skyMenuOpacity})`);
+        c.fillStyle = menuGradient;
+        c.fill();
+        c.stroke();
+        
+        // Draw close icon in upper left corner (round button)
+        const closeIconRadius = knobRadius * 0.25;
+        const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+        const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+        
+        // Red background circle
+        c.beginPath();
+        c.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 70%, 40%, ${skyMenuOpacity})`;
+        c.fill();
+        
+        // Black X
+        c.strokeStyle = `hsla(0, 0%, 0%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.05 * knobRadius;
+        c.lineCap = 'round';
+        const xSize = closeIconRadius * 0.4;
+        c.beginPath();
+        c.moveTo(closeIconX - xSize, closeIconY - xSize);
+        c.lineTo(closeIconX + xSize, closeIconY + xSize);
+        c.moveTo(closeIconX + xSize, closeIconY - xSize);
+        c.lineTo(closeIconX - xSize, closeIconY + xSize);
+        c.stroke();
+        
+        // Draw title
+        c.fillStyle = `hsla(30, 80%, 80%, ${skyMenuOpacity})`;
+        c.font = `bold ${0.05 * cScale}px verdana`;
+        c.textAlign = 'center';
+        c.fillText('SKY', menuWidth / 2, -padding + 0.04 * cScale);
+        
+        // Draw knobs for each parameter
+        for (let i = 0; i < menuItems.length && i < 8; i++) {
+            const x = (i % 4) * knobSpacing;
+            const y = Math.floor(i / 4) * knobSpacing;
+            
+            const value = menuItems[i];
+            const range = ranges[i];
+            const normalized = (value - range.min) / (range.max - range.min);
+            
+            // Draw knob background circle
+            c.beginPath();
+            c.arc(x, y, knobRadius, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(30, 40%, 15%, ${skyMenuOpacity})`;
+            c.fill();
+            c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+            c.lineWidth = 0.003 * cScale;
+            c.stroke();
+            
+            // Draw meter arc
+            c.beginPath();
+            c.arc(x, y, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalized);
+            c.strokeStyle = `hsla(30, 80%, 60%, ${skyMenuOpacity})`;
+            c.lineWidth = 0.02 * cScale;
+            c.stroke();
+            
+            // Draw knob pointer
+            const pointerAngle = meterStart + fullMeterSweep * normalized;
+            const pointerLength = knobRadius * 0.6;
+            const pointerEndX = x + Math.cos(pointerAngle) * pointerLength;
+            const pointerEndY = y + Math.sin(pointerAngle) * pointerLength;
+            c.beginPath();
+            c.moveTo(x, y);
+            c.lineTo(pointerEndX, pointerEndY);
+            c.strokeStyle = `hsla(30, 80%, 80%, ${skyMenuOpacity})`;
+            c.lineWidth = 0.008 * cScale;
+            c.stroke();
+            
+            // Draw label
+            c.fillStyle = `hsla(30, 60%, 70%, ${skyMenuOpacity})`;
+            c.font = `${0.032 * cScale}px sans-serif`;
+            c.textAlign = 'center';
+            c.fillText(labels[i], x, y + knobRadius + 0.04 * cScale);
+            
+            // Draw value
+            let displayValue = value.toFixed(value < 1 ? 3 : value < 10 ? 1 : 0);
+            c.fillStyle = `hsla(30, 50%, 60%, ${skyMenuOpacity})`;
+            c.font = `${0.025 * cScale}px sans-serif`;
+            c.fillText(displayValue, x, y + knobRadius + 0.07 * cScale);
+        }
+        
+        // Draw toggle buttons below the knobs
+        const buttonY = knobSpacing * 2 - knobRadius * 0.2;
+        const checkboxSize = knobRadius * 0.4;
+        
+        // Auto Rotate checkbox (centered under Rotation Speed knob at col 1)
+        const autoRotateX = knobSpacing * 1.0;
+        c.beginPath();
+        c.rect(autoRotateX - checkboxSize / 2, buttonY - checkboxSize / 2, checkboxSize, checkboxSize);
+        c.fillStyle = `hsla(30, 40%, 15%, ${skyMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        
+        // Draw checkmark if enabled
+        if (skyCtrl.autoRotate) {
+            c.strokeStyle = `hsla(30, 80%, 70%, ${skyMenuOpacity})`;
+            c.lineWidth = 0.006 * cScale;
+            c.beginPath();
+            c.moveTo(autoRotateX - checkboxSize * 0.3, buttonY);
+            c.lineTo(autoRotateX - checkboxSize * 0.1, buttonY + checkboxSize * 0.25);
+            c.lineTo(autoRotateX + checkboxSize * 0.35, buttonY - checkboxSize * 0.25);
+            c.stroke();
+        }
+        
+        // Label
+        c.fillStyle = `hsla(30, 60%, 70%, ${skyMenuOpacity})`;
+        c.font = `${0.028 * cScale}px sans-serif`;
+        c.textAlign = 'center';
+        c.fillText('Auto Rotate', autoRotateX, buttonY + knobRadius * 0.6);
+        
+        // Show Grid checkbox (remove or reposition as needed)
+        const showGridX = knobSpacing * 0.0;
+        c.beginPath();
+        c.rect(showGridX - checkboxSize / 2, buttonY - checkboxSize / 2, checkboxSize, checkboxSize);
+        c.fillStyle = `hsla(30, 40%, 15%, ${skyMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        
+        // Draw checkmark if enabled
+        if (skyCtrl.showGrid) {
+            c.strokeStyle = `hsla(30, 80%, 70%, ${skyMenuOpacity})`;
+            c.lineWidth = 0.006 * cScale;
+            c.beginPath();
+            c.moveTo(showGridX - checkboxSize * 0.3, buttonY);
+            c.lineTo(showGridX - checkboxSize * 0.1, buttonY + checkboxSize * 0.25);
+            c.lineTo(showGridX + checkboxSize * 0.35, buttonY - checkboxSize * 0.25);
+            c.stroke();
+        }
+        
+        // Label
+        c.textAlign = 'center';
+        c.fillStyle = `hsla(30, 60%, 70%, ${skyMenuOpacity})`;
+        c.fillText('Show Grid', showGridX, buttonY + knobRadius * 0.6);
+        
+        // Draw camera icon (in column 3, below exposure knob)
+        const camX = knobSpacing * 3.0;
+        const camSize = knobRadius * 1.3; 
+        
+        // Draw movie camera icon (no background box)
+        c.fillStyle = skyHandActive ? 
+            `hsla(120, 90%, 70%, ${skyMenuOpacity})` : 
+            `hsla(30, 50%, 40%, ${skyMenuOpacity})`;
+        c.strokeStyle = skyHandActive ? `hsla(30, 90%, 80%, ${skyMenuOpacity})` : `hsla(30, 50%, 40%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.005 * cScale;
+        c.lineCap = 'round';
+        c.lineJoin = 'round';
+        
+        // Camera body (rectangle) - on the left
+        c.beginPath();
+        c.rect(
+            camX - camSize * 0.5, 
+            buttonY - camSize * 0.12, 
+            camSize * 0.6, 
+            camSize * 0.35);
+        c.fill();
+        
+        const lensY = (buttonY - camSize * 0.12) + (camSize * 0.35 / 2);
+        // Triangular lens on right side (pointing left, but wide at right)
+        c.beginPath();
+        c.moveTo(camX + camSize * 0.45, lensY - camSize * 0.25);
+        c.lineTo(camX - camSize * 0.10, lensY);
+        c.lineTo(camX + camSize * 0.45, lensY + camSize * 0.25);
+        c.closePath();
+        c.fill();
+        
+        // Film reels on top (left smaller, right larger)
+        // Left reel (smaller)
+        c.beginPath();
+        c.arc(
+            camX - camSize * 0.4, 
+            buttonY - camSize * 0.3, 
+            camSize * 0.16, 
+            0, 
+            2 * Math.PI);
+        c.fill();
+        
+        // Right reel (larger)
+        c.beginPath();
+        c.arc(camX - camSize * 0.02, buttonY - camSize * 0.36, camSize * 0.22, 0, 2 * Math.PI);
+        c.fill();
+        
+        // Label
+        c.fillStyle = `hsla(30, 60%, 70%, ${skyMenuOpacity})`;
+        c.font = `${0.028 * cScale}px sans-serif`;
+        c.textAlign = 'center';
+        c.fillText('Adjust Camera', camX, buttonY + knobRadius * 0.6);
+        
+        c.restore();
     }
 
     function drawKittyLamp(lampX, lampY, menuOpacity) {
@@ -4456,11 +5079,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             colorMenuOpacity = Math.max(0, colorMenuOpacity - menuFadeSpeed * deltaT);
         }
         
-        // Update spray particles
-        for (let i = sprayParticles.length - 1; i >= 0; i--) {
-            if (!sprayParticles[i].update(deltaT)) {
-                sprayParticles.splice(i, 1); // Remove dead particles
-            }
+        // Update sky menu opacity for fade in/out
+        if (skyMenuVisible && skyMenuOpacity < 1) {
+            skyMenuOpacity = Math.min(1, skyMenuOpacity + menuFadeSpeed * deltaT);
+        } else if (!skyMenuVisible && skyMenuOpacity > 0) {
+            skyMenuOpacity = Math.max(0, skyMenuOpacity - menuFadeSpeed * deltaT);
         }
         
         // Update spray particles
@@ -4525,12 +5148,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
         
-        // Rebuild spatial grid
-        SpatialGrid.clear();
-        for (let boid of Boids) {
-            SpatialGrid.insert(boid);
-        }
-        
         // Trigger blackBoid flash periodically
         boidProps.blackBoidFlashTimer += deltaT;
         if (boidProps.blackBoidFlashTimer >= boidProps.blackBoidFlashInterval) {
@@ -4566,6 +5183,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             handleClouds(boid);
             handleBounds(boid);
             boid.simulate();
+        }
+
+        // Rebuild spatial grid after all boid positions are updated
+        SpatialGrid.clear();
+        for (let boid of Boids) {
+            SpatialGrid.insert(boid);
         }
 
         // Update balloon ---------
@@ -4609,8 +5232,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     function drawEverything() {
         // Clear canvas
         c.clearRect(0, 0, width, height);
-
-       
 
         // Draw black background
         //c.fillStyle = 'hsl(0, 0%, 0%)';
@@ -4677,9 +5298,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             particle.draw();
         }
 
-        drawSimMenu()
-        
-        drawColorMenu();
+        // Draw menus in z-order (lowest to highest so highest is on top)
+        const menus = [
+            {draw: drawSkyMenu, z: skyMenuZOrder},
+            {draw: drawColorMenu, z: colorMenuZOrder},
+            {draw: drawSimMenu, z: menuZOrder}
+        ];
+        menus.sort((a, b) => a.z - b.z);
+        for (let menu of menus) {
+            menu.draw();
+        }
         
         // Draw spraypaint cursor
         if (spraypaintActive) {
