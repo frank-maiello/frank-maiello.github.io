@@ -1,5 +1,4 @@
-// Sky Integration Module - Simplified from boids_sky.html
-// This creates a live sky background that can be used with boids simulations
+// Sky Rendering Integration Module for Boids
 
 (function() {
     'use strict';
@@ -506,10 +505,8 @@
         return;
     }
     
-    console.log('Initializing sky renderer...');
     const skyRenderer = new SkyRenderer(skyCanvas);
     skyRenderer.init();
-    console.log('Sky renderer initialized, starting animation...');
     skyRenderer.animate();
     
     // Expose skyRenderer globally so it can be controlled from the boids menu

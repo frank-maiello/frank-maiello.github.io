@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.29</title>
+    <title>Boids 1.30</title>
     <style>
         html, body {
             margin: 0;
@@ -73,6 +73,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let spacebarBalloonTimer = 0;
     let spacebarBalloonInterval = 0.1; // 10 per second = 0.1 seconds per balloon
 
+    // Main menu visibility and state
+    let mainMenuVisible = false;
+    let mainMenuOpacity = 0;
+    let mainMenuXOffset = -1.0; // Horizontal animation offset (0 = fully shown, negative = hidden to the left)
+    let mainMenuAnimSpeed = 5.0; // Animation speed for sliding
+    let mainMenuFadeSpeed = 3.0; // Fade speed (0 to 1 per second)
+    
+    // Store submenu visibility states (saved when main menu is closed)
+    let savedSimMenuVisible = true;
+    let savedPaintMenuVisible = true;
+    let savedSkyMenuVisible = true;
+    
     // Menu visibility state
     let menuVisible = false;
     let menuOpacity = 0;
@@ -181,6 +193,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let isDraggingHueSensitivity = false;
     let isDraggingHueTicker = false;
     let isDraggingSpraySlider = false;
+    let isDraggingTailWidthSlider = false;
     let hueSensitivityDragStart = 0;
     let hueTickerDragStart = 0;
     
@@ -237,11 +250,60 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const dx = mouseX - ellipsisWorldX;
         const dy = mouseY - ellipsisWorldY;
         if (dx * dx + dy * dy < ellipsisRadius * ellipsisRadius) {
-            menuVisible = !menuVisible;
-            // Also toggle color menu and sky menu
-            colorMenuVisible = !colorMenuVisible;
-            skyMenuVisible = !skyMenuVisible;
+            if (mainMenuVisible) {
+                // Closing main menu - save current submenu visibility states and hide them
+                savedSimMenuVisible = menuVisible;
+                savedPaintMenuVisible = colorMenuVisible;
+                savedSkyMenuVisible = skyMenuVisible;
+                menuVisible = false;
+                colorMenuVisible = false;
+                skyMenuVisible = false;
+            } else {
+                // Opening main menu - restore saved submenu visibility states
+                menuVisible = savedSimMenuVisible;
+                colorMenuVisible = savedPaintMenuVisible;
+                skyMenuVisible = savedSkyMenuVisible;
+            }
+            mainMenuVisible = !mainMenuVisible;
             return;
+        }
+        
+        // Check if main menu was clicked
+        if (mainMenuVisible && mainMenuOpacity > 0.5) {
+            const ellipsisX = ellipsisWorldX * cScale;
+            const ellipsisY = canvas.height - ellipsisWorldY * cScale;
+            const itemHeight = 0.12 * cScale;
+            const itemWidth = 0.24 * cScale;
+            const padding = 0.02 * cScale;
+            const menuHeight = itemHeight + (padding * 2);
+            const menuWidth = (itemWidth * 3) + (padding * 4);
+            const menuBaseX = ellipsisX + 0.08 * cScale;
+            const menuX = menuBaseX + mainMenuXOffset * cScale;
+            const menuY = ellipsisY - 0.01 * cScale;
+            
+            const clickCanvasX = mouseX * cScale;
+            const clickCanvasY = canvas.height - mouseY * cScale;
+            
+            // Check if click is within main menu bounds
+            if (clickCanvasX >= menuX && clickCanvasX <= menuX + menuWidth &&
+                clickCanvasY >= menuY && clickCanvasY <= menuY + menuHeight) {
+                
+                // Determine which item was clicked (horizontal layout)
+                const relativeX = clickCanvasX - menuX - padding;
+                const itemIndex = Math.floor(relativeX / (itemWidth + padding));
+                
+                if (itemIndex >= 0 && itemIndex < 3) {
+                    // Toggle the corresponding menu
+                    if (itemIndex === 0) {
+                        menuVisible = !menuVisible;
+                    } else if (itemIndex === 1) {
+                        colorMenuVisible = !colorMenuVisible;
+                    } else if (itemIndex === 2) {
+                        skyMenuVisible = !skyMenuVisible;
+                    }
+                }
+                return;
+            }
         }
         
         // Check menus in reverse z-order (highest priority first)
@@ -274,7 +336,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const buttonRowHeight = spacing * 2;
             const knobRowHeight = knobRadius * 3;
             const colorMenuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 1.5;
-            const colorMenuHeight = colorWheelRadius * 2 + buttonRowHeight + knobRowHeight + knobRadius * 0.5;
+            const colorMenuHeight = spacing * 20;
             const colorPadding = 0.8 * knobRadius;
             const colorMenuOriginX = colorMenuX * cScale;
             const colorMenuOriginY = canvas.height - colorMenuY * cScale;
@@ -511,7 +573,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const knobSpacing = knobRadius * 3;
             const menuTopMargin = 0.2 * knobRadius; // Must match the margin in drawSimMenu
             const menuWidth = knobSpacing * 3;
-            const menuHeight = knobSpacing * 2 + knobRadius * 1.0;
+            const menuHeight = knobSpacing * 2 + knobRadius * 3.5;
             const padding = 1.7 * knobRadius;
             const menuUpperLeftX = menuX * cScale;
             const menuUpperLeftY = (canvas.height - menuY * cScale);
@@ -574,6 +636,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     tailColorMode = i;
                     return true;
                 }
+            }
+            
+            // Check tail width slider (below tail color buttons)
+            const tailSldrWidth = knobRadius * 2.0;
+            const tailSldrHeight = knobRadius * 0.25;
+            const tailSldrCenterX = menuOriginX + tailKnobCol * knobSpacing;
+            const tailSldrBottomY = menuOriginY + tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin + tailColorRadioRadius + 1.2 * knobRadius;
+            const tailSldrX = tailSldrCenterX - tailSldrWidth / 2;
+            const tailSldrLeftHeight = tailSldrHeight;
+            const tailSldrRightHeight = tailSldrHeight * 1.8;
+            const tailWidthKnobRadius = knobRadius * 0.25;
+            
+            // Check if click is within slider area (with expanded bounds for knob)
+            if (clickCanvasX >= tailSldrX - tailWidthKnobRadius && 
+                clickCanvasX <= tailSldrX + tailSldrWidth + tailWidthKnobRadius &&
+                clickCanvasY >= tailSldrBottomY - tailSldrRightHeight - tailWidthKnobRadius &&
+                clickCanvasY <= tailSldrBottomY + tailWidthKnobRadius) {
+                isDraggingTailWidthSlider = true;
+                // Calculate new tail width value from click position
+                const clickRatio = Math.max(0, Math.min(1, (clickCanvasX - tailSldrX) / tailSldrWidth));
+                boidProps.tailWidth = 1.0 + clickRatio * (5.0 - 1.0);
+                return true;
             }
             
             // Check radio buttons (vertically stacked in column 2)
@@ -639,7 +723,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const knobRadius = 0.1 * cScale;
             const knobSpacing = knobRadius * 3;
             const menuWidth = knobSpacing * 3;
-            const menuHeight = knobSpacing * 3 + knobRadius * 2.5;
+            const menuHeight = knobSpacing * 2.25;
             const padding = 1.7 * knobRadius;
             const menuUpperLeftX = skyMenuX * cScale;
             const menuUpperLeftY = (canvas.height - skyMenuY * cScale);
@@ -900,10 +984,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
         
-        // Log camera position if we were dragging the sky
+        /*// Log camera position if we were dragging the sky
         if (isDraggingSky && window.skyRenderer) {
             console.log('Sky Camera Position - Pitch:', window.skyRenderer.effectController.cameraPitch, 'Yaw:', window.skyRenderer.effectController.cameraYaw);
-        }
+        }*/
         
         draggedCloud = null;
         draggedKnob = null;
@@ -917,6 +1001,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         isDraggingHueSensitivity = false;
         isDraggingHueTicker = false;
         isDraggingSpraySlider = false;
+        isDraggingTailWidthSlider = false;
         isSpraying = false;
     });
 
@@ -1059,6 +1144,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             spraypaintRadius = 0.05 + clickRatio * (0.5 - 0.05);
             spraypaintRadius = Math.max(0.05, Math.min(0.5, spraypaintRadius));
+            return;
+        }
+        
+        // Handle tail width slider dragging
+        if (isDraggingTailWidthSlider) {
+            const knobRadius = 0.1 * cScale;
+            const knobSpacing = knobRadius * 3;
+            const tailSldrWidth = knobRadius * 2.0;
+            const tailKnobCol = 1;
+            const menuUpperLeftX = menuX * cScale;
+            const menuOriginX = menuUpperLeftX + knobSpacing;
+            const tailSldrCenterX = menuOriginX + tailKnobCol * knobSpacing;
+            const tailSldrX = tailSldrCenterX - tailSldrWidth / 2;
+            const clickCanvasX = mouseX * cScale;
+            const clickRatio = (clickCanvasX - tailSldrX) / tailSldrWidth;
+            
+            boidProps.tailWidth = 1.0 + clickRatio * (5.0 - 1.0);
+            boidProps.tailWidth = Math.max(1.0, Math.min(5.0, boidProps.tailWidth));
             return;
         }
         
@@ -3351,21 +3454,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
 
                 //c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
-                // line width scales with boid size and inversely with speed
-                c.lineWidth = (0.3 + (1 - this.speedAdjust)) * radScale * 0.5;
+                // line width scales with boid size and inversely with speed, and with tail width slider
+                c.lineWidth = (0.3 + (1 - this.speedAdjust)) * radScale * 0.5 * boidProps.tailWidth;
                 // Override for special boids
                 if (this.whiteBoid) {
                     c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
-                    c.lineWidth = 4;
+                    c.lineWidth = 4 * boidProps.tailWidth;
                 } else if (this.blackBoid && !this.flashing) {
                     c.strokeStyle = `hsla(0, 0%, 5%, 0.5)`;
-                    c.lineWidth = 4;
+                    c.lineWidth = 4 * boidProps.tailWidth;
                 } else if (this.flashing && !this.blackBoid) {
                     c.strokeStyle = `hsla(0, 0%, ${this.lightness * 1.5}%, 1.0)`;
-                    c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
+                    c.lineWidth = (1.0 + (1 - this.speedAdjust) * 1.0) * boidProps.tailWidth;
                 } else if (this.flashing && this.blackBoid) {
                     c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
-                    c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
+                    c.lineWidth = (1.0 + (1 - this.speedAdjust) * 1.0) * boidProps.tailWidth;
                 }
                 
                 c.lineJoin = 'butt';
@@ -3564,6 +3667,224 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }  
 
+    function drawMainMenu() {
+        // Only draw menu if it has some opacity
+        if (mainMenuOpacity <= 0) return;
+        
+        const ellipsisWorldX = 0.05;
+        const ellipsisWorldY = simHeight - 0.05;
+        const ellipsisX = ellipsisWorldX * cScale;
+        const ellipsisY = canvas.height - ellipsisWorldY * cScale;
+        
+        // Menu dimensions (horizontal layout)
+        const itemHeight = 0.12 * cScale;
+        const itemWidth = 0.24 * cScale;
+        const padding = 0.02 * cScale;
+        const iconSize = 0.06 * cScale;
+        const menuHeight = itemHeight + (padding * 2);
+        const menuWidth = (itemWidth * 3) + (padding * 4);
+        
+        // Menu position - to the right of ellipsis with animation
+        // Position menu so it extends downward and is clearly visible
+        const menuBaseX = ellipsisX + 0.08 * cScale;
+        const menuX = menuBaseX + mainMenuXOffset * cScale;
+        const menuY = ellipsisY - 0.01 * cScale; // Position top of menu slightly above ellipsis center
+        
+        c.save();
+        c.globalAlpha = mainMenuOpacity;
+        
+        // Draw menu background with rounded corners
+        const cornerRadius = 0.02 * cScale;
+        c.beginPath();
+        c.moveTo(menuX + cornerRadius, menuY);
+        c.lineTo(menuX + menuWidth - cornerRadius, menuY);
+        c.quadraticCurveTo(menuX + menuWidth, menuY, menuX + menuWidth, menuY + cornerRadius);
+        c.lineTo(menuX + menuWidth, menuY + menuHeight - cornerRadius);
+        c.quadraticCurveTo(menuX + menuWidth, menuY + menuHeight, menuX + menuWidth - cornerRadius, menuY + menuHeight);
+        c.lineTo(menuX + cornerRadius, menuY + menuHeight);
+        c.quadraticCurveTo(menuX, menuY + menuHeight, menuX, menuY + menuHeight - cornerRadius);
+        c.lineTo(menuX, menuY + cornerRadius);
+        c.quadraticCurveTo(menuX, menuY, menuX + cornerRadius, menuY);
+        c.closePath();
+        
+        const menuGradient = c.createLinearGradient(menuX, menuY, menuX, menuY + menuHeight);
+        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, 0.95)`);
+        menuGradient.addColorStop(1, `hsla(210, 80%, 10%, 0.95)`);
+        c.fillStyle = menuGradient;
+        c.fill();
+        c.strokeStyle = `hsla(210, 60%, 60%, 0.8)`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        
+        // Menu items configuration
+        const menuItems = [
+            { label: 'Simulation', active: menuVisible, icon: 'sim' },
+            { label: 'Paint', active: colorMenuVisible, icon: 'paint' },
+            { label: 'Sky', active: skyMenuVisible, icon: 'sky' }
+        ];
+        
+        // Draw menu items
+        for (let i = 0; i < menuItems.length; i++) {
+            const item = menuItems[i];
+            const itemX = menuX + padding + (i * (itemWidth + padding));
+            const itemY = menuY + padding;
+            
+            // Draw item background (highlight if active)
+            c.fillStyle = item.active ? 
+                `hsla(210, 70%, 40%, 0.5)` : 
+                `hsla(210, 30%, 15%, 0.3)`;
+            c.beginPath();
+            c.moveTo(itemX + cornerRadius * 0.5, itemY);
+            c.lineTo(itemX + itemWidth - cornerRadius * 0.5, itemY);
+            c.quadraticCurveTo(itemX + itemWidth, itemY, itemX + itemWidth, itemY + cornerRadius * 0.5);
+            c.lineTo(itemX + itemWidth, itemY + itemHeight - cornerRadius * 0.5);
+            c.quadraticCurveTo(itemX + itemWidth, itemY + itemHeight, itemX + itemWidth - cornerRadius * 0.5, itemY + itemHeight);
+            c.lineTo(itemX + cornerRadius * 0.5, itemY + itemHeight);
+            c.quadraticCurveTo(itemX, itemY + itemHeight, itemX, itemY + itemHeight - cornerRadius * 0.5);
+            c.lineTo(itemX, itemY + cornerRadius * 0.5);
+            c.quadraticCurveTo(itemX, itemY, itemX + cornerRadius * 0.5, itemY);
+            c.closePath();
+            c.fill();
+            
+            // Draw icon (centered horizontally in item)
+            const iconX = itemX + itemWidth / 2;
+            const iconY = itemY + itemHeight / 2 - padding;
+            const iconColor = item.active ? 
+                `hsla(120, 70%, 60%, 1.0)` : 
+                `hsla(210, 30%, 50%, 1.0)`;
+            
+            c.strokeStyle = iconColor;
+            c.fillStyle = iconColor;
+            c.lineWidth = 0.006 * cScale;
+            c.lineCap = 'round';
+            c.lineJoin = 'round';
+            
+            if (item.icon === 'sim') {
+                // Draw gear icon with flat-topped teeth
+                const numTeeth = 8;
+                const outerRadius = iconSize * 0.45;
+                const innerRadius = iconSize * 0.32;
+                const centerRadius = iconSize * 0.18;
+                const toothFlatWidth = 0.2; // Width of flat top in radians
+                
+                c.beginPath();
+                for (let t = 0; t < numTeeth; t++) {
+                    const baseAngle = (t * 2 * Math.PI) / numTeeth;
+                    const nextBaseAngle = ((t + 1) * 2 * Math.PI) / numTeeth;
+                    
+                    // Left edge of flat top
+                    const outerLeft = baseAngle - toothFlatWidth / 2;
+                    const x1 = iconX + Math.cos(outerLeft) * outerRadius;
+                    const y1 = iconY + Math.sin(outerLeft) * outerRadius;
+                    if (t === 0) c.moveTo(x1, y1);
+                    else c.lineTo(x1, y1);
+                    
+                    // Right edge of flat top (draws the flat top as a line segment)
+                    const outerRight = baseAngle + toothFlatWidth / 2;
+                    const x2 = iconX + Math.cos(outerRight) * outerRadius;
+                    const y2 = iconY + Math.sin(outerRight) * outerRadius;
+                    c.lineTo(x2, y2);
+                    
+                    // Down to valley
+                    const valleyAngle = (baseAngle + nextBaseAngle) / 2;
+                    const x3 = iconX + Math.cos(valleyAngle) * innerRadius;
+                    const y3 = iconY + Math.sin(valleyAngle) * innerRadius;
+                    c.lineTo(x3, y3);
+                }
+                c.closePath();
+                c.fill();
+                
+                // Draw center circle
+                c.fillStyle = `hsla(210, 80%, 15%, 1.0)`;
+                c.beginPath();
+                c.arc(iconX, iconY, centerRadius, 0, 2 * Math.PI);
+                c.fill();
+                
+            } else if (item.icon === 'paint') {
+                // Draw color wheel icon (using pre-generated color wheel)
+                const wheelRadius = iconSize * 0.45;
+                
+                if (colorWheelCanvas) {
+                    c.save();
+                    
+                    // Dim when not active
+                    if (!item.active) {
+                        c.globalAlpha = mainMenuOpacity * 0.4;
+                    }
+                    
+                    c.beginPath();
+                    c.arc(iconX, iconY, wheelRadius, 0, 2 * Math.PI);
+                    c.clip();
+                    
+                    // Draw the color wheel
+                    c.drawImage(
+                        colorWheelCanvas,
+                        iconX - wheelRadius,
+                        iconY - wheelRadius,
+                        wheelRadius * 2,
+                        wheelRadius * 2
+                    );
+                    
+                    c.restore();
+                    
+                    // Draw outer ring to clean up edges
+                    c.strokeStyle = iconColor;
+                    c.lineWidth = iconSize * 0.06;
+                    c.beginPath();
+                    c.arc(iconX, iconY, wheelRadius, 0, 2 * Math.PI);
+                    c.stroke();
+                }
+                
+            } else if (item.icon === 'sky') {
+                // Draw asymmetrical cloud icon with truly flat bottom using clipping
+                const cloudRadius = iconSize * 0.35;
+                const flatBottomY = iconY + cloudRadius * 1.2;
+                
+                c.save();
+                
+                // Create clipping rectangle to cut off bottom at flat line
+                const clipLeft = iconX - cloudRadius * 1.8;
+                const clipRight = iconX + cloudRadius * 1.8;
+                const clipTop = iconY - cloudRadius * 1.5;
+                c.beginPath();
+                c.rect(clipLeft, clipTop, clipRight - clipLeft, flatBottomY - clipTop);
+                c.clip();
+                
+                // Now draw the circles - they'll be clipped at the bottom
+                c.fillStyle = iconColor;
+                c.beginPath();
+                // Left puff (medium)
+                c.arc(iconX - cloudRadius * 0.95, flatBottomY - cloudRadius * 0.5, cloudRadius * 0.82, 0, 2 * Math.PI);
+                c.fill();
+                c.beginPath();
+                // Center puff (largest)
+                c.arc(iconX, flatBottomY, cloudRadius * 1.05, 0, 2 * Math.PI);
+                c.fill();
+                c.beginPath();
+                // Right puff (small)
+                c.arc(iconX + cloudRadius * 0.9, flatBottomY - cloudRadius * 0.55, cloudRadius * 0.7, 0, 2 * Math.PI);
+                c.fill();
+                c.beginPath();
+                // Fourth puff adds height above center-left
+                c.arc(iconX - cloudRadius * 0.3, iconY - cloudRadius * 0.15, cloudRadius * 0.88, 0, 2 * Math.PI);
+                c.fill();
+                
+                c.restore();
+            }
+            
+            // Draw label text (centered below icon)
+            c.fillStyle = item.active ? 
+                `hsla(210, 80%, 90%, 1.0)` : 
+                `hsla(210, 40%, 70%, 1.0)`;
+            c.font = `bold ${0.028 * cScale}px verdana`;
+            c.textAlign = 'center';
+            c.textBaseline = 'top';
+            c.fillText(item.label, iconX, iconY + iconSize * 0.75);
+        }
+        
+        c.restore();
+    }
+
     function drawSimMenu() {
         // Draw ellipsis button (in world coordinates)
         const ellipsisWorldX = 0.05;
@@ -3639,7 +3960,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         // Draw overall menu background with rounded corners
         const menuWidth = knobSpacing * 3;
-        const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
+        const menuHeight = knobSpacing * 2 + knobRadius * 3.5;
         const padding = 1.7 * knobRadius;
         const cornerRadius = 0.05 * cScale;
         c.beginPath();
@@ -3839,6 +4160,61 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.fillText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
         }
         
+        // Draw tail width slider below the tail color buttons
+        const tailSldrWidth = knobRadius * 2.0;
+        const tailSldrHeight = knobRadius * 0.25;
+        const tailSldrCenterX = tailKnobCol * knobSpacing;
+        const tailSldrBottomY = tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin + tailColorRadioRadius + 1.2 * knobRadius;
+        const tailSldrX = tailSldrCenterX - tailSldrWidth / 2;
+        
+        // Draw trapezoid slider background - wedge shape (shorter on left, taller on right)
+        c.fillStyle = `hsla(210, 80%, 10%, ${0.5 * menuOpacity})`;
+        c.beginPath();
+        const tailSldrLeftHeight = tailSldrHeight;
+        const tailSldrRightHeight = tailSldrHeight * 1.8;
+        c.moveTo(tailSldrX, tailSldrBottomY - tailSldrLeftHeight); // Top left
+        c.lineTo(tailSldrX + tailSldrWidth, tailSldrBottomY - tailSldrRightHeight); // Top right
+        c.lineTo(tailSldrX + tailSldrWidth, tailSldrBottomY); // Bottom right
+        c.lineTo(tailSldrX, tailSldrBottomY); // Bottom left
+        c.closePath();
+        c.fill();
+        c.strokeStyle = `hsla(210, 60%, 80%, ${menuOpacity * 0.3})`;
+        c.lineWidth = 0.004 * cScale;
+        c.stroke();
+        
+        // Calculate slider position (1.0 to 5.0 range)
+        const tailWidthSliderValue = (boidProps.tailWidth - 1.0) / (5.0 - 1.0);
+        const tailWidthKnobX = tailSldrX + tailWidthSliderValue * tailSldrWidth;
+        const tailWidthKnobHeightAtPos = tailSldrLeftHeight - (tailSldrLeftHeight - tailSldrRightHeight) * tailWidthSliderValue;
+        const tailWidthKnobRadius = knobRadius * 0.25;
+        const tailWidthKnobY = tailSldrBottomY - tailWidthKnobHeightAtPos / 2;
+        
+        // Draw slider knob
+        c.beginPath();
+        c.arc(tailWidthKnobX, tailWidthKnobY, tailWidthKnobRadius, 0, 2 * Math.PI);
+        const tailWidthKnobGradient = c.createRadialGradient(
+            tailWidthKnobX - tailWidthKnobRadius * 0.3,
+            tailWidthKnobY - tailWidthKnobRadius * 0.3,
+            0,
+            tailWidthKnobX,
+            tailWidthKnobY,
+            tailWidthKnobRadius
+        );
+        tailWidthKnobGradient.addColorStop(0, `hsla(210, 60%, 80%, ${menuOpacity})`);
+        tailWidthKnobGradient.addColorStop(1, `hsla(210, 60%, 50%, ${menuOpacity})`);
+        c.fillStyle = tailWidthKnobGradient;
+        c.fill();
+        c.strokeStyle = `hsla(210, 60%, 90%, ${menuOpacity})`; 
+        c.lineWidth = 0.005 * cScale;
+        c.stroke();
+        
+        // Draw label
+        c.font = `${0.28 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
+        c.textAlign = 'center';
+        c.textBaseline = 'top';
+        c.fillText('Tail Width', tailSldrCenterX, tailSldrBottomY + 0.27 * knobRadius);
+        
         // Draw radio buttons for boid type selection (vertically stacked)
         const radioButtonRadius = knobRadius * 0.25;
         const radioCol = 2;
@@ -4008,16 +4384,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.closePath();
         
         const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
-        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.9 * colorMenuOpacity})`);
-        menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.9 * colorMenuOpacity})`);
+        menuGradient.addColorStop(0, `hsla(210, 0%, 20%, ${0.9 * colorMenuOpacity})`);
+        menuGradient.addColorStop(1, `hsla(210, 0%, 5%, ${0.9 * colorMenuOpacity})`);
         c.fillStyle = menuGradient;
         c.fill();
-        c.strokeStyle = `hsla(210, 60%, 80%, ${colorMenuOpacity})`;
+        c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
         c.lineWidth = 0.004 * cScale;
         c.stroke();
 
         // Draw title
-        c.fillStyle = `hsla(210, 80%, 80%, ${colorMenuOpacity})`;
+        c.fillStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
         c.font = `bold ${0.05 * cScale}px verdana`;
         c.textAlign = 'center';
         c.fillText('PAINT', menuWidth / 2, -padding + 0.04 * cScale);
@@ -4274,7 +4650,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             0);
         c.fill();
 
-        
         // top cap with a line
         c.strokeStyle = rimGradient;
         c.beginPath();
@@ -4336,11 +4711,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             sliderKnobY,
             sliderKnobRadius
         );
-        sliderKnobGradient.addColorStop(0, `hsla(210, 60%, 80%, ${colorMenuOpacity})`);
-        sliderKnobGradient.addColorStop(1, `hsla(210, 60%, 50%, ${colorMenuOpacity})`);
+        sliderKnobGradient.addColorStop(0, `hsla(210, 0%, 80%, ${colorMenuOpacity})`);
+        sliderKnobGradient.addColorStop(1, `hsla(210, 0%, 50%, ${colorMenuOpacity})`);
         c.fillStyle = sliderKnobGradient;
         c.fill();
-        c.strokeStyle = `hsla(210, 60%, 90%, ${colorMenuOpacity})`; 
+        c.strokeStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`; 
         c.lineWidth = 0.005 * cScale;
         c.stroke();
         
@@ -4366,7 +4741,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.arc(buttonStartX, buttonY, buttonRadius, 0, 2 * Math.PI);
         c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
         c.fill();
-        c.strokeStyle = `hsla(210, 60%, 80%, ${colorMenuOpacity})`;
+        c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
         c.lineWidth = 0.01 * cScale;
         c.stroke();
         
@@ -4375,7 +4750,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0, 2 * Math.PI);
         c.fillStyle = `hsla(0, 0%, 60%, ${colorMenuOpacity})`;
         c.fill();
-        
         c.stroke();
         
         // White button
@@ -4383,7 +4757,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.arc(buttonStartX + buttonSpacing * 2, buttonY, buttonRadius, 0, 2 * Math.PI);
         c.fillStyle = `hsla(0, 0%, 100%, ${colorMenuOpacity})`;
         c.fill();
-        
         c.stroke();
         
         // Selected color button
@@ -4391,7 +4764,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.arc(buttonStartX + buttonSpacing * 3, buttonY, buttonRadius, 0, 2 * Math.PI);
         c.fillStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity})`;
         c.fill();
-        
         c.stroke();
         
         // Calculate knob positions first (needed for segregation button placement)
@@ -4417,9 +4789,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Draw outer circle
             c.beginPath();
             c.arc(segBtnX, segButtonY, segRadioRadius, 0, 2 * Math.PI);
-            c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * colorMenuOpacity})`;
+            c.fillStyle = `hsla(210, 0%, 20%, ${0.3 * colorMenuOpacity})`;
             c.fill();
-            c.strokeStyle = `hsla(210, 80%, 70%, ${colorMenuOpacity})`;
+            c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
             c.lineWidth = 0.04 * knobRadius;
             c.stroke();
             
@@ -4439,7 +4811,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.font = `${0.24 * knobRadius}px verdana`;
             c.fillStyle = `hsla(0, 0%, 0%, ${0.5 * colorMenuOpacity})`;
             c.fillText(segLabels[i], segBtnX + 2, segButtonY + segRadioRadius + 0.15 * knobRadius + 2);
-            c.fillStyle = `hsla(210, 80%, 90%, ${colorMenuOpacity})`;
+            c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
             c.fillText(segLabels[i], segBtnX, segButtonY + segRadioRadius + 0.15 * knobRadius);
         }
         // Draw "Color Separation" label above buttons
@@ -4458,9 +4830,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Draw background circle
         c.beginPath();
         c.arc(hueSensitivityKnobX, hueSensitivityKnobY, 1.05 * knobRadius, 0, 2 * Math.PI, false);
-        c.fillStyle = `hsla(210, 40%, 15%, ${0.9 * colorMenuOpacity})`;
+        c.fillStyle = `hsla(210, 0%, 15%, ${0.9 * colorMenuOpacity})`;
         c.fill();
-        c.strokeStyle = `hsla(210, 40%, 50%, ${colorMenuOpacity})`;
+        c.strokeStyle = `hsla(210, 0%, 50%, ${colorMenuOpacity})`;
         c.lineWidth = 0.003 * cScale;
         c.stroke();
         
@@ -4474,8 +4846,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             hueSensitivityKnobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
             hueSensitivityKnobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
         );
-        gradient.addColorStop(0, `hsla(190, 40%, 50%, ${colorMenuOpacity})`);
-        gradient.addColorStop(0.5, `hsla(170, 40%, 50%, ${colorMenuOpacity})`);
+        gradient.addColorStop(0, `hsla(190, 0%, 60%, ${colorMenuOpacity})`);
+        gradient.addColorStop(0.5, `hsla(170, 0%, 80%, ${colorMenuOpacity})`);
         c.strokeStyle = gradient;
         c.beginPath();
         c.arc(hueSensitivityKnobX, hueSensitivityKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
@@ -4490,7 +4862,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.beginPath();
         c.moveTo(hueSensitivityKnobX, hueSensitivityKnobY);
         c.lineTo(pointerEndX, pointerEndY);
-        c.strokeStyle = `hsla(210, 80%, 80%, ${colorMenuOpacity})`;
+        c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
         c.lineWidth = 0.008 * cScale;
         c.stroke();
         
@@ -4511,9 +4883,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Draw background circle
         c.beginPath();
         c.arc(hueTickerKnobX, hueTickerKnobY, 1.05 * knobRadius, 0, 2 * Math.PI, false);
-        c.fillStyle = `hsla(210, 40%, 15%, ${0.9 * colorMenuOpacity})`;
+        c.fillStyle = `hsla(210, 0%, 15%, ${0.9 * colorMenuOpacity})`;
         c.fill();
-        c.strokeStyle = `hsla(210, 40%, 50%, ${colorMenuOpacity})`;
+        c.strokeStyle = `hsla(210, 0%, 50%, ${colorMenuOpacity})`;
         c.lineWidth = 0.003 * cScale;
         c.stroke();
         
@@ -4530,8 +4902,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             hueTickerKnobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
             hueTickerKnobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
         );
-        tickerGradient.addColorStop(0, `hsla(190, 40%, 50%, ${colorMenuOpacity})`);
-        tickerGradient.addColorStop(0.5, `hsla(170, 40%, 50%, ${colorMenuOpacity})`);
+        tickerGradient.addColorStop(0, `hsla(190, 0%, 60%, ${colorMenuOpacity})`);
+        tickerGradient.addColorStop(0.5, `hsla(170, 0%, 80%, ${colorMenuOpacity})`);
         c.strokeStyle = tickerGradient;
         c.beginPath();
         c.arc(hueTickerKnobX, hueTickerKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * tickerNormalized);
@@ -4546,18 +4918,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.beginPath();
         c.moveTo(hueTickerKnobX, hueTickerKnobY);
         c.lineTo(tickerPointerEndX, tickerPointerEndY);
-        c.strokeStyle = `hsla(210, 80%, 80%, ${colorMenuOpacity})`;
+        c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
         c.lineWidth = 0.008 * cScale;
         c.stroke();
         
         // Draw label
         c.font = `${0.29 * knobRadius}px verdana`;
-        c.strokeStyle = `hsla(210, 80%, 0%, ${0.6 * colorMenuOpacity})`;
+        c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
         c.lineWidth = 0.03 * knobRadius;
         c.lineJoin = 'round';
         c.strokeText('Color', 0.04 * knobRadius + hueTickerKnobX, 0.04 * knobRadius + (hueTickerKnobY + 1.35 * knobRadius));
         c.strokeText('Cycling', 0.04 * knobRadius + hueTickerKnobX, 0.04 * knobRadius + (hueTickerKnobY + 1.7 * knobRadius));
-        c.fillStyle = `hsla(210, 80%, 95%, ${colorMenuOpacity})`;
+        c.fillStyle = `hsla(210, 0%, 95%, ${colorMenuOpacity})`;
         c.fillText('Color', hueTickerKnobX, hueTickerKnobY + 1.35 * knobRadius);
         c.fillText('Cycling', hueTickerKnobX, hueTickerKnobY + 1.7 * knobRadius);
         
@@ -4636,6 +5008,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             speedLimit: 1.1, // clamp speed to this value
             turnFactor: 1.0, // How strongly Boids turn back when near edge
             tailLength: 10, // Number of trail points to keep (negative for last N points)
+            tailWidth: 1.0, // Width of tail line (1.0 to 5.0)
             doTails: true,
             blackBoidFlashInterval: 5.0, // Flash every 5 seconds
             blackBoidFlashTimer: 0,
@@ -4904,7 +5277,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             {min: 10, max: 120}           // fov
         ];
         
-        const labels = ['Turbidity', 'Rayleigh Scattering', 'Mie Scattering', 'Concentration', 'Sun Azimuth', 'Sun Movement', 'Sun Elevation', 'Exposure', 'Field of View'];
+        const labels = ['Turbidity', 'Rayleigh Scattering', 'Mie Scattering', 'Scatter Focus', 'Sun Azimuth', 'Sun Movement', 'Sun Elevation', 'Exposure', 'Field of View'];
         
         const knobRadius = 0.1 * cScale;
         const knobSpacing = knobRadius * 3;
@@ -5006,7 +5379,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 // Other knobs - draw partial arc
                 c.arc(x, y, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalized);
             }
-            c.strokeStyle = `hsla(30, 80%, 60%, ${skyMenuOpacity})`;
+            const gradient = c.createLinearGradient(
+                x + Math.cos(meterStart) * knobRadius,
+                y + Math.sin(meterStart) * knobRadius,
+                x + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+                y + Math.sin(meterStart + fullMeterSweep) * knobRadius
+            );
+            gradient.addColorStop(0, `hsla(20, 80%, 60%, ${skyMenuOpacity})`);
+            gradient.addColorStop(0.5, `hsla(35, 80%, 60%, ${skyMenuOpacity})`);
+            c.strokeStyle = gradient;
+            //c.strokeStyle = `hsla(30, 80%, 60%, ${skyMenuOpacity})`;
             c.lineWidth = 0.02 * cScale;
             c.stroke();
             
@@ -5178,7 +5560,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.fill();
         }
         c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-        c.fillText('Bunny', hotAirBalloonX, hotAirBalloonY + knobRadius * 0.50);
+        c.fillText('Hot Air', hotAirBalloonX, hotAirBalloonY + knobRadius * 0.50);
         c.fillText('Balloon', hotAirBalloonX, hotAirBalloonY + knobRadius * 0.80);
         
         // Draw camera icon (in column 2, row 2)
@@ -5351,17 +5733,36 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     // Main animation loop  ------------
     function simulateEverything() {
-        // Update menu opacity for fade in/out
-        if (menuVisible && menuOpacity < 1) {
+        // Update main menu opacity and animation for fade in/out and slide (hide when sky camera is active)
+        if (mainMenuVisible && !skyHandActive) {
+            if (mainMenuOpacity < 1) {
+                mainMenuOpacity = Math.min(1, mainMenuOpacity + mainMenuFadeSpeed * deltaT);
+            }
+            // Slide right (from negative offset to 0)
+            if (mainMenuXOffset < 0) {
+                mainMenuXOffset = Math.min(0, mainMenuXOffset + mainMenuAnimSpeed * deltaT);
+            }
+        } else {
+            if (mainMenuOpacity > 0) {
+                mainMenuOpacity = Math.max(0, mainMenuOpacity - mainMenuFadeSpeed * deltaT);
+            }
+            // Slide left (from 0 to negative offset)
+            if (mainMenuXOffset > -1.0) {
+                mainMenuXOffset = Math.max(-1.0, mainMenuXOffset - mainMenuAnimSpeed * deltaT);
+            }
+        }
+        
+        // Update menu opacity for fade in/out (hide when sky camera is active)
+        if (menuVisible && menuOpacity < 1 && !skyHandActive) {
             menuOpacity = Math.min(1, menuOpacity + menuFadeSpeed * deltaT);
-        } else if (!menuVisible && menuOpacity > 0) {
+        } else if ((!menuVisible || skyHandActive) && menuOpacity > 0) {
             menuOpacity = Math.max(0, menuOpacity - menuFadeSpeed * deltaT);
         }
         
-        // Update color menu opacity for fade in/out
-        if (colorMenuVisible && colorMenuOpacity < 1) {
+        // Update color menu opacity for fade in/out (hide when sky camera is active)
+        if (colorMenuVisible && colorMenuOpacity < 1 && !skyHandActive) {
             colorMenuOpacity = Math.min(1, colorMenuOpacity + menuFadeSpeed * deltaT);
-        } else if (!colorMenuVisible && colorMenuOpacity > 0) {
+        } else if ((!colorMenuVisible || skyHandActive) && colorMenuOpacity > 0) {
             colorMenuOpacity = Math.max(0, colorMenuOpacity - menuFadeSpeed * deltaT);
         }
         
@@ -5616,6 +6017,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         for (let menu of menus) {
             menu.draw();
         }
+        
+        // Draw main menu on top of everything
+        drawMainMenu();
         
         // Draw spraypaint cursor
         if (spraypaintActive) {
