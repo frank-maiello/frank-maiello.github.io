@@ -16,7 +16,7 @@
             mieDirectionalG: 0.7,
             elevation: 1,
             azimuth: 180,
-            exposure: 0.5,
+            exposure: 0.75,
             autoRotate: false,
             rotationSpeed: -0.1,
             showGrid: false,
