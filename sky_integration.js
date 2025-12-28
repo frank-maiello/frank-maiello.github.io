@@ -22,7 +22,8 @@
             rotationSpeed: -0.1,
             showGrid: false,
             cameraPitch: -0.3922325687031568,  // Vertical rotation
-            cameraYaw: 0.29879248996896113     // Horizontal rotation
+            cameraYaw: 0.29879248996896113,     // Horizontal rotation
+            fov: 60                             // Field of view (10-120)
         };
         this.sun = { x: 0, y: 1, z: 0 };
         this.lastTime = Date.now();
@@ -353,6 +354,8 @@
     };
     
     SkyRenderer.prototype.createPerspectiveMatrix = function() {
+        // Update camera FOV from effectController
+        this.camera.fov = this.effectController.fov;
         const f = 1.0 / Math.tan(this.camera.fov * Math.PI / 360);
         const nf = 1 / (this.camera.near - this.camera.far);
         return new Float32Array([

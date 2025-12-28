@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.28</title>
+    <title>Boids 1.29</title>
     <style>
         html, body {
             margin: 0;
@@ -153,9 +153,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let skyCameraPitchStart = 0;
     let skyCameraYawStart = 0;
     
+    // Store menu states before camera activation
+    let menuVisibleBeforeCamera = false;
+    let colorMenuVisibleBeforeCamera = false;
+    let skyMenuVisibleBeforeCamera = false;
+    
+    // Store menu states before paint tool activation
+    let menuVisibleBeforePaint = false;
+    let skyMenuVisibleBeforePaint = false;
+    
+    // Sky object visibility toggles
+    let showClouds = true;
+    let showPlane = true;
+    let showBalloons = true;
+    let showHotAirBalloon = true;
+    
     // Offscreen canvas for color wheel
     let colorWheelCanvas = null;
     let colorWheelContext = null;
+    
+    // Array to store painted color dots on color wheel (hue and saturation pairs)
+    let paintedColorDots = [];
     
     // Color selection dragging
     let isDraggingColorWheel = false;
@@ -273,6 +291,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             if (ccdx * ccdx + ccdy * ccdy < closeIconRadius * closeIconRadius) {
                 colorMenuVisible = false;
+                spraypaintActive = false; // Turn off spray tool when menu closes
                 return true;
             }
             
@@ -312,6 +331,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (clickCanvasX >= spraypaintX - canRadius * 0.45 && clickCanvasX <= spraypaintX + canRadius * 0.45 &&
                 clickCanvasY >= spraypaintY - canRadius * 0.95 && clickCanvasY <= spraypaintY + canRadius * 0.65) {
                 spraypaintActive = !spraypaintActive;
+                if (spraypaintActive) {
+                    skyHandActive = false; // Turn off camera adjust mode when spraypaint is activated
+                    // Store current menu states
+                    menuVisibleBeforePaint = menuVisible;
+                    skyMenuVisibleBeforePaint = skyMenuVisible;
+                    // Hide other menus
+                    menuVisible = false;
+                    skyMenuVisible = false;
+                } else {
+                    // Restore menu states when paint tool is deactivated
+                    menuVisible = menuVisibleBeforePaint;
+                    skyMenuVisible = skyMenuVisibleBeforePaint;
+                }
                 return true;
             }
             
@@ -334,6 +366,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
                 }
+                paintedColorDots = []; // Reset painted color indicators
                 return true;
             }
             
@@ -348,6 +381,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
                 }
+                paintedColorDots = []; // Reset painted color indicators
                 return true;
             }
             
@@ -362,6 +396,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
                 }
+                paintedColorDots = []; // Reset painted color indicators
                 return true;
             }
             
@@ -377,6 +412,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
                 }
+                // Reset painted color indicators and add the current selected color
+                paintedColorDots = [{hue: selectedHue, saturation: selectedSaturation}];
                 return true;
             }
             
@@ -472,7 +509,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (!menuVisible || menuOpacity <= 0.5) return false;
             const knobRadius = 0.1 * cScale;
             const knobSpacing = knobRadius * 3;
-            const menuTopMargin = 0; // Must match the margin in drawSimMenu
+            const menuTopMargin = 0.2 * knobRadius; // Must match the margin in drawSimMenu
             const menuWidth = knobSpacing * 3;
             const menuHeight = knobSpacing * 2 + knobRadius * 1.0;
             const padding = 1.7 * knobRadius;
@@ -602,7 +639,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const knobRadius = 0.1 * cScale;
             const knobSpacing = knobRadius * 3;
             const menuWidth = knobSpacing * 3;
-            const menuHeight = knobSpacing * 1 + knobRadius * 2.5;
+            const menuHeight = knobSpacing * 3 + knobRadius * 2.5;
             const padding = 1.7 * knobRadius;
             const menuUpperLeftX = skyMenuX * cScale;
             const menuUpperLeftY = (canvas.height - skyMenuY * cScale);
@@ -624,10 +661,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 return true;
             }
             
+            // Check Auto Rotate button first (before knobs, since it overlaps with rotation speed knob)
+            const checkboxRadius = knobRadius * 0.25;
+            const autoRotateX = menuOriginX + knobSpacing * 1.0;
+            const autoRotateY = menuOriginY + knobSpacing * 1.0;
+            const ardx = clickCanvasX - autoRotateX;
+            const ardy = clickCanvasY - autoRotateY;
+            
+            if (ardx * ardx + ardy * ardy < checkboxRadius * checkboxRadius) {
+                const skyCtrl = window.skyRenderer.effectController;
+                skyCtrl.autoRotate = !skyCtrl.autoRotate;
+                return true;
+            }
+            
+            // Check Show Grid button (before knobs, since it overlaps with FOV knob)
+            const showGridX = menuOriginX + knobSpacing * 3.0;
+            const showGridY = menuOriginY + knobSpacing * 2.0;
+            const sgdx = clickCanvasX - showGridX;
+            const sgdy = clickCanvasY - showGridY;
+            
+            if (sgdx * sgdx + sgdy * sgdy < checkboxRadius * checkboxRadius) {
+                const skyCtrl = window.skyRenderer.effectController;
+                skyCtrl.showGrid = !skyCtrl.showGrid;
+                return true;
+            }
+            
             // Check individual knobs
-            for (let knob = 0; knob < 8; knob++) {
-                const row = Math.floor(knob / 4);
-                const col = knob % 4;
+            for (let knob = 0; knob < 9; knob++) {
+                let row = Math.floor(knob / 4);
+                let col = knob % 4;
+                // Special positioning for FOV knob (index 8) - move to column 3, row 2
+                if (knob === 8) {
+                    row = 2;
+                    col = 3;
+                }
                 const knobCanvasX = menuOriginX + col * knobSpacing;
                 const knobCanvasY = menuOriginY + row * knobSpacing;
                 
@@ -648,7 +715,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         skyCtrl.azimuth,
                         skyCtrl.rotationSpeed,
                         skyCtrl.elevation,
-                        skyCtrl.exposure
+                        skyCtrl.exposure,
+                        skyCtrl.fov
                     ];
                     dragStartValue = menuItems[knob];
                     return true;
@@ -656,41 +724,94 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Check toggle buttons
-            const buttonY = knobSpacing * 2 - knobRadius * 0.2;
-            const checkboxSize = knobRadius * 0.4;
+            const buttonY = knobSpacing * 2;
             
-            // Auto Rotate checkbox (centered under Rotation Speed knob at col 1)
-            const autoRotateX = menuOriginX + knobSpacing * 1.0;
-            const autoRotateY = menuOriginY + buttonY;
-            const ardx = clickCanvasX - autoRotateX;
-            const ardy = clickCanvasY - autoRotateY;
+            // Object visibility toggle buttons - row of 4 centered under columns 0-1
+            const buttonRowY = menuOriginY + buttonY;
+            const buttonSpacing = knobRadius * 1.3;
+            const rowCenter = menuOriginX + knobSpacing * 0.5;
             
-            if (Math.abs(ardx) < checkboxSize && Math.abs(ardy) < checkboxSize) {
-                const skyCtrl = window.skyRenderer.effectController;
-                skyCtrl.autoRotate = !skyCtrl.autoRotate;
+            // Clouds checkbox
+            const cloudsX = rowCenter - 1.5 * buttonSpacing;
+            const cloudsY = buttonRowY;
+            const cdx3 = clickCanvasX - cloudsX;
+            const cdy3 = clickCanvasY - cloudsY;
+            if (cdx3 * cdx3 + cdy3 * cdy3 < checkboxRadius * checkboxRadius) {
+                showClouds = !showClouds;
                 return true;
             }
             
-            // Show Grid checkbox
-            const showGridX = menuOriginX + knobSpacing * 0.0;
-            const showGridY = menuOriginY + buttonY;
-            const sgdx = clickCanvasX - showGridX;
-            const sgdy = clickCanvasY - showGridY;
-            
-            if (Math.abs(sgdx) < checkboxSize && Math.abs(sgdy) < checkboxSize) {
-                const skyCtrl = window.skyRenderer.effectController;
-                skyCtrl.showGrid = !skyCtrl.showGrid;
+            // Plane checkbox
+            const planeX = rowCenter - 0.5 * buttonSpacing;
+            const planeY = buttonRowY;
+            const pdx = clickCanvasX - planeX;
+            const pdy = clickCanvasY - planeY;
+            if (pdx * pdx + pdy * pdy < checkboxRadius * checkboxRadius) {
+                showPlane = !showPlane;
                 return true;
             }
             
-            // Camera icon (column 3, below exposure knob)
-            const handX = menuOriginX + knobSpacing * 3.0;
+            // Balloons checkbox
+            const balloonsX = rowCenter + 0.5 * buttonSpacing;
+            const balloonsY = buttonRowY;
+            const bdx = clickCanvasX - balloonsX;
+            const bdy = clickCanvasY - balloonsY;
+            if (bdx * bdx + bdy * bdy < checkboxRadius * checkboxRadius) {
+                showBalloons = !showBalloons;
+                return true;
+            }
+            
+            // Hot Air Balloon checkbox
+            const hotAirBalloonX = rowCenter + 1.5 * buttonSpacing;
+            const hotAirBalloonY = buttonRowY;
+            const habdx = clickCanvasX - hotAirBalloonX;
+            const habdy = clickCanvasY - hotAirBalloonY;
+            if (habdx * habdx + habdy * habdy < checkboxRadius * checkboxRadius) {
+                showHotAirBalloon = !showHotAirBalloon;
+                return true;
+            }
+            
+            // Camera icon (column 2, row 2)
+            const handX = menuOriginX + knobSpacing * 2.0;
             const handY = menuOriginY + buttonY;
             const hdx = clickCanvasX - handX;
             const hdy = clickCanvasY - handY;
+            const cameraHitRadius = checkboxRadius * 2.5;
             
-            if (Math.abs(hdx) < checkboxSize && Math.abs(hdy) < checkboxSize) {
+            if (hdx * hdx + hdy * hdy < cameraHitRadius * cameraHitRadius) {
                 skyHandActive = !skyHandActive;
+                if (skyHandActive) {
+                    spraypaintActive = false; // Turn off spraypaint when camera adjust is activated
+                    // Store current menu states
+                    menuVisibleBeforeCamera = menuVisible;
+                    colorMenuVisibleBeforeCamera = colorMenuVisible;
+                    skyMenuVisibleBeforeCamera = skyMenuVisible;
+                    // Hide all menus
+                    menuVisible = false;
+                    colorMenuVisible = false;
+                    skyMenuVisible = false;
+                }
+                return true;
+            }
+            
+            // Check credit link at bottom left - only "ThreeJS.org" is clickable
+            const menuHeightForClick = knobSpacing * 2.25; // Match the drawing code
+            const creditFontSize = 0.032 * cScale;
+            c.font = `${creditFontSize}px sans-serif`;
+            const prefixText = 'Sky simulation borrowed from ';
+            const prefixWidth = c.measureText(prefixText).width;
+            const linkText = 'ThreeJS.org';
+            const linkWidth = c.measureText(linkText).width;
+            
+            const creditBaseX = menuOriginX - padding + 0.3 * knobRadius;
+            const creditBaseY = menuOriginY + menuHeightForClick + padding - 0.3 * knobRadius;
+            const linkX = creditBaseX + prefixWidth;
+            const linkY = creditBaseY;
+            
+            // Click detection for ThreeJS.org link only
+            if (clickCanvasX >= linkX && clickCanvasX <= linkX + linkWidth &&
+                clickCanvasY >= linkY - creditFontSize && clickCanvasY <= linkY + creditFontSize * 0.3) {
+                window.open('https://threejs.org/examples/#webgl_shaders_sky', '_blank');
                 return true;
             }
             
@@ -761,6 +882,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     });
 
     canvas.addEventListener('mouseup', function(e) {
+        // If camera control was active and we were dragging, check if it was a click to lock
+        if (isDraggingSky && skyHandActive) {
+            // Calculate movement distance
+            const dragDistance = Math.sqrt(
+                Math.pow(mouseX - skyDragStartX, 2) + 
+                Math.pow(mouseY - skyDragStartY, 2)
+            );
+            
+            // Lock camera if it was a click (minimal movement)
+            if (dragDistance < 0.02) { // Threshold in world coordinates
+                skyHandActive = false;
+                // Restore menu states
+                menuVisible = menuVisibleBeforeCamera;
+                colorMenuVisible = colorMenuVisibleBeforeCamera;
+                skyMenuVisible = skyMenuVisibleBeforeCamera;
+            }
+        }
+        
         // Log camera position if we were dragging the sky
         if (isDraggingSky && window.skyRenderer) {
             console.log('Sky Camera Position - Pitch:', window.skyRenderer.effectController.cameraPitch, 'Yaw:', window.skyRenderer.effectController.cameraYaw);
@@ -819,10 +958,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         // Handle sky camera dragging
         if (isDraggingSky && window.skyRenderer) {
-            const deltaX = (mouseX - skyDragStartX) * 2; // Horizontal drag
-            const deltaY = (mouseY - skyDragStartY) * 2; // Vertical drag
-            window.skyRenderer.effectController.cameraYaw = skyCameraYawStart + deltaX;
-            window.skyRenderer.effectController.cameraPitch = skyCameraPitchStart - deltaY;
+            const deltaX = (mouseX - skyDragStartX) * 0.75; // Horizontal drag (reduced sensitivity)
+            const deltaY = (mouseY - skyDragStartY) * 0.75; // Vertical drag (reduced sensitivity)
+            window.skyRenderer.effectController.cameraYaw = skyCameraYawStart - deltaX;
+            window.skyRenderer.effectController.cameraPitch = skyCameraPitchStart + deltaY;
             // Clamp pitch to avoid flipping
             window.skyRenderer.effectController.cameraPitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, window.skyRenderer.effectController.cameraPitch));
             return;
@@ -949,6 +1088,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     boid.manualHue = true;
                     boid.manualSaturation = true;
                     boid.manualLightness = true;
+                    
+                    // Add this color to painted dots (avoid duplicates within small tolerance)
+                    const tolerance = 5; // degrees/percent
+                    const alreadyExists = paintedColorDots.some(dot => 
+                        Math.abs(dot.hue - selectedHue) < tolerance && 
+                        Math.abs(dot.saturation - selectedSaturation) < tolerance
+                    );
+                    if (!alreadyExists) {
+                        paintedColorDots.push({hue: selectedHue, saturation: selectedSaturation});
+                    }
                 }
             }
         }
@@ -1098,16 +1247,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 {min: 0, max: 4},             // rayleigh
                 {min: 0, max: 0.1},           // mieCoefficient
                 {min: 0, max: 1},             // mieDirectionalG
-                {min: -180, max: 180},        // azimuth
+                {min: 0, max: 359},           // azimuth
                 {min: -2, max: 2},            // rotationSpeed
-                {min: -1, max: 10},           // elevation
-                {min: 0, max: 1}              // exposure
+                {min: -2, max: 10},           // elevation
+                {min: 0, max: 1},             // exposure
+                {min: 10, max: 120}           // fov
             ];
             
             // Calculate drag delta
             const dragDeltaX = mouseX - dragStartMouseX;
-            const dragDeltaY = (mouseY - dragStartMouseY);
-            const dragDelta = dragDeltaX + dragDeltaY;
+            const dragDeltaY = (mouseY - dragStartMouseY);            let dragDelta = dragDeltaX + dragDeltaY;
+            
+            // Reverse delta for FOV knob (index 8)
+            if (draggedSkyKnob === 8) {
+                dragDelta = -dragDelta;
+            }
             
             // Sensitivity
             const dragSensitivity = 0.5;
@@ -1117,8 +1271,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const rangeSize = range.max - range.min;
             let newValue = dragStartValue + normalizedDelta * rangeSize;
             
-            // Clamp to range
-            newValue = Math.max(range.min, Math.min(range.max, newValue));
+            // For azimuth (index 4), allow continuous rotation (wrap around)
+            if (draggedSkyKnob === 4) {
+                // Wrap azimuth from 0 to 359
+                while (newValue >= 360) newValue -= 360;
+                while (newValue < 0) newValue += 360;
+            } else {
+                // Clamp to range for other knobs
+                newValue = Math.max(range.min, Math.min(range.max, newValue));
+            }
             
             // Apply the new value
             const skyCtrl = window.skyRenderer.effectController;
@@ -1131,6 +1292,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 case 5: skyCtrl.rotationSpeed = newValue; break;
                 case 6: skyCtrl.elevation = newValue; break;
                 case 7: skyCtrl.exposure = newValue; break;
+                case 8: skyCtrl.fov = newValue; break;
             }
             return;
         }
@@ -3479,7 +3641,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const menuWidth = knobSpacing * 3;
         const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
         const padding = 1.7 * knobRadius;
-        
         const cornerRadius = 0.05 * cScale;
         c.beginPath();
         c.moveTo(-padding + cornerRadius, -padding);
@@ -3496,8 +3657,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.strokeStyle = `hsla(210, 60%, 80%, ${menuOpacity})`;
         c.lineWidth = 0.004 * cScale;
         const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
-        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.8 * menuOpacity})`);
-        menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.8 * menuOpacity})`);
+        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.9 * menuOpacity})`);
+        menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.9 * menuOpacity})`);
         c.fillStyle = menuGradient;
         c.fill();
         c.stroke();
@@ -3530,43 +3691,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.moveTo(closeIconX + xSize, closeIconY - xSize);
         c.lineTo(closeIconX - xSize, closeIconY + xSize);
         c.stroke();
-        
+
+        // Draw knobs ---------------------------------------------
         c.lineCap = 'round';
         for (var knob = 0; knob < menuItems.length; knob++) {
-            // draw knobs in rows of four
+            // fill and trace knob background
             const row = Math.floor(knob / 4);
             const col = knob % 4;
             const knobX = col * knobSpacing;
             const knobY = row * knobSpacing + menuTopMargin;
             c.beginPath();
             c.arc(knobX, knobY, 1.05 *knobRadius, 0, 2 * Math.PI, false);
-            c.fillStyle = `hsla(210, 80%, 10%, ${0.3 * menuOpacity})`;
+            c.fillStyle = `hsla(210, 40%, 15%, ${0.9 * menuOpacity})`;
             c.fill();
-
-            // draw knobs in rows of four
-            c.beginPath();
-            c.arc(knobX, knobY, knobRadius, meterStart, meterStart + fullMeterSweep, false);
-            //c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-            const gradient = c.createLinearGradient(
-                knobX + Math.cos(meterStart) * knobRadius,
-                knobY + Math.sin(meterStart) * knobRadius,
-                knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
-                knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
-            );
-            gradient.addColorStop(0, `hsla(190, 40%, 50%, ${menuOpacity})`);
-            gradient.addColorStop(1, `hsla(210, 60%, 60%, ${menuOpacity})`);
-            c.strokeStyle = gradient;
-            c.lineWidth = 0.4 * knobRadius;
+            c.strokeStyle = `hsla(210, 40%, 50%, ${menuOpacity})`;
+            c.lineWidth = 0.003 * cScale;
             c.stroke();
 
-            /*
-            // draw needle hub 
-            c.beginPath();
-            c.arc(knobX, knobY, 0.2 * knobRadius, 0, 2 * Math.PI, false);
-            c.fillStyle = `hsla(210, 80%, 0%, ${menuOpacity})`;
-            c.fill();
-            */
-            
             // draw needle / knob indicator
             let knobValue = menuItems[knob];
             // Normalize the value based on its range
@@ -3581,44 +3722,39 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 normalizedValue = (knobValue - ranges[knob].min) / (ranges[knob].max - ranges[knob].min);
             }
             
-            // Clamp to 0-1 range
+            // normalize to 0-1 range
             normalizedValue = Math.max(0, Math.min(1, normalizedValue));
-            
             const angle = meterStart + normalizedValue * fullMeterSweep;
             const indicatorLength = knobRadius * 1.0;
             const indicatorX = knobX + Math.cos(angle) * indicatorLength;
             const indicatorY = knobY + Math.sin(angle) * indicatorLength;
-        
-            // draw needle shadow
+
+            // draw meter arc
+            const gradient = c.createLinearGradient(
+                knobX + Math.cos(meterStart) * knobRadius,
+                knobY + Math.sin(meterStart) * knobRadius,
+                knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+                knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+            );
+            gradient.addColorStop(0, `hsla(190, 40%, 50%, ${menuOpacity})`);
+            gradient.addColorStop(0.5, `hsla(170, 40%, 50%, ${menuOpacity})`);
+            c.strokeStyle = gradient;
+            c.beginPath();
+            c.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
+            c.lineWidth = 0.02 * cScale;
+            c.stroke();
+
+            // Draw needle
+            const pointerAngle = meterStart + fullMeterSweep * normalizedValue;
+            const pointerLength = knobRadius * 0.6;
+            const pointerEndX = knobX + Math.cos(pointerAngle) * pointerLength;
+            const pointerEndY = knobY + Math.sin(pointerAngle) * pointerLength;
             c.beginPath();
             c.moveTo(knobX, knobY);
-            c.lineTo(indicatorX, indicatorY);
-            c.strokeStyle = `hsla(120, 80%, 0%, ${menuOpacity})`;
-            c.lineWidth = 0.25 * knobRadius;
+            c.lineTo(pointerEndX, pointerEndY);
+            c.strokeStyle = `hsla(210, 80%, 80%, ${menuOpacity})`;
+            c.lineWidth = 0.008 * cScale;
             c.stroke();
-            // draw needle indicator circle shadow
-            c.beginPath();
-            c.arc(indicatorX, indicatorY, 0.21 * knobRadius, 0, 2 * Math.PI);
-            c.fillStyle = `hsla(120, 80%, 0%, ${menuOpacity})`;
-            c.fill();
-
-            // draw needle
-            c.beginPath();
-            c.moveTo(knobX, knobY);
-            c.lineTo(indicatorX, indicatorY);
-            c.strokeStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
-            c.lineWidth = 0.2 * knobRadius;
-            c.shadowColor = `hsla(0, 0%, 0%, ${0.9 * menuOpacity})`;
-            c.shadowBlur = 0.1 * knobRadius;
-            c.stroke();
-            c.closePath();
-            c.shadowBlur = 0;
-
-            // draw needle indicator circle
-            c.beginPath();
-            c.arc(indicatorX, indicatorY, 0.18 * knobRadius, 0, 2 * Math.PI);
-            c.fillStyle = `hsla(120, 0%, 90%, ${menuOpacity})`;
-            c.fill();
 
             // draw knob label
             c.lineWidth = 0.03 * knobRadius;
@@ -3660,11 +3796,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 case 8: valueText = (boidProps.turnFactor).toFixed(1); break;
                 case 9: valueText = boidProps.tailLength.toString(); break;
             }
-            c.font = `${0.3 * knobRadius}px verdana`;
+            c.font = `${0.25 * knobRadius}px verdana`;
             c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
             c.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
         }
-        
+
         // Draw tail color radio buttons below tail length knob (knob 9)
         const tailColorRadioRadius = knobRadius * 0.25;
         const tailKnobCol = 1;
@@ -3872,8 +4008,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.closePath();
         
         const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
-        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.8 * colorMenuOpacity})`);
-        menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.8 * colorMenuOpacity})`);
+        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.9 * colorMenuOpacity})`);
+        menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.9 * colorMenuOpacity})`);
         c.fillStyle = menuGradient;
         c.fill();
         c.strokeStyle = `hsla(210, 60%, 80%, ${colorMenuOpacity})`;
@@ -3921,6 +4057,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             wheelCenterX - colorWheelRadius, wheelCenterY - colorWheelRadius,
             colorWheelRadius * 2, colorWheelRadius * 2);
         c.restore();
+        
+        // Draw painted color dots on color wheel
+        for (let dot of paintedColorDots) {
+            const dotAngle = dot.hue * Math.PI / 180;
+            const dotRadius = (dot.saturation / 100) * colorWheelRadius;
+            const dotX = wheelCenterX + dotRadius * Math.cos(dotAngle);
+            const dotY = wheelCenterY + dotRadius * Math.sin(dotAngle);
+            
+            c.beginPath();
+            c.arc(dotX, dotY, knobRadius * 0.08, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(0, 0%, 100%, ${colorMenuOpacity * 0.9})`;
+            c.fill();
+        }
         
         // Draw selection indicator on color wheel
         const angle = selectedHue * Math.PI / 180;
@@ -4309,12 +4458,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Draw background circle
         c.beginPath();
         c.arc(hueSensitivityKnobX, hueSensitivityKnobY, 1.05 * knobRadius, 0, 2 * Math.PI, false);
-        c.fillStyle = `hsla(210, 80%, 10%, ${0.3 * colorMenuOpacity})`;
+        c.fillStyle = `hsla(210, 40%, 15%, ${0.9 * colorMenuOpacity})`;
         c.fill();
+        c.strokeStyle = `hsla(210, 40%, 50%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        
+        // Calculate normalized value
+        const normalizedValue = (boidProps.hueSensitivity - 0) / (360 - 0);
         
         // Draw arc meter
-        c.beginPath();
-        c.arc(hueSensitivityKnobX, hueSensitivityKnobY, knobRadius, meterStart, meterStart + fullMeterSweep, false);
         const gradient = c.createLinearGradient(
             hueSensitivityKnobX + Math.cos(meterStart) * knobRadius,
             hueSensitivityKnobY + Math.sin(meterStart) * knobRadius,
@@ -4322,57 +4475,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             hueSensitivityKnobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
         );
         gradient.addColorStop(0, `hsla(190, 40%, 50%, ${colorMenuOpacity})`);
-        gradient.addColorStop(1, `hsla(210, 60%, 60%, ${colorMenuOpacity})`);
+        gradient.addColorStop(0.5, `hsla(170, 40%, 50%, ${colorMenuOpacity})`);
         c.strokeStyle = gradient;
-        c.lineWidth = 0.4 * knobRadius;
-        c.stroke();
-        
-        // Draw needle indicator
-        const normalizedValue = (boidProps.hueSensitivity - 0) / (360 - 0);
-        const needleAngle = meterStart + normalizedValue * fullMeterSweep;
-        const indicatorLength = knobRadius * 1.0;
-        const indicatorX = hueSensitivityKnobX + Math.cos(needleAngle) * indicatorLength;
-        const indicatorY = hueSensitivityKnobY + Math.sin(needleAngle) * indicatorLength;
-        
-        // Draw needle shadow
         c.beginPath();
-        c.moveTo(hueSensitivityKnobX, hueSensitivityKnobY);
-        c.lineTo(indicatorX, indicatorY);
-        c.strokeStyle = `hsla(120, 80%, 0%, ${colorMenuOpacity})`;
-        c.lineWidth = 0.25 * knobRadius;
+        c.arc(hueSensitivityKnobX, hueSensitivityKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
+        c.lineWidth = 0.02 * cScale;
         c.stroke();
-        
-        // Draw needle indicator circle shadow
-        c.beginPath();
-        c.arc(indicatorX, indicatorY, 0.21 * knobRadius, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(120, 80%, 0%, ${colorMenuOpacity})`;
-        c.fill();
         
         // Draw needle
+        const needleAngle = meterStart + normalizedValue * fullMeterSweep;
+        const pointerLength = knobRadius * 0.6;
+        const pointerEndX = hueSensitivityKnobX + Math.cos(needleAngle) * pointerLength;
+        const pointerEndY = hueSensitivityKnobY + Math.sin(needleAngle) * pointerLength;
         c.beginPath();
         c.moveTo(hueSensitivityKnobX, hueSensitivityKnobY);
-        c.lineTo(indicatorX, indicatorY);
-        c.strokeStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
-        c.lineWidth = 0.2 * knobRadius;
-        c.shadowColor = `hsla(0, 0%, 0%, ${0.9 * colorMenuOpacity})`;
-        c.shadowBlur = 0.1 * knobRadius;
+        c.lineTo(pointerEndX, pointerEndY);
+        c.strokeStyle = `hsla(210, 80%, 80%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.008 * cScale;
         c.stroke();
-        c.closePath();
-        c.shadowBlur = 0;
-        
-        // Draw needle indicator circle
-        c.beginPath();
-        c.arc(indicatorX, indicatorY, 0.18 * knobRadius, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(120, 0%, 90%, ${colorMenuOpacity})`;
-        c.fill();
-        
-        // Draw value display (divided by 3.6 to show 0-100 range)
-        const displayValue = (boidProps.hueSensitivity / 3.6).toFixed(1);
-        c.font = `${0.3 * knobRadius}px verdana`;
-        c.fillStyle = `hsla(160, 80%, 50%, ${colorMenuOpacity})`;
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.fillText(displayValue, hueSensitivityKnobX, hueSensitivityKnobY + 0.6 * knobRadius);
         
         // Draw label
         c.font = `${0.29 * knobRadius}px verdana`;
@@ -4391,12 +4511,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Draw background circle
         c.beginPath();
         c.arc(hueTickerKnobX, hueTickerKnobY, 1.05 * knobRadius, 0, 2 * Math.PI, false);
-        c.fillStyle = `hsla(210, 80%, 10%, ${0.3 * colorMenuOpacity})`;
+        c.fillStyle = `hsla(210, 40%, 15%, ${0.9 * colorMenuOpacity})`;
         c.fill();
+        c.strokeStyle = `hsla(210, 40%, 50%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        
+        // Convert hueTicker to normalized value using logarithmic scale
+        const tickerLogMin = Math.log(0.01);
+        const tickerLogMax = Math.log(10.0);
+        const tickerLogValue = Math.log(Math.max(0.01, Math.min(10.0, boidProps.hueTicker)));
+        const tickerNormalized = (tickerLogValue - tickerLogMin) / (tickerLogMax - tickerLogMin);
         
         // Draw arc meter
-        c.beginPath();
-        c.arc(hueTickerKnobX, hueTickerKnobY, knobRadius, meterStart, meterStart + fullMeterSweep, false);
         const tickerGradient = c.createLinearGradient(
             hueTickerKnobX + Math.cos(meterStart) * knobRadius,
             hueTickerKnobY + Math.sin(meterStart) * knobRadius,
@@ -4404,61 +4531,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             hueTickerKnobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
         );
         tickerGradient.addColorStop(0, `hsla(190, 40%, 50%, ${colorMenuOpacity})`);
-        tickerGradient.addColorStop(1, `hsla(210, 60%, 60%, ${colorMenuOpacity})`);
+        tickerGradient.addColorStop(0.5, `hsla(170, 40%, 50%, ${colorMenuOpacity})`);
         c.strokeStyle = tickerGradient;
-        c.lineWidth = 0.4 * knobRadius;
-        c.stroke();
-        
-        // Convert hueTicker to normalized value using logarithmic scale
-        // hueTicker range: 0.01 to 10.0 (log scale)
-        const tickerLogMin = Math.log(0.01);
-        const tickerLogMax = Math.log(10.0);
-        const tickerLogValue = Math.log(Math.max(0.01, Math.min(10.0, boidProps.hueTicker)));
-        const tickerNormalized = (tickerLogValue - tickerLogMin) / (tickerLogMax - tickerLogMin);
-        const tickerNeedleAngle = meterStart + tickerNormalized * fullMeterSweep;
-        const tickerIndicatorLength = knobRadius * 1.0;
-        const tickerIndicatorX = hueTickerKnobX + Math.cos(tickerNeedleAngle) * tickerIndicatorLength;
-        const tickerIndicatorY = hueTickerKnobY + Math.sin(tickerNeedleAngle) * tickerIndicatorLength;
-        
-        // Draw needle shadow
         c.beginPath();
-        c.moveTo(hueTickerKnobX, hueTickerKnobY);
-        c.lineTo(tickerIndicatorX, tickerIndicatorY);
-        c.strokeStyle = `hsla(120, 80%, 0%, ${colorMenuOpacity})`;
-        c.lineWidth = 0.25 * knobRadius;
+        c.arc(hueTickerKnobX, hueTickerKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * tickerNormalized);
+        c.lineWidth = 0.02 * cScale;
         c.stroke();
-        
-        // Draw needle indicator circle shadow
-        c.beginPath();
-        c.arc(tickerIndicatorX, tickerIndicatorY, 0.21 * knobRadius, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(120, 80%, 0%, ${colorMenuOpacity})`;
-        c.fill();
         
         // Draw needle
+        const tickerNeedleAngle = meterStart + tickerNormalized * fullMeterSweep;
+        const tickerPointerLength = knobRadius * 0.6;
+        const tickerPointerEndX = hueTickerKnobX + Math.cos(tickerNeedleAngle) * tickerPointerLength;
+        const tickerPointerEndY = hueTickerKnobY + Math.sin(tickerNeedleAngle) * tickerPointerLength;
         c.beginPath();
         c.moveTo(hueTickerKnobX, hueTickerKnobY);
-        c.lineTo(tickerIndicatorX, tickerIndicatorY);
-        c.strokeStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
-        c.lineWidth = 0.2 * knobRadius;
-        c.shadowColor = `hsla(0, 0%, 0%, ${0.9 * colorMenuOpacity})`;
-        c.shadowBlur = 0.1 * knobRadius;
+        c.lineTo(tickerPointerEndX, tickerPointerEndY);
+        c.strokeStyle = `hsla(210, 80%, 80%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.008 * cScale;
         c.stroke();
-        c.closePath();
-        c.shadowBlur = 0;
-        
-        // Draw needle indicator circle
-        c.beginPath();
-        c.arc(tickerIndicatorX, tickerIndicatorY, 0.18 * knobRadius, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(120, 0%, 90%, ${colorMenuOpacity})`;
-        c.fill();
-        
-        // Draw value display
-        const tickerDisplayValue = boidProps.hueTicker.toFixed(2);
-        c.font = `${0.3 * knobRadius}px verdana`;
-        c.fillStyle = `hsla(160, 80%, 50%, ${colorMenuOpacity})`;
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.fillText(tickerDisplayValue, hueTickerKnobX, hueTickerKnobY + 0.6 * knobRadius);
         
         // Draw label
         c.font = `${0.29 * knobRadius}px verdana`;
@@ -4604,51 +4694,57 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     //  HANDLE CLOUDS -------------
     function handleClouds(boid) {
         // CLOUD AVOIDANCE - loop through all Clouds
-        for (let cloud of Clouds) {
-            const cloudDx = boid.pos.x - cloud.x;
-            const cloudDy = boid.pos.y - cloud.y;
-            const cloudDistSq = cloudDx * cloudDx + cloudDy * cloudDy;
-            const cloudAvoidRadius = cloud.radius + boidProps.minDistance * 1.5;
-            const radiusSq = cloudAvoidRadius * cloudAvoidRadius;
-            
-            if (cloudDistSq < radiusSq && cloudDistSq > 0) {
-                // Only compute sqrt when we know we need it
-                const cloudDist = Math.sqrt(cloudDistSq);
-                const cloudStrength = boidProps.avoidFactor * 3.0 * (cloudAvoidRadius - cloudDist) / cloudDist;
-                boid.vel.x += cloudDx * cloudStrength * deltaT;
-                boid.vel.y += cloudDy * cloudStrength * deltaT;
+        if (showClouds) {
+            for (let cloud of Clouds) {
+                const cloudDx = boid.pos.x - cloud.x;
+                const cloudDy = boid.pos.y - cloud.y;
+                const cloudDistSq = cloudDx * cloudDx + cloudDy * cloudDy;
+                const cloudAvoidRadius = cloud.radius + boidProps.minDistance * 1.5;
+                const radiusSq = cloudAvoidRadius * cloudAvoidRadius;
+                
+                if (cloudDistSq < radiusSq && cloudDistSq > 0) {
+                    // Only compute sqrt when we know we need it
+                    const cloudDist = Math.sqrt(cloudDistSq);
+                    const cloudStrength = boidProps.avoidFactor * 3.0 * (cloudAvoidRadius - cloudDist) / cloudDist;
+                    boid.vel.x += cloudDx * cloudStrength * deltaT;
+                    boid.vel.y += cloudDy * cloudStrength * deltaT;
+                }
             }
         }
         
         // MOVING AIRPLANE AVOIDANCE
-        for (let plane of Airplane) {
-            const planeDx = boid.pos.x - plane.x;
-            const planeDy = boid.pos.y - plane.y;
-            const planeDistSq = planeDx * planeDx + planeDy * planeDy;
-            const cloudAvoidRadius = plane.radius + boidProps.minDistance * 1.5;
-            const radiusSq = cloudAvoidRadius * cloudAvoidRadius;
-            
-            if (planeDistSq < radiusSq && planeDistSq > 0) {
-                const planeDist = Math.sqrt(planeDistSq);
-                const planeStrength = boidProps.avoidFactor * 3.0 * (cloudAvoidRadius - planeDist) / planeDist;
-                boid.vel.x += planeDx * planeStrength * deltaT;
-                boid.vel.y += planeDy * planeStrength * deltaT;
+        if (showPlane) {
+            for (let plane of Airplane) {
+                const planeDx = boid.pos.x - plane.x;
+                const planeDy = boid.pos.y - plane.y;
+                const planeDistSq = planeDx * planeDx + planeDy * planeDy;
+                const cloudAvoidRadius = plane.radius + boidProps.minDistance * 1.5;
+                const radiusSq = cloudAvoidRadius * cloudAvoidRadius;
+                
+                if (planeDistSq < radiusSq && planeDistSq > 0) {
+                    const planeDist = Math.sqrt(planeDistSq);
+                    const planeStrength = boidProps.avoidFactor * 3.0 * (cloudAvoidRadius - planeDist) / planeDist;
+                    boid.vel.x += planeDx * planeStrength * deltaT;
+                    boid.vel.y += planeDy * planeStrength * deltaT;
+                }
             }
         }
 
         // BALLOON AVOIDANCE
-        for (let balloon of Balloons) {
-            const balloonDx = boid.pos.x - balloon.pos.x;
-            const balloonDy = boid.pos.y - balloon.pos.y;
-            const balloonDistSq = balloonDx * balloonDx + balloonDy * balloonDy;
-            const balloonAvoidRadius = balloon.radius + boidProps.minDistance * 1.5;
-            const radiusSq = balloonAvoidRadius * balloonAvoidRadius;
-            
-            if (balloonDistSq < radiusSq && balloonDistSq > 0) {
-                const balloonDist = Math.sqrt(balloonDistSq);
-                const balloonStrength = boidProps.avoidFactor * 3.0 * (balloonAvoidRadius - balloonDist) / balloonDist;
-                boid.vel.x += balloonDx * balloonStrength * deltaT;
-                boid.vel.y += balloonDy * balloonStrength * deltaT;
+        if (showBalloons) {
+            for (let balloon of Balloons) {
+                const balloonDx = boid.pos.x - balloon.pos.x;
+                const balloonDy = boid.pos.y - balloon.pos.y;
+                const balloonDistSq = balloonDx * balloonDx + balloonDy * balloonDy;
+                const balloonAvoidRadius = balloon.radius + boidProps.minDistance * 1.5;
+                const radiusSq = balloonAvoidRadius * balloonAvoidRadius;
+                
+                if (balloonDistSq < radiusSq && balloonDistSq > 0) {
+                    const balloonDist = Math.sqrt(balloonDistSq);
+                    const balloonStrength = boidProps.avoidFactor * 3.0 * (balloonAvoidRadius - balloonDist) / balloonDist;
+                    boid.vel.x += balloonDx * balloonStrength * deltaT;
+                    boid.vel.y += balloonDy * balloonStrength * deltaT;
+                }
             }
         }
     }
@@ -4792,7 +4888,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             skyCtrl.azimuth,
             skyCtrl.rotationSpeed,
             skyCtrl.elevation,
-            skyCtrl.exposure
+            skyCtrl.exposure,
+            skyCtrl.fov
         ];
         
         const ranges = [
@@ -4800,13 +4897,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             {min: 0, max: 4},             // rayleigh
             {min: 0, max: 0.1},           // mieCoefficient
             {min: 0, max: 1},             // mieDirectionalG
-            {min: -180, max: 180},        // azimuth
+            {min: 0, max: 359},           // azimuth
             {min: -2, max: 2},            // rotationSpeed
-            {min: -1, max: 10},           // elevation
-            {min: 0, max: 1}              // exposure
+            {min: -2, max: 10},           // elevation
+            {min: 0, max: 1},             // exposure
+            {min: 10, max: 120}           // fov
         ];
         
-        const labels = ['Turbidity', 'Rayleigh', 'Mie Coef', 'Mie Dir G', 'Azimuth', 'Rot Speed', 'Elevation', 'Exposure'];
+        const labels = ['Turbidity', 'Rayleigh Scattering', 'Mie Scattering', 'Concentration', 'Sun Azimuth', 'Sun Movement', 'Sun Elevation', 'Exposure', 'Field of View'];
         
         const knobRadius = 0.1 * cScale;
         const knobSpacing = knobRadius * 3;
@@ -4820,7 +4918,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         // Draw overall menu background with rounded corners
         const menuWidth = knobSpacing * 3;
-        const menuHeight = knobSpacing * 1 + knobRadius * 2.5;
+        const menuHeight = knobSpacing * 2.25;
         const padding = 1.7 * knobRadius;
         
         const cornerRadius = 0.05 * cScale;
@@ -4838,8 +4936,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.strokeStyle = `hsla(30, 80%, 60%, ${skyMenuOpacity})`;
         c.lineWidth = 0.004 * cScale;
         const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
-        menuGradient.addColorStop(0, `hsla(30, 70%, 25%, ${0.8 * skyMenuOpacity})`);
-        menuGradient.addColorStop(1, `hsla(30, 70%, 10%, ${0.8 * skyMenuOpacity})`);
+        menuGradient.addColorStop(0, `hsla(30, 70%, 25%, ${0.9 * skyMenuOpacity})`);
+        menuGradient.addColorStop(1, `hsla(30, 70%, 10%, ${0.9 * skyMenuOpacity})`);
         c.fillStyle = menuGradient;
         c.fill();
         c.stroke();
@@ -4874,9 +4972,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.fillText('SKY', menuWidth / 2, -padding + 0.04 * cScale);
         
         // Draw knobs for each parameter
-        for (let i = 0; i < menuItems.length && i < 8; i++) {
-            const x = (i % 4) * knobSpacing;
-            const y = Math.floor(i / 4) * knobSpacing;
+        for (let i = 0; i < menuItems.length && i < 9; i++) {
+            let x = (i % 4) * knobSpacing;
+            let y = Math.floor(i / 4) * knobSpacing;
+            // Special positioning for FOV knob (index 8) - move to column 3, row 2
+            if (i === 8) {
+                x = 3 * knobSpacing;
+                y = 2 * knobSpacing;
+            }
             
             const value = menuItems[i];
             const range = ranges[i];
@@ -4885,21 +4988,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Draw knob background circle
             c.beginPath();
             c.arc(x, y, knobRadius, 0, 2 * Math.PI);
-            c.fillStyle = `hsla(30, 40%, 15%, ${skyMenuOpacity})`;
+            c.fillStyle = `hsla(30, 40%, 15%, ${0.9 *skyMenuOpacity})`;
             c.fill();
             c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
             c.lineWidth = 0.003 * cScale;
             c.stroke();
             
-            // Draw meter arc
+            // Draw meter arc - for azimuth (index 4), draw full circle
             c.beginPath();
-            c.arc(x, y, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalized);
+            if (i === 4) {
+                // Azimuth - draw full circle
+                c.arc(x, y, knobRadius * 0.85, 0, 2 * Math.PI);
+            } else if (i === 8) {
+                // FOV knob - draw inverted arc
+                c.arc(x, y, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * (1 - normalized));
+            } else {
+                // Other knobs - draw partial arc
+                c.arc(x, y, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalized);
+            }
             c.strokeStyle = `hsla(30, 80%, 60%, ${skyMenuOpacity})`;
             c.lineWidth = 0.02 * cScale;
             c.stroke();
             
             // Draw knob pointer
-            const pointerAngle = meterStart + fullMeterSweep * normalized;
+            let pointerAngle;
+            if (i === 4) {
+                // Azimuth - full 360 degree rotation
+                pointerAngle = normalized * 2 * Math.PI;
+            } else if (i === 8) {
+                // FOV - inverted
+                pointerAngle = meterStart + fullMeterSweep * (1 - normalized);
+            } else {
+                // Other knobs - normal
+                pointerAngle = meterStart + fullMeterSweep * normalized;
+            }
             const pointerLength = knobRadius * 0.6;
             const pointerEndX = x + Math.cos(pointerAngle) * pointerLength;
             const pointerEndY = y + Math.sin(pointerAngle) * pointerLength;
@@ -4911,83 +5033,162 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.stroke();
             
             // Draw label
-            c.fillStyle = `hsla(30, 60%, 70%, ${skyMenuOpacity})`;
+            c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
             c.font = `${0.032 * cScale}px sans-serif`;
             c.textAlign = 'center';
             c.fillText(labels[i], x, y + knobRadius + 0.04 * cScale);
             
             // Draw value
-            let displayValue = value.toFixed(value < 1 ? 3 : value < 10 ? 1 : 0);
-            c.fillStyle = `hsla(30, 50%, 60%, ${skyMenuOpacity})`;
+            let decimals;
+            if (i === 1 || i === 5 || i === 7) decimals = 2; // Concentration, sun movement, exposure
+            else if (i === 4) decimals = 0; // Azimuth
+            else if (i === 6) decimals = 1; // Elevation
+            else decimals = value < 1 ? 3 : value < 10 ? 1 : 0; // Default logic
+            let displayValue = value.toFixed(decimals);
+            if (i === 4 || i === 8) displayValue += '°'; // Add degree symbol for azimuth and FOV
+            c.fillStyle = `hsla(150, 50%, 60%, ${skyMenuOpacity})`;
             c.font = `${0.025 * cScale}px sans-serif`;
-            c.fillText(displayValue, x, y + knobRadius + 0.07 * cScale);
+            c.fillText(displayValue, x, y + knobRadius * 0.60);
         }
         
         // Draw toggle buttons below the knobs
-        const buttonY = knobSpacing * 2 - knobRadius * 0.2;
-        const checkboxSize = knobRadius * 0.4;
+        const buttonY = knobSpacing * 2;
+        const checkboxRadius = knobRadius * 0.25;
         
-        // Auto Rotate checkbox (centered under Rotation Speed knob at col 1)
+        // Auto Rotate checkbox (centered under Rotation Speed knob at col 1, row 1)
         const autoRotateX = knobSpacing * 1.0;
+        const autoRotateY = knobSpacing * 1.0;
+        
+        // Draw outer circle with knob fill color
         c.beginPath();
-        c.rect(autoRotateX - checkboxSize / 2, buttonY - checkboxSize / 2, checkboxSize, checkboxSize);
-        c.fillStyle = `hsla(30, 40%, 15%, ${skyMenuOpacity})`;
+        c.arc(autoRotateX, autoRotateY, checkboxRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(30, 40%, 15%, ${0.9 * skyMenuOpacity})`; // Knob fill color
         c.fill();
         c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
         c.lineWidth = 0.003 * cScale;
         c.stroke();
         
-        // Draw checkmark if enabled
+        // Draw filled center if enabled (green)
         if (skyCtrl.autoRotate) {
-            c.strokeStyle = `hsla(30, 80%, 70%, ${skyMenuOpacity})`;
-            c.lineWidth = 0.006 * cScale;
             c.beginPath();
-            c.moveTo(autoRotateX - checkboxSize * 0.3, buttonY);
-            c.lineTo(autoRotateX - checkboxSize * 0.1, buttonY + checkboxSize * 0.25);
-            c.lineTo(autoRotateX + checkboxSize * 0.35, buttonY - checkboxSize * 0.25);
-            c.stroke();
+            c.arc(autoRotateX, autoRotateY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(120, 80%, 50%, ${skyMenuOpacity})`; // Green when active
+            c.fill();
         }
         
-        // Label
-        c.fillStyle = `hsla(30, 60%, 70%, ${skyMenuOpacity})`;
-        c.font = `${0.028 * cScale}px sans-serif`;
-        c.textAlign = 'center';
-        c.fillText('Auto Rotate', autoRotateX, buttonY + knobRadius * 0.6);
+        // Show Grid checkbox (centered under FOV knob at col 3, row 2)
+        const showGridX = knobSpacing * 3.0;
+        const showGridY = knobSpacing * 2.0;
         
-        // Show Grid checkbox (remove or reposition as needed)
-        const showGridX = knobSpacing * 0.0;
+        // Draw outer circle with knob fill color
         c.beginPath();
-        c.rect(showGridX - checkboxSize / 2, buttonY - checkboxSize / 2, checkboxSize, checkboxSize);
-        c.fillStyle = `hsla(30, 40%, 15%, ${skyMenuOpacity})`;
+        c.arc(showGridX, showGridY, checkboxRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(30, 40%, 15%, ${0.9 * skyMenuOpacity})`; // Knob fill color
         c.fill();
         c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
         c.lineWidth = 0.003 * cScale;
         c.stroke();
         
-        // Draw checkmark if enabled
+        // Draw filled center if enabled (green)
         if (skyCtrl.showGrid) {
-            c.strokeStyle = `hsla(30, 80%, 70%, ${skyMenuOpacity})`;
-            c.lineWidth = 0.006 * cScale;
             c.beginPath();
-            c.moveTo(showGridX - checkboxSize * 0.3, buttonY);
-            c.lineTo(showGridX - checkboxSize * 0.1, buttonY + checkboxSize * 0.25);
-            c.lineTo(showGridX + checkboxSize * 0.35, buttonY - checkboxSize * 0.25);
-            c.stroke();
+            c.arc(showGridX, showGridY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(120, 80%, 50%, ${skyMenuOpacity})`; // Green when active
+            c.fill();
         }
         
-        // Label
-        c.textAlign = 'center';
-        c.fillStyle = `hsla(30, 60%, 70%, ${skyMenuOpacity})`;
-        c.fillText('Show Grid', showGridX, buttonY + knobRadius * 0.6);
+        // Object visibility toggle buttons - row of 4 centered under columns 0-1
+        const buttonRowY = buttonY;
+        const buttonSpacing = knobRadius * 1.3;
+        const rowCenter = knobSpacing * 0.5; // Center between columns 0 and 1
         
-        // Draw camera icon (in column 3, below exposure knob)
-        const camX = knobSpacing * 3.0;
-        const camSize = knobRadius * 1.3; 
+        // Clouds toggle
+        const cloudsX = rowCenter - 1.5 * buttonSpacing;
+        const cloudsY = buttonRowY;
+        c.beginPath();
+        c.arc(cloudsX, cloudsY, checkboxRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        if (showClouds) {
+            c.beginPath();
+            c.arc(cloudsX, cloudsY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+            c.fill();
+        }
+        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+        c.font = `${0.028 * cScale}px sans-serif`;
+        c.fillText('Clouds', cloudsX, cloudsY + knobRadius * 0.5);
+        
+        // Plane toggle
+        const planeX = rowCenter - 0.5 * buttonSpacing;
+        const planeY = buttonRowY;
+        c.beginPath();
+        c.arc(planeX, planeY, checkboxRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        if (showPlane) {
+            c.beginPath();
+            c.arc(planeX, planeY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+            c.fill();
+        }
+        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+        c.fillText('Plane', planeX, planeY + knobRadius * 0.5);
+        
+        // Balloons toggle
+        const balloonsX = rowCenter + 0.5 * buttonSpacing;
+        const balloonsY = buttonRowY;
+        c.beginPath();
+        c.arc(balloonsX, balloonsY, checkboxRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        if (showBalloons) {
+            c.beginPath();
+            c.arc(balloonsX, balloonsY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+            c.fill();
+        }
+        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+        c.fillText('Party', balloonsX, balloonsY + knobRadius * 0.50);
+        c.fillText('Balloons', balloonsX, balloonsY + knobRadius * 0.80);
+        
+        // Hot Air Balloon toggle
+        const hotAirBalloonX = rowCenter + 1.5 * buttonSpacing;
+        const hotAirBalloonY = buttonRowY;
+        c.beginPath();
+        c.arc(hotAirBalloonX, hotAirBalloonY, checkboxRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        if (showHotAirBalloon) {
+            c.beginPath();
+            c.arc(hotAirBalloonX, hotAirBalloonY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+            c.fill();
+        }
+        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+        c.fillText('Bunny', hotAirBalloonX, hotAirBalloonY + knobRadius * 0.50);
+        c.fillText('Balloon', hotAirBalloonX, hotAirBalloonY + knobRadius * 0.80);
+        
+        // Draw camera icon (in column 2, row 2)
+        const camX = knobSpacing * 2.0;
+        const camSize = knobRadius * 1.5; 
         
         // Draw movie camera icon (no background box)
         c.fillStyle = skyHandActive ? 
-            `hsla(120, 90%, 70%, ${skyMenuOpacity})` : 
-            `hsla(30, 50%, 40%, ${skyMenuOpacity})`;
+            `hsla(120, 90%, 60%, ${skyMenuOpacity})` : 
+            `hsla(0, 50%, 40%, ${skyMenuOpacity})`;
         c.strokeStyle = skyHandActive ? `hsla(30, 90%, 80%, ${skyMenuOpacity})` : `hsla(30, 50%, 40%, ${skyMenuOpacity})`;
         c.lineWidth = 0.005 * cScale;
         c.lineCap = 'round';
@@ -5012,26 +5213,111 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.fill();
         
         // Film reels on top (left smaller, right larger)
-        // Left reel (smaller)
+        const leftReelX = camX - camSize * 0.4;
+        const leftReelY = buttonY - camSize * 0.3;
+        const leftReelRadius = camSize * 0.16;
+        
+        const rightReelX = camX - camSize * 0.02;
+        const rightReelY = buttonY - camSize * 0.36;
+        const rightReelRadius = camSize * 0.22;
+        
+        // Draw left reel (smaller)
         c.beginPath();
-        c.arc(
-            camX - camSize * 0.4, 
-            buttonY - camSize * 0.3, 
-            camSize * 0.16, 
-            0, 
-            2 * Math.PI);
+        c.arc(leftReelX, leftReelY, leftReelRadius, 0, 2 * Math.PI);
         c.fill();
         
-        // Right reel (larger)
+        // Draw rotating circles on left reel when active (faster rotation)
+        if (skyHandActive) {
+            const time = Date.now() / 1000;
+            const leftReelRotation = -time * 4; // 4 radians per second
+            const leftReelDots = 4;
+            const leftReelDotRadius = leftReelRadius * 0.7;
+            const leftReelDotSize = camSize * 0.03;
+            
+            c.fillStyle = `hsla(0, 0%, 0%, ${skyMenuOpacity})`;
+            for (let i = 0; i < leftReelDots; i++) {
+                const angle = leftReelRotation + (i * 2 * Math.PI / leftReelDots);
+                const dotX = leftReelX + Math.cos(angle) * leftReelDotRadius;
+                const dotY = leftReelY + Math.sin(angle) * leftReelDotRadius;
+                c.beginPath();
+                c.arc(dotX, dotY, leftReelDotSize, 0, 2 * Math.PI);
+                c.fill();
+            }
+        }
+        
+        // Draw right reel (larger)
+        c.fillStyle = skyHandActive ? 
+            `hsla(120, 90%, 60%, ${skyMenuOpacity})` : 
+            `hsla(0, 50%, 40%, ${skyMenuOpacity})`;
         c.beginPath();
-        c.arc(camX - camSize * 0.02, buttonY - camSize * 0.36, camSize * 0.22, 0, 2 * Math.PI);
+        c.arc(rightReelX, rightReelY, rightReelRadius, 0, 2 * Math.PI);
         c.fill();
+        
+        // Draw rotating circles on right reel when active (slower rotation, opposite direction)
+        if (skyHandActive) {
+            const time = Date.now() / 1000;
+            const rightReelRotation = time * 2.5; // Negative for opposite rotation
+            const rightReelDots = 5;
+            const rightReelDotRadius = rightReelRadius * 0.7;
+            const rightReelDotSize = camSize * 0.04;
+            
+            c.fillStyle = `hsla(0, 0%, 0%, ${skyMenuOpacity})`;
+            for (let i = 0; i < rightReelDots; i++) {
+                const angle = rightReelRotation + (i * 2 * Math.PI / rightReelDots);
+                const dotX = rightReelX + Math.cos(angle) * rightReelDotRadius;
+                const dotY = rightReelY + Math.sin(angle) * rightReelDotRadius;
+                c.beginPath();
+                c.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
+                c.fill();
+            }
+        }
+
+        // Draw lock icon only if skyHandActive is false
+        if (!skyHandActive) {
+            const lockSize = 40;
+            const lockY = -lockSize / 4; // Position slightly above center
+            
+            // Draw lock body (rectangle)
+            c.fillStyle = 'hsl(0, 0%, 70%)';
+            c.fillRect(camX - lockSize/4, buttonY + lockY, lockSize/2, lockSize/2.5);
+            
+            // Draw lock shackle (arc on top)
+            c.strokeStyle = 'hsl(0, 0%, 90%)';
+            c.lineWidth = 3;
+            c.beginPath();
+            c.arc(camX, buttonY +(lockY - 0.15 * lockSize), lockSize/6, Math.PI, 0, false);
+            c.stroke();
+
+            // Draw shackle straight lengths
+            c.beginPath();
+            c.moveTo(camX - lockSize/6, buttonY + lockY);
+            c.lineTo(camX - lockSize/6, buttonY + (lockY - 0.15 * lockSize));
+            c.moveTo(camX + lockSize/6, buttonY + lockY);
+            c.lineTo(camX + lockSize/6, buttonY + (lockY - 0.15 * lockSize));
+            c.stroke();
+        }
         
         // Label
-        c.fillStyle = `hsla(30, 60%, 70%, ${skyMenuOpacity})`;
+        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
         c.font = `${0.028 * cScale}px sans-serif`;
         c.textAlign = 'center';
-        c.fillText('Adjust Camera', camX, buttonY + knobRadius * 0.6);
+        c.fillText('Adjust Sky Camera', camX, buttonY + knobRadius * 0.7);
+        
+        // Credit link at bottom left - split into two parts
+        c.font = `${0.032 * cScale}px sans-serif`;
+        c.textAlign = 'left';
+        const creditX = -padding + 0.3 * knobRadius;
+        const creditY = menuHeight + padding - 0.3 * knobRadius;
+        
+        // Draw first part in tan
+        c.fillStyle = `hsla(30, 50%, 70%, ${skyMenuOpacity})`;
+        const prefixText = 'Sky simulation borrowed from ';
+        c.fillText(prefixText, creditX, creditY);
+        
+        // Draw ThreeJS.org in green
+        const prefixWidth = c.measureText(prefixText).width;
+        c.fillStyle = `hsla(120, 80%, 60%, ${skyMenuOpacity})`;
+        c.fillText('ThreeJS.org', creditX + prefixWidth, creditY);
         
         c.restore();
     }
@@ -5090,6 +5376,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         for (let i = sprayParticles.length - 1; i >= 0; i--) {
             if (!sprayParticles[i].update(deltaT)) {
                 sprayParticles.splice(i, 1); // Remove dead particles
+            }
+        }
+        
+        // Generate idle spray particles when spray tool is active but not painting
+        if (spraypaintActive && !isSpraying) {
+            const idleParticlesPerFrame = 0.5; // Generate less frequently
+            for (let i = 0; i < idleParticlesPerFrame; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * (spraypaintRadius / 3); // Limit to third of normal radius
+                const px = mouseX + Math.cos(angle) * distance;
+                const py = mouseY + Math.sin(angle) * distance;
+                sprayParticles.push(new SprayParticle(px, py, selectedHue, selectedSaturation, selectedLightness));
             }
         }
         
@@ -5238,18 +5536,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //.fillRect(0, 0, width, height);
 
         // Draw hot air balloon 
-        for (let hotAirBalloon of HotAirBalloon) {
-            hotAirBalloon.draw();
+        if (showHotAirBalloon) {
+            for (let hotAirBalloon of HotAirBalloon) {
+                hotAirBalloon.draw();
+            }
         }
         
         // Draw background clouds first
-        for (let cloud of BackgroundClouds) {
-            cloud.draw();
+        if (showClouds) {
+            for (let cloud of BackgroundClouds) {
+                cloud.draw();
+            }
         }
         
         // Draw foreground clouds
-        for (let cloud of Clouds) {
-            cloud.draw();
+        if (showClouds) {
+            for (let cloud of Clouds) {
+                cloud.draw();
+            }
         }
 
         // Draw boids
@@ -5268,7 +5572,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         
         // Draw airplane
-        if (doKitty == true) {
+        if (doKitty == true && showPlane) {
             // Draw airplane
             for (let plane of Airplane) {
                 plane.draw();
@@ -5276,8 +5580,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         // Draw balloon ---------
-        for (let balloon of Balloons) {
-            balloon.draw();
+        if (showBalloons) {
+            for (let balloon of Balloons) {
+                balloon.draw();
+            }
         }
         
         // Draw Rain --------
@@ -5286,10 +5592,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         // Draw big foreground cloud (non-interactive) last
-        for (let cloud of ForegroundCloud) {
-            cloud.draw();
-            if (cloud.isRaining) {
-                makeItRain(cloud);
+        if (showClouds) {
+            for (let cloud of ForegroundCloud) {
+                cloud.draw();
+                if (cloud.isRaining) {
+                    makeItRain(cloud);
+                }
             }
         }
         
@@ -5311,6 +5619,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         // Draw spraypaint cursor
         if (spraypaintActive) {
+            canvas.style.cursor = 'default';
             const cursorX = mouseX * cScale;
             const cursorY = canvas.height - mouseY * cScale;
             const canSize = 0.04 * cScale;
@@ -5340,6 +5649,99 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.lineWidth = 1;
             c.strokeRect(cursorX - canSize * 0.4, cursorY - canSize * 0.6, canSize * 0.8, canSize * 1.2);
             */
+        }
+        
+        // Draw camera cursor when skyHandActive
+        if (skyHandActive && !spraypaintActive) {
+            canvas.style.cursor = 'none';
+            const cursorX = mouseX * cScale;
+            const cursorY = canvas.height - mouseY * cScale;
+            const camSize = 0.1 * cScale;
+            
+            c.fillStyle = 'hsla(120, 0%, 70%, 0.9)';
+            c.strokeStyle = 'hsla(30, 0%, 0%, 0.9)';
+            c.lineWidth = 0.002 * cScale;
+            c.lineCap = 'round';
+            c.lineJoin = 'round';
+
+            const lensY = (cursorY - camSize * 0.12) + (camSize * 0.35 / 2);
+            // Triangular lens on right side
+            c.beginPath();
+            c.moveTo(cursorX + camSize * 0.45, lensY - camSize * 0.25);
+            c.lineTo(cursorX - camSize * 0.10, lensY);
+            c.lineTo(cursorX + camSize * 0.45, lensY + camSize * 0.25);
+            c.closePath();
+            c.fill();
+            c.stroke();
+            
+            // Camera body (rectangle) - on the left
+            c.beginPath();
+            c.rect(
+                cursorX - camSize * 0.5, 
+                cursorY - camSize * 0.12, 
+                camSize * 0.6, 
+                camSize * 0.35);
+            c.fill();
+            c.stroke();
+            
+            
+            
+            // Film reels on top
+            const leftReelX = cursorX - camSize * 0.4;
+            const leftReelY = cursorY - camSize * 0.3;
+            const leftReelRadius = camSize * 0.16;
+            
+            const rightReelX = cursorX - camSize * 0.02;
+            const rightReelY = cursorY - camSize * 0.36;
+            const rightReelRadius = camSize * 0.22;
+            
+            // Draw left reel (smaller, faster)
+            c.beginPath();
+            c.arc(leftReelX, leftReelY, leftReelRadius, 0, 2 * Math.PI);
+            c.fill();
+            c.stroke();
+            
+            // Draw rotating circles on left reel (faster rotation)
+            const time = Date.now() / 1000;
+            const leftReelRotation = -time * 4; // 4 radians per second
+            const leftReelDots = 4;
+            const leftReelDotRadius = leftReelRadius * 0.7;
+            const leftReelDotSize = camSize * 0.03;
+            
+            c.fillStyle = 'hsla(0, 0%, 0%, 0.9)';
+            for (let i = 0; i < leftReelDots; i++) {
+                const angle = leftReelRotation + (i * 2 * Math.PI / leftReelDots);
+                const dotX = leftReelX + Math.cos(angle) * leftReelDotRadius;
+                const dotY = leftReelY + Math.sin(angle) * leftReelDotRadius;
+                c.beginPath();
+                c.arc(dotX, dotY, leftReelDotSize, 0, 2 * Math.PI);
+                c.fill();
+            }
+            
+            // Draw right reel (larger, slower)
+            c.fillStyle = 'hsla(120, 0%, 70%, 0.9)';
+            c.beginPath();
+            c.arc(rightReelX, rightReelY, rightReelRadius, 0, 2 * Math.PI);
+            c.fill();
+            c.stroke();
+            
+            // Draw rotating circles on right reel (slower rotation, opposite direction)
+            const rightReelRotation = time * 2.5; // Negative for opposite rotation
+            const rightReelDots = 5;
+            const rightReelDotRadius = rightReelRadius * 0.7;
+            const rightReelDotSize = camSize * 0.04;
+            
+            c.fillStyle = 'hsla(0, 0%, 0%, 0.9)';
+            for (let i = 0; i < rightReelDots; i++) {
+                const angle = rightReelRotation + (i * 2 * Math.PI / rightReelDots);
+                const dotX = rightReelX + Math.cos(angle) * rightReelDotRadius;
+                const dotY = rightReelY + Math.sin(angle) * rightReelDotRadius;
+                c.beginPath();
+                c.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
+                c.fill();
+            }
+        } else if (!spraypaintActive) {
+            canvas.style.cursor = 'default';
         }
 
         drawStats();
