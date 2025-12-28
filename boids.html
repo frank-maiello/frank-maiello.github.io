@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.30</title>
+    <title>Boids 1.31</title>
     <style>
         html, body {
             margin: 0;
@@ -882,7 +882,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const menuHeightForClick = knobSpacing * 2.25; // Match the drawing code
             const creditFontSize = 0.032 * cScale;
             c.font = `${creditFontSize}px sans-serif`;
-            const prefixText = 'Sky simulation borrowed from ';
+            const prefixText = '';
             const prefixWidth = c.measureText(prefixText).width;
             const linkText = 'ThreeJS.org';
             const linkWidth = c.measureText(linkText).width;
@@ -3185,7 +3185,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.lineCap = 'round';
                     c.lineJoin = 'round';
                     for (let i = 0; i < this.propTrail1.length - 1; i++) {
-                        const alpha = (i / this.propTrail1.length) * 0.3;
+                        const alpha = (i / this.propTrail1.length) * 0.2;
                         //const width = Math.min(10, 5 / (i / this.propTrail1.length));
                         const maxWidth = Math.min(30, 5 / (i / this.propTrail1.length));
                         const point1 = this.propTrail1[i];
@@ -3251,7 +3251,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     let width;
                     // Draw 
                     for (let i = 0; i < this.propTrail2.length - 1; i++) {
-                        const alpha = (i / this.propTrail2.length) * 0.3;
+                        const alpha = (i / this.propTrail2.length) * 0.2;
                         //const width = Math.min(10, 50 / (i / this.propTrail1.length));
                         //width += 10;
                         const maxWidth = Math.min(20, 7 / (i / this.propTrail1.length));
@@ -3708,13 +3708,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.closePath();
         
         const menuGradient = c.createLinearGradient(menuX, menuY, menuX, menuY + menuHeight);
-        menuGradient.addColorStop(0, `hsla(210, 80%, 20%, 0.95)`);
-        menuGradient.addColorStop(1, `hsla(210, 80%, 10%, 0.95)`);
+        menuGradient.addColorStop(0, `hsla(210, 0%, 10%, 0.6)`);
+        menuGradient.addColorStop(1, `hsla(210, 0%, 20%, 0.6)`);
         c.fillStyle = menuGradient;
         c.fill();
-        c.strokeStyle = `hsla(210, 60%, 60%, 0.8)`;
-        c.lineWidth = 0.003 * cScale;
-        c.stroke();
         
         // Menu items configuration
         const menuItems = [
@@ -3728,11 +3725,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const item = menuItems[i];
             const itemX = menuX + padding + (i * (itemWidth + padding));
             const itemY = menuY + padding;
-            
-            // Draw item background (highlight if active)
-            c.fillStyle = item.active ? 
-                `hsla(210, 70%, 40%, 0.5)` : 
-                `hsla(210, 30%, 15%, 0.3)`;
+
+            // Draw item background with rounded corners
             c.beginPath();
             c.moveTo(itemX + cornerRadius * 0.5, itemY);
             c.lineTo(itemX + itemWidth - cornerRadius * 0.5, itemY);
@@ -3744,14 +3738,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.lineTo(itemX, itemY + cornerRadius * 0.5);
             c.quadraticCurveTo(itemX, itemY, itemX + cornerRadius * 0.5, itemY);
             c.closePath();
+            // Draw item background (highlight if active)
+            if (item.active) {
+                if (item.icon === 'sim') {
+                    c.fillStyle = `hsla(210, 90%, 60%, 0.3)`;
+                } else if (item.icon === 'paint') {
+                    c.fillStyle = `hsla(0, 0%, 80%, 0.3)`;
+                } else if (item.icon === 'sky') {
+                    c.fillStyle = `hsla(30, 90%, 60%, 0.3)`;
+                }
+            } else {
+                c.fillStyle = `hsla(0, 0%, 15%, 0.6)`;
+            }
             c.fill();
             
             // Draw icon (centered horizontally in item)
             const iconX = itemX + itemWidth / 2;
             const iconY = itemY + itemHeight / 2 - padding;
             const iconColor = item.active ? 
-                `hsla(120, 70%, 60%, 1.0)` : 
-                `hsla(210, 30%, 50%, 1.0)`;
+                `hsla(120, 0%, 90%, 1.0)` : 
+                `hsla(0, 0%, 20%, 1.0)`;
             
             c.strokeStyle = iconColor;
             c.fillStyle = iconColor;
@@ -3795,7 +3801,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.fill();
                 
                 // Draw center circle
-                c.fillStyle = `hsla(210, 80%, 15%, 1.0)`;
+                c.fillStyle = `hsla(210, 50%, 40%, 1.0)`;
                 c.beginPath();
                 c.arc(iconX, iconY, centerRadius, 0, 2 * Math.PI);
                 c.fill();
@@ -3874,8 +3880,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             // Draw label text (centered below icon)
             c.fillStyle = item.active ? 
-                `hsla(210, 80%, 90%, 1.0)` : 
-                `hsla(210, 40%, 70%, 1.0)`;
+                `hsla(210, 0%, 90%, 1.0)` : 
+                `hsla(210, 0%, 80%, 1.0)`;
             c.font = `bold ${0.028 * cScale}px verdana`;
             c.textAlign = 'center';
             c.textBaseline = 'top';
@@ -4253,6 +4259,41 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
             c.fillText(radioLabels[i], buttonX + radioButtonRadius + 0.2 * knobRadius, buttonY);
         }
+
+        // Draw reset button --------------------------------------
+        const resetButtonRadius = knobRadius * 0.5;
+        const resetButtonX = 3 * knobSpacing;
+        const resetButtonY = 2.1 * knobSpacing + menuTopMargin;
+        
+        // Draw reset button
+        c.fillStyle = `hsla(60, 80%, 50%, ${menuOpacity})`;
+        c.beginPath();
+        c.arc(resetButtonX, resetButtonY, 0.7 * resetButtonRadius, 0, 2 * Math.PI);
+        c.closePath();
+        c.fill();
+
+        // Draw "RESET" text in arc above button
+        const resetText = "RESET";
+        const arcRadius = resetButtonRadius * 1.8;
+        const totalArcAngle = Math.PI * 0.6; // 60 degrees total arc
+        const startAngle = -Math.PI / 2 - totalArcAngle / 2; // Center the arc above
+        
+        c.font = `bold ${0.4 * knobRadius}px verdana`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        for (let i = 0; i < resetText.length; i++) {
+            const angle = startAngle + (i / (resetText.length - 1)) * totalArcAngle;
+            const x = resetButtonX + Math.cos(angle) * arcRadius;
+            const y = resetButtonY + (0.1 * knobRadius) + Math.sin(angle) * arcRadius;
+            c.save();
+            c.translate(x, y);
+            c.rotate(angle + Math.PI / 2); // Rotate to follow arc
+            c.fillStyle = `hsla(0, 80%, 0%, ${0.7 *menuOpacity})`;
+            c.fillText(resetText[i], 0.08 * knobRadius, 0.06 * knobRadius);
+            c.fillStyle = `hsla(210, 80%, 80%, ${menuOpacity})`;
+            c.fillText(resetText[i], 0, 0);
+            c.restore();
+        }
         
         // Draw FPS counter in bottom right of menu -------------------------------
         c.textAlign = 'right';
@@ -4270,77 +4311,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Full red for very low FPS
             fpsHue = 0;
         }
-        //c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
-
-        // Draw "running at" text
-        c.font = `${0.3 * knobRadius}px monospace`;
-        c.fillStyle = `hsla(0, 0%, 0%, ${0.5 *menuOpacity})`;
-        c.fillText('running at', menuWidth + padding - 0.75 * knobRadius, menuHeight + padding - 1.25 * knobRadius);
-        c.fillStyle = `hsla(${fpsHue}, 0%, 85%, ${menuOpacity})`;
-        c.fillText('running at', menuWidth + padding - 0.8 * knobRadius, menuHeight + padding - 1.3 * knobRadius);
         
         // draw dark heavy background line for FPS text
         const fpsTextWidth = c.measureText(fpsText).width;
         c.beginPath();
-        c.moveTo(menuWidth + padding - 2.7 * knobRadius, menuHeight + padding - 0.92 * knobRadius);
-        c.lineTo(menuWidth + padding - 0.7 *knobRadius, menuHeight + padding - 0.92 * knobRadius);
-        c.lineWidth = 0.6 * knobRadius;
+        c.moveTo(menuWidth + padding - 2.5 * knobRadius, menuHeight + padding - 3.55 * knobRadius);
+        c.lineTo(menuWidth + padding - 0.9 *knobRadius, menuHeight + padding - 3.55 * knobRadius);
+        c.lineWidth = 0.5 * knobRadius;
         c.strokeStyle = `hsla(0, 0%, 0%, ${0.7 * menuOpacity})`;
         c.lineCap = 'round';
         c.stroke();
 
-        // Draw FPS text
-        c.font = `${0.5 * knobRadius}px monospace`;
-        c.fillStyle = `hsla(0, 0%, 0%, ${0.5 *menuOpacity})`;
-        c.fillText(fpsText, menuWidth + padding - 1.95 * knobRadius, menuHeight + padding - 0.55 * knobRadius);
+        // Draw FPS value
+        c.font = `${0.4 * knobRadius}px monospace`;
         c.fillStyle = `hsla(${fpsHue}, 90%, 60%, ${menuOpacity})`;
-        c.fillText(fpsText, menuWidth + padding - 2.0 * knobRadius, menuHeight + padding - 0.6 * knobRadius);
+        c.fillText(fpsText, menuWidth + padding - 1.9 * knobRadius, menuHeight + padding - 3.3 * knobRadius);
         
-        // Draw FPS text
-        c.font = `${0.5 * knobRadius}px monospace`;
-        c.fillStyle = `hsla(0, 0%, 0%, ${0.5 *menuOpacity})`;
-        c.fillText('FPS', menuWidth + padding - 0.75 * knobRadius, menuHeight + padding - 0.55 * knobRadius);
+        // Draw 'FPS' label
+        c.font = `${0.4 * knobRadius}px monospace`;
         c.fillStyle = `hsla(0, 0%, 80%, ${menuOpacity})`;
-        c.fillText('FPS', menuWidth + padding - 0.8 * knobRadius, menuHeight + padding - 0.6 * knobRadius);
+        c.fillText('fps', menuWidth + padding - 1.0 * knobRadius, menuHeight + padding - 3.3 * knobRadius);
         
-        // Draw reset button (universal recycling symbol - row 2, column 3)  -------------------
-        const resetButtonRadius = knobRadius * 0.5;
-        const resetButtonX = 3 * knobSpacing;
-        const resetButtonY = 2.05 * knobSpacing + menuTopMargin;
         
-        // Draw recycling symbol (Unicode ♻)
-        c.font = `bold ${2.3 * resetButtonRadius}px Arial`;
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.fillStyle = `hsla(0, 0%, 0%, ${0.7 * menuOpacity})`;
-        c.fillText('♻', resetButtonX + 0.05 * knobRadius, resetButtonY + 0.25 * knobRadius);
-        c.fillStyle = `hsla(60, 80%, 50%, ${menuOpacity})`;
-        c.fillText('♻', resetButtonX, resetButtonY + 0.2 * knobRadius);
-        
-        // Draw "RESET" text in arc above button
-        const resetText = "RESET";
-        const arcRadius = resetButtonRadius * 1.8;
-        const totalArcAngle = Math.PI * 0.6; // 60 degrees total arc
-        const startAngle = -Math.PI / 2 - totalArcAngle / 2; // Center the arc above
-        
-        c.font = `bold ${0.4 * knobRadius}px verdana`;
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        for (let i = 0; i < resetText.length; i++) {
-            const angle = startAngle + (i / (resetText.length - 1)) * totalArcAngle;
-            const x = resetButtonX + Math.cos(angle) * arcRadius;
-            const y = resetButtonY + Math.sin(angle) * arcRadius;
-            c.save();
-            c.translate(x, y);
-            c.rotate(angle + Math.PI / 2); // Rotate to follow arc
-            c.fillStyle = `hsla(0, 80%, 0%, ${0.7 *menuOpacity})`;
-            c.fillText(resetText[i], 0.08 * knobRadius, 0.06 * knobRadius);
-            c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-            c.fillText(resetText[i], 0, 0);
-            c.restore();
-        }
-        
-        c.closePath();
 
         c.restore();
     }
@@ -4724,7 +4716,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
         c.textAlign = 'center';
         c.textBaseline = 'top';
-        c.fillText('Spray', 0, spraySldrBottomY + 0.27 * knobRadius);
+        c.fillText('Spray ∅', 0, spraySldrBottomY + 0.27 * knobRadius);
         
         c.restore();
         
@@ -4949,6 +4941,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         boidProps.speedLimit = 1.1;
         boidProps.turnFactor = 1.0;
         boidProps.tailLength = 10;
+        boidProps.tailWidth = 1.0;
+        
+        // Reset tail color mode to black
+        tailColorMode = 0;
         
         // Reset boid type to arrows
         selectedBoidType = 0;
@@ -5521,7 +5517,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.fill();
         }
         c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-        c.fillText('Plane', planeX, planeY + knobRadius * 0.5);
+        c.fillText('Airplane', planeX, planeY + knobRadius * 0.5);
         
         // Balloons toggle
         const balloonsX = rowCenter + 0.5 * buttonSpacing;
@@ -5693,7 +5689,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         // Draw first part in tan
         c.fillStyle = `hsla(30, 50%, 70%, ${skyMenuOpacity})`;
-        const prefixText = 'Sky simulation borrowed from ';
+        const prefixText = 'Sun and sky shader by '; 
         c.fillText(prefixText, creditX, creditY);
         
         // Draw ThreeJS.org in green
@@ -6424,7 +6420,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         // Prepare text
         //const fpsText = `${currentFPS.toFixed(0)} fps`;
-        const boidText = `making ${Boids.length} boids`;
+        const boidText = `please wait... making ${Boids.length} boids`;
         const boidLockedText = `settled on ${Boids.length} boids`;
         
         // Position at bottom right with padding
@@ -6432,7 +6428,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const lineHeight = 20;
         const x = canvas.width - padding;
         let y = canvas.height - padding;
-        
+
         // Draw boid count
         // White text
         if (currentFPS >= 58) {
@@ -6444,6 +6440,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         // Use different text based on whether boid count is locked
         const displayText = boidCountLocked ? boidLockedText : boidText;
+        //c.fillText('Please wait', x - 2 *padding, y - lineHeight);
         c.fillText(displayText, x, y);
         
         /*
