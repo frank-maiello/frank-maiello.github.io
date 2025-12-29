@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.32</title>
+    <title>Boids 1.33</title>
     <style>
         html, body {
             margin: 0;
@@ -342,7 +342,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const buttonRowHeight = spacing * 2;
             const knobRowHeight = knobRadius * 3;
             const colorMenuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 1.5;
-            const colorMenuHeight = spacing * 20;
+            // Shorter menu when spray tool is active (omit knobs and radio buttons)
+            const colorMenuHeight = spraypaintActive ? spacing * 10 : spacing * 20;
             const colorPadding = 0.8 * knobRadius;
             const colorMenuOriginX = colorMenuX * cScale;
             const colorMenuOriginY = canvas.height - colorMenuY * cScale;
@@ -439,7 +440,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 return true;
             }
             
-            // Gray button
+            // Black and white button
             // Bipartite: first half black, second half white
             const grayDx = clickCanvasX - (buttonStartX + buttonSpacing);
             const grayDy = clickCanvasY - buttonY;
@@ -448,7 +449,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 for (let i = 0; i < halfBoids; i++) {
                     Boids[i].hue = 180;
                     Boids[i].saturation = 0;
-                    Boids[i].lightness = 0;
+                    Boids[i].lightness = 100;
                     Boids[i].manualHue = true;
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
@@ -456,7 +457,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 for (let i = halfBoids; i < Boids.length; i++) {
                     Boids[i].hue = 0;
                     Boids[i].saturation = 0;
-                    Boids[i].lightness = 100;
+                    Boids[i].lightness = 0;
                     Boids[i].manualHue = true;
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
@@ -498,21 +499,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 return true;
             }
             
-            // Check segregation radio buttons (below knobs)
-            const hueTickerY = colorMenuOriginY + colorWheelRadius * 2 + spacing * 2 + knobRadius * 1.5 + knobRadius / 3;
-            const segRadioRadius = knobRadius * 0.25;
-            const segButtonY = hueTickerY + knobRadius * 2.6;
-            const segButtonSpacing = knobRadius * 1.3;
-            const segButtonStartX = colorMenuOriginX + colorWheelRadius - segButtonSpacing * 0.5;
-            const segModeMap = [0, 2, 1]; // Map visual position to segregationMode value
-            
-            for (let i = 0; i < 3; i++) {
-                const segBtnX = segButtonStartX + i * segButtonSpacing;
-                const sdx = clickCanvasX - segBtnX;
-                const sdy = clickCanvasY - segButtonY;
-                if (sdx * sdx + sdy * sdy < segRadioRadius * segRadioRadius) {
-                    segregationMode = segModeMap[i];
-                    return true;
+            // Check segregation radio buttons (below knobs) only when spray tool is not active
+            if (!spraypaintActive) {
+                const hueTickerY = colorMenuOriginY + colorWheelRadius * 2 + spacing * 2 + knobRadius * 1.5 + knobRadius / 3;
+                const segRadioRadius = knobRadius * 0.25;
+                const segButtonY = hueTickerY + knobRadius * 2.6;
+                const segButtonSpacing = knobRadius * 1.3;
+                const segButtonStartX = colorMenuOriginX + colorWheelRadius - segButtonSpacing * 0.5;
+                const segModeMap = [0, 2, 1]; // Map visual position to segregationMode value
+                
+                for (let i = 0; i < 3; i++) {
+                    const segBtnX = segButtonStartX + i * segButtonSpacing;
+                    const sdx = clickCanvasX - segBtnX;
+                    const sdy = clickCanvasY - segButtonY;
+                    if (sdx * sdx + sdy * sdy < segRadioRadius * segRadioRadius) {
+                        segregationMode = segModeMap[i];
+                        return true;
+                    }
                 }
             }
             
@@ -541,34 +544,37 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 return true;
             }
             
-            // Check hueSensitivity knob
-            const lightnessSldrX = colorMenuOriginX + colorWheelRadius * 2 + spacing;
-            const hueTickerTargetX = lightnessSldrX + sliderWidth / 2; // Center below lightness slider
-            const hueTickerOriginalX = colorMenuOriginX + colorWheelRadius + knobRadius * 2.4;
-            const knobOffset = hueTickerTargetX - hueTickerOriginalX; // Calculate offset
-            const hueSensitivityKnobX = colorMenuOriginX + knobRadius + knobOffset; // Move by same offset
-            const hueSensitivityKnobY = colorMenuOriginY + colorWheelRadius * 2 + buttonRowHeight + knobRadius * 1.5 + knobRadius / 3;
-            const hsKnobDx = clickCanvasX - hueSensitivityKnobX;
-            const hsKnobDy = clickCanvasY - hueSensitivityKnobY;
-            if (hsKnobDx * hsKnobDx + hsKnobDy * hsKnobDy < knobRadius * knobRadius) {
-                isDraggingHueSensitivity = true;
-                dragStartMouseX = mouseX;
-                dragStartMouseY = mouseY;
-                hueSensitivityDragStart = boidProps.hueSensitivity;
-                return true;
-            }
-            
-            // Check hueTicker knob
-            const hueTickerKnobX = hueTickerTargetX; // Centered below lightness slider
-            const hueTickerKnobY = hueSensitivityKnobY;
-            const htKnobDx = clickCanvasX - hueTickerKnobX;
-            const htKnobDy = clickCanvasY - hueTickerKnobY;
-            if (htKnobDx * htKnobDx + htKnobDy * htKnobDy < knobRadius * knobRadius) {
-                isDraggingHueTicker = true;
-                dragStartMouseX = mouseX;
-                dragStartMouseY = mouseY;
-                hueTickerDragStart = boidProps.hueTicker;
-                return true;
+            // Check hueSensitivity and hueTicker knobs only when spray tool is not active
+            if (!spraypaintActive) {
+                // Check hueSensitivity knob
+                const lightnessSldrX = colorMenuOriginX + colorWheelRadius * 2 + spacing;
+                const hueTickerTargetX = lightnessSldrX + sliderWidth / 2; // Center below lightness slider
+                const hueTickerOriginalX = colorMenuOriginX + colorWheelRadius + knobRadius * 2.4;
+                const knobOffset = hueTickerTargetX - hueTickerOriginalX; // Calculate offset
+                const hueSensitivityKnobX = colorMenuOriginX + knobRadius + knobOffset; // Move by same offset
+                const hueSensitivityKnobY = colorMenuOriginY + colorWheelRadius * 2 + buttonRowHeight + knobRadius * 1.5 + knobRadius / 3;
+                const hsKnobDx = clickCanvasX - hueSensitivityKnobX;
+                const hsKnobDy = clickCanvasY - hueSensitivityKnobY;
+                if (hsKnobDx * hsKnobDx + hsKnobDy * hsKnobDy < knobRadius * knobRadius) {
+                    isDraggingHueSensitivity = true;
+                    dragStartMouseX = mouseX;
+                    dragStartMouseY = mouseY;
+                    hueSensitivityDragStart = boidProps.hueSensitivity;
+                    return true;
+                }
+                
+                // Check hueTicker knob
+                const hueTickerKnobX = hueTickerTargetX; // Centered below lightness slider
+                const hueTickerKnobY = hueSensitivityKnobY;
+                const htKnobDx = clickCanvasX - hueTickerKnobX;
+                const htKnobDy = clickCanvasY - hueTickerKnobY;
+                if (htKnobDx * htKnobDx + htKnobDy * htKnobDy < knobRadius * knobRadius) {
+                    isDraggingHueTicker = true;
+                    dragStartMouseX = mouseX;
+                    dragStartMouseY = mouseY;
+                    hueTickerDragStart = boidProps.hueTicker;
+                    return true;
+                }
             }
             
             // Check if color menu background was clicked (for dragging entire menu)
@@ -1439,7 +1445,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 case 1: skyCtrl.rayleigh = newValue; break;
                 case 2: skyCtrl.mieCoefficient = newValue; break;
                 case 3: skyCtrl.mieDirectionalG = newValue; break;
-                case 4: skyCtrl.azimuth = newValue; break;
+                case 4: skyCtrl.azimuth = 359 - newValue; break; // Reverse direction
                 case 5: skyCtrl.rotationSpeed = -newValue; break; // Reverse direction
                 case 6: skyCtrl.elevation = newValue; break;
                 case 7: skyCtrl.exposure = newValue; break;
@@ -3737,7 +3743,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Position menu so it extends downward and is clearly visible
         const menuBaseX = ellipsisX + 0.08 * cScale;
         const menuX = menuBaseX + mainMenuXOffset * cScale;
-        const menuY = ellipsisY - 0.01 * cScale; // Position top of menu slightly above ellipsis center
+        const menuY = ellipsisY - 0.04 * cScale; // Position top of menu slightly above ellipsis center
         
         c.save();
         c.globalAlpha = mainMenuOpacity;
@@ -3806,7 +3812,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const iconY = itemY + itemHeight / 2 - padding;
             const iconColor = item.active ? 
                 `hsla(120, 0%, 90%, 1.0)` : 
-                `hsla(0, 0%, 20%, 1.0)`;
+                `hsla(0, 0%, 30%, 1.0)`;
             
             c.strokeStyle = iconColor;
             c.fillStyle = iconColor;
@@ -3814,6 +3820,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.lineCap = 'round';
             c.lineJoin = 'round';
             
+            // Draw sim icon --------------------
             if (item.icon === 'sim') {
                 // Draw gear icon with flat-topped teeth
                 const numTeeth = 8;
@@ -3821,7 +3828,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 const innerRadius = iconSize * 0.32;
                 const centerRadius = iconSize * 0.18;
                 const toothFlatWidth = 0.2; // Width of flat top in radians
-                
                 c.beginPath();
                 for (let t = 0; t < numTeeth; t++) {
                     const baseAngle = (t * 2 * Math.PI) / numTeeth;
@@ -3848,17 +3854,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }
                 c.closePath();
                 c.fill();
-                
+
                 // Draw center circle
-                c.fillStyle = `hsla(210, 50%, 40%, 1.0)`;
+                c.fillStyle = `hsla(0, 0%, 15%, 0.6)`;
                 c.beginPath();
                 c.arc(iconX, iconY, centerRadius, 0, 2 * Math.PI);
                 c.fill();
-                
+
+            // Draw paint icon --------------------
             } else if (item.icon === 'paint') {
                 // Draw color wheel icon (using pre-generated color wheel)
                 const wheelRadius = iconSize * 0.45;
-                
                 if (colorWheelCanvas) {
                     c.save();
                     
@@ -3866,11 +3872,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     if (!item.active) {
                         c.globalAlpha = mainMenuOpacity * 0.4;
                     }
-                    
                     c.beginPath();
                     c.arc(iconX, iconY, wheelRadius, 0, 2 * Math.PI);
                     c.clip();
-                    
                     // Draw the color wheel
                     c.drawImage(
                         colorWheelCanvas,
@@ -3889,7 +3893,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.arc(iconX, iconY, wheelRadius, 0, 2 * Math.PI);
                     c.stroke();
                 }
-                
+
+            // Draw sky icon --------------------
             } else if (item.icon === 'sky') {
                 // Draw asymmetrical cloud icon with truly flat bottom using clipping
                 const cloudRadius = iconSize * 0.35;
@@ -4408,7 +4413,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const knobRowHeight = knobRadius * 3;
         const segRadioRowHeight = knobRadius * 3.0 + spacing * 2; // Space for radio buttons, labels, and bottom margin
         const menuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 1.5;
-        const menuHeight = spacing * 20;
+        // Shorter menu when spray tool is active (omit knobs and radio buttons)
+        const menuHeight = spraypaintActive ? spacing * 10 : spacing * 20;
         const padding = 0.8 * knobRadius;
         
         const cornerRadius = 0.05 * cScale;
@@ -4786,8 +4792,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.lineWidth = 0.01 * cScale;
         c.stroke();
         
-        // Gray button
-        // Black and white split button
+        // Black and white button
         c.beginPath();
         c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0.5 * Math.PI, 1.5 * Math.PI);
         c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
@@ -4814,16 +4819,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.fill();
         c.stroke();
         
-        // Calculate knob positions first (needed for segregation button placement)
-        const hueTickerTargetX = lightnessSliderX + sliderWidth / 2; // Center below lightness slider
-        const hueTickerOriginalX = colorWheelRadius + knobRadius * 2.4;
-        const knobOffset = hueTickerTargetX - hueTickerOriginalX; // Calculate offset
-        const hueSensitivityKnobX = knobRadius + knobOffset; // Move by same offset
-        const hueSensitivityKnobY = colorWheelRadius * 2 + buttonRowHeight + knobRadius * 1.5 + knobRadius / 3;
-        const hueTickerKnobX = hueTickerTargetX;
-        const hueTickerKnobY = hueSensitivityKnobY;
-        
-        // Draw segregation radio buttons below the knobs
+        // Only draw knobs and segregation buttons when spray tool is not active
+        if (!spraypaintActive) {
+            // Calculate knob positions first (needed for segregation button placement)
+            const hueTickerTargetX = lightnessSliderX + sliderWidth / 2; // Center below lightness slider
+            const hueTickerOriginalX = colorWheelRadius + knobRadius * 2.4;
+            const knobOffset = hueTickerTargetX - hueTickerOriginalX; // Calculate offset
+            const hueSensitivityKnobX = knobRadius + knobOffset; // Move by same offset
+            const hueSensitivityKnobY = colorWheelRadius * 2 + buttonRowHeight + knobRadius * 1.5 + knobRadius / 3;
+            const hueTickerKnobX = hueTickerTargetX;
+            const hueTickerKnobY = hueSensitivityKnobY;
+            
+            // Draw segregation radio buttons below the knobs
         const segRadioRadius = knobRadius * 0.25;
         const segButtonY = hueTickerKnobY + knobRadius * 2.6;
         const segButtonSpacing = knobRadius * 1.3;
@@ -4980,6 +4987,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.fillStyle = `hsla(210, 0%, 95%, ${colorMenuOpacity})`;
         c.fillText('Color', hueTickerKnobX, hueTickerKnobY + 1.35 * knobRadius);
         c.fillText('Cycling', hueTickerKnobX, hueTickerKnobY + 1.7 * knobRadius);
+        
+        } // End of if (!spraypaintActive)
         
         c.restore();
     }
@@ -5459,8 +5468,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Draw knob pointer
             let pointerAngle;
             if (i === 4) {
-                // Azimuth - full 360 degree rotation
-                pointerAngle = normalized * 2 * Math.PI;
+                // Azimuth - full 360 degree rotation (reversed)
+                pointerAngle = (1 - normalized) * 2 * Math.PI;
             } else if (i === 8) {
                 // FOV - inverted
                 pointerAngle = meterStart + fullMeterSweep * (1 - normalized);
