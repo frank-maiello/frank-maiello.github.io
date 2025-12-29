@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.31</title>
+    <title>Boids 1.32</title>
     <style>
         html, body {
             margin: 0;
@@ -179,6 +179,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let showPlane = true;
     let showBalloons = true;
     let showHotAirBalloon = true;
+    
+    // Auto elevation state
+    let autoElevation = true;
+    let autoElevationPhase = 0;
+    let autoElevationRate = 0.05; // Speed of oscillation
+    let autoElevationInitial = 0; // Initial elevation when auto mode was enabled
     
     // Offscreen canvas for color wheel
     let colorWheelCanvas = null;
@@ -425,6 +431,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     Boids[i].hue = 0;
                     Boids[i].saturation = 0;
                     Boids[i].lightness = 0;
+                    Boids[i].manualHue = true;
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
                 }
@@ -433,13 +440,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Gray button
+            // Bipartite: first half black, second half white
             const grayDx = clickCanvasX - (buttonStartX + buttonSpacing);
             const grayDy = clickCanvasY - buttonY;
+            const halfBoids = Math.floor(0.5 * Boids.length);
             if (grayDx * grayDx + grayDy * grayDy < buttonRadius * buttonRadius) {
-                for (let i = 0; i < Boids.length; i++) {
+                for (let i = 0; i < halfBoids; i++) {
                     Boids[i].hue = 180;
                     Boids[i].saturation = 0;
-                    Boids[i].lightness = 60;
+                    Boids[i].lightness = 0;
+                    Boids[i].manualHue = true;
+                    Boids[i].manualSaturation = true;
+                    Boids[i].manualLightness = true;
+                }
+                for (let i = halfBoids; i < Boids.length; i++) {
+                    Boids[i].hue = 0;
+                    Boids[i].saturation = 0;
+                    Boids[i].lightness = 100;
+                    Boids[i].manualHue = true;
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
                 }
@@ -452,9 +470,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const whiteDy = clickCanvasY - buttonY;
             if (whiteDx * whiteDx + whiteDy * whiteDy < buttonRadius * buttonRadius) {
                 for (let i = 0; i < Boids.length; i++) {
-                    Boids[i].hue = 360;
+                    Boids[i].hue = 180;
                     Boids[i].saturation = 0;
                     Boids[i].lightness = 100;
+                    Boids[i].manualHue = true;
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
                 }
@@ -771,12 +790,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Check individual knobs
-            for (let knob = 0; knob < 9; knob++) {
+            for (let knob = 0; knob < 10; knob++) {
                 let row = Math.floor(knob / 4);
                 let col = knob % 4;
+                // Special positioning for exposure knob (index 7) - move to column 1, row 2
+                if (knob === 7) {
+                    row = 2;
+                    col = 1;
+                }
                 // Special positioning for FOV knob (index 8) - move to column 3, row 2
                 if (knob === 8) {
                     row = 2;
+                    col = 3;
+                }
+                // Special positioning for autoElevationRate knob (index 9) - move to column 3, row 1
+                if (knob === 9) {
+                    row = 1;
                     col = 3;
                 }
                 const knobCanvasX = menuOriginX + col * knobSpacing;
@@ -785,6 +814,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 const kdx = clickCanvasX - knobCanvasX;
                 const kdy = clickCanvasY - knobCanvasY;
                 if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
+                    // For knob 9 (auto elevation rate), check if clicking the center button
+                    if (knob === 9) {
+                        const centerRadius = checkboxRadius * 0.5;
+                        if (kdx * kdx + kdy * kdy < centerRadius * centerRadius) {
+                            // Toggle auto elevation
+                            autoElevation = !autoElevation;
+                            if (autoElevation) {
+                                const skyCtrl = window.skyRenderer.effectController;
+                                autoElevationInitial = skyCtrl.elevation; // Store current elevation
+                                // Set phase so current elevation matches the sine wave (starts rising)
+                                autoElevationPhase = -Math.PI / 6; // sin(-π/6) = -0.5, placing current elevation at start
+                            }
+                            return true;
+                        }
+                    }
+                    // Otherwise, start dragging the knob
                     draggedSkyKnob = knob;
                     dragStartMouseX = mouseX;
                     dragStartMouseY = mouseY;
@@ -797,10 +842,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         skyCtrl.mieCoefficient,
                         skyCtrl.mieDirectionalG,
                         skyCtrl.azimuth,
-                        skyCtrl.rotationSpeed,
+                        -skyCtrl.rotationSpeed,
                         skyCtrl.elevation,
                         skyCtrl.exposure,
-                        skyCtrl.fov
+                        skyCtrl.fov,
+                        autoElevationRate
                     ];
                     dragStartValue = menuItems[knob];
                     return true;
@@ -810,14 +856,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Check toggle buttons
             const buttonY = knobSpacing * 2;
             
-            // Object visibility toggle buttons - row of 4 centered under columns 0-1
+            // Object visibility toggle buttons - 2x2 grid centered below azimuth knob (column 0)
             const buttonRowY = menuOriginY + buttonY;
-            const buttonSpacing = knobRadius * 1.3;
-            const rowCenter = menuOriginX + knobSpacing * 0.5;
+            const buttonSpacing = knobRadius * 1.5;
+            const gridCenterX = menuOriginX + knobSpacing * 0.0; // Column 0 (azimuth)
+            const buttonRowSpacing = knobRadius * 1.2;
             
-            // Clouds checkbox
-            const cloudsX = rowCenter - 1.5 * buttonSpacing;
-            const cloudsY = buttonRowY;
+            // Clouds checkbox (top-left)
+            const cloudsX = gridCenterX - 0.5 * buttonSpacing;
+            const cloudsY = buttonRowY - 0.5 * buttonRowSpacing;
             const cdx3 = clickCanvasX - cloudsX;
             const cdy3 = clickCanvasY - cloudsY;
             if (cdx3 * cdx3 + cdy3 * cdy3 < checkboxRadius * checkboxRadius) {
@@ -825,9 +872,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 return true;
             }
             
-            // Plane checkbox
-            const planeX = rowCenter - 0.5 * buttonSpacing;
-            const planeY = buttonRowY;
+            // Plane checkbox (top-right)
+            const planeX = gridCenterX + 0.5 * buttonSpacing;
+            const planeY = buttonRowY - 0.5 * buttonRowSpacing;
             const pdx = clickCanvasX - planeX;
             const pdy = clickCanvasY - planeY;
             if (pdx * pdx + pdy * pdy < checkboxRadius * checkboxRadius) {
@@ -835,9 +882,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 return true;
             }
             
-            // Balloons checkbox
-            const balloonsX = rowCenter + 0.5 * buttonSpacing;
-            const balloonsY = buttonRowY;
+            // Balloons checkbox (bottom-left)
+            const balloonsX = gridCenterX - 0.5 * buttonSpacing;
+            const balloonsY = buttonRowY + 0.5 * buttonRowSpacing;
             const bdx = clickCanvasX - balloonsX;
             const bdy = clickCanvasY - balloonsY;
             if (bdx * bdx + bdy * bdy < checkboxRadius * checkboxRadius) {
@@ -845,9 +892,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 return true;
             }
             
-            // Hot Air Balloon checkbox
-            const hotAirBalloonX = rowCenter + 1.5 * buttonSpacing;
-            const hotAirBalloonY = buttonRowY;
+            // Hot Air Balloon checkbox (bottom-right)
+            const hotAirBalloonX = gridCenterX + 0.5 * buttonSpacing;
+            const hotAirBalloonY = buttonRowY + 0.5 * buttonRowSpacing;
             const habdx = clickCanvasX - hotAirBalloonX;
             const habdy = clickCanvasY - hotAirBalloonY;
             if (habdx * habdx + habdy * habdy < checkboxRadius * checkboxRadius) {
@@ -1354,7 +1401,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 {min: -2, max: 2},            // rotationSpeed
                 {min: -2, max: 10},           // elevation
                 {min: 0, max: 1},             // exposure
-                {min: 10, max: 120}           // fov
+                {min: 10, max: 120},          // fov
+                {min: 0.01, max: 0.10}        // autoElevationRate
             ];
             
             // Calculate drag delta
@@ -1392,10 +1440,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 case 2: skyCtrl.mieCoefficient = newValue; break;
                 case 3: skyCtrl.mieDirectionalG = newValue; break;
                 case 4: skyCtrl.azimuth = newValue; break;
-                case 5: skyCtrl.rotationSpeed = newValue; break;
+                case 5: skyCtrl.rotationSpeed = -newValue; break; // Reverse direction
                 case 6: skyCtrl.elevation = newValue; break;
                 case 7: skyCtrl.exposure = newValue; break;
                 case 8: skyCtrl.fov = newValue; break;
+                case 9: autoElevationRate = newValue; break;
             }
             return;
         }
@@ -4668,7 +4717,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const spraySldrBottomY = colorWheelRadius * 0.9;
         const spraySldrX = -spraySldrWidth / 2;
         
-        // Draw trapezoid slider background - wedge shape (shorter on left, taller on right)
+        // Draw slider background - wedge shape (shorter on left, taller on right)
         // Left and right sides are vertical, bottom is horizontal, top angles downward from left to right
         c.fillStyle = `hsla(210, 80%, 10%, ${0.5 * colorMenuOpacity})`;
         c.beginPath();
@@ -4733,15 +4782,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.arc(buttonStartX, buttonY, buttonRadius, 0, 2 * Math.PI);
         c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
         c.fill();
-        c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
+        c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
         c.lineWidth = 0.01 * cScale;
         c.stroke();
         
         // Gray button
+        // Black and white split button
+        c.beginPath();
+        c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0.5 * Math.PI, 1.5 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
+        c.fill();
+        c.beginPath();
+        c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0.5 * Math.PI, 1.5 * Math.PI, true);
+        c.fillStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
+        c.fill();
         c.beginPath();
         c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(0, 0%, 60%, ${colorMenuOpacity})`;
-        c.fill();
         c.stroke();
         
         // White button
@@ -5192,7 +5248,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 
                 if (distSq < visualRangeSq && distSq > 0) {
                     // Check if segregation mode is active and hues match (within tolerance)
-                    const hueMatch = segregationMode === 0 || Math.abs(boid.hue - otherBoid.hue) < 30;
+                    const hueMatch = segregationMode === 0 || Math.abs(boid.hue - otherBoid.hue) < 10;
                     
                     // RULE #2 - ALIGNMENT: accumulate velocities (only if hue matches in segregate modes)
                     if (hueMatch) {
@@ -5255,10 +5311,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             skyCtrl.mieCoefficient,
             skyCtrl.mieDirectionalG,
             skyCtrl.azimuth,
-            skyCtrl.rotationSpeed,
+            -skyCtrl.rotationSpeed,
             skyCtrl.elevation,
             skyCtrl.exposure,
-            skyCtrl.fov
+            skyCtrl.fov,
+            autoElevationRate
         ];
         
         const ranges = [
@@ -5270,10 +5327,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             {min: -2, max: 2},            // rotationSpeed
             {min: -2, max: 10},           // elevation
             {min: 0, max: 1},             // exposure
-            {min: 10, max: 120}           // fov
+            {min: 10, max: 120},          // fov
+            {min: 0.01, max: 0.10}        // autoElevationRate
         ];
         
-        const labels = ['Turbidity', 'Rayleigh Scattering', 'Mie Scattering', 'Scatter Focus', 'Sun Azimuth', 'Sun Movement', 'Sun Elevation', 'Exposure', 'Field of View'];
+        const labels = ['Turbidity', 'Rayleigh Scattering', 'Mie Scattering', 'Scatter Focus', 'Sun Azimuth', 'Auto Azimuth', 'Sun Elevation', 'Exposure', 'Field of View', 'Auto Elevation'];
         
         const knobRadius = 0.1 * cScale;
         const knobSpacing = knobRadius * 3;
@@ -5341,13 +5399,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.fillText('SKY', menuWidth / 2, -padding + 0.04 * cScale);
         
         // Draw knobs for each parameter
-        for (let i = 0; i < menuItems.length && i < 9; i++) {
+        for (let i = 0; i < menuItems.length && i < 10; i++) {
             let x = (i % 4) * knobSpacing;
             let y = Math.floor(i / 4) * knobSpacing;
+            // Special positioning for exposure knob (index 7) - move to column 1, row 2
+            if (i === 7) {
+                x = 1 * knobSpacing;
+                y = 2 * knobSpacing;
+            }
             // Special positioning for FOV knob (index 8) - move to column 3, row 2
             if (i === 8) {
                 x = 3 * knobSpacing;
                 y = 2 * knobSpacing;
+            }
+            // Special positioning for autoElevationRate knob (index 9) - move to column 3, row 1
+            if (i === 9) {
+                x = 3 * knobSpacing;
+                y = 1 * knobSpacing;
             }
             
             const value = menuItems[i];
@@ -5418,7 +5486,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             // Draw value
             let decimals;
-            if (i === 1 || i === 5 || i === 7) decimals = 2; // Concentration, sun movement, exposure
+            if (i === 1 || i === 5 || i === 7 || i === 9) decimals = 2; // Concentration, sun movement, exposure, auto elevation rate
             else if (i === 4) decimals = 0; // Azimuth
             else if (i === 6) decimals = 1; // Elevation
             else decimals = value < 1 ? 3 : value < 10 ? 1 : 0; // Default logic
@@ -5446,13 +5514,38 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.lineWidth = 0.003 * cScale;
         c.stroke();
         
-        // Draw filled center if enabled (green)
+        // Draw filled center (green when on, red when off)
+        c.beginPath();
+        c.arc(autoRotateX, autoRotateY, checkboxRadius * 0.5, 0, 2 * Math.PI);
         if (skyCtrl.autoRotate) {
-            c.beginPath();
-            c.arc(autoRotateX, autoRotateY, checkboxRadius * 0.5, 0, 2 * Math.PI);
             c.fillStyle = `hsla(120, 80%, 50%, ${skyMenuOpacity})`; // Green when active
-            c.fill();
+        } else {
+            c.fillStyle = `hsla(0, 80%, 50%, ${skyMenuOpacity})`; // Red when inactive
         }
+        c.fill();
+        
+        // Auto Elevation checkbox (centered under Elevation Rate knob at col 3, row 1)
+        const autoElevationX = knobSpacing * 3.0;
+        const autoElevationY = knobSpacing * 1.0;
+        
+        // Draw outer circle with knob fill color
+        c.beginPath();
+        c.arc(autoElevationX, autoElevationY, checkboxRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(30, 40%, 15%, ${0.9 * skyMenuOpacity})`; // Knob fill color
+        c.fill();
+        c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        
+        // Draw filled center (green when on, red when off)
+        c.beginPath();
+        c.arc(autoElevationX, autoElevationY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+        if (autoElevation) {
+            c.fillStyle = `hsla(120, 80%, 50%, ${skyMenuOpacity})`; // Green when active
+        } else {
+            c.fillStyle = `hsla(0, 80%, 50%, ${skyMenuOpacity})`; // Red when inactive
+        }
+        c.fill();
         
         // Show Grid checkbox (centered under FOV knob at col 3, row 2)
         const showGridX = knobSpacing * 3.0;
@@ -5467,22 +5560,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.lineWidth = 0.003 * cScale;
         c.stroke();
         
-        // Draw filled center if enabled (green)
+        // Draw filled center (green when on, red when off)
+        c.beginPath();
+        c.arc(showGridX, showGridY, checkboxRadius * 0.5, 0, 2 * Math.PI);
         if (skyCtrl.showGrid) {
-            c.beginPath();
-            c.arc(showGridX, showGridY, checkboxRadius * 0.5, 0, 2 * Math.PI);
             c.fillStyle = `hsla(120, 80%, 50%, ${skyMenuOpacity})`; // Green when active
-            c.fill();
+        } else {
+            c.fillStyle = `hsla(0, 80%, 50%, ${skyMenuOpacity})`; // Red when inactive
         }
+        c.fill();
         
-        // Object visibility toggle buttons - row of 4 centered under columns 0-1
+        // Object visibility toggle buttons - 2x2 grid centered below azimuth knob (column 0)
         const buttonRowY = buttonY;
-        const buttonSpacing = knobRadius * 1.3;
-        const rowCenter = knobSpacing * 0.5; // Center between columns 0 and 1
+        const buttonSpacing = knobRadius * 1.5;
+        const gridCenterX = knobSpacing * 0.0; // Column 0 (azimuth)
+        const buttonRowSpacing = knobRadius * 1.2;
         
-        // Clouds toggle
-        const cloudsX = rowCenter - 1.5 * buttonSpacing;
-        const cloudsY = buttonRowY;
+        // Clouds toggle (top-left)
+        const cloudsX = gridCenterX - 0.5 * buttonSpacing;
+        const cloudsY = buttonRowY - 0.5 * buttonRowSpacing;
         c.beginPath();
         c.arc(cloudsX, cloudsY, checkboxRadius, 0, 2 * Math.PI);
         c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
@@ -5500,9 +5596,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.font = `${0.028 * cScale}px sans-serif`;
         c.fillText('Clouds', cloudsX, cloudsY + knobRadius * 0.5);
         
-        // Plane toggle
-        const planeX = rowCenter - 0.5 * buttonSpacing;
-        const planeY = buttonRowY;
+        // Plane toggle (top-right)
+        const planeX = gridCenterX + 0.5 * buttonSpacing;
+        const planeY = buttonRowY - 0.5 * buttonRowSpacing;
         c.beginPath();
         c.arc(planeX, planeY, checkboxRadius, 0, 2 * Math.PI);
         c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
@@ -5519,9 +5615,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
         c.fillText('Airplane', planeX, planeY + knobRadius * 0.5);
         
-        // Balloons toggle
-        const balloonsX = rowCenter + 0.5 * buttonSpacing;
-        const balloonsY = buttonRowY;
+        // Balloons toggle (bottom-left)
+        const balloonsX = gridCenterX - 0.5 * buttonSpacing;
+        const balloonsY = buttonRowY + 0.5 * buttonRowSpacing;
         c.beginPath();
         c.arc(balloonsX, balloonsY, checkboxRadius, 0, 2 * Math.PI);
         c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
@@ -5539,9 +5635,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.fillText('Party', balloonsX, balloonsY + knobRadius * 0.50);
         c.fillText('Balloons', balloonsX, balloonsY + knobRadius * 0.80);
         
-        // Hot Air Balloon toggle
-        const hotAirBalloonX = rowCenter + 1.5 * buttonSpacing;
-        const hotAirBalloonY = buttonRowY;
+        // Hot Air Balloon toggle (bottom-right)
+        const hotAirBalloonX = gridCenterX + 0.5 * buttonSpacing;
+        const hotAirBalloonY = buttonRowY + 0.5 * buttonRowSpacing;
         c.beginPath();
         c.arc(hotAirBalloonX, hotAirBalloonY, checkboxRadius, 0, 2 * Math.PI);
         c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
@@ -5767,6 +5863,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             skyMenuOpacity = Math.min(1, skyMenuOpacity + menuFadeSpeed * deltaT);
         } else if (!skyMenuVisible && skyMenuOpacity > 0) {
             skyMenuOpacity = Math.max(0, skyMenuOpacity - menuFadeSpeed * deltaT);
+        }
+        
+        // Update auto elevation if enabled
+        if (autoElevation && window.skyRenderer) {
+            autoElevationPhase += deltaT * autoElevationRate;
+            const skyCtrl = window.skyRenderer.effectController;
+            // Oscillate between (initial - 1) and (initial + 3)
+            const center = autoElevationInitial + 1; // Center point
+            const amplitude = 2; // Half of the 4-unit range
+            skyCtrl.elevation = center + amplitude * Math.sin(autoElevationPhase);
         }
         
         // Update spray particles
@@ -6491,6 +6597,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // make spatial grid ----------
         makeSpatialGrid();
         SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+        
+        // Initialize auto elevation and auto azimuth if sky renderer is available
+        if (window.skyRenderer) {
+            const skyCtrl = window.skyRenderer.effectController;
+            skyCtrl.autoRotate = true;
+            autoElevationInitial = skyCtrl.elevation;
+        }
 
         /*
         // Load and play audio from GitHub LFS
