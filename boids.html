@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.33</title>
+    <title>Boids 1.34</title>
     <style>
         html, body {
             margin: 0;
@@ -199,9 +199,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let isDraggingHueSensitivity = false;
     let isDraggingHueTicker = false;
     let isDraggingSpraySlider = false;
-    let isDraggingTailWidthSlider = false;
     let hueSensitivityDragStart = 0;
     let hueTickerDragStart = 0;
+
+    // Set magnet state
+    let magnetActive = false;
+    let isDraggingMagnet = false;
     
     // Create offscreen canvas for color wheel
     function createColorWheel() {
@@ -308,6 +311,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         skyMenuVisible = !skyMenuVisible;
                     }
                 }
+                return;
+            }
+        }
+        
+        // Check if magnet was clicked (for dragging)
+        if (magnetActive && Magnet.length > 0) {
+            const magnetCanvasX = Magnet[0].x * cScale;
+            const magnetCanvasY = canvas.height - Magnet[0].y * cScale;
+            const clickCanvasX = mouseX * cScale;
+            const clickCanvasY = canvas.height - mouseY * cScale;
+            const magnetRadius = Magnet[0].radius * cScale;
+            const mdx = clickCanvasX - magnetCanvasX;
+            const mdy = clickCanvasY - magnetCanvasY;
+            
+            if (mdx * mdx + mdy * mdy < magnetRadius * magnetRadius) {
+                isDraggingMagnet = true;
                 return;
             }
         }
@@ -598,7 +617,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const knobSpacing = knobRadius * 3;
             const menuTopMargin = 0.2 * knobRadius; // Must match the margin in drawSimMenu
             const menuWidth = knobSpacing * 3;
-            const menuHeight = knobSpacing * 2 + knobRadius * 3.5;
+            const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
             const padding = 1.7 * knobRadius;
             const menuUpperLeftX = menuX * cScale;
             const menuUpperLeftY = (canvas.height - menuY * cScale);
@@ -622,9 +641,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             
             // Check individual knobs first
-            for (let knob = 0; knob < 10; knob++) {
-                const row = Math.floor(knob / 4);
-                const col = knob % 4;
+            for (let knob = 0; knob < 11; knob++) {
+                if (knob === 4) continue; // Skip removed knob
+                const layoutIndex = knob > 4 ? knob - 1 : knob;
+                const row = Math.floor(layoutIndex / 4);
+                const col = layoutIndex % 4;
                 const knobCanvasX = menuOriginX + col * knobSpacing;
                 const knobCanvasY = menuOriginY + row * knobSpacing + menuTopMargin;
                 
@@ -639,8 +660,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     // Store the starting value
                     const menuItems = [
                         boidProps.numBoids, boidRadius * 100, boidProps.visualRange, boidProps.speedLimit,
-                        boidProps.minDistance, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
-                        boidProps.turnFactor, boidProps.tailLength];
+                        null, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
+                        boidProps.turnFactor, boidProps.tailLength, boidProps.tailWidth];
                     dragStartValue = menuItems[knob];
                     return true;
                 }
@@ -648,11 +669,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             
             // Check tail color radio buttons (below tail length knob)
             const tailColorRadioRadius = knobRadius * 0.25;
-            const tailKnobCol = 1;
             const tailKnobRow = 2;
+            const tailButtonsCenterX = 0.5; // Center between columns 0 and 1
             
             for (let i = 0; i < 4; i++) {
-                const buttonX = menuOriginX + tailKnobCol * knobSpacing + (i - 1.5) * knobRadius * 1.0;
+                const buttonX = menuOriginX + tailButtonsCenterX * knobSpacing + (i - 1.5) * knobRadius * 1.0;
                 const buttonY = menuOriginY + tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin;
                 const rdx = clickCanvasX - buttonX;
                 const rdy = clickCanvasY - buttonY;
@@ -661,28 +682,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     tailColorMode = i;
                     return true;
                 }
-            }
-            
-            // Check tail width slider (below tail color buttons)
-            const tailSldrWidth = knobRadius * 2.0;
-            const tailSldrHeight = knobRadius * 0.25;
-            const tailSldrCenterX = menuOriginX + tailKnobCol * knobSpacing;
-            const tailSldrBottomY = menuOriginY + tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin + tailColorRadioRadius + 1.2 * knobRadius;
-            const tailSldrX = tailSldrCenterX - tailSldrWidth / 2;
-            const tailSldrLeftHeight = tailSldrHeight;
-            const tailSldrRightHeight = tailSldrHeight * 1.8;
-            const tailWidthKnobRadius = knobRadius * 0.25;
-            
-            // Check if click is within slider area (with expanded bounds for knob)
-            if (clickCanvasX >= tailSldrX - tailWidthKnobRadius && 
-                clickCanvasX <= tailSldrX + tailSldrWidth + tailWidthKnobRadius &&
-                clickCanvasY >= tailSldrBottomY - tailSldrRightHeight - tailWidthKnobRadius &&
-                clickCanvasY <= tailSldrBottomY + tailWidthKnobRadius) {
-                isDraggingTailWidthSlider = true;
-                // Calculate new tail width value from click position
-                const clickRatio = Math.max(0, Math.min(1, (clickCanvasX - tailSldrX) / tailSldrWidth));
-                boidProps.tailWidth = 1.0 + clickRatio * (5.0 - 1.0);
-                return true;
             }
             
             // Check radio buttons (vertically stacked in column 2)
@@ -699,6 +698,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (rdx * rdx + rdy * rdy < resetButtonRadius * resetButtonRadius) {
                 // Reset all parameters to defaults
                 resetParameters();
+                return true;
+            }
+            
+            // Check magnet toggle button
+            const magnetButtonRadius = knobRadius * 0.4;
+            const magnetButtonX = menuOriginX + menuWidth + padding - 1.4 * knobRadius;
+            const magnetButtonY = menuOriginY + menuHeight + padding - 1.2 * knobRadius;
+            const mdx = clickCanvasX - magnetButtonX;
+            const mdy = clickCanvasY - magnetButtonY;
+            
+            if (mdx * mdx + mdy * mdy < magnetButtonRadius * magnetButtonRadius) {
+                magnetActive = !magnetActive;
                 return true;
             }
             
@@ -1054,7 +1065,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         isDraggingHueSensitivity = false;
         isDraggingHueTicker = false;
         isDraggingSpraySlider = false;
-        isDraggingTailWidthSlider = false;
+        isDraggingMagnet = false;
         isSpraying = false;
     });
 
@@ -1066,6 +1077,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const rect = canvas.getBoundingClientRect();
         mouseX = (e.clientX - rect.left) / cScale;
         mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
+        
+        // Handle magnet dragging
+        if (isDraggingMagnet && Magnet.length > 0) {
+            Magnet[0].x = mouseX;
+            Magnet[0].y = mouseY;
+            return;
+        }
         
         // Handle menu dragging
         if (isDraggingMenu) {
@@ -1200,24 +1218,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             return;
         }
         
-        // Handle tail width slider dragging
-        if (isDraggingTailWidthSlider) {
-            const knobRadius = 0.1 * cScale;
-            const knobSpacing = knobRadius * 3;
-            const tailSldrWidth = knobRadius * 2.0;
-            const tailKnobCol = 1;
-            const menuUpperLeftX = menuX * cScale;
-            const menuOriginX = menuUpperLeftX + knobSpacing;
-            const tailSldrCenterX = menuOriginX + tailKnobCol * knobSpacing;
-            const tailSldrX = tailSldrCenterX - tailSldrWidth / 2;
-            const clickCanvasX = mouseX * cScale;
-            const clickRatio = (clickCanvasX - tailSldrX) / tailSldrWidth;
-            
-            boidProps.tailWidth = 1.0 + clickRatio * (5.0 - 1.0);
-            boidProps.tailWidth = Math.max(1.0, Math.min(5.0, boidProps.tailWidth));
-            return;
-        }
-        
         // Handle spraypaint tool
         if (isSpraying && spraypaintActive) {
             // Generate spray particles
@@ -1259,18 +1259,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         
         // Handle knob dragging
-        if (draggedKnob !== null) {
+        if (draggedKnob !== null && draggedKnob !== 4) {
             const ranges = [
                 {min: 100, max: 5000},      // numBoids
                 {min: 1, max: 10},           // boidRadius (scaled by 100)
                 {min: 0.05, max: 0.5},       // visualRange
                 {min: 0.1, max: 3.0},        // speedLimit
-                {min: 0.0, max: 0.2},        // minDistance
+                {min: 0.0, max: 0.2},        // (removed)
                 {min: 0, max: 100},          // avoidFactor
                 {min: 0, max: 50},           // matchingFactor
                 {min: 0, max: 20},           // centeringFactor
                 {min: 0, max: 5},            // turnFactor
-                {min: 0, max: 100}           // trailLength
+                {min: 0, max: 100},          // trailLength
+                {min: 1.0, max: 5.0}         // tailWidth
             ];
             
             // Calculate drag delta (combined horizontal and vertical)
@@ -1383,15 +1384,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 case 2: 
                     boidProps.visualRange = newValue; 
                     // Update dependent properties
-                    boidProps.minDistance = 5.0 * boidRadius;
+                    boidProps.minDistance = Math.max(0.08, 5.0 * boidRadius);
                     break;
                 case 3: boidProps.speedLimit = newValue; break;
-                case 4: boidProps.minDistance = newValue; break;
                 case 5: boidProps.avoidFactor = newValue; break;
                 case 6: boidProps.matchingFactor = newValue; break;
                 case 7: boidProps.centeringFactor = newValue; break;
                 case 8: boidProps.turnFactor = newValue; break;
                 case 9: boidProps.tailLength = Math.round(newValue); break;
+                case 10: boidProps.tailWidth = newValue; break;
             }
             return;
         }
@@ -2569,6 +2570,36 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
                 ctx.fill();
             }
+
+            // Draw pouty face on foreground rainy clouds
+            if (this.isForeground && this.isRaining) {
+                const faceY = cy + r * 0.1;
+                const eyeOffsetX = r * 0.2;
+                const eyeOffsetY = r * 0.1;
+                const eyeRadiusX = r * 0.05;
+                const eyeRadiusY = r * 0.08;
+                
+                // Left eye
+                ctx.fillStyle = 'hsl(0, 0%, 10%)';
+                ctx.beginPath();
+                ctx.ellipse(cx - eyeOffsetX, faceY - eyeOffsetY, eyeRadiusX, eyeRadiusY, 0, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Right eye
+                ctx.beginPath();
+                ctx.ellipse(cx + eyeOffsetX, faceY - eyeOffsetY, eyeRadiusX, eyeRadiusY, 0, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Pouty mouth
+                const mouthWidth = r * 0.25;
+                const mouthHeight = r * 0.05;
+                ctx.beginPath();
+                ctx.moveTo(cx - mouthWidth / 2, faceY + r * 0.14);
+                ctx.quadraticCurveTo(cx, faceY + r * 0.1 - mouthHeight, cx + mouthWidth / 2, faceY + r * 0.1);
+                ctx.strokeStyle = 'hsl(0, 0%, 10%)';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            }
             
             ctx.restore();
             
@@ -3242,7 +3273,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     for (let i = 0; i < this.propTrail1.length - 1; i++) {
                         const alpha = (i / this.propTrail1.length) * 0.2;
                         //const width = Math.min(10, 5 / (i / this.propTrail1.length));
-                        const maxWidth = Math.min(30, 5 / (i / this.propTrail1.length));
+                        const maxWidth = Math.min(10, 3 / (i / this.propTrail1.length));
                         const point1 = this.propTrail1[i];
                         const point2 = this.propTrail1[i + 1];
                         c.strokeStyle = `hsla(200, 15%, 50%, ${alpha})`;
@@ -3309,7 +3340,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         const alpha = (i / this.propTrail2.length) * 0.2;
                         //const width = Math.min(10, 50 / (i / this.propTrail1.length));
                         //width += 10;
-                        const maxWidth = Math.min(20, 7 / (i / this.propTrail1.length));
+                        const maxWidth = Math.min(10, 5 / (i / this.propTrail1.length));
                         const point1 = this.propTrail2[i];
                         const point2 = this.propTrail2[i + 1];
                         c.strokeStyle = `hsla(200, 20%, 70%, ${alpha})`;
@@ -3631,7 +3662,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 //c.translate(cX(this.pos), cY(this.pos));
                 c.beginPath();
                 //c.arc(0, 0, radScale, 0, 2 * Math.PI);
-                c.arc(cX(this.pos), cY(this.pos), radScale, 0, 2 * Math.PI);
+                c.arc(cX(this.pos), cY(this.pos), 0.6 * radScale, 0, 2 * Math.PI);
                 if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
                     c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
                     c.strokeStyle = `hsl(${this.hue - 70}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
@@ -3984,8 +4015,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         const menuItems = [
             boidProps.numBoids, boidProps.boidRadius, boidProps.visualRange, boidProps.speedLimit,
-            boidProps.minDistance, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
-            boidProps.turnFactor, boidProps.tailLength];
+            null, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
+            boidProps.turnFactor, boidProps.tailLength, boidProps.tailWidth];
 
         // Define min/max ranges for each parameter
         const ranges = [
@@ -3993,12 +4024,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             {min: 1, max: 10},           // boidRadius (scaled by 100)
             {min: 0.05, max: 0.5},       // visualRange
             {min: 0.1, max: 3.0},        // speedLimit
-            {min: 0.0, max: 0.2},        // minDistance
+            {min: 0.0, max: 0.2},        // (removed) was minDistance
             {min: 0, max: 100},          // avoidFactor
             {min: 0, max: 50},           // matchingFactor
             {min: 0, max: 20},           // centeringFactor
             {min: 0, max: 5},            // turnFactor
-            {min: 0, max: 100}           // trailLength
+            {min: 0, max: 100},          // trailLength
+            {min: 1.0, max: 5.0}         // tailWidth
         ];
 
         const knobRadius = 0.1 * cScale;
@@ -4020,7 +4052,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         // Draw overall menu background with rounded corners
         const menuWidth = knobSpacing * 3;
-        const menuHeight = knobSpacing * 2 + knobRadius * 3.5;
+        const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
         const padding = 1.7 * knobRadius;
         const cornerRadius = 0.05 * cScale;
         c.beginPath();
@@ -4076,9 +4108,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Draw knobs ---------------------------------------------
         c.lineCap = 'round';
         for (var knob = 0; knob < menuItems.length; knob++) {
+            if (knob === 4) continue; // Skip removed knob
             // fill and trace knob background
-            const row = Math.floor(knob / 4);
-            const col = knob % 4;
+            const layoutIndex = knob > 4 ? knob - 1 : knob;
+            const row = Math.floor(layoutIndex / 4);
+            const col = layoutIndex % 4;
             const knobX = col * knobSpacing;
             const knobY = row * knobSpacing + menuTopMargin;
             c.beginPath();
@@ -4149,12 +4183,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 case 1: label = 'Size'; break;
                 case 2: label = 'Visual Range'; break;
                 case 3: label = 'Speed Limit'; break;
-                case 4: label = 'Rule 1: Separation'; break;
-                case 5: label = 'Separation Strength'; break;
+                case 4: label = 'blank'; break;
+                case 5: label = 'Rule 1: Separation'; break;
                 case 6: label = 'Rule 2: Alignment'; break;
                 case 7: label = 'Rule 3: Cohesion'; break;
                 case 8: label = 'Confinement'; break;
                 case 9: label = 'Tail Length'; break;
+                case 10: label = 'Tail Width'; break;
             }
             c.font = `${0.29 * knobRadius}px verdana`;
             c.strokeStyle = `hsla(210, 80%, 0%, ${0.6 * menuOpacity})`;
@@ -4170,12 +4205,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 case 1: valueText = (boidRadius * 100).toFixed(1); break;
                 case 2: valueText = (boidProps.visualRange).toFixed(2); break;
                 case 3: valueText = (boidProps.speedLimit).toFixed(1); break;
-                case 4: valueText = (boidProps.minDistance).toFixed(2); break;
                 case 5: valueText = (boidProps.avoidFactor).toFixed(0); break;
                 case 6: valueText = (boidProps.matchingFactor).toFixed(1); break;
                 case 7: valueText = (boidProps.centeringFactor).toFixed(1); break;
                 case 8: valueText = (boidProps.turnFactor).toFixed(1); break;
                 case 9: valueText = boidProps.tailLength.toString(); break;
+                case 10: valueText = (boidProps.tailWidth).toFixed(1); break;
             }
             c.font = `${0.25 * knobRadius}px verdana`;
             c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
@@ -4184,12 +4219,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         // Draw tail color radio buttons below tail length knob (knob 9)
         const tailColorRadioRadius = knobRadius * 0.25;
-        const tailKnobCol = 1;
         const tailKnobRow = 2;
+        const tailButtonsCenterX = 0.5; // Center between columns 0 and 1
         const tailRadioLabels = ['Black', 'White', 'Hue', 'Hue2'];
         
         for (let i = 0; i < 4; i++) {
-            const buttonX = tailKnobCol * knobSpacing + (i - 1.5) * knobRadius * 1.0;
+            const buttonX = tailButtonsCenterX * knobSpacing + (i - 1.5) * knobRadius * 1.0;
             const buttonY = tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin;
             
             // Draw outer circle
@@ -4219,61 +4254,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
             c.fillText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
         }
-        
-        // Draw tail width slider below the tail color buttons
-        const tailSldrWidth = knobRadius * 2.0;
-        const tailSldrHeight = knobRadius * 0.25;
-        const tailSldrCenterX = tailKnobCol * knobSpacing;
-        const tailSldrBottomY = tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin + tailColorRadioRadius + 1.2 * knobRadius;
-        const tailSldrX = tailSldrCenterX - tailSldrWidth / 2;
-        
-        // Draw trapezoid slider background - wedge shape (shorter on left, taller on right)
-        c.fillStyle = `hsla(210, 80%, 10%, ${0.5 * menuOpacity})`;
-        c.beginPath();
-        const tailSldrLeftHeight = tailSldrHeight;
-        const tailSldrRightHeight = tailSldrHeight * 1.8;
-        c.moveTo(tailSldrX, tailSldrBottomY - tailSldrLeftHeight); // Top left
-        c.lineTo(tailSldrX + tailSldrWidth, tailSldrBottomY - tailSldrRightHeight); // Top right
-        c.lineTo(tailSldrX + tailSldrWidth, tailSldrBottomY); // Bottom right
-        c.lineTo(tailSldrX, tailSldrBottomY); // Bottom left
-        c.closePath();
-        c.fill();
-        c.strokeStyle = `hsla(210, 60%, 80%, ${menuOpacity * 0.3})`;
-        c.lineWidth = 0.004 * cScale;
-        c.stroke();
-        
-        // Calculate slider position (1.0 to 5.0 range)
-        const tailWidthSliderValue = (boidProps.tailWidth - 1.0) / (5.0 - 1.0);
-        const tailWidthKnobX = tailSldrX + tailWidthSliderValue * tailSldrWidth;
-        const tailWidthKnobHeightAtPos = tailSldrLeftHeight - (tailSldrLeftHeight - tailSldrRightHeight) * tailWidthSliderValue;
-        const tailWidthKnobRadius = knobRadius * 0.25;
-        const tailWidthKnobY = tailSldrBottomY - tailWidthKnobHeightAtPos / 2;
-        
-        // Draw slider knob
-        c.beginPath();
-        c.arc(tailWidthKnobX, tailWidthKnobY, tailWidthKnobRadius, 0, 2 * Math.PI);
-        const tailWidthKnobGradient = c.createRadialGradient(
-            tailWidthKnobX - tailWidthKnobRadius * 0.3,
-            tailWidthKnobY - tailWidthKnobRadius * 0.3,
-            0,
-            tailWidthKnobX,
-            tailWidthKnobY,
-            tailWidthKnobRadius
-        );
-        tailWidthKnobGradient.addColorStop(0, `hsla(210, 60%, 80%, ${menuOpacity})`);
-        tailWidthKnobGradient.addColorStop(1, `hsla(210, 60%, 50%, ${menuOpacity})`);
-        c.fillStyle = tailWidthKnobGradient;
-        c.fill();
-        c.strokeStyle = `hsla(210, 60%, 90%, ${menuOpacity})`; 
-        c.lineWidth = 0.005 * cScale;
-        c.stroke();
-        
-        // Draw label
-        c.font = `${0.28 * knobRadius}px verdana`;
-        c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
-        c.textAlign = 'center';
-        c.textBaseline = 'top';
-        c.fillText('Tail Width', tailSldrCenterX, tailSldrBottomY + 0.27 * knobRadius);
         
         // Draw radio buttons for boid type selection (vertically stacked)
         const radioButtonRadius = knobRadius * 0.25;
@@ -4313,7 +4293,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
             c.fillText(radioLabels[i], buttonX + radioButtonRadius + 0.2 * knobRadius, buttonY);
         }
-
+        
         // Draw reset button --------------------------------------
         const resetButtonRadius = knobRadius * 0.5;
         const resetButtonX = 3 * knobSpacing;
@@ -4369,8 +4349,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // draw dark heavy background line for FPS text
         const fpsTextWidth = c.measureText(fpsText).width;
         c.beginPath();
-        c.moveTo(menuWidth + padding - 2.5 * knobRadius, menuHeight + padding - 3.55 * knobRadius);
-        c.lineTo(menuWidth + padding - 0.9 *knobRadius, menuHeight + padding - 3.55 * knobRadius);
+        c.moveTo(menuWidth + padding - 2.5 * knobRadius, menuHeight + padding - 2.55 * knobRadius);
+        c.lineTo(menuWidth + padding - 0.9 *knobRadius, menuHeight + padding - 2.55 * knobRadius);
         c.lineWidth = 0.5 * knobRadius;
         c.strokeStyle = `hsla(0, 0%, 0%, ${0.7 * menuOpacity})`;
         c.lineCap = 'round';
@@ -4379,14 +4359,66 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Draw FPS value
         c.font = `${0.4 * knobRadius}px monospace`;
         c.fillStyle = `hsla(${fpsHue}, 90%, 60%, ${menuOpacity})`;
-        c.fillText(fpsText, menuWidth + padding - 1.9 * knobRadius, menuHeight + padding - 3.3 * knobRadius);
+        c.fillText(fpsText, menuWidth + padding - 1.9 * knobRadius, menuHeight + padding - 2.3 * knobRadius);
         
         // Draw 'FPS' label
         c.font = `${0.4 * knobRadius}px monospace`;
         c.fillStyle = `hsla(0, 0%, 80%, ${menuOpacity})`;
-        c.fillText('fps', menuWidth + padding - 1.0 * knobRadius, menuHeight + padding - 3.3 * knobRadius);
+        c.fillText('fps', menuWidth + padding - 1.0 * knobRadius, menuHeight + padding - 2.3 * knobRadius);
         
+        // Draw magnet toggle button --------------------------------------
+        const magnetButtonRadius = 0.065 * cScale;
+        const magnetButtonX = 3 * knobSpacing;
+        const magnetButtonY = menuHeight + padding - 1.2 * knobRadius;
         
+        /*// Draw magnet button circle
+        c.beginPath();
+        c.arc(magnetButtonX, magnetButtonY, magnetButtonRadius, 0, 2 * Math.PI);
+        c.fillStyle = magnetActive ? `hsla(300, 80%, 50%, ${menuOpacity})` : `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(300, 80%, 70%, ${menuOpacity})`;
+        c.lineWidth = 0.05 * knobRadius;
+        c.stroke();
+        
+        // Draw M symbol
+        c.fillStyle = `hsla(0, 0%, 90%, ${menuOpacity})`;
+        c.font = `bold ${0.4 * knobRadius}px verdana`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText('M', magnetButtonX, magnetButtonY);
+        */
+
+        // Draw magnet sphere
+        c.beginPath();
+        const lightness = Magnet[0].lightness;
+        c.arc(magnetButtonX, magnetButtonY, magnetButtonRadius, 0, 2 * Math.PI);
+        const sphereGradient = c.createRadialGradient(
+            magnetButtonX -0.1 * magnetButtonRadius, 
+            magnetButtonY -0.15 * magnetButtonRadius,
+            0,
+            magnetButtonX -0.1 * magnetButtonRadius, 
+            magnetButtonY -0.15 * magnetButtonRadius,
+            magnetButtonRadius);
+        sphereGradient.addColorStop(0, `hsl(200, 80%, 100%)`);
+        sphereGradient.addColorStop(1, `hsl(200, 80%, 20%)`);
+        c.fillStyle = sphereGradient;
+        c.fill();
+
+            /*// Draw glowing aura 
+            c.beginPath();
+            c.arc(0, 0, this.effectRadius * cScale, 0, 2 * Math.PI);
+            const auraGradient = c.createRadialGradient(
+                0, 
+                0, 
+                0, 
+                0, 
+                0, 
+                this.effectRadius * cScale);
+            auraGradient.addColorStop(0, `hsl(180, 80%, ${lightness * 50}%, 0.3)`);
+            auraGradient.addColorStop(1, `hsl(180, 80%, ${lightness * 20}%, 0.0)`);
+            c.fillStyle = auraGradient;
+            c.fill();*/
+
 
         c.restore();
     }
@@ -4831,12 +4863,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const hueTickerKnobY = hueSensitivityKnobY;
             
             // Draw segregation radio buttons below the knobs
-        const segRadioRadius = knobRadius * 0.25;
-        const segButtonY = hueTickerKnobY + knobRadius * 2.6;
-        const segButtonSpacing = knobRadius * 1.3;
-        const segButtonStartX = colorWheelRadius - segButtonSpacing * 0.5;
-        const segLabels = ['None', 'Moderate', 'Heavy'];
-        const segModeMap = [0, 2, 1]; // Map visual position to segregationMode value
+            const segRadioRadius = knobRadius * 0.25;
+            const segButtonY = hueTickerKnobY + knobRadius * 2.6;
+            const segButtonSpacing = knobRadius * 1.3;
+            const segButtonStartX = colorWheelRadius - segButtonSpacing * 0.5;
+            const segLabels = ['None', 'Moderate', 'Heavy'];
+            const segModeMap = [0, 2, 1]; // Map visual position to segregationMode value
         
         for (let i = 0; i < 3; i++) {
             const segBtnX = segButtonStartX + i * segButtonSpacing;
@@ -4920,6 +4952,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
         c.lineWidth = 0.008 * cScale;
         c.stroke();
+
+        // Draw value label
+        c.font = `${0.25 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
+        c.fillText((boidProps.hueSensitivity / 3.6).toFixed(0), hueSensitivityKnobX, hueSensitivityKnobY + 0.5 * knobRadius);
         
         // Draw label
         c.font = `${0.29 * knobRadius}px verdana`;
@@ -4976,7 +5013,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
         c.lineWidth = 0.008 * cScale;
         c.stroke();
-        
+
+        // Draw value label
+        c.font = `${0.25 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
+        if (boidProps.hueTicker < 0.1) {
+            c.fillText((boidProps.hueTicker).toFixed(2), hueTickerKnobX, hueTickerKnobY + 0.5 * knobRadius);
+        } else {
+        c.fillText((boidProps.hueTicker).toFixed(1), hueTickerKnobX, hueTickerKnobY + 0.5 * knobRadius);
+        }
         // Draw label
         c.font = `${0.29 * knobRadius}px verdana`;
         c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
@@ -4998,7 +5043,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Reset all parameters to defaults
         boidRadius = 0.02;
         boidProps.numBoids = 2200;
-        boidProps.minDistance = 5.0 * boidRadius;
+        boidProps.minDistance = Math.max(0.08, 5.0 * boidRadius);
         boidProps.avoidFactor = 50.0;
         boidProps.matchingFactor = 10.0;
         boidProps.visualRange = 10.0 * boidRadius;
@@ -5125,6 +5170,91 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
     }
 
+    // MAGNET CLASS -------------
+    class MAGNET {
+        constructor() {
+            this.x = 0.5 * simWidth;
+            this.y = 0.5 * simHeight;
+            this.radius = 0.04 * Math.min(simWidth, simHeight);
+            this.effectRadius = 0.5 * Math.min(simWidth, simHeight);
+            this.pulser = 0;
+            this.lightness = 1.0;
+        }
+        draw() {
+            this.pulser += 0.05;
+            if (this.pulser >= 2 *Math.PI) {
+                this.pulser = 0;
+            }
+            this.lightness = Math.abs(Math.cos(this.pulser)) * 0.4 + 0.6;
+            c.save();
+            c.translate(this.x * cScale, canvas.height - this.y * cScale);
+
+            // Draw magnet sphere
+            c.beginPath();
+            c.arc(0, 0, this.radius * cScale, 0, 2 * Math.PI);
+            const sphereGradient = c.createRadialGradient(
+                -0.2 * this.radius * cScale, 
+                -0.3 * this.radius * cScale,
+                0,
+                -0.2 * this.radius * cScale, 
+                -0.3 * this.radius * cScale,
+                this.radius * cScale);
+            sphereGradient.addColorStop(0, `hsl(200, 80%, ${this.lightness * 60}%)`);
+            sphereGradient.addColorStop(1, `hsl(200, 80%, ${this.lightness * 20}%)`);
+            c.fillStyle = sphereGradient;
+            c.fill();
+
+            // Draw glowing aura 
+            c.beginPath();
+            c.arc(0, 0, this.effectRadius * cScale, 0, 2 * Math.PI);
+            const auraGradient = c.createRadialGradient(
+                0, 
+                0, 
+                0, 
+                0, 
+                0, 
+                this.effectRadius * cScale);
+            auraGradient.addColorStop(0, `hsl(180, 80%, ${this.lightness * 50}%, 0.3)`);
+            auraGradient.addColorStop(1, `hsl(180, 80%, ${this.lightness * 20}%, 0.0)`);
+            c.fillStyle = auraGradient;
+            c.fill();
+
+            /*c.beginPath();
+            c.strokeStyle = 'hsl(200, 80%, 70%, 0.8)';
+            c.lineWidth = 0.01 * cScale;
+            c.arc(0, 0, this.effectRadius * cScale, 0, 2 * Math.PI);
+            c.stroke();
+            */
+
+            c.restore();
+        }
+    }
+
+    // Define magnet -------------
+    function makeMagnet() {
+        Magnet = [];
+        Magnet.push(new MAGNET);
+    }
+
+    //  HANDLE MAGNET -------------
+    function handleMagnet(boid) {
+        if (magnetActive) {
+            const magnetDx = Magnet[0].x - boid.pos.x;
+            const magnetDy = Magnet[0].y - boid.pos.y;
+            const magnetDistSq = magnetDx * magnetDx + magnetDy * magnetDy;
+            const magnetEffectRadius = Magnet[0].effectRadius;
+            const radiusSq = magnetEffectRadius * magnetEffectRadius;
+            
+            if (magnetDistSq < radiusSq && magnetDistSq > 0) {
+                // Only compute sqrt when we know we need it
+                const magnetDist = Math.sqrt(magnetDistSq);
+                const magnetStrength = 7;
+                boid.vel.x += magnetDx * magnetStrength * deltaT;
+                boid.vel.y += magnetDy * magnetStrength * deltaT;
+            }
+        }
+    }
+
     //  HANDLE CLOUDS -------------
     function handleClouds(boid) {
         // CLOUD AVOIDANCE - loop through all Clouds
@@ -5245,7 +5375,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const visualRangeSq = boidProps.visualRange * boidProps.visualRange;
         const minDistSq = boidProps.minDistance * boidProps.minDistance;
         const avoidFactor = boidProps.avoidFactor;
-        const minDistance = boidProps.minDistance;
+        const minDistance = Math.max(0.08, 5.0 * boidRadius); // Use this to keep separation consistent if boidRadius changes
         
         // Use traditional for loop for better performance
         for (let i = 0; i < nearbyBoids.length; i++) {
@@ -5991,6 +6121,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             handleFlashing(boid);
             handleBoidRules(boid);
             handleClouds(boid);
+            handleMagnet(boid);
             handleBounds(boid);
             boid.simulate();
         }
@@ -6103,7 +6234,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             rainDrop.draw();
         }
 
-        // Draw big foreground cloud (non-interactive) last
+        // Draw big foreground cloud (non-interactive) last --------
         if (showClouds) {
             for (let cloud of ForegroundCloud) {
                 cloud.draw();
@@ -6113,12 +6244,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
         
-        // Draw spray particles
+        // Draw spray particles --------
         for (let particle of sprayParticles) {
             particle.draw();
         }
 
-        // Draw menus in z-order (lowest to highest so highest is on top)
+        // Draw magnet --------
+        if (magnetActive) {
+            for (let magnet of Magnet) {
+                magnet.draw();
+            }
+        }
+
+        // Draw menus in z-order (lowest to highest so highest is on top) --------
         const menus = [
             {draw: drawSkyMenu, z: skyMenuZOrder},
             {draw: drawColorMenu, z: colorMenuZOrder},
@@ -6198,9 +6336,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 camSize * 0.35);
             c.fill();
             c.stroke();
-            
-            
-            
+
             // Film reels on top
             const leftReelX = cursorX - camSize * 0.4;
             const leftReelY = cursorY - camSize * 0.3;
@@ -6603,6 +6739,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         initBalloon();
         // make hot air balloon ----------
         makeHotAirBalloon()
+        // Make magnet ----------
+        makeMagnet(); 
         // make spatial grid ----------
         makeSpatialGrid();
         SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
