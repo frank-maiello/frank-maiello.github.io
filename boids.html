@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.34</title>
+    <title>Boids 1.35</title>
     <style>
         html, body {
             margin: 0;
@@ -1000,6 +1000,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
         
+        // Find which balloon was clicked
+        let clickedBalloon = null;
+        for (let balloon of Balloons) {
+            if (balloon.contains(mouseX, mouseY)) {
+                clickedBalloon = balloon;
+                break;
+            }
+        }
+        
+        // If balloon was clicked, set it to popping
+        if (clickedBalloon && !clickedBalloon.popping) {
+            clickedBalloon.popping = true;
+            clickedBalloon.popStartTime = performance.now();
+        }
+        
         if (e.button === 0) { // Left click
             const currentTime = Date.now();
             
@@ -1253,6 +1268,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     );
                     if (!alreadyExists) {
                         paintedColorDots.push({hue: selectedHue, saturation: selectedSaturation});
+                        // Limit array size to prevent memory leak (keep most recent 100 colors)
+                        if (paintedColorDots.length > 100) {
+                            paintedColorDots.shift();
+                        }
                     }
                 }
             }
@@ -2296,13 +2315,41 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.pos = pos.clone();
             this.vel = vel.clone();
             this.radius = 0.15;
+            this.originalRadius = 0.15; // Store original size for string length when popping
             this.hue = 360 * Math.random();
             this.saturation = 40 + Math.random() * 60;
             this.lightness = 40 + Math.random() * 30;
             this.stringPhase = Math.random() * Math.PI * 2; // Random starting phase for wave
+            this.popping = false;
+            this.tumbleAngle = 0; // Rotation angle for knot tumbling when popped
         }
         simulate() {
-            this.vel.y += 0.001;
+            if (this.popping) {
+                // When popping, balloon collapses and falls
+                const timeSincePop = (performance.now() - this.popStartTime) / 1000; // in seconds
+                
+                // Collapse the balloon rapidly
+                this.radius = Math.max(0.01, 0.15 * (1 - Math.min(timeSincePop * 2, 1)));
+                
+                // Fall downward with gravity
+                this.vel.y -= 0.8 * deltaT; // Strong downward acceleration
+                this.vel.x *= 0.98; // Slight horizontal dampening
+                
+                // Tumble the knot
+                this.tumbleAngle += deltaT * 8; // Rotate at 8 radians per second
+                
+                // Remove balloon when it falls off bottom of screen
+                if (this.pos.y < -0.5) {
+                    const index = Balloons.indexOf(this);
+                    if (index > -1) {
+                        Balloons.splice(index, 1);
+                    }
+                }
+            } else {
+                // Normal floating behavior
+                this.vel.y += 0.001;
+            }
+            
             this.pos.add(this.vel, deltaT);
             this.stringPhase += deltaT * 3; // Animate the wave
             
@@ -2316,92 +2363,247 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
         draw() {
             const radScale = this.radius * cScale;
-            const stringLength = radScale * 3.5;
+            // Use original radius for string length so it doesn't shrink when popping
+            const originalRadScale = this.originalRadius * cScale;
+            const stringLength = originalRadScale * 3.5;
             const startY = 0.6 * radScale;
             const segments = 20;
 
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
 
-            // Draw vertical part of knot at balloon connection
-            c.fillStyle = `hsl(${this.hue}, 40%, 30%)`;
-            c.beginPath();
-            c.ellipse(
-                0, 
-                startY + radScale * 0.15, 
-                radScale * 0.08, 
-                radScale * 0.12, 
-                0, 
-                0, 
-                2 * Math.PI);
-            c.fill();
+            // Always draw the knot at balloon connection
+            // Position knot below the balloon body (less negative Y = lower)
+            const knotStartY = this.popping ? (-0.3 * originalRadScale) : startY;
             
-            // Draw horizontal part of knot at balloon connection
-            c.fillStyle = `hsl(${this.hue}, 40%, 20%)`;
-            c.beginPath();
-            c.ellipse(
-                0, 
-                startY + radScale * 0.22, 
-                radScale * 0.12, 
-                radScale * 0.06, 
-                0, 
-                0, 
-                2 * Math.PI);
-            c.fill();
+            // Draw knot at fixed position when not popping
+            if (!this.popping) {
+                // Draw vertical part of knot at balloon connection
+                c.fillStyle = `hsl(${this.hue}, 40%, 30%)`;
+                c.beginPath();
+                c.ellipse(
+                    0, 
+                    startY + radScale * 0.15,
+                    radScale * 0.08,
+                    radScale * 0.12,
+                    0, 
+                    0, 
+                    2 * Math.PI);
+                c.fill();
+                
+                // Draw horizontal part of knot at balloon connection
+                c.fillStyle = `hsl(${this.hue}, 40%, 20%)`;
+                c.beginPath();
+                c.ellipse(
+                    0, 
+                    startY + radScale * 0.22,
+                    radScale * 0.12,
+                    radScale * 0.06,
+                    0, 
+                    0, 
+                    2 * Math.PI);
+                c.fill();
+            }
 
-            // draw arced string around knot
-            c.beginPath();
-            const squeeze = 0.3 * Math.PI
-            c.arc(0, startY + radScale * 0.02, radScale * 0.15, 0 + squeeze, Math.PI - squeeze, false);
+            // draw arced string around knot (only when not popping)
+            if (!this.popping) {
+                c.beginPath();
+                const squeeze = 0.3 * Math.PI
+                c.arc(0, startY + originalRadScale * 0.02, originalRadScale * 0.15, 0 + squeeze, Math.PI - squeeze, false);
+                c.strokeStyle = 'hsl(0, 0%, 80%)';
+                c.lineWidth = 2.0;
+                c.stroke();
+            }
+
+            // Draw string with wave (trails behind when falling)
             c.strokeStyle = 'hsl(0, 0%, 80%)';
             c.lineWidth = 2.0;
-            c.stroke();
-
-            // Draw string with wave
-            c.strokeStyle = 'hsl(0, 0%, 80%)';
-            c.lineWidth = 2.0;
             c.beginPath();
+            
+            // Calculate string start position (where knot will be when popping)
+            let stringStartY;
+            
+            // Store all points first for smooth curve drawing
+            const points = [];
+            
             for (let i = 0; i <= segments; i++) {
                 const t = i / segments;
-                const y = (startY + radScale * 0.18) + stringLength * t;
-                // Wave amplitude increases with distance from balloon (quadratic)
-                const amplitude = radScale * 0.3 * t * t;
-                const x = radScale * 0.065 + Math.sin(this.stringPhase + t * Math.PI * 2) * amplitude;
+                let y, x;
                 
-                if (i === 0) {
-                    c.moveTo(x, y);
+                if (this.popping) {
+                    // U-turn animation: knot falls and drags string down smoothly
+                    const timeSincePop = (performance.now() - this.popStartTime) / 1000;
+                    
+                    // Knot is at t=0, string extends downward (t increases = further from knot)
+                    const knotBottomY = knotStartY + originalRadScale * 0.58;
+                    
+                    // Original string position (hanging down from knot)
+                    const originalStringY = knotBottomY + stringLength * t;
+                    
+                    // Simplified physics: each segment lags behind based on distance from knot
+                    // The further from knot, the more delay in responding to the fall
+                    const delay = t * 0.5; // Segments lag proportionally to distance
+                    const effectiveTime = Math.max(0, timeSincePop - delay);
+                    
+                    // Each segment falls with the same gravity, just delayed
+                    const fallAcceleration = 0.7;
+                    const fallDistance = 0.5 * fallAcceleration * effectiveTime * effectiveTime * cScale;
+                    
+                    // Far segments (higher t) create upward curve due to delay
+                    y = originalStringY + fallDistance;
+                    
+                    // Store the first segment position for knot placement (t=0)
+                    if (i === 0) {
+                        stringStartY = y;
+                    }
+                    
+                    const amplitude = originalRadScale * 0.4 * t * t;
+                    x = originalRadScale * 0.065 + Math.sin(this.stringPhase + t * Math.PI * 2) * amplitude;
                 } else {
-                    c.lineTo(x, y);
+                    // Normal downward string
+                    y = (startY + originalRadScale * 0.18) + stringLength * t;
+                    const amplitude = originalRadScale * 0.3 * t * t;
+                    x = originalRadScale * 0.065 + Math.sin(this.stringPhase + t * Math.PI * 2) * amplitude;
+                }
+                
+                points.push({x, y});
+            }
+            
+            // Draw smooth curve through points using quadratic curves
+            if (points.length > 0) {
+                c.moveTo(points[0].x, points[0].y);
+                
+                for (let i = 1; i < points.length; i++) {
+                    if (i < points.length - 1) {
+                        // Use quadratic curve with control point at current point
+                        const xc = (points[i].x + points[i + 1].x) / 2;
+                        const yc = (points[i].y + points[i + 1].y) / 2;
+                        c.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+                    } else {
+                        // Last point - draw straight to it
+                        c.quadraticCurveTo(points[i].x, points[i].y, points[i].x, points[i].y);
+                    }
                 }
             }
             c.stroke();
             
-            // Draw balloon
-            const gradient = c.createRadialGradient(
-                -radScale * 0.25,
-                -radScale * 0.7, 
-                0, 
-                0, 
-                -radScale * 0.3, 
-                1.2 *radScale);
-            gradient.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.8)`);
-            gradient.addColorStop(1, `hsla(${this.hue}, ${this.saturation * 0.75}%, 10%, 1.0)`);
-            c.fillStyle = gradient;
-            c.beginPath();
-            c.ellipse(
-                0, 
-                -radScale * 0.3, 
-                radScale * 0.8, 
-                radScale, 
-                0, 
-                0, 
-                2 * Math.PI);
-            c.fill();
-            c.strokeStyle = `hsl(${this.hue}, 50%, 30%)`;
-            c.lineWidth = 2;
-            c.stroke();
+            // Draw knot at the start of string when popping (so it moves with the string)
+            if (this.popping && stringStartY !== undefined) {
+                // Save context and apply rotation for tumbling effect
+                c.save();
+                c.translate(0, stringStartY - originalRadScale * 0.095);
+                c.rotate(this.tumbleAngle);
+                
+                // Reposition knot to follow the string as it falls
+                c.fillStyle = `hsl(${this.hue}, 40%, 30%)`;
+                c.beginPath();
+                c.ellipse(
+                    0, 
+                    -originalRadScale * 0.035,
+                    originalRadScale * 0.08,
+                    originalRadScale * 0.12,
+                    0, 
+                    0, 
+                    2 * Math.PI);
+                c.fill();
+                
+                c.fillStyle = `hsl(${this.hue}, 40%, 20%)`;
+                c.beginPath();
+                c.ellipse(
+                    0, 
+                    originalRadScale * 0.035,
+                    originalRadScale * 0.12,
+                    originalRadScale * 0.06,
+                    0, 
+                    0, 
+                    2 * Math.PI);
+                c.fill();
+                
+                c.restore();
+            }
+            
+            // Draw balloon (collapsed when popping)
+            if (this.popping) {
+                // Draw wrinkled/collapsed balloon shape at top, around knot
+                const timeSincePop = (performance.now() - this.popStartTime) / 1000;
+                const collapseAmount = Math.min(timeSincePop * 2, 1);
+                
+                c.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness * 0.5}%, ${0.6 * (1 - collapseAmount)})`;
+                c.strokeStyle = `hsla(${this.hue}, 50%, 30%, ${0.8 * (1 - collapseAmount)})`;
+                c.lineWidth = 2;
+                
+                // Draw crumpled shape above/around the knot
+                c.beginPath();
+                const points = 8;
+                const balloonScrapY = knotStartY + originalRadScale * 0.2; // Above the knot
+                for (let i = 0; i < points; i++) {
+                    const angle = (i / points) * Math.PI * 2;
+                    const radiusVariation = 0.5 + Math.sin(angle * 3 + timeSincePop * 10) * 0.3;
+                    const px = Math.cos(angle) * originalRadScale * 0.3 * radiusVariation;
+                    const py = balloonScrapY + Math.sin(angle) * originalRadScale * 0.2 * radiusVariation;
+                    if (i === 0) {
+                        c.moveTo(px, py);
+                    } else {
+                        c.lineTo(px, py);
+                    }
+                }
+                c.closePath();
+                c.fill();
+                c.stroke();
+            } else {
+                // Draw normal inflated balloon
+                const gradient = c.createRadialGradient(
+                    -radScale * 0.25,
+                    -radScale * 0.7, 
+                    0, 
+                    0, 
+                    -radScale * 0.3, 
+                    1.2 *radScale);
+                gradient.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.8)`);
+                gradient.addColorStop(1, `hsla(${this.hue}, ${this.saturation * 0.75}%, 10%, 1.0)`);
+                c.fillStyle = gradient;
+                c.beginPath();
+                c.ellipse(
+                    0, 
+                    -radScale * 0.3, 
+                    radScale * 0.8, 
+                    radScale, 
+                    0, 
+                    0, 
+                    2 * Math.PI);
+                c.fill();
+                c.strokeStyle = `hsl(${this.hue}, 50%, 30%)`;
+                c.lineWidth = 2;
+                c.stroke();
+            }
+
+            // draw tiny particles around circumference, moving outward when popping 
+            if (this.popping) {
+                const particleCount = 60;
+                for (let i = 0; i < particleCount; i++) {
+                    const angle = (i / particleCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+                    const distance = radScale * (1.0 + Math.random() * 0.5 + (performance.now() - this.popStartTime) / 200);
+                    const particleX = Math.cos(angle) * distance;
+                    const particleY = -radScale * 0.3 + Math.sin(angle) * distance;
+                    const particleRadius = Math.max(radScale * 0.01, radScale * 0.05 * (1.0 - (performance.now() - this.popStartTime) / 500));
+                    
+                    c.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${1.0 - (performance.now() - this.popStartTime) / 500})`;
+                    c.beginPath();
+                    c.arc(particleX, particleY, particleRadius, 0, Math.PI * 2);
+                    c.fill();
+                }
+            }
             
             c.restore();
+        }
+        contains(x, y) {
+            // Balloon body is an ellipse centered at (0, -radScale * 0.3) with radii (radScale * 0.8, radScale)
+            const dx = x - this.pos.x;
+            const dy = y - (this.pos.y - 0.3 * this.radius);
+            // Check if point is inside ellipse: (dx/rx)^2 + (dy/ry)^2 <= 1
+            const rx = this.radius * 0.8;
+            const ry = this.radius;
+            return (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1;
         }
     }
 
@@ -6156,6 +6358,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             balloon.simulate();
         }
 
+        // Check balloon-airplane collisions
+        if (doKitty && Airplane.length > 0 && Balloons.length > 0) {
+            for (let plane of Airplane) {
+                for (let balloon of Balloons) {
+                    if (!balloon.popping) {
+                        // Simple distance-based collision detection
+                        const dx = balloon.pos.x - plane.x;
+                        const dy = balloon.pos.y - plane.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        const collisionDist = balloon.radius + plane.radius;
+                        
+                        if (dist < collisionDist) {
+                            // Collision detected - pop the balloon
+                            balloon.popping = true;
+                            balloon.popStartTime = performance.now();
+                        }
+                    }
+                }
+            }
+        }
+
         // Update airplane
         if (doKitty == true) {
             for (let plane of Airplane) {
@@ -6429,6 +6652,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         const currentTime = performance.now();
         const frameTime = currentTime - lastFrameTime;
         lastFrameTime = currentTime;
+        
+        // Prevent invalid frame times (can happen on page refresh or tab switching)
+        if (frameTime > 100 || frameTime <= 0) {
+            return; // Skip this frame
+        }
         
         // Keep last 60 frame times (1 second at 60fps) - longer window for better stability check
         fpsFrameTimes.push(frameTime);
@@ -6772,14 +7000,35 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     //  RUN  ------------------------------------------------
     setupScene();
     
+    // Ensure only one animation loop is running
+    let animationFrameId = null;
+    let isRunning = false;
+    
     function update() {
-        updateFPS();
-        checkAndAdjustBoids();
-        simulateEverything();
-        drawEverything();
-        requestAnimationFrame(update);
-    } 
+        if (isRunning) {
+            updateFPS();
+            checkAndAdjustBoids();
+            simulateEverything();
+            drawEverything();
+        }
+        animationFrameId = requestAnimationFrame(update);
+    }
+    
+    // Start the animation loop
+    isRunning = true;
     update();
+    
+    // Cleanup on page unload to prevent resource accumulation
+    window.addEventListener('beforeunload', function() {
+        isRunning = false;
+        if (animationFrameId !== null) {
+            cancelAnimationFrame(animationFrameId);
+        }
+        // Stop sky renderer if it exists
+        if (window.skyRenderer && window.skyRenderer.stop) {
+            window.skyRenderer.stop();
+        }
+    });
 
     </script>
 </body>
