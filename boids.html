@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <html>
     <head>
     <meta name="viewport" content="width=500, initial-scale=1.0">
-    <title>Boids 1.35</title>
+    <title>Boids 1.36</title>
     <style>
         html, body {
             margin: 0;
@@ -45,8 +45,522 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </canvas>
 <canvas id="myCanvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%">
 </canvas>
-<script src="sky_integration.js"></script>
 <script>
+
+// Sky Rendering Integration Module for Boids
+(function() {
+    'use strict';
+    
+    // SkyRenderer class
+    function SkyRenderer(canvas) {
+        this.canvas = canvas;
+        this.gl = null;
+        this.program = null;
+        this.camera = null;
+        this.effectController = {
+            turbidity: 10,
+            rayleigh: 3,
+            mieCoefficient: 0.005,
+            mieDirectionalG: 0.7,
+            elevation: 1,
+            azimuth: 180,
+            exposure: 0.75,
+            autoRotate: false,
+            rotationSpeed: -0.1,
+            showGrid: false,
+            cameraPitch: -0.3922325687031568,  // Vertical rotation
+            cameraYaw: 0.29879248996896113,     // Horizontal rotation
+            fov: 60                             // Field of view (10-120)
+        };
+        this.sun = { x: 0, y: 1, z: 0 };
+        this.lastTime = Date.now();
+    }
+    
+    SkyRenderer.prototype.init = function() {
+        // Setup WebGL context
+        this.gl = this.canvas.getContext('webgl2') || this.canvas.getContext('webgl');
+        if (!this.gl) {
+            console.error('WebGL not supported');
+            return;
+        }
+        
+        const gl = this.gl;
+        
+        // Set canvas size
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+        gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Setup camera
+        this.camera = {
+            fov: 60,
+            aspect: window.innerWidth / window.innerHeight,
+            near: 100,
+            far: 2000000,
+            position: { x: 0, y: 100, z: 2000 }
+        };
+        
+        // Create shader programs
+        this.program = this.createShaderProgram();
+        this.gridProgram = this.createGridShaderProgram();
+        
+        if (!this.program) {
+            console.error('Failed to create shader program');
+            return;
+        }
+        
+        if (!this.gridProgram) {
+            console.error('Failed to create grid shader program');
+            return;
+        }
+        
+        // Setup resize handler
+        window.addEventListener('resize', () => this.onResize());
+    };
+    
+    SkyRenderer.prototype.createShaderProgram = function() {
+        const gl = this.gl;
+        
+        const vertexShader = `
+            precision highp float;
+            attribute vec3 position;
+            uniform mat4 projectionMatrix;
+            uniform mat4 viewMatrix;
+            uniform mat4 modelMatrix;
+            uniform vec3 sunPosition;
+            uniform float rayleigh;
+            uniform float turbidity;
+            uniform float mieCoefficient;
+            uniform vec3 up;
+            varying vec3 vWorldPosition;
+            varying vec3 vSunDirection;
+            varying float vSunfade;
+            varying vec3 vBetaR;
+            varying vec3 vBetaM;
+            varying float vSunE;
+            
+            const float e = 2.71828182845904523536028747135266249775724709369995957;
+            const float pi = 3.141592653589793238462643383279502884197169;
+            const vec3 lambda = vec3(680e-9, 550e-9, 450e-9);
+            const vec3 totalRayleigh = vec3(5.804542996261093e-6, 1.3562911419845635e-5, 3.0265902468824876e-5);
+            const float v = 4.0;
+            const vec3 K = vec3(0.686, 0.678, 0.666);
+            const vec3 MieConst = vec3(1.8399918514433978e14, 2.7798023919660528e14, 4.0790479543861094e14);
+            const float cutoffAngle = 1.6110731556870734;
+            const float steepness = 1.5;
+            const float EE = 1000.0;
+            
+            float sunIntensity(float zenithAngleCos) {
+                zenithAngleCos = clamp(zenithAngleCos, -1.0, 1.0);
+                return EE * max(0.0, 1.0 - pow(e, -((cutoffAngle - acos(zenithAngleCos)) / steepness)));
+            }
+            
+            vec3 totalMie(float T) {
+                float c = (0.2 * T) * 10e-18;
+                return 0.434 * c * MieConst;
+            }
+            
+            void main() {
+                vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                vWorldPosition = worldPosition.xyz;
+                gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0);
+                gl_Position.z = gl_Position.w;
+                vSunDirection = normalize(sunPosition);
+                vSunE = sunIntensity(dot(vSunDirection, up));
+                vSunfade = 1.0 - clamp(1.0 - exp((sunPosition.y / 450000.0)), 0.0, 1.0);
+                float rayleighCoefficient = rayleigh - (1.0 * (1.0 - vSunfade));
+                vBetaR = totalRayleigh * rayleighCoefficient;
+                vBetaM = totalMie(turbidity) * mieCoefficient;
+            }
+        `;
+        
+        const fragmentShader = `
+            precision highp float;
+            uniform vec3 cameraPosition;
+            varying vec3 vWorldPosition;
+            varying vec3 vSunDirection;
+            varying float vSunfade;
+            varying vec3 vBetaR;
+            varying vec3 vBetaM;
+            varying float vSunE;
+            uniform float mieDirectionalG;
+            uniform vec3 up;
+            uniform float exposure;
+            
+            const float pi = 3.141592653589793238462643383279502884197169;
+            const float n = 1.0003;
+            const float N = 2.545e25;
+            const float rayleighZenithLength = 8.4e3;
+            const float mieZenithLength = 1.25e3;
+            const float sunAngularDiameterCos = 0.999956676946448443553574619906976478926848692873900859324;
+            const float THREE_OVER_SIXTEENPI = 0.05968310365946075;
+            const float ONE_OVER_FOURPI = 0.07957747154594767;
+            
+            float rayleighPhase(float cosTheta) {
+                return THREE_OVER_SIXTEENPI * (1.0 + pow(cosTheta, 2.0));
+            }
+            float hgPhase(float cosTheta, float g) {
+                float g2 = pow(g, 2.0);
+                float inverse = 1.0 / pow(1.0 - 2.0 * g * cosTheta + g2, 1.5);
+                return ONE_OVER_FOURPI * ((1.0 - g2) * inverse);
+            }
+            void main() {
+                vec3 direction = normalize(vWorldPosition - cameraPosition);
+                float zenithAngle = acos(max(0.0, dot(up, direction)));
+                float inverse = 1.0 / (cos(zenithAngle) + 0.15 * pow(93.885 - ((zenithAngle * 180.0) / pi), -1.253));
+                float sR = rayleighZenithLength * inverse;
+                float sM = mieZenithLength * inverse;
+                vec3 Fex = exp(-(vBetaR * sR + vBetaM * sM));
+                float cosTheta = dot(direction, vSunDirection);
+                float rPhase = rayleighPhase(cosTheta * 0.5 + 0.5);
+                vec3 betaRTheta = vBetaR * rPhase;
+                float mPhase = hgPhase(cosTheta, mieDirectionalG);
+                vec3 betaMTheta = vBetaM * mPhase;
+                vec3 Lin = pow(vSunE * ((betaRTheta + betaMTheta) / (vBetaR + vBetaM)) * (1.0 - Fex), vec3(1.5));
+                Lin *= mix(vec3(1.0), pow(vSunE * ((betaRTheta + betaMTheta) / (vBetaR + vBetaM)) * Fex, vec3(1.0 / 2.0)), clamp(pow(1.0 - dot(up, vSunDirection), 5.0), 0.0, 1.0));
+                float theta = acos(direction.y);
+                float phi = atan(direction.z, direction.x);
+                vec2 uv = vec2(phi, theta) / vec2(2.0 * pi, pi) + vec2(0.5, 0.0);
+                vec3 L0 = vec3(0.1) * Fex;
+                float sundisk = smoothstep(sunAngularDiameterCos, sunAngularDiameterCos + 0.00002, cosTheta);
+                L0 += (vSunE * 19000.0 * Fex) * sundisk;
+                vec3 texColor = (Lin + L0) * 0.04 + vec3(0.0, 0.0003, 0.00075);
+                vec3 retColor = pow(texColor, vec3(1.0 / (1.2 + (1.2 * vSunfade))));
+                retColor = vec3(1.0) - exp(-retColor * exposure);
+                gl_FragColor = vec4(retColor, 1.0);
+            }
+        `;
+        
+        // Compile shaders
+        const vShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vShader, vertexShader);
+        gl.compileShader(vShader);
+        
+        if (!gl.getShaderParameter(vShader, gl.COMPILE_STATUS)) {
+            console.error('Vertex shader compile error:', gl.getShaderInfoLog(vShader));
+            return null;
+        }
+        
+        const fShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fShader, fragmentShader);
+        gl.compileShader(fShader);
+        
+        if (!gl.getShaderParameter(fShader, gl.COMPILE_STATUS)) {
+            console.error('Fragment shader compile error:', gl.getShaderInfoLog(fShader));
+            return null;
+        }
+        
+        // Create program
+        const program = gl.createProgram();
+        gl.attachShader(program, vShader);
+        gl.attachShader(program, fShader);
+        gl.linkProgram(program);
+        
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error('Program link error:', gl.getProgramInfoLog(program));
+            return null;
+        }
+        
+        return program;
+    };
+    
+    SkyRenderer.prototype.createGridShaderProgram = function() {
+        const gl = this.gl;
+        
+        const vertexShader = `
+            attribute vec3 position;
+            uniform mat4 projectionMatrix;
+            uniform mat4 viewMatrix;
+            uniform mat4 modelMatrix;
+            
+            void main() {
+                gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
+            }
+        `;
+        
+        const fragmentShader = `
+            precision highp float;
+            uniform vec3 gridColor;
+            
+            void main() {
+                gl_FragColor = vec4(gridColor, 0.3);
+            }
+        `;
+        
+        // Compile shaders
+        const vShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vShader, vertexShader);
+        gl.compileShader(vShader);
+        
+        if (!gl.getShaderParameter(vShader, gl.COMPILE_STATUS)) {
+            console.error('Grid vertex shader compile error:', gl.getShaderInfoLog(vShader));
+            return null;
+        }
+        
+        const fShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fShader, fragmentShader);
+        gl.compileShader(fShader);
+        
+        if (!gl.getShaderParameter(fShader, gl.COMPILE_STATUS)) {
+            console.error('Grid fragment shader compile error:', gl.getShaderInfoLog(fShader));
+            return null;
+        }
+        
+        // Create program
+        const program = gl.createProgram();
+        gl.attachShader(program, vShader);
+        gl.attachShader(program, fShader);
+        gl.linkProgram(program);
+        
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error('Grid program link error:', gl.getProgramInfoLog(program));
+            return null;
+        }
+        
+        return program;
+    };
+    
+    SkyRenderer.prototype.render = function() {
+        if (!this.program) return;
+        
+        // Handle auto-rotation
+        const currentTime = Date.now();
+        const deltaTime = (currentTime - this.lastTime) / 1000;
+        this.lastTime = currentTime;
+        
+        if (this.effectController.autoRotate) {
+            this.effectController.azimuth += this.effectController.rotationSpeed * deltaTime;
+            // Wrap around
+            if (this.effectController.azimuth > 180) this.effectController.azimuth -= 360;
+            if (this.effectController.azimuth < -180) this.effectController.azimuth += 360;
+        }
+        
+        const gl = this.gl;
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.useProgram(this.program);
+        
+        // Update sun position
+        const phi = (90 - this.effectController.elevation) * Math.PI / 180;
+        const theta = this.effectController.azimuth * Math.PI / 180;
+        this.sun.x = Math.sin(phi) * Math.sin(theta);
+        this.sun.y = Math.cos(phi);
+        this.sun.z = Math.sin(phi) * Math.cos(theta);
+        
+        // Set uniforms
+        const program = this.program;
+        gl.uniform1f(gl.getUniformLocation(program, 'turbidity'), this.effectController.turbidity);
+        gl.uniform1f(gl.getUniformLocation(program, 'rayleigh'), this.effectController.rayleigh);
+        gl.uniform1f(gl.getUniformLocation(program, 'mieCoefficient'), this.effectController.mieCoefficient);
+        gl.uniform1f(gl.getUniformLocation(program, 'mieDirectionalG'), this.effectController.mieDirectionalG);
+        gl.uniform1f(gl.getUniformLocation(program, 'exposure'), this.effectController.exposure);
+        gl.uniform3f(gl.getUniformLocation(program, 'sunPosition'), this.sun.x, this.sun.y, this.sun.z);
+        gl.uniform3f(gl.getUniformLocation(program, 'up'), 0, 1, 0);
+        gl.uniform3f(gl.getUniformLocation(program, 'cameraPosition'), 
+            this.camera.position.x, this.camera.position.y, this.camera.position.z);
+        
+        // Create matrices
+        const projectionMatrix = this.createPerspectiveMatrix();
+        const viewMatrix = this.createViewMatrix();
+        const modelMatrix = this.createModelMatrix(450000);
+        
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'projectionMatrix'), false, projectionMatrix);
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'viewMatrix'), false, viewMatrix);
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'modelMatrix'), false, modelMatrix);
+        
+        // Create cube geometry
+        const vertices = new Float32Array([
+            -1,-1,-1, 1,-1,-1, 1,1,-1, -1,1,-1,
+            -1,-1,1, 1,-1,1, 1,1,1, -1,1,1
+        ]);
+        const indices = new Uint16Array([
+            0,1,2, 0,2,3, 1,5,6, 1,6,2,
+            5,4,7, 5,7,6, 4,0,3, 4,3,7,
+            3,2,6, 3,6,7, 4,5,1, 4,1,0
+        ]);
+        
+        const vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+        
+        const indexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+        
+        const posLoc = gl.getAttribLocation(program, 'position');
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+        
+        gl.depthFunc(gl.LEQUAL);
+        gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+        gl.depthFunc(gl.LESS);
+        
+        // Draw spherical grid if enabled
+        if (this.effectController.showGrid) {
+            this.drawGrid();
+        }
+    };
+    
+    SkyRenderer.prototype.createPerspectiveMatrix = function() {
+        // Update camera FOV from effectController
+        this.camera.fov = this.effectController.fov;
+        const f = 1.0 / Math.tan(this.camera.fov * Math.PI / 360);
+        const nf = 1 / (this.camera.near - this.camera.far);
+        return new Float32Array([
+            f / this.camera.aspect, 0, 0, 0,
+            0, f, 0, 0,
+            0, 0, (this.camera.far + this.camera.near) * nf, -1,
+            0, 0, (2 * this.camera.far * this.camera.near) * nf, 0
+        ]);
+    };
+    
+    SkyRenderer.prototype.createViewMatrix = function() {
+        // Create view matrix with camera rotation
+        const pitch = this.effectController.cameraPitch;
+        const yaw = this.effectController.cameraYaw;
+        
+        const cosPitch = Math.cos(pitch);
+        const sinPitch = Math.sin(pitch);
+        const cosYaw = Math.cos(yaw);
+        const sinYaw = Math.sin(yaw);
+        
+        // Rotation around X (pitch) then Y (yaw)
+        return new Float32Array([
+            cosYaw, sinYaw * sinPitch, -sinYaw * cosPitch, 0,
+            0, cosPitch, sinPitch, 0,
+            sinYaw, -cosYaw * sinPitch, cosYaw * cosPitch, 0,
+            0, 0, 0, 1
+        ]);
+    };
+    
+    SkyRenderer.prototype.createModelMatrix = function(scale) {
+        return new Float32Array([
+            scale, 0, 0, 0,
+            0, scale, 0, 0,
+            0, 0, scale, 0,
+            0, 0, 0, 1
+        ]);
+    };
+    
+    SkyRenderer.prototype.drawGrid = function() {
+        const gl = this.gl;
+        const gridRadius = 450000; // Large radius for the grid sphere
+        const latLines = 18; // Number of latitude lines
+        const lonLines = 36; // Number of longitude lines
+        
+        // Generate grid vertices
+        const vertices = [];
+        
+        // Latitude circles (horizontal)
+        for (let lat = 1; lat < latLines; lat++) {
+            const theta = (lat * Math.PI) / latLines;
+            const sinTheta = Math.sin(theta);
+            const cosTheta = Math.cos(theta);
+            const segments = 60;
+            
+            for (let i = 0; i <= segments; i++) {
+                const phi = (i * 2 * Math.PI) / segments;
+                const x = gridRadius * sinTheta * Math.cos(phi);
+                const y = gridRadius * cosTheta;
+                const z = gridRadius * sinTheta * Math.sin(phi);
+                vertices.push(x, y, z);
+            }
+        }
+        
+        // Longitude circles (vertical)
+        for (let lon = 0; lon < lonLines; lon++) {
+            const phi = (lon * 2 * Math.PI) / lonLines;
+            const cosPhi = Math.cos(phi);
+            const sinPhi = Math.sin(phi);
+            const segments = 60;
+            
+            for (let i = 0; i <= segments; i++) {
+                const theta = (i * Math.PI) / segments;
+                const sinTheta = Math.sin(theta);
+                const cosTheta = Math.cos(theta);
+                const x = gridRadius * sinTheta * cosPhi;
+                const y = gridRadius * cosTheta;
+                const z = gridRadius * sinTheta * sinPhi;
+                vertices.push(x, y, z);
+            }
+        }
+        
+        // Create and bind buffer
+        if (!this.gridBuffer) {
+            this.gridBuffer = gl.createBuffer();
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.gridBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+        
+        // Use the grid shader program
+        gl.useProgram(this.gridProgram);
+        const program = this.gridProgram;
+        
+        const projectionMatrix = this.createPerspectiveMatrix();
+        const viewMatrix = this.createViewMatrix();
+        const modelMatrix = this.createModelMatrix(1.0);
+        
+        // Set uniforms for the grid shader
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'projectionMatrix'), false, projectionMatrix);
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'viewMatrix'), false, viewMatrix);
+        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'modelMatrix'), false, modelMatrix);
+        gl.uniform3f(gl.getUniformLocation(program, 'gridColor'), 1.0, 1.0, 1.0); // White grid
+        
+        // Set grid vertex attribute
+        const posLoc = gl.getAttribLocation(program, 'position');
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.gridBuffer);
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+        
+        // Enable blending for transparency
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        
+        // Draw grid lines
+        const latSegments = 61; // segments + 1
+        const lonSegments = 61; // segments + 1
+        
+        // Draw latitude lines
+        for (let lat = 0; lat < latLines - 1; lat++) {
+            gl.drawArrays(gl.LINE_STRIP, lat * latSegments, latSegments);
+        }
+        
+        // Draw longitude lines
+        const lonStart = (latLines - 1) * latSegments;
+        for (let lon = 0; lon < lonLines; lon++) {
+            gl.drawArrays(gl.LINE_STRIP, lonStart + lon * lonSegments, lonSegments);
+        }
+        
+        // Disable blending
+        gl.disable(gl.BLEND);
+    };
+    
+    SkyRenderer.prototype.animate = function() {
+        this.render();
+        requestAnimationFrame(() => this.animate());
+    };
+    
+    SkyRenderer.prototype.onResize = function() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+        this.camera.aspect = window.innerWidth / window.innerHeight;
+        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    };
+    
+    // Initialize sky renderer after class is defined
+    const skyCanvas = document.getElementById('skyCanvas');
+    if (!skyCanvas) {
+        console.error('Sky canvas not found');
+        return;
+    }
+    
+    const skyRenderer = new SkyRenderer(skyCanvas);
+    skyRenderer.init();
+    skyRenderer.animate();
+    
+    // Expose skyRenderer globally so it can be controlled from the boids menu
+    window.skyRenderer = skyRenderer;
+    
+})();
 
     // Setup canvas and handle window resizing  ------------------
     canvas = document.getElementById("myCanvas");
@@ -465,7 +979,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const grayDy = clickCanvasY - buttonY;
             const halfBoids = Math.floor(0.5 * Boids.length);
             if (grayDx * grayDx + grayDy * grayDy < buttonRadius * buttonRadius) {
-                for (let i = 0; i < halfBoids; i++) {
+                for (let i = 0; i < Boids.length; i++) {
+                    var boido = Boids[i];
+                    if (boido.pos.x < 0.5 * simWidth) {
+                        boido.hue = 0;
+                        boido.saturation = 0;
+                        boido.lightness = 0;
+                    } else {
+                        boido.hue = 180;
+                        boido.saturation = 0;
+                        boido.lightness = 100;
+                    }
+                    boido.manualHue = true;
+                    boido.manualSaturation = true;
+                    boido.manualLightness = true;
+                }
+
+                /*for (let i = 0; i < halfBoids; i++) {
                     Boids[i].hue = 180;
                     Boids[i].saturation = 0;
                     Boids[i].lightness = 100;
@@ -480,7 +1010,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     Boids[i].manualHue = true;
                     Boids[i].manualSaturation = true;
                     Boids[i].manualLightness = true;
-                }
+                }*/
                 paintedColorDots = []; // Reset painted color indicators
                 return true;
             }
@@ -1399,11 +1929,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     for (let i = 0; i < Boids.length; i++) {
                         Boids[i].radius = boidRadius;
                     }
+                    // Update dependent properties
+                    boidProps.minDistance = Math.max(0.08, 5.0 * boidRadius);
                     break;
                 case 2: 
                     boidProps.visualRange = newValue; 
                     // Update dependent properties
-                    boidProps.minDistance = Math.max(0.08, 5.0 * boidRadius);
+                    SpatialGrid = new SpatialHashGrid(boidProps.visualRange / 2)
                     break;
                 case 3: boidProps.speedLimit = newValue; break;
                 case 5: boidProps.avoidFactor = newValue; break;
@@ -1705,8 +2237,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Optimal cell size: visualRange/2 ensures 3x3 cell queries with good boid distribution
         SpatialGrid = new SpatialHashGrid(boidProps.visualRange / 2);
     }
-
-    
 
     // RAINDROP CLASS  -----------------------------------------------------
     class RAINDROP {
@@ -3660,6 +4190,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.flashCooldownDuration = 0.3; // Must wait this long before flashing again (300ms)
             this.lastFlashCycle = -1; // Track which cycle last triggered this boid
             this.tail = [];
+            this.tailStartIndex = 0; // Ring buffer start index
+            // Cached color strings to avoid garbage collection
+            this.cachedFillStyle = '';
+            this.cachedStrokeStyle = '';
+            this.cachedTailStyle = '';
+            this.lastHue = -1;
+            this.lastSaturation = -1;
+            this.lastLightness = -1;
         }
         get left() {
             return this.pos.x - this.radius;
@@ -3676,10 +4214,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Update position based on velocity
             this.pos.x += this.vel.x * deltaT;
             this.pos.y += this.vel.y * deltaT;
-            // Maintain tail 
+            // Maintain tail (avoid array operations to reduce garbage collection)
             if (boidProps.doTails == true && boidProps.tailLength > 0) {
-                this.tail.push([this.pos.x, this.pos.y])
-                this.tail = this.tail.slice(-boidProps.tailLength);
+                this.tail.push([this.pos.x, this.pos.y]);
+                // Remove old elements from front to keep most recent at end
+                if (this.tail.length > boidProps.tailLength) {
+                    this.tail.splice(0, this.tail.length - boidProps.tailLength);
+                }
             }
         }
         draw() {
@@ -3713,6 +4254,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Only auto-calculate lightness if not manually controlled
             if (!this.manualLightness) {
                 this.lightness = 35 + (1 - (this.pos.y / simHeight)) * 35;
+            }
+            
+            // Cache color strings if they've changed (reduces garbage collection)
+            const hueRounded = Math.round(this.hue);
+            const satRounded = Math.round(this.saturation);
+            const lightRounded = Math.round(this.lightness);
+            if (hueRounded !== this.lastHue || satRounded !== this.lastSaturation || lightRounded !== this.lastLightness) {
+                this.cachedFillStyle = `hsl(${hueRounded}, ${satRounded}%, ${lightRounded}%)`;
+                this.cachedStrokeStyle = `hsl(${hueRounded - 70}, ${satRounded}%, ${Math.round(lightRounded * 0.8)}%)`;
+                this.cachedTailStyle = `hsla(${hueRounded}, ${satRounded}%, ${lightRounded}%, 0.5)`;
+                this.lastHue = hueRounded;
+                this.lastSaturation = satRounded;
+                this.lastLightness = lightRounded;
             } 
 
             // Draw tail ----------
@@ -3730,15 +4284,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.strokeStyle = 'hsla(0, 0%, 10%, 0.3)';
                 } else if (tailColorMode === 1) {
                     // White tail
-                    c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
+                    c.strokeStyle = 'hsla(0, 0%, 95%, 0.5)';
                 } else if (tailColorMode === 2) {
-                    // Selected hue tail
-                    //c.strokeStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, 0.5)`;
-                    c.strokeStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.5)`;
+                    // Selected hue tail (use cached)
+                    c.strokeStyle = this.cachedTailStyle;
                 } else if (tailColorMode === 3) {
-                    // Selected hue tail
-                    //c.strokeStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, 0.5)`;
-                    c.strokeStyle = `hsla(${this.hue - 70}, ${this.saturation}%, ${this.lightness}%, 0.5)`;
+                    // Alternate hue tail
+                    c.strokeStyle = `hsla(${Math.round(this.hue - 70)}, ${Math.round(this.saturation)}%, ${Math.round(this.lightness)}%, 0.5)`;
                 }
 
                 //c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
@@ -3779,15 +4331,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.lineTo(-arrowLength, arrowWidth / 2);
                 c.closePath();
                 if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                    c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
+                    c.fillStyle = this.cachedFillStyle;
                 } else if (this.whiteBoid) {
-                    c.fillStyle = `hsl(0, 0%, 90%)`;
+                    c.fillStyle = 'hsl(0, 0%, 90%)';
                 } else if (this.blackBoid && !this.flashing) {
-                    c.fillStyle = `hsl(0, 0%, 10%)`;
+                    c.fillStyle = 'hsl(0, 0%, 10%)';
                 } else if (this.flashing && !this.blackBoid) {
-                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                    c.fillStyle = `hsl(${Math.round(this.hue + 70)}, ${Math.round(this.saturation)}%, ${Math.round(this.lightness * 1.5)}%)`;
                 } else if (this.flashing && this.blackBoid) {
-                    c.fillStyle = `hsl(0, 0%, 90%)`;
+                    c.fillStyle = 'hsl(0, 0%, 90%)';
                 }
                 c.fill();
 
@@ -3796,15 +4348,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.moveTo(arrowLength, 0);
                 c.lineTo(-arrowLength, -arrowWidth / 2);
                 if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                    c.strokeStyle = `hsl(${this.hue - 70}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+                    c.strokeStyle = this.cachedStrokeStyle;
                 } else if (this.whiteBoid) {
-                    c.strokeStyle = `hsl(0, 0%, 100%)`;
+                    c.strokeStyle = 'hsl(0, 0%, 100%)';
                 } else if (this.blackBoid) {
-                    c.strokeStyle = `hsl(0, 0%, 0%)`;
+                    c.strokeStyle = 'hsl(0, 0%, 0%)';
                 } else if (this.flashing && !this.blackBoid) {
-                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                    c.strokeStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${Math.round(this.lightness * 1.5)}%)`;
                 } else if (this.flashing && this.blackBoid) {
-                    c.strokeStyle = `hsl(0, 0%, 100%)`;
+                    c.strokeStyle = 'hsl(0, 0%, 100%)';
                 }
                 c.lineWidth = 1.0;
                 c.stroke();
@@ -3840,17 +4392,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 }  
                 c.closePath();
                 if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                    c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
-                    c.strokeStyle = `hsl(${this.hue - 70}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+                    c.fillStyle = this.cachedFillStyle;
+                    c.strokeStyle = this.cachedStrokeStyle;
                 } else if (this.whiteBoid) {
-                    c.fillStyle = `hsl(0, 0%, 90%)`;
-                    c.strokeStyle = `hsl(0, 0%, 100%)`;
+                    c.fillStyle = 'hsl(0, 0%, 90%)';
+                    c.strokeStyle = 'hsl(0, 0%, 100%)';
                 } else if (this.blackBoid) {
-                    c.fillStyle = `hsl(0, 0%, 10%)`;
-                    c.strokeStyle = `hsl(0, 0%, 0%)`;
+                    c.fillStyle = 'hsl(0, 0%, 10%)';
+                    c.strokeStyle = 'hsl(0, 0%, 0%)';
                 } else if (this.flashing) {
-                    c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
-                    c.strokeStyle = `hsl(${this.hue - 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                    const flashLight = Math.round(this.lightness * 1.5);
+                    c.fillStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+                    c.strokeStyle = `hsl(${Math.round(this.hue - 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
                 }
                 c.fill();
                 c.lineWidth = 1.0;
@@ -3866,20 +4419,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 //c.arc(0, 0, radScale, 0, 2 * Math.PI);
                 c.arc(cX(this.pos), cY(this.pos), 0.6 * radScale, 0, 2 * Math.PI);
                 if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                    c.fillStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
-                    c.strokeStyle = `hsl(${this.hue - 70}, ${this.saturation}%, ${this.lightness * 0.8}%)`;
+                    c.fillStyle = this.cachedFillStyle;
+                    c.strokeStyle = this.cachedStrokeStyle;
                 } else if (this.whiteBoid) {
-                    c.fillStyle = `hsl(0, 0%, 90%)`;
-                    c.strokeStyle = `hsl(0, 0%, 100%)`;
+                    c.fillStyle = 'hsl(0, 0%, 90%)';
+                    c.strokeStyle = 'hsl(0, 0%, 100%)';
                 } else if (this.blackBoid) {
-                    c.fillStyle = `hsl(0, 0%, 10%)`;
-                    c.strokeStyle = `hsl(0, 0%, 0%)`;
+                    c.fillStyle = 'hsl(0, 0%, 10%)';
+                    c.strokeStyle = 'hsl(0, 0%, 0%)';
                 } else if (this.flashing && !this.blackBoid) {
-                    c.fillStyle = `hsl(${this.hue + 70}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
-                    c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 1.5}%)`;
+                    const flashLight = Math.round(this.lightness * 1.5);
+                    c.fillStyle = `hsl(${Math.round(this.hue + 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+                    c.strokeStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
                 } else if (this.flashing && this.blackBoid) {
-                    c.fillStyle = `hsl(0, 0%, 90%)`;
-                    c.strokeStyle = `hsl(0, 0%, 100%)`;
+                    c.fillStyle = 'hsl(0, 0%, 90%)';
+                    c.strokeStyle = 'hsl(0, 0%, 100%)';
                 }
                 c.fill();
                 c.lineWidth = 1.0;
@@ -5069,7 +5623,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             const segButtonY = hueTickerKnobY + knobRadius * 2.6;
             const segButtonSpacing = knobRadius * 1.3;
             const segButtonStartX = colorWheelRadius - segButtonSpacing * 0.5;
-            const segLabels = ['None', 'Moderate', 'Heavy'];
+            const segLabels = ['None', 'Partial', 'Total'];
             const segModeMap = [0, 2, 1]; // Map visual position to segregationMode value
         
         for (let i = 0; i < 3; i++) {
@@ -5107,10 +5661,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.font = `${0.3 * knobRadius}px verdana`;
         c.fillStyle = `hsla(0, 0%, 0%, ${0.5 * colorMenuOpacity})`;
         //c.lineWidth = 0.02 * knobRadius;
-        c.fillText('Color Separation', (segButtonStartX + segButtonSpacing) + 2, (segButtonY + 3.3 * segRadioRadius) + 2);
+        c.fillText('Flocking by Color', (segButtonStartX + segButtonSpacing) + 2, (segButtonY + 3.3 * segRadioRadius) + 2);
         c.fillStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
         c.lineWidth = 0.02 * knobRadius;
-        c.fillText('Color Separation', segButtonStartX + segButtonSpacing, segButtonY + 3.3 * segRadioRadius);
+        c.fillText('Flocking by Color', segButtonStartX + segButtonSpacing, segButtonY + 3.3 * segRadioRadius);
               
         // Draw hueSensitivity knob
         const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - 1.6 * Math.PI);
@@ -6004,10 +6558,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.fillStyle = skyHandActive ? 
             `hsla(120, 90%, 60%, ${skyMenuOpacity})` : 
             `hsla(0, 50%, 40%, ${skyMenuOpacity})`;
-        c.strokeStyle = skyHandActive ? `hsla(30, 90%, 80%, ${skyMenuOpacity})` : `hsla(30, 50%, 40%, ${skyMenuOpacity})`;
-        c.lineWidth = 0.005 * cScale;
+        c.strokeStyle = `hsla(0, 0%, 10%, ${skyMenuOpacity})`
+        c.lineWidth = 0.003 * cScale;
         c.lineCap = 'round';
         c.lineJoin = 'round';
+
+        // Triangular lens on right side (pointing left, but wide at right)
+        const lensY = (buttonY - camSize * 0.12) + (camSize * 0.35 / 2);
+        c.beginPath();
+        c.moveTo(camX + camSize * 0.45, lensY - camSize * 0.25);
+        c.lineTo(camX - camSize * 0.10, lensY);
+        c.lineTo(camX + camSize * 0.45, lensY + camSize * 0.25);
+        c.closePath();
+        c.fill();
+        c.stroke();
         
         // Camera body (rectangle) - on the left
         c.beginPath();
@@ -6017,15 +6581,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             camSize * 0.6, 
             camSize * 0.35);
         c.fill();
-        
-        const lensY = (buttonY - camSize * 0.12) + (camSize * 0.35 / 2);
-        // Triangular lens on right side (pointing left, but wide at right)
-        c.beginPath();
-        c.moveTo(camX + camSize * 0.45, lensY - camSize * 0.25);
-        c.lineTo(camX - camSize * 0.10, lensY);
-        c.lineTo(camX + camSize * 0.45, lensY + camSize * 0.25);
-        c.closePath();
-        c.fill();
+        c.stroke();
         
         // Film reels on top (left smaller, right larger)
         const leftReelX = camX - camSize * 0.4;
@@ -6040,6 +6596,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.beginPath();
         c.arc(leftReelX, leftReelY, leftReelRadius, 0, 2 * Math.PI);
         c.fill();
+        c.stroke();
         
         // Draw rotating circles on left reel when active (faster rotation)
         if (skyHandActive) {
@@ -6067,6 +6624,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         c.beginPath();
         c.arc(rightReelX, rightReelY, rightReelRadius, 0, 2 * Math.PI);
         c.fill();
+        c.stroke();
         
         // Draw rotating circles on right reel when active (slower rotation, opposite direction)
         if (skyHandActive) {
@@ -6866,8 +7424,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 
                 if (stabilityTimerAfterMax >= 3.0 && Boids.length > 200) {
                     // Remove 200 boids as safety margin
-                    const removeCount = Math.min(200, Boids.length - 100);
-                    
+                    //const removeCount = Math.min(200, Boids.length - 100);
+                    const removeCount = 100;
                     if (removeCount > 0) {
                         cullBoids(removeCount);
                     }
