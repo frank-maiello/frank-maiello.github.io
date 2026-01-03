@@ -1,0 +1,6909 @@
+/*
+B0IDS 1.37 :: autonomous flocking behavior ::
+copyright 2025 :: Frank Maiello :: maiello.frank@gmail.com ::
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. In no event shall the author or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort or otherwise, arising from, our of or in, connection with the software or the use of other dealings in the Software.
+*/
+
+// Setup canvas and handle window resizing  ------------------
+canvas = document.getElementById("myCanvas");
+c = canvas.getContext("2d");
+width = window.innerWidth;
+height = window.innerHeight;
+canvas.width = width;
+canvas.height = height;
+
+simMinWidth = 2.0;
+cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+simWidth = canvas.width / cScale;
+simHeight = canvas.height / cScale;
+
+// Mouse tracking
+let mouseX = simWidth / 2;
+let mouseY = simHeight / 2;
+let draggedCloud = null;
+let lastClickTime = 0;
+let lastClickedCloud = null;
+
+// Spacebar tracking for balloon spawning
+let spacebarHeld = false;
+let spacebarBalloonTimer = 0;
+let spacebarBalloonInterval = 0.1; // 10 per second = 0.1 seconds per balloon
+
+// Main menu visibility and state
+let mainMenuVisible = false;
+let mainMenuOpacity = 0;
+let mainMenuXOffset = -1.0; // Horizontal animation offset (0 = fully shown, negative = hidden to the left)
+let mainMenuAnimSpeed = 5.0; // Animation speed for sliding
+let mainMenuFadeSpeed = 3.0; // Fade speed (0 to 1 per second)
+
+// Store submenu visibility states (saved when main menu is closed)
+let savedSimMenuVisible = true;
+let savedPaintMenuVisible = true;
+let savedSkyMenuVisible = true;
+
+// Menu visibility state
+let menuVisible = false;
+let menuOpacity = 0;
+let menuFadeSpeed = 3.0; // Fade speed (0 to 1 per second)
+
+// Sky menu visibility
+let skyMenuVisible = false;
+let skyMenuOpacity = 0;
+
+// Menu z-order (higher number = on top)
+let menuZOrder = 2;
+let colorMenuZOrder = 1;
+let skyMenuZOrder = 0;
+
+// Menu position
+let menuX = 0.1; // World coordinates
+let menuY = simHeight - 0.4; // World coordinates
+
+// Sky menu position
+let skyMenuX = 0.6; // World coordinates
+let skyMenuY = simHeight - 0.3; // World coordinates
+
+// Menu knob dragging state
+let draggedKnob = null; // Index of the knob being dragged
+let draggedSkyKnob = null; // Index of the sky knob being dragged
+let dragStartMouseX = 0;
+let dragStartMouseY = 0;
+let dragStartValue = 0;
+
+// Menu dragging state
+let isDraggingMenu = false;
+let menuDragStartX = 0;
+let menuDragStartY = 0;
+let menuStartX = 0;
+let menuStartY = 0;
+
+// Boid type selection (0=arrows, 1=circles, 2=airfoils)
+let selectedBoidType = 0;
+let tailColorMode = 0; // 0 = black, 1 = white, 2 = selected hue, 3 = hue2
+
+// Color menu visibility state
+let colorMenuVisible = false;
+let colorMenuOpacity = 0;
+
+// Color menu position
+let colorMenuX = 1.6; // World coordinates
+let colorMenuY = simHeight - 0.6; // World coordinates
+
+// Color menu dragging state
+let isDraggingColorMenu = false;
+let colorMenuDragStartX = 0;
+let colorMenuDragStartY = 0;
+let colorMenuStartX = 0;
+let colorMenuStartY = 0;
+
+// Sky menu dragging state
+let isDraggingSkyMenu = false;
+let skyMenuDragStartX = 0;
+let skyMenuDragStartY = 0;
+let skyMenuStartX = 0;
+let skyMenuStartY = 0;
+
+// Spraypaint tool state
+let spraypaintActive = false;
+let spraypaintRadius = 0.15; // Radius in world units
+let selectedHue = 0;
+let selectedSaturation = 100;
+let selectedLightness = 50;
+let isSpraying = false;
+let sprayParticles = []; // Array to hold spray effect particles
+let segregationMode = 0; // 0 = normal, 1 = segregate (all rules only apply to same hue), 2 = segregate2 (rule 1 all, rules 2&3 same hue)
+
+// Sky hand mode state
+let skyHandActive = false;
+let isDraggingSky = false;
+let skyDragStartX = 0;
+let skyDragStartY = 0;
+let skyCameraPitchStart = 0;
+let skyCameraYawStart = 0;
+
+// Store menu states before camera activation
+let menuVisibleBeforeCamera = false;
+let colorMenuVisibleBeforeCamera = false;
+let skyMenuVisibleBeforeCamera = false;
+
+// Store menu states before paint tool activation
+let menuVisibleBeforePaint = false;
+let skyMenuVisibleBeforePaint = false;
+
+// Sky object visibility toggles
+let showClouds = true;
+let showPlane = true;
+let showBalloons = true;
+let showHotAirBalloon = true;
+
+// Auto elevation state
+let autoElevation = true;
+let autoElevationPhase = 0;
+let autoElevationRate = 0.05; // Speed of oscillation
+let autoElevationInitial = 0; // Initial elevation when auto mode was enabled
+
+// Offscreen canvas for color wheel
+let colorWheelCanvas = null;
+let colorWheelContext = null;
+
+// Array to store painted color dots on color wheel (hue and saturation pairs)
+let paintedColorDots = [];
+
+// Color selection dragging
+let isDraggingColorWheel = false;
+let isDraggingLightness = false;
+let isDraggingHueSensitivity = false;
+let isDraggingHueTicker = false;
+let isDraggingSpraySlider = false;
+let hueSensitivityDragStart = 0;
+let hueTickerDragStart = 0;
+
+// Set magnet state
+let magnetActive = false;
+let isDraggingMagnet = false;
+
+// Create offscreen canvas for color wheel
+function createColorWheel() {
+    const size = 200; // Size in pixels
+    colorWheelCanvas = document.createElement('canvas');
+    colorWheelCanvas.width = size;
+    colorWheelCanvas.height = size;
+    colorWheelContext = colorWheelCanvas.getContext('2d');
+    
+    const centerX = size / 2;
+    const centerY = size / 2;
+    const radius = size / 2;
+    
+    // Draw color wheel using wedges to avoid moiré artifacts
+    const numWedges = 360;
+    const wedgeAngle = (2 * Math.PI) / numWedges;
+    
+    for (let i = 0; i < numWedges; i++) {
+        const hue = (i / numWedges) * 360;
+        const startAngle = i * wedgeAngle;
+        const endAngle = (i + 1) * wedgeAngle;
+        
+        // Create radial gradient for saturation
+        const gradient = colorWheelContext.createRadialGradient(
+            centerX, centerY, 0,
+            centerX, centerY, radius
+        );
+        gradient.addColorStop(0, `hsl(${hue}, 0%, 50%)`);
+        gradient.addColorStop(1, `hsl(${hue}, 100%, 50%)`);
+        
+        // Draw wedge
+        colorWheelContext.fillStyle = gradient;
+        colorWheelContext.beginPath();
+        colorWheelContext.moveTo(centerX, centerY);
+        colorWheelContext.arc(centerX, centerY, radius, startAngle, endAngle);
+        colorWheelContext.closePath();
+        colorWheelContext.fill();
+    }
+}
+createColorWheel();
+
+// Mouse down event handler ------------------------------
+canvas.addEventListener('mousedown', function(e) {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = (e.clientX - rect.left) / cScale;
+    mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
+    
+    // Check if ellipsis was clicked (in world coordinates)
+    const ellipsisWorldX = 0.05;
+    const ellipsisWorldY = simHeight - 0.05;
+    const ellipsisRadius = 0.04;
+    const dx = mouseX - ellipsisWorldX;
+    const dy = mouseY - ellipsisWorldY;
+    if (dx * dx + dy * dy < ellipsisRadius * ellipsisRadius) {
+        if (mainMenuVisible) {
+            // Closing main menu - save current submenu visibility states and hide them
+            savedSimMenuVisible = menuVisible;
+            savedPaintMenuVisible = colorMenuVisible;
+            savedSkyMenuVisible = skyMenuVisible;
+            menuVisible = false;
+            colorMenuVisible = false;
+            skyMenuVisible = false;
+        } else {
+            // Opening main menu - restore saved submenu visibility states
+            menuVisible = savedSimMenuVisible;
+            colorMenuVisible = savedPaintMenuVisible;
+            skyMenuVisible = savedSkyMenuVisible;
+        }
+        mainMenuVisible = !mainMenuVisible;
+        return;
+    }
+    
+    // Check if main menu was clicked
+    if (mainMenuVisible && mainMenuOpacity > 0.5) {
+        const ellipsisX = ellipsisWorldX * cScale;
+        const ellipsisY = canvas.height - ellipsisWorldY * cScale;
+        const itemHeight = 0.12 * cScale;
+        const itemWidth = 0.24 * cScale;
+        const padding = 0.02 * cScale;
+        const menuHeight = itemHeight + (padding * 2);
+        const menuWidth = (itemWidth * 3) + (padding * 4);
+        const menuBaseX = ellipsisX + 0.08 * cScale;
+        const menuX = menuBaseX + mainMenuXOffset * cScale;
+        const menuY = ellipsisY - 0.01 * cScale;
+        
+        const clickCanvasX = mouseX * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        
+        // Check if click is within main menu bounds
+        if (clickCanvasX >= menuX && clickCanvasX <= menuX + menuWidth &&
+            clickCanvasY >= menuY && clickCanvasY <= menuY + menuHeight) {
+            
+            // Determine which item was clicked (horizontal layout)
+            const relativeX = clickCanvasX - menuX - padding;
+            const itemIndex = Math.floor(relativeX / (itemWidth + padding));
+            
+            if (itemIndex >= 0 && itemIndex < 3) {
+                // Toggle the corresponding menu
+                if (itemIndex === 0) {
+                    menuVisible = !menuVisible;
+                } else if (itemIndex === 1) {
+                    colorMenuVisible = !colorMenuVisible;
+                } else if (itemIndex === 2) {
+                    skyMenuVisible = !skyMenuVisible;
+                }
+            }
+            return;
+        }
+    }
+    
+    // Check if magnet was clicked (for dragging)
+    if (magnetActive && Magnet.length > 0) {
+        const magnetCanvasX = Magnet[0].x * cScale;
+        const magnetCanvasY = canvas.height - Magnet[0].y * cScale;
+        const clickCanvasX = mouseX * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        const magnetRadius = Magnet[0].radius * cScale;
+        const mdx = clickCanvasX - magnetCanvasX;
+        const mdy = clickCanvasY - magnetCanvasY;
+        
+        if (mdx * mdx + mdy * mdy < magnetRadius * magnetRadius) {
+            isDraggingMagnet = true;
+            return;
+        }
+    }
+    
+    // Check menus in reverse z-order (highest priority first)
+    const menuChecks = [
+        {check: checkSkyMenuClick, z: skyMenuZOrder, name: 'sky'},
+        {check: checkColorMenuClick, z: colorMenuZOrder, name: 'color'},
+        {check: checkSimMenuClick, z: menuZOrder, name: 'sim'}
+    ];
+    menuChecks.sort((a, b) => b.z - a.z); // Sort highest to lowest
+    
+    for (let menuCheck of menuChecks) {
+        if (menuCheck.check()) {
+            // Bring this menu to front
+            const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder);
+            if (menuCheck.name === 'sim') menuZOrder = maxZ + 1;
+            else if (menuCheck.name === 'color') colorMenuZOrder = maxZ + 1;
+            else if (menuCheck.name === 'sky') skyMenuZOrder = maxZ + 1;
+            return; // Stop checking other menus
+        }
+    }
+    
+    // Helper function for color menu clicks
+    function checkColorMenuClick() {
+        if (!colorMenuVisible || colorMenuOpacity <= 0.5) return false;
+        const knobRadius = 0.1 * cScale;
+        const colorWheelRadius = knobRadius * 1.7;
+        const sliderWidth = knobRadius * 0.6;
+        const sliderHeight = colorWheelRadius * 2;
+        const spacing = knobRadius * 0.5;
+        const buttonRowHeight = spacing * 2;
+        const knobRowHeight = knobRadius * 3;
+        const colorMenuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 1.5;
+        // Shorter menu when spray tool is active (omit knobs and radio buttons)
+        const colorMenuHeight = spraypaintActive ? spacing * 10 : spacing * 20;
+        const colorPadding = 0.8 * knobRadius;
+        const colorMenuOriginX = colorMenuX * cScale;
+        const colorMenuOriginY = canvas.height - colorMenuY * cScale;
+        
+        const clickCanvasX = mouseX * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        
+        // Check close icon
+        const closeIconRadius = knobRadius * 0.25;
+        const colorCloseIconX = colorMenuOriginX - colorPadding + closeIconRadius + 0.2 * knobRadius;
+        const colorCloseIconY = colorMenuOriginY - colorPadding + closeIconRadius + 0.2 * knobRadius;
+        const ccdx = clickCanvasX - colorCloseIconX;
+        const ccdy = clickCanvasY - colorCloseIconY;
+        
+        if (ccdx * ccdx + ccdy * ccdy < closeIconRadius * closeIconRadius) {
+            colorMenuVisible = false;
+            spraypaintActive = false; // Turn off spray tool when menu closes
+            return true;
+        }
+        
+        // Check color wheel click
+        const wheelCenterX = colorMenuOriginX + colorWheelRadius;
+        const wheelCenterY = colorMenuOriginY + colorWheelRadius;
+        const wheelDx = clickCanvasX - wheelCenterX;
+        const wheelDy = clickCanvasY - wheelCenterY;
+        const wheelDist = Math.sqrt(wheelDx * wheelDx + wheelDy * wheelDy);
+        
+        if (wheelDist <= colorWheelRadius) {
+            isDraggingColorWheel = true;
+            // Calculate hue and saturation
+            selectedHue = (Math.atan2(wheelDy, wheelDx) * 180 / Math.PI + 360) % 360;
+            selectedSaturation = Math.min(100, (wheelDist / colorWheelRadius) * 100);
+            return true;
+        }
+        
+        // Check lightness slider click
+        const sliderX = colorMenuOriginX + colorWheelRadius * 2 + spacing;
+        const sliderY = colorMenuOriginY;
+        
+        if (clickCanvasX >= sliderX && clickCanvasX <= sliderX + sliderWidth &&
+            clickCanvasY >= sliderY && clickCanvasY <= sliderY + sliderHeight) {
+            isDraggingLightness = true;
+            // Calculate lightness
+            const relativeY = clickCanvasY - sliderY;
+            selectedLightness = Math.max(0, Math.min(100, 100 - (relativeY / sliderHeight) * 100));
+            return true;
+        }
+        
+        // Check spraypaint icon click
+        const spraypaintX = sliderX + sliderWidth + spacing + knobRadius * 0.85;
+        const spraypaintY = colorMenuOriginY + colorWheelRadius;
+        const canRadius = knobRadius * 1.2; // 2x larger
+        
+        if (clickCanvasX >= spraypaintX - canRadius * 0.45 && clickCanvasX <= spraypaintX + canRadius * 0.45 &&
+            clickCanvasY >= spraypaintY - canRadius * 0.95 && clickCanvasY <= spraypaintY + canRadius * 0.65) {
+            spraypaintActive = !spraypaintActive;
+            if (spraypaintActive) {
+                skyHandActive = false; // Turn off camera adjust mode when spraypaint is activated
+                // Store current menu states
+                menuVisibleBeforePaint = menuVisible;
+                skyMenuVisibleBeforePaint = skyMenuVisible;
+                // Hide other menus
+                menuVisible = false;
+                skyMenuVisible = false;
+            } else {
+                // Restore menu states when paint tool is deactivated
+                menuVisible = menuVisibleBeforePaint;
+                skyMenuVisible = skyMenuVisibleBeforePaint;
+            }
+            return true;
+        }
+        
+        // Check preset color buttons
+        const buttonRadius = knobRadius * 0.35;
+        const buttonY = colorMenuOriginY + colorWheelRadius * 2 + spacing * 1.5;
+        const buttonSpacing = knobRadius * 1.2;
+        // Position fourth button centered below lightness slider
+        const lightnessSliderCenterX = sliderX + sliderWidth / 2;
+        const buttonStartX = lightnessSliderCenterX - buttonSpacing * 3;
+        
+        // Black button
+        const blackDx = clickCanvasX - buttonStartX;
+        const blackDy = clickCanvasY - buttonY;
+        if (blackDx * blackDx + blackDy * blackDy < buttonRadius * buttonRadius) {
+            for (let i = 0; i < Boids.length; i++) {
+                Boids[i].hue = 0;
+                Boids[i].saturation = 0;
+                Boids[i].lightness = 0;
+                Boids[i].manualHue = true;
+                Boids[i].manualSaturation = true;
+                Boids[i].manualLightness = true;
+            }
+            paintedColorDots = []; // Reset painted color indicators
+            return true;
+        }
+        
+        // Black and white button
+        // Bipartite: first half black, second half white
+        const grayDx = clickCanvasX - (buttonStartX + buttonSpacing);
+        const grayDy = clickCanvasY - buttonY;
+        const halfBoids = Math.floor(0.5 * Boids.length);
+        if (grayDx * grayDx + grayDy * grayDy < buttonRadius * buttonRadius) {
+            for (let i = 0; i < Boids.length; i++) {
+                var boido = Boids[i];
+                if (boido.pos.x < 0.5 * simWidth) {
+                    boido.hue = 0;
+                    boido.saturation = 0;
+                    boido.lightness = 0;
+                } else {
+                    boido.hue = 180;
+                    boido.saturation = 0;
+                    boido.lightness = 100;
+                }
+                boido.manualHue = true;
+                boido.manualSaturation = true;
+                boido.manualLightness = true;
+            }
+
+            /*for (let i = 0; i < halfBoids; i++) {
+                Boids[i].hue = 180;
+                Boids[i].saturation = 0;
+                Boids[i].lightness = 100;
+                Boids[i].manualHue = true;
+                Boids[i].manualSaturation = true;
+                Boids[i].manualLightness = true;
+            }
+            for (let i = halfBoids; i < Boids.length; i++) {
+                Boids[i].hue = 0;
+                Boids[i].saturation = 0;
+                Boids[i].lightness = 0;
+                Boids[i].manualHue = true;
+                Boids[i].manualSaturation = true;
+                Boids[i].manualLightness = true;
+            }*/
+            paintedColorDots = []; // Reset painted color indicators
+            return true;
+        }
+        
+        // White button
+        const whiteDx = clickCanvasX - (buttonStartX + buttonSpacing * 2);
+        const whiteDy = clickCanvasY - buttonY;
+        if (whiteDx * whiteDx + whiteDy * whiteDy < buttonRadius * buttonRadius) {
+            for (let i = 0; i < Boids.length; i++) {
+                Boids[i].hue = 180;
+                Boids[i].saturation = 0;
+                Boids[i].lightness = 100;
+                Boids[i].manualHue = true;
+                Boids[i].manualSaturation = true;
+                Boids[i].manualLightness = true;
+            }
+            paintedColorDots = []; // Reset painted color indicators
+            return true;
+        }
+        
+        // Selected color button
+        const selectedDx = clickCanvasX - (buttonStartX + buttonSpacing * 3);
+        const selectedDy = clickCanvasY - buttonY;
+        if (selectedDx * selectedDx + selectedDy * selectedDy < buttonRadius * buttonRadius) {
+            for (let i = 0; i < Boids.length; i++) {
+                Boids[i].hue = selectedHue;
+                Boids[i].saturation = selectedSaturation;
+                Boids[i].lightness = selectedLightness;
+                Boids[i].manualHue = true;
+                Boids[i].manualSaturation = true;
+                Boids[i].manualLightness = true;
+            }
+            // Reset painted color indicators and add the current selected color
+            paintedColorDots = [{hue: selectedHue, saturation: selectedSaturation}];
+            return true;
+        }
+        
+        // Check segregation radio buttons (below knobs) only when spray tool is not active
+        if (!spraypaintActive) {
+            const hueTickerY = colorMenuOriginY + colorWheelRadius * 2 + spacing * 2 + knobRadius * 1.5 + knobRadius / 3;
+            const segRadioRadius = knobRadius * 0.25;
+            const segButtonY = hueTickerY + knobRadius * 2.6;
+            const segButtonSpacing = knobRadius * 1.3;
+            const segButtonStartX = colorMenuOriginX + colorWheelRadius - segButtonSpacing * 0.5;
+            const segModeMap = [0, 2, 1]; // Map visual position to segregationMode value
+            
+            for (let i = 0; i < 3; i++) {
+                const segBtnX = segButtonStartX + i * segButtonSpacing;
+                const sdx = clickCanvasX - segBtnX;
+                const sdy = clickCanvasY - segButtonY;
+                if (sdx * sdx + sdy * sdy < segRadioRadius * segRadioRadius) {
+                    segregationMode = segModeMap[i];
+                    return true;
+                }
+            }
+        }
+        
+        // Check spray radius slider
+        const spraySliderWidth = canRadius * 1.4;
+        const spraySliderX = spraypaintX - spraySliderWidth / 2;
+        // Bottom aligned with lightness slider bottom
+        const spraySliderBottomY = spraypaintY + colorWheelRadius * 0.9;
+        const leftHeight = knobRadius * 0.25; // Shorter on left
+        const rightHeight = knobRadius * 0.25 * 1.8; // Taller on right
+        const spraySliderKnobRadius = knobRadius * 0.3;
+        
+        // Expand hit area to include the full trapezoid shape (use rightHeight which is taller)
+        const sliderHitYTop = spraySliderBottomY - rightHeight - spraySliderKnobRadius;
+        const sliderHitYBottom = spraySliderBottomY - spraySliderKnobRadius * 0.3; // Stop above the bottom edge
+        const sliderHitXLeft = spraySliderX - spraySliderKnobRadius;
+        const sliderHitXRight = spraySliderX + spraySliderWidth + spraySliderKnobRadius;
+        
+        if (clickCanvasX >= sliderHitXLeft && clickCanvasX <= sliderHitXRight &&
+            clickCanvasY >= sliderHitYTop && clickCanvasY <= sliderHitYBottom) {
+            // Calculate new value from click position
+            const clickRatio = (clickCanvasX - spraySliderX) / spraySliderWidth;
+            spraypaintRadius = 0.05 + clickRatio * (0.5 - 0.05);
+            spraypaintRadius = Math.max(0.05, Math.min(0.5, spraypaintRadius)); // Clamp
+            isDraggingSpraySlider = true;
+            return true;
+        }
+        
+        // Check hueSensitivity and hueTicker knobs only when spray tool is not active
+        if (!spraypaintActive) {
+            // Check hueSensitivity knob
+            const lightnessSldrX = colorMenuOriginX + colorWheelRadius * 2 + spacing;
+            const hueTickerTargetX = lightnessSldrX + sliderWidth / 2; // Center below lightness slider
+            const hueTickerOriginalX = colorMenuOriginX + colorWheelRadius + knobRadius * 2.4;
+            const knobOffset = hueTickerTargetX - hueTickerOriginalX; // Calculate offset
+            const hueSensitivityKnobX = colorMenuOriginX + knobRadius + knobOffset; // Move by same offset
+            const hueSensitivityKnobY = colorMenuOriginY + colorWheelRadius * 2 + buttonRowHeight + knobRadius * 1.5 + knobRadius / 3;
+            const hsKnobDx = clickCanvasX - hueSensitivityKnobX;
+            const hsKnobDy = clickCanvasY - hueSensitivityKnobY;
+            if (hsKnobDx * hsKnobDx + hsKnobDy * hsKnobDy < knobRadius * knobRadius) {
+                isDraggingHueSensitivity = true;
+                dragStartMouseX = mouseX;
+                dragStartMouseY = mouseY;
+                hueSensitivityDragStart = boidProps.hueSensitivity;
+                return true;
+            }
+            
+            // Check hueTicker knob
+            const hueTickerKnobX = hueTickerTargetX; // Centered below lightness slider
+            const hueTickerKnobY = hueSensitivityKnobY;
+            const htKnobDx = clickCanvasX - hueTickerKnobX;
+            const htKnobDy = clickCanvasY - hueTickerKnobY;
+            if (htKnobDx * htKnobDx + htKnobDy * htKnobDy < knobRadius * knobRadius) {
+                isDraggingHueTicker = true;
+                dragStartMouseX = mouseX;
+                dragStartMouseY = mouseY;
+                hueTickerDragStart = boidProps.hueTicker;
+                return true;
+            }
+        }
+        
+        // Check if color menu background was clicked (for dragging entire menu)
+        if (clickCanvasX >= colorMenuOriginX - colorPadding && clickCanvasX <= colorMenuOriginX + colorMenuWidth + colorPadding &&
+            clickCanvasY >= colorMenuOriginY - colorPadding && clickCanvasY <= colorMenuOriginY + colorMenuHeight + colorPadding) {
+            isDraggingColorMenu = true;
+            colorMenuDragStartX = mouseX;
+            colorMenuDragStartY = mouseY;
+            colorMenuStartX = colorMenuX;
+            colorMenuStartY = colorMenuY;
+            return true;
+        }
+        
+        return false; // Click was not on color menu
+    }
+    
+    // Helper function for sim menu clicks
+    function checkSimMenuClick() {
+        if (!menuVisible || menuOpacity <= 0.5) return false;
+        const knobRadius = 0.1 * cScale;
+        const knobSpacing = knobRadius * 3;
+        const menuTopMargin = 0.2 * knobRadius; // Must match the margin in drawSimMenu
+        const menuWidth = knobSpacing * 3;
+        const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
+        const padding = 1.7 * knobRadius;
+        const menuUpperLeftX = menuX * cScale;
+        const menuUpperLeftY = (canvas.height - menuY * cScale);
+        const menuOriginX = menuUpperLeftX + knobSpacing;
+        const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+        
+        // Declare click coordinates once for all checks
+        const clickCanvasX = mouseX * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        
+        // Check close icon (upper left corner - round button)
+        const closeIconRadius = knobRadius * 0.25;
+        const closeIconX = menuOriginX - padding + closeIconRadius + 0.2 * knobRadius;
+        const closeIconY = menuOriginY - padding + closeIconRadius + 0.2 * knobRadius;
+        const cdx = clickCanvasX - closeIconX;
+        const cdy = clickCanvasY - closeIconY;
+        
+        if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+            menuVisible = false;
+            return true;
+        }
+        
+        // Check individual knobs first
+        for (let knob = 0; knob < 11; knob++) {
+            if (knob === 4) continue; // Skip removed knob
+            const layoutIndex = knob > 4 ? knob - 1 : knob;
+            const row = Math.floor(layoutIndex / 4);
+            const col = layoutIndex % 4;
+            const knobCanvasX = menuOriginX + col * knobSpacing;
+            const knobCanvasY = menuOriginY + row * knobSpacing + menuTopMargin;
+            
+            // Check in canvas space for accurate hit detection
+            const kdx = clickCanvasX - knobCanvasX;
+            const kdy = clickCanvasY - knobCanvasY;
+            if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
+                draggedKnob = knob;
+                dragStartMouseX = mouseX;
+                dragStartMouseY = mouseY;
+                
+                // Store the starting value
+                const menuItems = [
+                    boidProps.numBoids, boidRadius * 100, boidProps.visualRange, boidProps.speedLimit,
+                    null, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
+                    boidProps.turnFactor, boidProps.tailLength, boidProps.tailWidth];
+                dragStartValue = menuItems[knob];
+                return true;
+            }
+        }
+        
+        // Check tail color radio buttons (below tail length knob)
+        const tailColorRadioRadius = knobRadius * 0.25;
+        const tailKnobRow = 2;
+        const tailButtonsCenterX = 0.5; // Center between columns 0 and 1
+        
+        for (let i = 0; i < 4; i++) {
+            const buttonX = menuOriginX + tailButtonsCenterX * knobSpacing + (i - 1.5) * knobRadius * 1.0;
+            const buttonY = menuOriginY + tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin;
+            const rdx = clickCanvasX - buttonX;
+            const rdy = clickCanvasY - buttonY;
+            
+            if (rdx * rdx + rdy * rdy < tailColorRadioRadius * tailColorRadioRadius) {
+                tailColorMode = i;
+                return true;
+            }
+        }
+        
+        // Check radio buttons (vertically stacked in column 2)
+        const radioButtonRadius = knobRadius * 0.25;
+        const radioCol = 2;
+        
+        // Check reset button (round button in blank area - row 2, column 3)
+        const resetButtonRadius = knobRadius * 0.5;
+        const resetButtonX = menuOriginX + 3 * knobSpacing;
+        const resetButtonY = menuOriginY + 2 * knobSpacing + menuTopMargin;
+        const rdx = clickCanvasX - resetButtonX;
+        const rdy = clickCanvasY - resetButtonY;
+        
+        if (rdx * rdx + rdy * rdy < resetButtonRadius * resetButtonRadius) {
+            // Reset all parameters to defaults
+            resetParameters();
+            return true;
+        }
+        
+        // Check magnet toggle button
+        const magnetButtonRadius = knobRadius * 0.4;
+        const magnetButtonX = menuOriginX + menuWidth + padding - 1.4 * knobRadius;
+        const magnetButtonY = menuOriginY + menuHeight + padding - 1.2 * knobRadius;
+        const mdx = clickCanvasX - magnetButtonX;
+        const mdy = clickCanvasY - magnetButtonY;
+        
+        if (mdx * mdx + mdy * mdy < magnetButtonRadius * magnetButtonRadius) {
+            magnetActive = !magnetActive;
+            return true;
+        }
+        
+        // Three radio buttons vertically stacked
+        for (let i = 0; i < 4; i++) {
+            const buttonX = menuOriginX + radioCol * knobSpacing - 0.5 * knobRadius;
+            const buttonY = menuOriginY + (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius) + menuTopMargin;
+            const rdx = clickCanvasX - buttonX;
+            const rdy = clickCanvasY - buttonY;
+            
+            if (rdx * rdx + rdy * rdy < radioButtonRadius * radioButtonRadius) {
+                selectedBoidType = i;
+                // Call the appropriate function
+                if (i === 0) {
+                    doArrowBoids();
+                } else if (i === 1) {
+                    doCircleBoids();
+                } else if (i === 2) {
+                    doAirfoilBoids();
+                } else if (i === 3) {
+                    doNoneBoids();
+                }
+                return true;
+            }
+        }
+        
+        // Check if menu background was clicked (for dragging entire menu)
+        const clickX = mouseX * cScale;
+        const clickY = canvas.height - mouseY * cScale;
+        
+        if (clickX >= menuOriginX - padding && clickX <= menuOriginX + menuWidth + padding &&
+            clickY >= menuOriginY - padding && clickY <= menuOriginY + menuHeight + padding) {
+            isDraggingMenu = true;
+            menuDragStartX = mouseX;
+            menuDragStartY = mouseY;
+            menuStartX = menuX;
+            menuStartY = menuY;
+            return true;
+        }
+        
+        return false; // Click was not on sim menu
+    }
+    
+    // Helper function for sky menu clicks
+    function checkSkyMenuClick() {
+        if (!skyMenuVisible || skyMenuOpacity <= 0.5 || !window.skyRenderer) return false;
+        const knobRadius = 0.1 * cScale;
+        const knobSpacing = knobRadius * 3;
+        const menuWidth = knobSpacing * 3;
+        const menuHeight = knobSpacing * 2.25;
+        const padding = 1.7 * knobRadius;
+        const menuUpperLeftX = skyMenuX * cScale;
+        const menuUpperLeftY = (canvas.height - skyMenuY * cScale);
+        const menuOriginX = menuUpperLeftX + knobSpacing;
+        const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+        
+        const clickCanvasX = mouseX * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        
+        // Check close icon
+        const closeIconRadius = knobRadius * 0.25;
+        const closeIconX = menuOriginX - padding + closeIconRadius + 0.2 * knobRadius;
+        const closeIconY = menuOriginY - padding + closeIconRadius + 0.2 * knobRadius;
+        const cdx = clickCanvasX - closeIconX;
+        const cdy = clickCanvasY - closeIconY;
+        
+        if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+            skyMenuVisible = false;
+            return true;
+        }
+        
+        // Check Auto Rotate button first (before knobs, since it overlaps with rotation speed knob)
+        const checkboxRadius = knobRadius * 0.25;
+        const autoRotateX = menuOriginX + knobSpacing * 1.0;
+        const autoRotateY = menuOriginY + knobSpacing * 1.0;
+        const ardx = clickCanvasX - autoRotateX;
+        const ardy = clickCanvasY - autoRotateY;
+        
+        if (ardx * ardx + ardy * ardy < checkboxRadius * checkboxRadius) {
+            const skyCtrl = window.skyRenderer.effectController;
+            skyCtrl.autoRotate = !skyCtrl.autoRotate;
+            return true;
+        }
+        
+        // Check Show Grid button (before knobs, since it overlaps with FOV knob)
+        const showGridX = menuOriginX + knobSpacing * 3.0;
+        const showGridY = menuOriginY + knobSpacing * 2.0;
+        const sgdx = clickCanvasX - showGridX;
+        const sgdy = clickCanvasY - showGridY;
+        
+        if (sgdx * sgdx + sgdy * sgdy < checkboxRadius * checkboxRadius) {
+            const skyCtrl = window.skyRenderer.effectController;
+            skyCtrl.showGrid = !skyCtrl.showGrid;
+            return true;
+        }
+        
+        // Check individual knobs
+        for (let knob = 0; knob < 10; knob++) {
+            let row = Math.floor(knob / 4);
+            let col = knob % 4;
+            // Special positioning for exposure knob (index 7) - move to column 1, row 2
+            if (knob === 7) {
+                row = 2;
+                col = 1;
+            }
+            // Special positioning for FOV knob (index 8) - move to column 3, row 2
+            if (knob === 8) {
+                row = 2;
+                col = 3;
+            }
+            // Special positioning for autoElevationRate knob (index 9) - move to column 3, row 1
+            if (knob === 9) {
+                row = 1;
+                col = 3;
+            }
+            const knobCanvasX = menuOriginX + col * knobSpacing;
+            const knobCanvasY = menuOriginY + row * knobSpacing;
+            
+            const kdx = clickCanvasX - knobCanvasX;
+            const kdy = clickCanvasY - knobCanvasY;
+            if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
+                // For knob 9 (auto elevation rate), check if clicking the center button
+                if (knob === 9) {
+                    const centerRadius = checkboxRadius * 0.5;
+                    if (kdx * kdx + kdy * kdy < centerRadius * centerRadius) {
+                        // Toggle auto elevation
+                        autoElevation = !autoElevation;
+                        if (autoElevation) {
+                            const skyCtrl = window.skyRenderer.effectController;
+                            autoElevationInitial = skyCtrl.elevation; // Store current elevation
+                            // Set phase so current elevation matches the sine wave (starts rising)
+                            autoElevationPhase = -Math.PI / 6; // sin(-π/6) = -0.5, placing current elevation at start
+                        }
+                        return true;
+                    }
+                }
+                // Otherwise, start dragging the knob
+                draggedSkyKnob = knob;
+                dragStartMouseX = mouseX;
+                dragStartMouseY = mouseY;
+                
+                // Store the starting value
+                const skyCtrl = window.skyRenderer.effectController;
+                const menuItems = [
+                    skyCtrl.turbidity,
+                    skyCtrl.rayleigh,
+                    skyCtrl.mieCoefficient,
+                    skyCtrl.mieDirectionalG,
+                    skyCtrl.azimuth,
+                    -skyCtrl.rotationSpeed,
+                    skyCtrl.elevation,
+                    skyCtrl.exposure,
+                    skyCtrl.fov,
+                    autoElevationRate
+                ];
+                dragStartValue = menuItems[knob];
+                return true;
+            }
+        }
+        
+        // Check toggle buttons
+        const buttonY = knobSpacing * 2;
+        
+        // Object visibility toggle buttons - 2x2 grid centered below azimuth knob (column 0)
+        const buttonRowY = menuOriginY + buttonY;
+        const buttonSpacing = knobRadius * 1.5;
+        const gridCenterX = menuOriginX + knobSpacing * 0.0; // Column 0 (azimuth)
+        const buttonRowSpacing = knobRadius * 1.2;
+        
+        // Clouds checkbox (top-left)
+        const cloudsX = gridCenterX - 0.5 * buttonSpacing;
+        const cloudsY = buttonRowY - 0.5 * buttonRowSpacing;
+        const cdx3 = clickCanvasX - cloudsX;
+        const cdy3 = clickCanvasY - cloudsY;
+        if (cdx3 * cdx3 + cdy3 * cdy3 < checkboxRadius * checkboxRadius) {
+            showClouds = !showClouds;
+            return true;
+        }
+        
+        // Plane checkbox (top-right)
+        const planeX = gridCenterX + 0.5 * buttonSpacing;
+        const planeY = buttonRowY - 0.5 * buttonRowSpacing;
+        const pdx = clickCanvasX - planeX;
+        const pdy = clickCanvasY - planeY;
+        if (pdx * pdx + pdy * pdy < checkboxRadius * checkboxRadius) {
+            showPlane = !showPlane;
+            return true;
+        }
+        
+        // Balloons checkbox (bottom-left)
+        const balloonsX = gridCenterX - 0.5 * buttonSpacing;
+        const balloonsY = buttonRowY + 0.5 * buttonRowSpacing;
+        const bdx = clickCanvasX - balloonsX;
+        const bdy = clickCanvasY - balloonsY;
+        if (bdx * bdx + bdy * bdy < checkboxRadius * checkboxRadius) {
+            showBalloons = !showBalloons;
+            return true;
+        }
+        
+        // Hot Air Balloon checkbox (bottom-right)
+        const hotAirBalloonX = gridCenterX + 0.5 * buttonSpacing;
+        const hotAirBalloonY = buttonRowY + 0.5 * buttonRowSpacing;
+        const habdx = clickCanvasX - hotAirBalloonX;
+        const habdy = clickCanvasY - hotAirBalloonY;
+        if (habdx * habdx + habdy * habdy < checkboxRadius * checkboxRadius) {
+            showHotAirBalloon = !showHotAirBalloon;
+            return true;
+        }
+        
+        // Camera icon (column 2, row 2)
+        const handX = menuOriginX + knobSpacing * 2.0;
+        const handY = menuOriginY + buttonY;
+        const hdx = clickCanvasX - handX;
+        const hdy = clickCanvasY - handY;
+        const cameraHitRadius = checkboxRadius * 2.5;
+        
+        if (hdx * hdx + hdy * hdy < cameraHitRadius * cameraHitRadius) {
+            skyHandActive = !skyHandActive;
+            if (skyHandActive) {
+                spraypaintActive = false; // Turn off spraypaint when camera adjust is activated
+                // Store current menu states
+                menuVisibleBeforeCamera = menuVisible;
+                colorMenuVisibleBeforeCamera = colorMenuVisible;
+                skyMenuVisibleBeforeCamera = skyMenuVisible;
+                // Hide all menus
+                menuVisible = false;
+                colorMenuVisible = false;
+                skyMenuVisible = false;
+            }
+            return true;
+        }
+        
+        // Check credit link at bottom left - only "ThreeJS.org" is clickable
+        const menuHeightForClick = knobSpacing * 2.25; // Match the drawing code
+        const creditFontSize = 0.032 * cScale;
+        c.font = `${creditFontSize}px sans-serif`;
+        const prefixText = '';
+        const prefixWidth = c.measureText(prefixText).width;
+        const linkText = 'ThreeJS.org';
+        const linkWidth = c.measureText(linkText).width;
+        
+        const creditBaseX = menuOriginX - padding + 0.3 * knobRadius;
+        const creditBaseY = menuOriginY + menuHeightForClick + padding - 0.3 * knobRadius;
+        const linkX = creditBaseX + prefixWidth;
+        const linkY = creditBaseY;
+        
+        // Click detection for ThreeJS.org link only
+        if (clickCanvasX >= linkX && clickCanvasX <= linkX + linkWidth &&
+            clickCanvasY >= linkY - creditFontSize && clickCanvasY <= linkY + creditFontSize * 0.3) {
+            window.open('https://threejs.org/examples/#webgl_shaders_sky', '_blank');
+            return true;
+        }
+        
+        // Check if sky menu background was clicked (for dragging entire menu)
+        if (clickCanvasX >= menuOriginX - padding && clickCanvasX <= menuOriginX + menuWidth + padding &&
+            clickCanvasY >= menuOriginY - padding && clickCanvasY <= menuOriginY + menuHeight + padding) {
+            isDraggingSkyMenu = true;
+            skyMenuDragStartX = mouseX;
+            skyMenuDragStartY = mouseY;
+            skyMenuStartX = skyMenuX;
+            skyMenuStartY = skyMenuY;
+            return true;
+        }
+        
+        return false; // Click was not on sky menu
+    }
+    
+    // Handle spraypaint tool
+    if (spraypaintActive && e.button === 0) {
+        isSpraying = true;
+    }
+    
+    // Handle sky hand tool
+    if (skyHandActive && e.button === 0 && window.skyRenderer) {
+        isDraggingSky = true;
+        skyDragStartX = mouseX;
+        skyDragStartY = mouseY;
+        skyCameraPitchStart = window.skyRenderer.effectController.cameraPitch;
+        skyCameraYawStart = window.skyRenderer.effectController.cameraYaw;
+    }
+    
+    // Find which cloud was clicked (only foreground clouds)
+    let clickedCloud = null;
+    for (let cloud of Clouds) {
+        if (cloud.contains(mouseX, mouseY)) {
+            clickedCloud = cloud;
+            break;
+        }
+    }
+    
+    // Find which balloon was clicked
+    let clickedBalloon = null;
+    for (let balloon of Balloons) {
+        if (balloon.contains(mouseX, mouseY)) {
+            clickedBalloon = balloon;
+            break;
+        }
+    }
+    
+    // If balloon was clicked, set it to popping
+    if (clickedBalloon && !clickedBalloon.popping) {
+        clickedBalloon.popping = true;
+        clickedBalloon.popStartTime = performance.now();
+    }
+    
+    if (e.button === 0) { // Left click
+        const currentTime = Date.now();
+        
+        // Check for double-click
+        if (currentTime - lastClickTime < 300) {
+            if (clickedCloud && clickedCloud === lastClickedCloud) {
+                // Double-click on cloud: create new cloud at this position
+                Clouds.push(new CLOUD(mouseX, mouseY));
+            } else if (!clickedCloud && lastClickedCloud === null) {
+                // Double-click on empty canvas: create new cloud
+                Clouds.push(new CLOUD(mouseX, mouseY));
+            }
+            lastClickTime = 0;
+            lastClickedCloud = null;
+        } else {
+            // Single click: drag cloud if clicked on one
+            draggedCloud = clickedCloud;
+            lastClickTime = currentTime;
+            lastClickedCloud = clickedCloud;
+        }
+    } else if (e.button === 2) { // Right click
+        // Delete the clicked cloud
+        if (clickedCloud) {
+            Clouds = Clouds.filter(cloud => cloud !== clickedCloud);
+        }
+        e.preventDefault();
+    }
+});
+
+canvas.addEventListener('mouseup', function(e) {
+    // If camera control was active and we were dragging, check if it was a click to lock
+    if (isDraggingSky && skyHandActive) {
+        // Calculate movement distance
+        const dragDistance = Math.sqrt(
+            Math.pow(mouseX - skyDragStartX, 2) + 
+            Math.pow(mouseY - skyDragStartY, 2)
+        );
+        
+        // Lock camera if it was a click (minimal movement)
+        if (dragDistance < 0.02) { // Threshold in world coordinates
+            skyHandActive = false;
+            // Restore menu states
+            menuVisible = menuVisibleBeforeCamera;
+            colorMenuVisible = colorMenuVisibleBeforeCamera;
+            skyMenuVisible = skyMenuVisibleBeforeCamera;
+        }
+    }
+    
+    /*// Log camera position if we were dragging the sky
+    if (isDraggingSky && window.skyRenderer) {
+        console.log('Sky Camera Position - Pitch:', window.skyRenderer.effectController.cameraPitch, 'Yaw:', window.skyRenderer.effectController.cameraYaw);
+    }*/
+    
+    draggedCloud = null;
+    draggedKnob = null;
+    draggedSkyKnob = null;
+    isDraggingMenu = false;
+    isDraggingColorMenu = false;
+    isDraggingSkyMenu = false;
+    isDraggingSky = false;
+    isDraggingColorWheel = false;
+    isDraggingLightness = false;
+    isDraggingHueSensitivity = false;
+    isDraggingHueTicker = false;
+    isDraggingSpraySlider = false;
+    isDraggingMagnet = false;
+    isSpraying = false;
+});
+
+canvas.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+});
+
+canvas.addEventListener('mousemove', function(e) {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = (e.clientX - rect.left) / cScale;
+    mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
+    
+    // Handle magnet dragging
+    if (isDraggingMagnet && Magnet.length > 0) {
+        Magnet[0].x = mouseX;
+        Magnet[0].y = mouseY;
+        return;
+    }
+    
+    // Handle menu dragging
+    if (isDraggingMenu) {
+        const deltaX = mouseX - menuDragStartX;
+        const deltaY = mouseY - menuDragStartY;
+        menuX = menuStartX + deltaX;
+        menuY = menuStartY + deltaY;
+        return;
+    }
+    
+    // Handle color menu dragging
+    if (isDraggingColorMenu) {
+        const deltaX = mouseX - colorMenuDragStartX;
+        const deltaY = mouseY - colorMenuDragStartY;
+        colorMenuX = colorMenuStartX + deltaX;
+        colorMenuY = colorMenuStartY + deltaY;
+        return;
+    }
+    
+    // Handle sky menu dragging
+    if (isDraggingSkyMenu) {
+        const deltaX = mouseX - skyMenuDragStartX;
+        const deltaY = mouseY - skyMenuDragStartY;
+        skyMenuX = skyMenuStartX + deltaX;
+        skyMenuY = skyMenuStartY + deltaY;
+        return;
+    }
+    
+    // Handle sky camera dragging
+    if (isDraggingSky && window.skyRenderer) {
+        const deltaX = (mouseX - skyDragStartX) * 0.75; // Horizontal drag (reduced sensitivity)
+        const deltaY = (mouseY - skyDragStartY) * 0.75; // Vertical drag (reduced sensitivity)
+        window.skyRenderer.effectController.cameraYaw = skyCameraYawStart - deltaX;
+        window.skyRenderer.effectController.cameraPitch = skyCameraPitchStart + deltaY;
+        // Clamp pitch to avoid flipping
+        window.skyRenderer.effectController.cameraPitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, window.skyRenderer.effectController.cameraPitch));
+        return;
+    }
+    
+    // Handle color wheel dragging
+    if (isDraggingColorWheel) {
+        const knobRadius = 0.1 * cScale;
+        const colorWheelRadius = knobRadius * 1.7;
+        const wheelCenterX = (colorMenuX * cScale) + colorWheelRadius;
+        const wheelCenterY = (canvas.height - colorMenuY * cScale) + colorWheelRadius;
+        const clickCanvasX = mouseX * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        const wheelDx = clickCanvasX - wheelCenterX;
+        const wheelDy = clickCanvasY - wheelCenterY;
+        const wheelDist = Math.sqrt(wheelDx * wheelDx + wheelDy * wheelDy);
+        
+        selectedHue = (Math.atan2(wheelDy, wheelDx) * 180 / Math.PI + 360) % 360;
+        selectedSaturation = Math.min(100, (wheelDist / colorWheelRadius) * 100);
+        return;
+    }
+    
+    // Handle lightness slider dragging
+    if (isDraggingLightness) {
+        const knobRadius = 0.1 * cScale;
+        const colorWheelRadius = knobRadius * 1.7;
+        const spacing = knobRadius * 0.5;
+        const sliderHeight = colorWheelRadius * 2;
+        const sliderY = canvas.height - colorMenuY * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        const relativeY = clickCanvasY - sliderY;
+        selectedLightness = Math.max(0, Math.min(100, 100 - (relativeY / sliderHeight) * 100));
+        return;
+    }
+    
+    // Handle hueSensitivity knob dragging
+    if (isDraggingHueSensitivity) {
+        const dragDeltaX = mouseX - dragStartMouseX;
+        const dragDeltaY = mouseY - dragStartMouseY;
+        const dragDelta = dragDeltaX + dragDeltaY;
+        
+        const dragSensitivity = 0.5;
+        const normalizedDelta = dragDelta / dragSensitivity;
+        const rangeSize = 360 - 0;
+        let newValue = hueSensitivityDragStart + normalizedDelta * rangeSize;
+        
+        newValue = Math.max(0, Math.min(360, newValue));
+        boidProps.hueSensitivity = newValue;
+        return;
+    }
+    
+    // Handle hueTicker knob dragging with logarithmic scale
+    if (isDraggingHueTicker) {
+        const dragDeltaX = mouseX - dragStartMouseX;
+        const dragDeltaY = mouseY - dragStartMouseY;
+        const dragDelta = dragDeltaX + dragDeltaY;
+        
+        // Convert current value to normalized position (0-1) using log scale
+        const logMin = Math.log(0.01);
+        const logMax = Math.log(10.0);
+        const startLogValue = Math.log(Math.max(0.01, Math.min(10.0, hueTickerDragStart)));
+        const startNormalized = (startLogValue - logMin) / (logMax - logMin);
+        
+        // Apply drag delta
+        const dragSensitivity = 0.5;
+        const normalizedDelta = dragDelta / dragSensitivity;
+        let newNormalized = startNormalized + normalizedDelta;
+        newNormalized = Math.max(0, Math.min(1, newNormalized));
+        
+        // Convert back to log scale value
+        const newLogValue = logMin + newNormalized * (logMax - logMin);
+        const newValue = Math.exp(newLogValue);
+        
+        boidProps.hueTicker = Math.max(0.01, Math.min(10.0, newValue));
+        return;
+    }
+    
+    // Handle spray slider dragging
+    if (isDraggingSpraySlider) {
+        const knobRadius = 0.1 * cScale;
+        const canRadius = knobRadius * 1.2;
+        const spacing = knobRadius * 0.5;
+        const colorWheelRadius = knobRadius * 1.7;
+        const lightnessSldrWidth = knobRadius * 0.6;
+        const sliderWidth = lightnessSldrWidth;
+        
+        // Calculate spraypaint icon position
+        const sliderX = (colorMenuX * cScale) + colorWheelRadius * 2 + spacing;
+        const spraypaintX = sliderX + sliderWidth + spacing + knobRadius * 0.85;
+        
+        const spraySliderWidth = canRadius * 1.4;
+        const spraySliderX = spraypaintX - spraySliderWidth / 2;
+        const clickCanvasX = mouseX * cScale;
+        const clickRatio = (clickCanvasX - spraySliderX) / spraySliderWidth;
+        
+        spraypaintRadius = 0.05 + clickRatio * (0.5 - 0.05);
+        spraypaintRadius = Math.max(0.05, Math.min(0.5, spraypaintRadius));
+        return;
+    }
+    
+    // Handle spraypaint tool
+    if (isSpraying && spraypaintActive) {
+        // Generate spray particles
+        const particlesPerFrame = 20;
+        for (let i = 0; i < particlesPerFrame; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Math.random() * spraypaintRadius;
+            const px = mouseX + Math.cos(angle) * distance;
+            const py = mouseY + Math.sin(angle) * distance;
+            sprayParticles.push(new SprayParticle(px, py, selectedHue, selectedSaturation, selectedLightness));
+        }
+        
+        // Apply color to boids within radius
+        for (let i = 0; i < Boids.length; i++) {
+            const boid = Boids[i];
+            const dx = boid.pos.x - mouseX;
+            const dy = boid.pos.y - mouseY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < spraypaintRadius) {
+                boid.hue = selectedHue;
+                boid.saturation = selectedSaturation;
+                boid.lightness = selectedLightness;
+                boid.manualHue = true;
+                boid.manualSaturation = true;
+                boid.manualLightness = true;
+                
+                // Add this color to painted dots (avoid duplicates within small tolerance)
+                const tolerance = 5; // degrees/percent
+                const alreadyExists = paintedColorDots.some(dot => 
+                    Math.abs(dot.hue - selectedHue) < tolerance && 
+                    Math.abs(dot.saturation - selectedSaturation) < tolerance
+                );
+                if (!alreadyExists) {
+                    paintedColorDots.push({hue: selectedHue, saturation: selectedSaturation});
+                    // Limit array size to prevent memory leak (keep most recent 100 colors)
+                    if (paintedColorDots.length > 100) {
+                        paintedColorDots.shift();
+                    }
+                }
+            }
+        }
+    }
+    
+    // Handle knob dragging
+    if (draggedKnob !== null && draggedKnob !== 4) {
+        const ranges = [
+            {min: 100, max: 5000},      // numBoids
+            {min: 1, max: 10},           // boidRadius (scaled by 100)
+            {min: 0.05, max: 0.5},       // visualRange
+            {min: 0.1, max: 3.0},        // speedLimit
+            {min: 0.0, max: 0.2},        // (removed)
+            {min: 0, max: 100},          // avoidFactor
+            {min: 0, max: 50},           // matchingFactor
+            {min: 0, max: 20},           // centeringFactor
+            {min: 0, max: 5},            // turnFactor
+            {min: 0, max: 100},          // trailLength
+            {min: 1.0, max: 5.0}         // tailWidth
+        ];
+        
+        // Calculate drag delta (combined horizontal and vertical)
+        const dragDeltaX = mouseX - dragStartMouseX;
+        const dragDeltaY = (mouseY - dragStartMouseY); // Up=decrease, down=increase
+        const dragDelta = dragDeltaX + dragDeltaY; // Combined drag in world units
+        
+        // Sensitivity: how much world units equals full range
+        const dragSensitivity = 0.5; // 0.5 world units = full range
+        const normalizedDelta = dragDelta / dragSensitivity;
+        
+        const range = ranges[draggedKnob];
+        const rangeSize = range.max - range.min;
+        let newValue = dragStartValue + normalizedDelta * rangeSize;
+        
+        // Clamp to range
+        newValue = Math.max(range.min, Math.min(range.max, newValue));
+        
+        // Apply the new value
+        switch (draggedKnob) {
+            case 0: 
+                boidProps.numBoids = Math.round(newValue);
+                // Immediately adjust boid count
+                const currentCount = Boids.length;
+                const targetCount = boidProps.numBoids;
+                
+                if (currentCount > targetCount) {
+                    // Remove excess boids (prioritize those outside canvas)
+                    const removeCount = currentCount - targetCount;
+                    const regularBoids = [];
+                    const specialBoids = [];
+                    const outsideBoids = [];
+                    const insideBoids = [];
+                    
+                    // Separate regular and special boids
+                    for (let i = 0; i < Boids.length; i++) {
+                        const boid = Boids[i];
+                        if (boid.whiteBoid || boid.blackBoid) {
+                            specialBoids.push(boid);
+                        } else {
+                            regularBoids.push(boid);
+                        }
+                    }
+                    
+                    // Categorize regular boids by position
+                    for (let i = 0; i < regularBoids.length; i++) {
+                        const boid = regularBoids[i];
+                        const isOutside = boid.pos.x < 0 || boid.pos.x > simWidth || 
+                                        boid.pos.y < 0 || boid.pos.y > simHeight;
+                        
+                        if (isOutside) {
+                            outsideBoids.push(i);
+                        } else {
+                            insideBoids.push(i);
+                        }
+                    }
+                    
+                    // Remove outside boids first, then inside from the end
+                    const toRemove = [];
+                    let removed = 0;
+                    
+                    for (let i = outsideBoids.length - 1; i >= 0 && removed < removeCount; i--) {
+                        toRemove.push(outsideBoids[i]);
+                        removed++;
+                    }
+                    
+                    for (let i = insideBoids.length - 1; i >= 0 && removed < removeCount; i--) {
+                        toRemove.push(insideBoids[i]);
+                        removed++;
+                    }
+                    
+                    toRemove.sort((a, b) => b - a);
+                    for (let idx of toRemove) {
+                        regularBoids.splice(idx, 1);
+                    }
+                    
+                    Boids = [...regularBoids, ...specialBoids];
+                    
+                } else if (currentCount < targetCount) {
+                    // Add new boids outside the canvas
+                    const addCount = targetCount - currentCount;
+                    const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
+                    
+                    for (let i = 0; i < addCount; i++) {
+                        const ang = Math.random() * 2 * Math.PI;
+                        const pos = new Vector2(
+                            0.5 * simWidth + Math.cos(ang) * spawnRadius,
+                            0.5 * simHeight + Math.sin(ang) * spawnRadius);
+                        const vel = new Vector2(0, 0);
+                        const hue = 0;
+                        const newBoid = new BOID(pos, vel, hue, false, false);
+                        
+                        // Set boid type based on selectedBoidType
+                        newBoid.arrow = selectedBoidType === 0;
+                        newBoid.circle = selectedBoidType === 1;
+                        newBoid.airfoil = selectedBoidType === 2;
+                        
+                        // Insert before the last 2 special boids
+                        Boids.splice(Boids.length - 2, 0, newBoid);
+                    }
+                }
+                break;
+            case 1: 
+                boidRadius = newValue / 100; // Scale back down
+                // Update radius for all existing boids
+                for (let i = 0; i < Boids.length; i++) {
+                    Boids[i].radius = boidRadius;
+                }
+                // Update dependent properties
+                boidProps.minDistance = Math.max(0.08, 5.0 * boidRadius);
+                break;
+            case 2: 
+                boidProps.visualRange = newValue; 
+                // Update dependent properties
+                SpatialGrid = new SpatialHashGrid(boidProps.visualRange / 2)
+                break;
+            case 3: boidProps.speedLimit = newValue; break;
+            case 5: boidProps.avoidFactor = newValue; break;
+            case 6: boidProps.matchingFactor = newValue; break;
+            case 7: boidProps.centeringFactor = newValue; break;
+            case 8: boidProps.turnFactor = newValue; break;
+            case 9: boidProps.tailLength = Math.round(newValue); break;
+            case 10: boidProps.tailWidth = newValue; break;
+        }
+        return;
+    }
+    
+    // Handle sky knob dragging
+    if (draggedSkyKnob !== null && window.skyRenderer) {
+        const ranges = [
+            {min: 0, max: 20},           // turbidity
+            {min: 0, max: 4},             // rayleigh
+            {min: 0, max: 0.1},           // mieCoefficient
+            {min: 0, max: 1},             // mieDirectionalG
+            {min: 0, max: 359},           // azimuth
+            {min: -2, max: 2},            // rotationSpeed
+            {min: -2, max: 10},           // elevation
+            {min: 0, max: 1},             // exposure
+            {min: 10, max: 120},          // fov
+            {min: 0.01, max: 0.10}        // autoElevationRate
+        ];
+        
+        // Calculate drag delta
+        const dragDeltaX = mouseX - dragStartMouseX;
+        const dragDeltaY = (mouseY - dragStartMouseY);            let dragDelta = dragDeltaX + dragDeltaY;
+        
+        // Reverse delta for FOV knob (index 8)
+        if (draggedSkyKnob === 8) {
+            dragDelta = -dragDelta;
+        }
+        
+        // Sensitivity
+        const dragSensitivity = 0.5;
+        const normalizedDelta = dragDelta / dragSensitivity;
+        
+        const range = ranges[draggedSkyKnob];
+        const rangeSize = range.max - range.min;
+        let newValue = dragStartValue + normalizedDelta * rangeSize;
+        
+        // For azimuth (index 4), allow continuous rotation (wrap around)
+        if (draggedSkyKnob === 4) {
+            // Wrap azimuth from 0 to 359
+            while (newValue >= 360) newValue -= 360;
+            while (newValue < 0) newValue += 360;
+        } else {
+            // Clamp to range for other knobs
+            newValue = Math.max(range.min, Math.min(range.max, newValue));
+        }
+        
+        // Apply the new value
+        const skyCtrl = window.skyRenderer.effectController;
+        switch (draggedSkyKnob) {
+            case 0: skyCtrl.turbidity = newValue; break;
+            case 1: skyCtrl.rayleigh = newValue; break;
+            case 2: skyCtrl.mieCoefficient = newValue; break;
+            case 3: skyCtrl.mieDirectionalG = newValue; break;
+            case 4: skyCtrl.azimuth = 359 - newValue; break; // Reverse direction
+            case 5: skyCtrl.rotationSpeed = -newValue; break; // Reverse direction
+            case 6: skyCtrl.elevation = newValue; break;
+            case 7: skyCtrl.exposure = newValue; break;
+            case 8: skyCtrl.fov = newValue; break;
+            case 9: autoElevationRate = newValue; break;
+        }
+        return;
+    }
+    
+    if (draggedCloud) {
+        draggedCloud.x = mouseX;
+        draggedCloud.y = mouseY;
+    }
+});
+
+// Spacebar event listeners for balloon spawning
+document.addEventListener('keydown', function(e) {
+    if (e.code === 'Space' && !spacebarHeld) {
+        spacebarHeld = true;
+        spacebarBalloonTimer = 0; // Reset timer to spawn immediately
+        e.preventDefault(); // Prevent page scrolling
+    }
+});
+
+document.addEventListener('keyup', function(e) {
+    if (e.code === 'Space') {
+        spacebarHeld = false;
+        e.preventDefault();
+    }
+});
+
+//  HANDLE WINDOW RESIZING  ------------------
+function resizeCanvas() {
+    canvas = document.getElementById("myCanvas");
+    c = canvas.getContext("2d");
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+
+    const oldSimWidth = simWidth;
+    const oldSimHeight = simHeight;
+
+    simMinWidth = 2.0;
+    cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+    simWidth = canvas.width / cScale;
+    simHeight = canvas.height / cScale;
+
+    // Calculate scale factors
+    const scaleX = simWidth / oldSimWidth;
+    const scaleY = simHeight / oldSimHeight;
+    
+    // Scale boid positions
+    if (typeof boid !== 'undefined' && boid != null) {
+        for (let boid of Boids) {
+            boid.pos.x *= scaleX;
+            boid.pos.y *= scaleY;
+        }
+    }
+    
+    // Scale Clouds
+    if (typeof Clouds !== 'undefined' && Clouds != null) {
+        for (let cloud of Clouds) {
+            cloud.x *= scaleX;
+            cloud.y *= scaleY;
+            cloud.radius *= Math.min(scaleX, scaleY);
+            // Regenerate the cloud's visual representation at the new size
+            cloud.renderToCanvas();
+        }
+    }
+    
+    // Scale Background Clouds
+    if (typeof BackgroundClouds !== 'undefined' && BackgroundClouds != null) {
+        for (let cloud of BackgroundClouds) {
+            cloud.x *= scaleX;
+            cloud.y *= scaleY;
+            cloud.radius *= Math.min(scaleX, scaleY);
+            cloud.renderToCanvas();
+        }
+    }
+    
+    // Scale Foreground Clouds
+    if (typeof ForegroundCloud !== 'undefined' && ForegroundCloud != null) {
+        for (let cloud of ForegroundCloud) {
+            cloud.x *= scaleX;
+            cloud.y *= scaleY;
+            cloud.radius *= Math.min(scaleX, scaleY);
+            cloud.renderToCanvas();
+        }
+    }
+}
+window.addEventListener("resize", resizeCanvas);
+
+//  VECTOR CLASS ---------------------------------
+class Vector2 {
+    constructor(x = 0.0, y = 0.0) {
+        this.x = x; 
+        this.y = y;
+    }
+    clone() {
+        return new Vector2(this.x, this.y);
+    }
+    add(v, s=1) {
+        this.x += v.x * s;
+        this.y += v.y * s;
+        return this;
+    }
+    addVectors(a, b) {
+        this.x = a.x + b.x;
+        this.y = a.y + b.y;
+        return this;
+    }
+    subtract(v, s = 1.0) {
+        this.x -= v.x * s;
+        this.y -= v.y * s;
+        return this;
+    }
+    subtractVectors(a, b) {
+        this.x = a.x - b.x;
+        this.y = a.y - b.y;
+        return this;			
+    }
+    length() {
+        return Math.sqrt(this.x * this.x + this.y * this.y);
+    }
+    scale(s) {
+        this.x *= s;
+        this.y *= s;
+    }
+    normalize() {
+        const len = this.length();
+        if (len > 0) {
+            this.x /= len;
+            this.y /= len;
+        }
+        return this;
+    }
+}
+
+//  COORDINATE CONVERSION  -----------
+function cX(pos) {
+    return pos.x * cScale;
+}
+function cY(pos) {
+    return canvas.height - pos.y * cScale;
+}
+
+//  SPATIAL HASH GRID CLASS ---------------------------------------------------------------------
+class SpatialHashGrid {
+    constructor(cellSize) {
+        this.cellSize = cellSize;
+        this.grid = new Map();
+    }
+    
+    // Convert position to grid key
+    getKey(x, y) {
+        const gridX = Math.floor(x / this.cellSize);
+        const gridY = Math.floor(y / this.cellSize);
+        return `${gridX},${gridY}`;
+    }
+    
+    // Clear the grid
+    clear() {
+        this.grid.clear();
+    }
+    
+    // Add boid to grid
+    insert(boid) {
+        const key = this.getKey(boid.pos.x, boid.pos.y);
+        if (!this.grid.has(key)) {
+            this.grid.set(key, []);
+        }
+        this.grid.get(key).push(boid);
+    }
+    
+    // Get nearby boids within a radius
+    getNearby(boid, radius) {
+        const nearby = [];
+        const cellRadius = Math.ceil(radius / this.cellSize);
+        const centerX = Math.floor(boid.pos.x / this.cellSize);
+        const centerY = Math.floor(boid.pos.y / this.cellSize);
+        
+        // Check all cells in square pattern - actual distance filtering happens later
+        for (let dx = -cellRadius; dx <= cellRadius; dx++) {
+            for (let dy = -cellRadius; dy <= cellRadius; dy++) {
+                const key = `${centerX + dx},${centerY + dy}`;
+                if (this.grid.has(key)) {
+                    const cellBoids = this.grid.get(key);
+                    // Direct iteration instead of spread for better performance
+                    for (let i = 0; i < cellBoids.length; i++) {
+                        nearby.push(cellBoids[i]);
+                    }
+                }
+            }
+        }
+        return nearby;
+    }
+}
+
+function makeSpatialGrid() {
+    // Optimal cell size: visualRange/2 ensures 3x3 cell queries with good boid distribution
+    SpatialGrid = new SpatialHashGrid(boidProps.visualRange / 2);
+}
+
+//  SPRAY PARTICLE CLASS ---------------------------------------------------------------------
+class SprayParticle {
+    constructor(x, y, hue, saturation, lightness) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 0.3; // Random velocity
+        this.vy = (Math.random() - 0.5) * 0.3;
+        this.hue = hue;
+        this.saturation = saturation;
+        this.lightness = lightness;
+        this.size = Math.random() * 0.002 + 0.001; // Start small
+        this.maxSize = Math.random() * 0.006 + 0.004; // Max size to grow to
+        this.life = 1.0; // Full life
+        this.decay = 0.5 + Math.random() * 0.5; // Decay speed
+    }
+    
+    update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.life -= this.decay * dt;
+        // Grow the particle
+        if (this.size < this.maxSize) {
+            this.size += 0.08 * dt;
+        }
+        return this.life > 0; // Return true if still alive
+    }
+    
+    draw() {
+        const alpha = Math.max(0, this.life);
+        c.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${alpha * 0.6})`;
+        c.beginPath();
+        c.arc(cX({x: this.x}), cY({y: this.y}), this.size * cScale, 0, 2 * Math.PI);
+        c.fill();
+    }
+}
+
+// RAINDROP CLASS  -----------------------------------------------------
+class RAINDROP {
+    constructor (pos, vel) {
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.hue = 200;
+        this.saturation = 80;
+        this.lightness = 60;
+    }
+    simulate() {
+        this.vel.y -= 1 * deltaT;  // gravity effect
+        this.pos.add(this.vel, deltaT);
+        if (this.pos.y < 0) {
+            for (let i = 0; i < Rain.length; i++) {
+                if (Rain[i] === this) {
+                    Rain.splice(i, 1);
+                    break;
+                }
+            }
+        }
+    }
+    draw() {
+        c.save();
+        c.translate(cX(this.pos), cY(this.pos));
+        const radScale = 0.035 * cScale;
+
+        // Draw airfoil  -----------
+        const numPoints = 14; 
+        const a = 0.2;
+        const b = 1.5;
+        const pivotOffsetX = 0;
+        const pivotOffsetY = -b * radScale;  // Centroid of bulb head
+        c.beginPath();  
+        for (let i = 0; i <= numPoints; i++) {
+            const t = Math.PI / 2 + (i / numPoints) * (2 * Math.PI);
+            const x = (2 * a * Math.cos(t) - a * Math.sin(2 * t)) * radScale;
+            const y = b * Math.sin(t) * radScale;
+            if (i === 0) {
+                c.moveTo(x - pivotOffsetX, -y - pivotOffsetY);
+            } else {
+                c.lineTo(x - pivotOffsetX, -y - pivotOffsetY);
+            }
+        }  
+        c.closePath();
+        const gradient = c.createRadialGradient(
+            -a * radScale * 0.5,
+            b * radScale * 1.5,
+            0,
+            -a * radScale * 0.5,
+            b * radScale * 1.5,
+            b * radScale  * 3.0);
+        gradient.addColorStop(0, 'hsla(180, 100%, 90%, 0.9)');
+        gradient.addColorStop(0.05, 'hsla(180, 100%, 40%, 0.7)');
+        gradient.addColorStop(1, 'hsla(180, 50%, 20%, 0.4)');
+        c.fillStyle = gradient;
+        
+        c.fill();
+        c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.7}%)`;
+        c.lineWidth = 1.0;
+        c.stroke();
+
+        c.restore();
+    }
+}
+
+// Make it rain at specified position -----------------------------------------------------
+Rain = [];
+function makeItRain(cloud) {
+    const pos = new Vector2(
+        cloud.x + (Math.random() - 0.5) * 1.9 * cloud.radius,
+        cloud.y - (Math.random() - 0.5) * 0.2 * cloud.radius);
+    const vel = new Vector2(
+        -cloud.speed,
+        -0);
+    Rain.push(new RAINDROP(pos, vel));
+}
+
+//  HOT AIR BALLOON CLASS  -----------------------------------------------------
+class HOTAIRBALLOON {
+    constructor (radius, pos, vel) {
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.radius = radius;
+    }
+    simulate() {
+        this.pos.add(this.vel, deltaT);
+        if (this.pos.x < -2 * this.radius) {
+            this.pos.x = simWidth + 2 * this.radius;
+            this.pos.y = 0.6 * simHeight + Math.random() * 0.3 * simHeight;
+        }
+    }
+    draw() {
+        const radScale = this.radius * cScale;
+        const balloonRadius = 0.2 * radScale + (this.pos.x / simWidth) * 0.3 * radScale;
+        c.save();
+        c.translate(cX(this.pos), cY(this.pos));
+        
+        // draw balloon as spherical with a net over the top half, like a vintage hot air balloon
+        // Sphere is centered at (0, -0.5 * balloonRadius) with radius balloonRadius
+        const sphereCenterY = -0.5 * balloonRadius;
+        const balloonLightness = 30 + (this.pos.x / simWidth) * 30;
+        const gradient = c.createRadialGradient(
+            -balloonRadius * 0.3,
+            sphereCenterY + balloonRadius * 0.4, 
+            0, 
+            0, 
+            sphereCenterY, 
+            balloonRadius * 1.2);
+        gradient.addColorStop(0, `hsl(180, 80%, ${balloonLightness}%)`);
+        gradient.addColorStop(1, `hsl(220, 60%, ${0.60 * balloonLightness}%)`);
+        c.fillStyle = gradient;
+
+        // Draw round top
+        c.beginPath();
+        c.arc(
+            0,
+            sphereCenterY,
+            balloonRadius,   
+            0, 
+            2 * Math.PI);
+        c.fill();
+        c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+        c.lineWidth = 0.03 * balloonRadius;
+        c.stroke();
+
+        // draw bottom ellipse
+        c.beginPath();
+        c.ellipse(
+            0,
+            sphereCenterY,
+            balloonRadius,
+            balloonRadius * 1.3,
+            0,
+            Math.PI,
+            2 * Math.PI,
+            true);
+            
+        c.lineWidth = 0.022 * balloonRadius;
+        c.fill();
+        c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+        c.stroke();
+
+        // Draw net over top half of balloon (viewed from horizontal side angle)
+        const sphereTop = sphereCenterY - balloonRadius;
+        const sphereEquator = sphereCenterY;
+        
+        // Vertical meridian lines - evenly spaced from equator, from top to equator
+        const verticalLines = 8;
+        //c.strokeStyle = `hsla(30, 50%, 10%, 0.7)`;
+        //c.lineWidth = 0.75;
+        for (let i = 0; i <= verticalLines; i++) {
+            // Evenly space along visible arc of equator (from -π/2 to +π/2)
+            const angle = (i / verticalLines - 0.5) * Math.PI; // -π/2 to +π/2
+            c.beginPath();
+            for (let j = 0; j <= 20; j++) {
+                const t = j / 20; // 0 at top, 1 at equator
+                const currentAngle = -Math.PI / 2 + t * (Math.PI / 2); // -90° to 0°
+                const cosCurrentAngle = Math.cos(currentAngle);
+                const x = balloonRadius * Math.sin(angle) * cosCurrentAngle;
+                const y = sphereCenterY + balloonRadius * Math.sin(currentAngle);
+                if (j === 0) {
+                    c.moveTo(x, y);
+                } else {
+                    c.lineTo(x, y);
+                }
+            }
+            // Calculate intersection with equator ellipse
+            const equatorX = balloonRadius * Math.sin(angle);
+            const equatorEllipseY = sphereEquator + balloonRadius * 0.3 * Math.sqrt(1 - (equatorX / balloonRadius) ** 2);
+            c.lineTo(equatorX, equatorEllipseY);
+            c.stroke();
+        }
+        
+        // Horizontal latitude lines - circular arcs at different heights
+        const horizontalLines = 3;
+        c.lineWidth = 0.03 * balloonRadius;
+        for (let i = 1; i <= horizontalLines; i++) {
+            const t = i / (horizontalLines + 1); // Position from top to equator
+            const currentAngle = -Math.PI / 2 + t * (Math.PI / 2); // -90° to 0°
+            const yPos = sphereCenterY + balloonRadius * Math.sin(currentAngle);
+            const circleRadius = balloonRadius * Math.cos(currentAngle);
+            
+            // Draw front half of ellipse only (omit rear arcs)
+            c.beginPath();
+            c.ellipse(0, yPos, circleRadius, circleRadius * 0.3, 0, -0.1, Math.PI + 0.1);
+            c.stroke();
+        }
+        
+        // Draw thicker equator band
+        c.beginPath();
+        c.ellipse(0, sphereEquator, balloonRadius, balloonRadius * 0.3, 0, -0.1, Math.PI + 0.1);
+        //c.strokeStyle = `hsla(30, 0%, 10%, 0.7)`;
+        //c.lineWidth = 0.03 * balloonRadius;
+        c.stroke();
+        
+        // Draw basket with rounded corners and cylindrical shading
+        const basketWidth = balloonRadius * 0.5;
+        const basketHeight = balloonRadius * 0.4;
+        const basketY = 1.4 * balloonRadius + basketHeight * 0.5;
+        const cornerRadius = basketWidth * 0.15;
+
+        // Connect meridian line endpoints to basket with draped cables
+        c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+        c.lineWidth = 0.022 * balloonRadius;
+        const basketTop = basketY - basketHeight / 2;
+        for (let i = 0; i <= verticalLines; i++) {
+            const angle = (i / verticalLines - 0.5) * Math.PI;
+            
+            const normalizedPos = Math.abs(i / verticalLines - 0.5) * 2; // 0 at center, 1 at edges
+            
+            // For only the outermost cables, attach below the equator
+            let connectionX, connectionY;
+            if (normalizedPos > 0.8) {
+                // Only the very outer cables attach progressively lower
+                const verticalOffset = (normalizedPos - 0.8) / 0.2 * (Math.PI / 12); // Up to 15° below equator for outermost
+                const connectionAngle = verticalOffset; // below equator
+                const connY = sphereCenterY + balloonRadius * Math.sin(connectionAngle);
+                const circleRadiusAtHeight = balloonRadius * Math.cos(connectionAngle);
+                connectionX = circleRadiusAtHeight * Math.sin(angle);
+                // Project onto ellipse for side view
+                connectionY = connY + circleRadiusAtHeight * 0.3 * Math.sqrt(Math.max(0, 1 - (Math.sin(angle)) ** 2));
+            } else {
+                // Most cables attach at equator
+                const equatorX = balloonRadius * Math.sin(angle);
+                connectionX = equatorX;
+                connectionY = sphereEquator + balloonRadius * 0.3 * Math.sqrt(Math.max(0, 1 - (equatorX / balloonRadius) ** 2));
+            }
+            
+            // Connect to basket - distribute connections evenly along basket width
+            const basketX = (i / verticalLines - 0.5) * basketWidth;
+            
+            // Draw draped cable using quadratic curve
+            c.beginPath();
+            c.moveTo(connectionX, connectionY);
+            
+            // Create draping curve with control point offset
+            const midX = (connectionX + basketX) / 2;
+            const midY = (connectionY + basketTop) / 2;
+            // Add drape - how much the cable sags (much more for outer cables)
+            const drape = balloonRadius * 0.25 * (1 + normalizedPos * normalizedPos * 1.5);
+            const controlY = midY + drape; // Drape downward (positive Y is down from balloon)
+            
+            c.quadraticCurveTo(midX, controlY, basketX, basketTop);
+            c.stroke();
+        }
+
+        // draw bottom ellipse
+        c.beginPath();
+        c.ellipse(
+            0,
+            sphereCenterY,
+            balloonRadius,
+            balloonRadius * 1.3,
+            0,
+            Math.PI,
+            2 * Math.PI,
+            true);
+            
+        c.lineWidth = 0.03 * balloonRadius;
+        c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+        c.stroke();
+
+        // Draw basket as 3D cylinder with elliptical top and bottom
+        const basketTopRadiusX = basketWidth / 1.8;
+        const basketTopRadiusY = basketTopRadiusX * 0.3; // Ellipse compression for 3D view
+        const basketBottomRadiusX = basketTopRadiusX * 0.8; // Bottom 90% as wide
+        const basketBottomRadiusY = basketTopRadiusY * 0.8;
+        //const basketTop = basketY - basketHeight / 2;
+        const basketBottom = basketY + basketHeight / 2;
+        
+        // Create linear gradient for cylindrical appearance
+        const basketGradient = c.createLinearGradient(
+            -basketWidth / 2, 0,
+            basketWidth / 2, 0
+        );
+        basketGradient.addColorStop(0, `hsl(30, 60%, 20%)`);
+        basketGradient.addColorStop(0.4, `hsl(30, 70%, 35%)`);
+        basketGradient.addColorStop(0.45, `hsl(30, 70%, 35%)`);
+        basketGradient.addColorStop(1, `hsl(30, 60%, 20%)`);
+
+        // Draw bottom ellipse (darkest - furthest from light)
+        c.fillStyle = `hsl(30, 50%, 15%)`;
+        c.beginPath();
+        c.ellipse(
+            0, 
+            basketBottom, 
+            basketBottomRadiusX, 
+            basketBottomRadiusY, 
+            0, 
+            Math.PI, 
+            Math.PI * 2,
+            true);
+        c.fill();
+        c.beginPath();
+        c.ellipse(
+            0, 
+            basketBottom, 
+            basketBottomRadiusX, 
+            basketBottomRadiusY, 
+            0, 
+            0, 
+            Math.PI * 2,
+            true);
+        c.strokeStyle = `hsl(30, 40%, 10%)`;
+        c.lineWidth = 0.05 * balloonRadius;
+        c.stroke();
+
+        // Draw basket as filled shape
+        c.fillStyle = basketGradient;
+        c.beginPath();
+        c.moveTo(-basketTopRadiusX, basketTop + basketTopRadiusY);
+        c.lineTo(-basketBottomRadiusX, basketBottom);
+        c.ellipse(0, basketBottom, basketBottomRadiusX, basketBottomRadiusY, 0, Math.PI, 0, true);
+        c.lineTo(basketBottomRadiusX, basketBottom);
+        c.lineTo(basketTopRadiusX, basketTop + basketTopRadiusY);
+        c.ellipse(0, basketTop, basketTopRadiusX, basketTopRadiusY, 0, 0, Math.PI, true);
+        c.closePath();
+        c.fill();
+        
+        // Draw top ellipse stroke (interior visible edge)
+        c.beginPath();
+        c.ellipse(
+            0, 
+            basketTop, 
+            basketTopRadiusX, 
+            basketTopRadiusY, 
+            0, 
+            0, 
+            Math.PI * 2);
+        c.fillStyle = `hsl(30, 30%, 15%)`;
+        c.fill();
+        
+        // Draw top front ellipse stroke 
+        c.beginPath();
+        c.ellipse(
+            0, 
+            basketTop, 
+            basketTopRadiusX, 
+            basketTopRadiusY, 
+            0, 
+            0, 
+            Math.PI * 2);
+        c.strokeStyle = `hsl(30, 40%, 40%)`;
+        c.lineWidth = 0.03 * balloonRadius;
+        c.stroke();
+
+        // Draw wicker pattern on basket
+        c.strokeStyle = `hsl(30, 70%, 20%)`;
+        c.lineWidth = 0.01 * balloonRadius;
+        
+        // Horizontal wicker strands
+        const wickerRows = 7;
+        for (let i = 0; i <= wickerRows; i++) {
+            const t = i / wickerRows;
+            const y = basketTop + basketHeight * t;
+            const topRadius = basketTopRadiusX - (basketTopRadiusX - basketBottomRadiusX) * t;
+            const vertRadius = (basketTopRadiusY - (basketTopRadiusY - basketBottomRadiusY) * t) * 0.95;
+            
+            c.beginPath();
+            c.ellipse(0, y, topRadius * 0.95, vertRadius, 0, 0.02, Math.PI - 0.02);
+            c.stroke();
+        }
+        
+        // Vertical wicker strands
+        const wickerColumns = 9;
+        for (let i = 0; i <= wickerColumns; i++) {
+            const angle = (i / wickerColumns) * Math.PI;
+            const xTop = Math.cos(angle) * basketTopRadiusX * 0.95;
+            const xBottom = Math.cos(angle) * basketBottomRadiusX * 0.95;
+            
+            // Calculate starting y position on the visible top rim ellipse
+            const topRimOffset = basketTopRadiusY * Math.sin(angle);
+            const startY = basketTop + topRimOffset;
+            
+            // Calculate ending y position on the visible bottom rim ellipse
+            const bottomRimOffset = basketBottomRadiusY * Math.sin(angle);
+            const endY = basketBottom + bottomRimOffset;
+            
+            c.beginPath();
+            c.moveTo(xTop, startY);
+            
+            for (let j = 1; j <= 10; j++) {
+                const t = j / 10;
+                const y = basketTop + basketHeight * t;
+                const x = xTop + (xBottom - xTop) * t;
+                const offsetY = (basketTopRadiusY - (basketTopRadiusY - basketBottomRadiusY) * t) * 0.6;
+                const waveFactor = Math.sin(t * Math.PI) * 0.15;
+                
+                c.lineTo(x, y + offsetY * waveFactor);
+            }
+            
+            c.lineTo(xBottom, endY);
+            c.stroke();
+        }
+
+        // Draw bunny in basket
+        const bunnyScale = basketTopRadiusX;
+        const maxEarHeight = bunnyScale * 1.2;
+        const earHeight = maxEarHeight;
+        const headRadius = bunnyScale * 0.48;
+        const earWidth = bunnyScale * 0.12;
+        const earSpacing = bunnyScale * 0.15;
+        
+        // Position bunny head inside basket
+        const headY = basketTop + basketHeight * 0.1;
+        
+        const earBottomY = headY - headRadius * 0.3;
+        const earTopY = earBottomY - earHeight;
+        const earCenterY = (earBottomY + earTopY) / 2;
+        
+        // Draw left ear
+        const leftEarGradient = c.createLinearGradient(0, earTopY, 0, earBottomY);
+        leftEarGradient.addColorStop(0, 'hsl(195, 75%, 85%)');
+        leftEarGradient.addColorStop(0.5, 'hsl(200, 70%, 75%)');
+        leftEarGradient.addColorStop(1, 'hsl(205, 65%, 65%)');
+        c.fillStyle = leftEarGradient;
+        c.beginPath();
+        const leftEarX = -earSpacing * 2.0;
+        const leftEarW = earWidth * 1.5;
+        const leftEarH = earHeight / 2;
+        c.save();
+        c.translate(leftEarX, earCenterY);
+        c.rotate(-0.18);
+        // Create airfoil shape - rounded tip at top, wider at bottom
+        c.moveTo(0, -leftEarH);
+        c.bezierCurveTo(leftEarW * 0.6, -leftEarH, leftEarW * 0.85, -leftEarH * 0.6, leftEarW * 0.9, -leftEarH * 0.2);
+        c.bezierCurveTo(leftEarW, leftEarH * 0.3, leftEarW * 0.7, leftEarH * 0.85, 0, leftEarH);
+        c.bezierCurveTo(-leftEarW * 0.7, leftEarH * 0.85, -leftEarW, leftEarH * 0.3, -leftEarW * 0.9, -leftEarH * 0.2);
+        c.bezierCurveTo(-leftEarW * 0.85, -leftEarH * 0.6, -leftEarW * 0.6, -leftEarH, 0, -leftEarH);
+        c.closePath();
+        c.fill();
+        c.strokeStyle = 'hsl(200, 50%, 55%)';
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        c.restore();
+        
+        // Draw left inner ear
+        c.fillStyle = 'hsl(195, 65%, 90%)';
+        c.beginPath();
+        const leftInnerW = earWidth * 0.75;
+            const leftInnerH = earHeight / 2 * 0.7;
+            
+        c.save();
+
+        c.translate(leftEarX, earCenterY);
+        c.rotate(-0.18);
+        c.moveTo(0, -leftInnerH);
+        c.bezierCurveTo(leftInnerW * 0.6, -leftInnerH, leftInnerW * 0.85, -leftInnerH * 0.6, leftInnerW * 0.9, -leftInnerH * 0.2);
+        c.bezierCurveTo(leftInnerW, leftInnerH * 0.3, leftInnerW * 0.7, leftInnerH * 0.85, 0, leftInnerH);
+        c.bezierCurveTo(-leftInnerW * 0.7, leftInnerH * 0.85, -leftInnerW, leftInnerH * 0.3, -leftInnerW * 0.9, -leftInnerH * 0.2);
+        c.bezierCurveTo(-leftInnerW * 0.85, -leftInnerH * 0.6, -leftInnerW * 0.6, -leftInnerH, 0, -leftInnerH);
+        c.closePath();
+        c.fill();
+
+        c.restore();
+            
+        // Draw right ear
+        const rightEarGradient = c.createLinearGradient(0, earTopY, 0, earBottomY);
+        rightEarGradient.addColorStop(0, 'hsl(195, 75%, 85%)');
+        rightEarGradient.addColorStop(0.5, 'hsl(200, 70%, 75%)');
+        rightEarGradient.addColorStop(1, 'hsl(205, 65%, 65%)');
+        c.fillStyle = rightEarGradient;
+        c.beginPath();
+        const rightEarX = earSpacing * 2.0;
+        const rightEarW = earWidth * 1.5;
+        const rightEarH = earHeight / 2;
+
+        c.save();
+
+        c.translate(rightEarX, earCenterY);
+        c.rotate(0.18);
+        // Create airfoil shape - rounded tip at top, wider at bottom
+        c.moveTo(0, -rightEarH);
+        c.bezierCurveTo(rightEarW * 0.6, -rightEarH, rightEarW * 0.85, -rightEarH * 0.6, rightEarW * 0.9, -rightEarH * 0.2);
+        c.bezierCurveTo(rightEarW, rightEarH * 0.3, rightEarW * 0.7, rightEarH * 0.85, 0, rightEarH);
+        c.bezierCurveTo(-rightEarW * 0.7, rightEarH * 0.85, -rightEarW, rightEarH * 0.3, -rightEarW * 0.9, -rightEarH * 0.2);
+        c.bezierCurveTo(-rightEarW * 0.85, -rightEarH * 0.6, -rightEarW * 0.6, -rightEarH, 0, -rightEarH);
+        c.closePath();
+        c.fill();
+        c.strokeStyle = 'hsl(200, 50%, 55%)';
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        c.restore();
+        
+        // Draw right inner ear
+        c.fillStyle = 'hsl(195, 65%, 90%)';
+        c.beginPath();
+        const rightInnerW = earWidth * 0.75;
+        const rightInnerH = earHeight / 2 * 0.7;
+        c.save();
+        c.translate(rightEarX, earCenterY);
+        c.rotate(0.18);
+        c.moveTo(0, -rightInnerH);
+        c.bezierCurveTo(rightInnerW * 0.6, -rightInnerH, rightInnerW * 0.85, -rightInnerH * 0.6, rightInnerW * 0.9, -rightInnerH * 0.2);
+        c.bezierCurveTo(rightInnerW, rightInnerH * 0.3, rightInnerW * 0.7, rightInnerH * 0.85, 0, rightInnerH);
+        c.bezierCurveTo(-rightInnerW * 0.7, rightInnerH * 0.85, -rightInnerW, rightInnerH * 0.3, -rightInnerW * 0.9, -rightInnerH * 0.2);
+        c.bezierCurveTo(-rightInnerW * 0.85, -rightInnerH * 0.6, -rightInnerW * 0.6, -rightInnerH, 0, -rightInnerH);
+        c.closePath();
+        c.fill();
+
+        c.restore();
+        
+        // Draw bunny head
+        const headGradient = c.createRadialGradient(-headRadius * 0.3, headY - headRadius * 0.3, 0, 0, headY, headRadius);
+        headGradient.addColorStop(0, 'hsl(195, 70%, 85%)');
+        headGradient.addColorStop(0.7, 'hsl(200, 65%, 75%)');
+        headGradient.addColorStop(1, 'hsl(205, 60%, 65%)');
+        
+        c.fillStyle = headGradient;
+        c.beginPath();
+        c.arc(
+            0, 
+            headY, 
+            headRadius, 
+            Math.PI * 0.9, 
+            Math.PI * 2.1,
+        false);
+        c.fill();
+        
+        // Draw eyes
+        const eyeY = headY - headRadius * 0.22;
+        const eyeSpacing = headRadius * 0.4;
+        const eyeWidth = headRadius * 0.2;
+        const eyeHeight = headRadius * 0.35;
+        const pupilWidth = headRadius * 0.1014;
+        const pupilHeight = headRadius * 0.2028;
+        const eyeAngle = 0.15;
+        const pupilOffsetY = headRadius * 0.05;
+        const pupilOffsetX = headRadius * 0.02;
+        
+        // Left eye
+        c.fillStyle = 'white';
+        c.beginPath();
+        c.ellipse(-eyeSpacing, eyeY, eyeWidth, eyeHeight, -eyeAngle, 0, Math.PI * 2);
+        c.fill();
+        
+        c.fillStyle = 'hsl(210, 60%, 30%)';
+        c.beginPath();
+        c.ellipse(-eyeSpacing + pupilOffsetX, eyeY + pupilOffsetY, pupilWidth, pupilHeight, -eyeAngle, 0, Math.PI * 2);
+        c.fill();
+        
+        c.fillStyle = 'white';
+        c.beginPath();
+        c.arc(-eyeSpacing + pupilOffsetX - pupilWidth * 0.3, eyeY + pupilOffsetY - pupilHeight * 0.6, headRadius * 0.04, 0, Math.PI * 2);
+        c.fill();
+        
+        // Right eye
+        c.fillStyle = 'white';
+        c.beginPath();
+        c.ellipse(eyeSpacing, eyeY, eyeWidth, eyeHeight, eyeAngle, 0, Math.PI * 2);
+        c.fill();
+        
+        c.fillStyle = 'hsl(210, 60%, 30%)';
+        c.beginPath();
+        c.ellipse(eyeSpacing - pupilOffsetX, eyeY + pupilOffsetY, pupilWidth, pupilHeight, eyeAngle, 0, Math.PI * 2);
+        c.fill();
+        
+        c.fillStyle = 'white';
+        c.beginPath();
+        c.arc(eyeSpacing - pupilOffsetX + pupilWidth * 0.3, eyeY + pupilOffsetY - pupilHeight * 0.6, headRadius * 0.04, 0, Math.PI * 2);
+        c.fill();
+
+        // Draw top front ellipse stroke 
+        c.beginPath();
+        c.ellipse(
+            0, 
+            basketTop, 
+            basketTopRadiusX, 
+            basketTopRadiusY, 
+            0, 
+            Math.PI, 
+            Math.PI * 2,
+            true);
+        c.strokeStyle = `hsl(30, 40%, 60%)`;
+        c.lineWidth = 0.03 * balloonRadius;
+        c.stroke();
+        
+        c.restore();
+    }
+}
+
+// make hot air balloon --------------------------------
+function makeHotAirBalloon() {
+    HotAirBalloon = [];
+    const radius = 0.25;
+    const pos = new Vector2(
+        1.2 * simWidth, 
+        //0.6 * simHeight + Math.random() * 0.3 *simHeight); 
+        0.15 * simHeight + 0.75 * Math.random() * simHeight);
+    const vel = new Vector2(
+        -0.01, 
+        (Math.random() - 0.5) * 0.007);
+    HotAirBalloon.push(new HOTAIRBALLOON(radius, pos, vel));
+}
+
+// BALLOON CLASS ---------------------------------------------------------------------
+class BALLOON {
+    constructor (pos, vel) {
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.radius = 0.15;
+        this.originalRadius = 0.15; // Store original size for string length when popping
+        this.hue = 360 * Math.random();
+        this.saturation = 40 + Math.random() * 60;
+        this.lightness = 40 + Math.random() * 30;
+        this.stringPhase = Math.random() * Math.PI * 2; // Random starting phase for wave
+        this.popping = false;
+        this.tumbleAngle = 0; // Rotation angle for knot tumbling when popped
+    }
+    simulate() {
+        if (this.popping) {
+            // When popping, balloon collapses and falls
+            const timeSincePop = (performance.now() - this.popStartTime) / 1000; // in seconds
+            
+            // Collapse the balloon rapidly
+            this.radius = Math.max(0.01, 0.15 * (1 - Math.min(timeSincePop * 2, 1)));
+            
+            // Fall downward with gravity
+            this.vel.y -= 0.8 * deltaT; // Strong downward acceleration
+            this.vel.x *= 0.98; // Slight horizontal dampening
+            
+            // Tumble the knot
+            this.tumbleAngle += deltaT * 8; // Rotate at 8 radians per second
+            
+            // Remove balloon when it falls off bottom of screen
+            if (this.pos.y < -0.5) {
+                const index = Balloons.indexOf(this);
+                if (index > -1) {
+                    Balloons.splice(index, 1);
+                }
+            }
+        } else {
+            // Normal floating behavior
+            this.vel.y += 0.001;
+        }
+        
+        this.pos.add(this.vel, deltaT);
+        this.stringPhase += deltaT * 3; // Animate the wave
+        
+        if (this.pos.y > simHeight + 5 * this.radius) {
+            // remove balloon from array when it goes off top
+            const index = Balloons.indexOf(this);
+            if (index > -1) {
+                Balloons.splice(index, 1);
+            }
+        }
+    }
+    draw() {
+        const radScale = this.radius * cScale;
+        // Use original radius for string length so it doesn't shrink when popping
+        const originalRadScale = this.originalRadius * cScale;
+        const stringLength = originalRadScale * 3.5;
+        const startY = 0.6 * radScale;
+        const segments = 20;
+
+        c.save();
+        c.translate(cX(this.pos), cY(this.pos));
+
+        // Always draw the knot at balloon connection
+        // Position knot below the balloon body (less negative Y = lower)
+        const knotStartY = this.popping ? (-0.3 * originalRadScale) : startY;
+        
+        // Draw knot at fixed position when not popping
+        if (!this.popping) {
+            // Draw vertical part of knot at balloon connection
+            c.fillStyle = `hsl(${this.hue}, 40%, 30%)`;
+            c.beginPath();
+            c.ellipse(
+                0, 
+                startY + radScale * 0.15,
+                radScale * 0.08,
+                radScale * 0.12,
+                0, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+            
+            // Draw horizontal part of knot at balloon connection
+            c.fillStyle = `hsl(${this.hue}, 40%, 20%)`;
+            c.beginPath();
+            c.ellipse(
+                0, 
+                startY + radScale * 0.22,
+                radScale * 0.12,
+                radScale * 0.06,
+                0, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+        }
+
+        // draw arced string around knot (only when not popping)
+        if (!this.popping) {
+            c.beginPath();
+            const squeeze = 0.3 * Math.PI
+            c.arc(0, startY + originalRadScale * 0.02, originalRadScale * 0.15, 0 + squeeze, Math.PI - squeeze, false);
+            c.strokeStyle = 'hsl(0, 0%, 80%)';
+            c.lineWidth = 2.0;
+            c.stroke();
+        }
+
+        // Draw string with wave (trails behind when falling)
+        c.strokeStyle = 'hsl(0, 0%, 80%)';
+        c.lineWidth = 2.0;
+        c.beginPath();
+        
+        // Calculate string start position (where knot will be when popping)
+        let stringStartY;
+        
+        // Store all points first for smooth curve drawing
+        const points = [];
+        
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            let y, x;
+            
+            if (this.popping) {
+                // U-turn animation: knot falls and drags string down smoothly
+                const timeSincePop = (performance.now() - this.popStartTime) / 1000;
+                
+                // Knot is at t=0, string extends downward (t increases = further from knot)
+                const knotBottomY = knotStartY + originalRadScale * 0.58;
+                
+                // Original string position (hanging down from knot)
+                const originalStringY = knotBottomY + stringLength * t;
+                
+                // Simplified physics: each segment lags behind based on distance from knot
+                // The further from knot, the more delay in responding to the fall
+                const delay = t * 0.5; // Segments lag proportionally to distance
+                const effectiveTime = Math.max(0, timeSincePop - delay);
+                
+                // Each segment falls with the same gravity, just delayed
+                const fallAcceleration = 0.7;
+                const fallDistance = 0.5 * fallAcceleration * effectiveTime * effectiveTime * cScale;
+                
+                // Far segments (higher t) create upward curve due to delay
+                y = originalStringY + fallDistance;
+                
+                // Store the first segment position for knot placement (t=0)
+                if (i === 0) {
+                    stringStartY = y;
+                }
+                
+                const amplitude = originalRadScale * 0.4 * t * t;
+                x = originalRadScale * 0.065 + Math.sin(this.stringPhase + t * Math.PI * 2) * amplitude;
+            } else {
+                // Normal downward string
+                y = (startY + originalRadScale * 0.18) + stringLength * t;
+                const amplitude = originalRadScale * 0.3 * t * t;
+                x = originalRadScale * 0.065 + Math.sin(this.stringPhase + t * Math.PI * 2) * amplitude;
+            }
+            
+            points.push({x, y});
+        }
+        
+        // Draw smooth curve through points using quadratic curves
+        if (points.length > 0) {
+            c.moveTo(points[0].x, points[0].y);
+            
+            for (let i = 1; i < points.length; i++) {
+                if (i < points.length - 1) {
+                    // Use quadratic curve with control point at current point
+                    const xc = (points[i].x + points[i + 1].x) / 2;
+                    const yc = (points[i].y + points[i + 1].y) / 2;
+                    c.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+                } else {
+                    // Last point - draw straight to it
+                    c.quadraticCurveTo(points[i].x, points[i].y, points[i].x, points[i].y);
+                }
+            }
+        }
+        c.stroke();
+        
+        // Draw knot at the start of string when popping (so it moves with the string)
+        if (this.popping && stringStartY !== undefined) {
+            // Save context and apply rotation for tumbling effect
+            c.save();
+            c.translate(0, stringStartY - originalRadScale * 0.095);
+            c.rotate(this.tumbleAngle);
+            
+            // Reposition knot to follow the string as it falls
+            c.fillStyle = `hsl(${this.hue}, 40%, 30%)`;
+            c.beginPath();
+            c.ellipse(
+                0, 
+                -originalRadScale * 0.035,
+                originalRadScale * 0.08,
+                originalRadScale * 0.12,
+                0, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+            
+            c.fillStyle = `hsl(${this.hue}, 40%, 20%)`;
+            c.beginPath();
+            c.ellipse(
+                0, 
+                originalRadScale * 0.035,
+                originalRadScale * 0.12,
+                originalRadScale * 0.06,
+                0, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+            
+            c.restore();
+        }
+        
+        // Draw balloon (collapsed when popping)
+        if (this.popping) {
+            // Draw wrinkled/collapsed balloon shape at top, around knot
+            const timeSincePop = (performance.now() - this.popStartTime) / 1000;
+            const collapseAmount = Math.min(timeSincePop * 2, 1);
+            
+            c.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness * 0.5}%, ${0.6 * (1 - collapseAmount)})`;
+            c.strokeStyle = `hsla(${this.hue}, 50%, 30%, ${0.8 * (1 - collapseAmount)})`;
+            c.lineWidth = 2;
+            
+            // Draw crumpled shape above/around the knot
+            c.beginPath();
+            const points = 8;
+            const balloonScrapY = knotStartY + originalRadScale * 0.2; // Above the knot
+            for (let i = 0; i < points; i++) {
+                const angle = (i / points) * Math.PI * 2;
+                const radiusVariation = 0.5 + Math.sin(angle * 3 + timeSincePop * 10) * 0.3;
+                const px = Math.cos(angle) * originalRadScale * 0.3 * radiusVariation;
+                const py = balloonScrapY + Math.sin(angle) * originalRadScale * 0.2 * radiusVariation;
+                if (i === 0) {
+                    c.moveTo(px, py);
+                } else {
+                    c.lineTo(px, py);
+                }
+            }
+            c.closePath();
+            c.fill();
+            c.stroke();
+        } else {
+            // Draw normal inflated balloon
+            const gradient = c.createRadialGradient(
+                -radScale * 0.25,
+                -radScale * 0.7, 
+                0, 
+                0, 
+                -radScale * 0.3, 
+                1.2 *radScale);
+            gradient.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.8)`);
+            gradient.addColorStop(1, `hsla(${this.hue}, ${this.saturation * 0.75}%, 10%, 1.0)`);
+            c.fillStyle = gradient;
+            c.beginPath();
+            c.ellipse(
+                0, 
+                -radScale * 0.3, 
+                radScale * 0.8, 
+                radScale, 
+                0, 
+                0, 
+                2 * Math.PI);
+            c.fill();
+            c.strokeStyle = `hsl(${this.hue}, 50%, 30%)`;
+            c.lineWidth = 2;
+            c.stroke();
+        }
+
+        // draw tiny particles around circumference, moving outward when popping 
+        if (this.popping) {
+            const particleCount = 60;
+            for (let i = 0; i < particleCount; i++) {
+                const angle = (i / particleCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+                const distance = radScale * (1.0 + Math.random() * 0.5 + (performance.now() - this.popStartTime) / 200);
+                const particleX = Math.cos(angle) * distance;
+                const particleY = -radScale * 0.3 + Math.sin(angle) * distance;
+                const particleRadius = Math.max(radScale * 0.01, radScale * 0.05 * (1.0 - (performance.now() - this.popStartTime) / 500));
+                
+                c.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${1.0 - (performance.now() - this.popStartTime) / 500})`;
+                c.beginPath();
+                c.arc(particleX, particleY, particleRadius, 0, Math.PI * 2);
+                c.fill();
+            }
+        }
+        
+        c.restore();
+    }
+    contains(x, y) {
+        // Balloon body is an ellipse centered at (0, -radScale * 0.3) with radii (radScale * 0.8, radScale)
+        const dx = x - this.pos.x;
+        const dy = y - (this.pos.y - 0.3 * this.radius);
+        // Check if point is inside ellipse: (dx/rx)^2 + (dy/ry)^2 <= 1
+        const rx = this.radius * 0.8;
+        const ry = this.radius;
+        return (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1;
+    }
+}
+
+// initialize balloon --------------------------------
+function initBalloon() {
+    Balloons = [];
+    balloonProps = {
+        balloonInitialDelay: 10.0, // Delay before first balloon spawns (0 = immediate)
+        balloonSpawnInterval: 50.0 // Time between balloon spawns after first one (seconds)
+    } 
+    balloonSpawnTimer = -balloonProps.balloonInitialDelay;
+}
+
+// spawn balloon --------------------------------
+function spawnBalloon() {
+    const pos = new Vector2(.1 * simWidth + Math.random() * 0.8 *simWidth, -0.3);
+    const vel = new Vector2((Math.random() - 0.5) * 0.3, Math.random() * 0.3);
+    Balloons.push(new BALLOON(pos, vel));
+}   
+
+//  CLOUD CLASS ---------------------------------------------------------------------
+class CLOUD {
+    constructor(x, y, isBackground = false, isForeground = false, isRaining = false) {
+        this.x = x;
+        this.y = y;
+        this.isBackground = isBackground;
+        this.isForeground = isForeground;
+        this.isRaining = isRaining;
+        // Foreground clouds are largest, background smallest, normal in between
+        this.radius = isForeground ? 0.20 : (isBackground ? 0.07 : 0.15);
+        this.speed = isForeground ? 0.08 : (isBackground ? 0.02 : 0.04); // Foreground fastest, background slowest
+        // Create unique cloud shape using true randomness (changes on refresh)
+        this.seed = Math.random();
+        this.generatePuffs();
+        this.renderToCanvas();
+    }
+    generatePuffs() {
+        const numPuffs = 4;
+        this.puffData = [];
+        
+        // Use seed to create deterministic but varied random values
+        let rng = this.seed;
+        const seededRandom = () => {
+            rng = (rng * 9301 + 49297) % 233280;
+            return rng / 233280;
+        };
+        
+        // Create cloud-like arrangement with horizontal spread
+        for (let i = 0; i < numPuffs; i++) {
+            if (i < 3) {
+                // First 3 puffs form the base with flat bottom
+                // Horizontal position: spread across the width with variation
+                const offsetX = -0.7 + (i / 2) * 1.4 + (seededRandom() - 0.5) * 0.05;
+                
+                // Size variation
+                const size = 0.6 + seededRandom() * 0.3;
+                
+                // Vertical position: constrained to be close to the crop line
+                const offsetY = 0.3 + (seededRandom() - 0.5) * 0.4;
+                
+                this.puffData.push({
+                    offsetX: offsetX,
+                    offsetY: offsetY,
+                    size: size
+                });
+            } else {
+                // Fourth puff adds height - positioned above the crop line
+                const offsetX = -0.2 + (seededRandom() - 0.5) * 0.4; // More centered
+                const size = 0.5 + seededRandom() * 0.25; // Slightly smaller
+                const offsetY = -0.3 + (seededRandom() - 0.5) * 0.2; // Positioned higher (negative = up)
+                
+                this.puffData.push({
+                    offsetX: offsetX,
+                    offsetY: offsetY,
+                    size: size
+                });
+            }
+        }
+    }
+    contains(x, y) {
+        // Calculate the crop line position
+        const r = this.radius;
+        const cropY = this.y + r * 0.5;
+        
+        // Don't collide below the crop line
+        if (y > cropY) return false;
+        
+        // Elliptical collision - wider horizontally than vertically
+        const dx = (x - this.x) / (r * 1.5); // 1.5x wider horizontally
+        const dy = (y - this.y) / r;
+        return (dx * dx + dy * dy) < 1;
+    }
+    renderToCanvas() {
+        // Create offscreen canvas sized for the cloud
+        const r = this.radius * cScale;
+        const padding = 30;
+        const size = r * 3 + padding * 2;
+        
+        this.offscreenCanvas = document.createElement('canvas');
+        this.offscreenCanvas.width = size;
+        this.offscreenCanvas.height = size;
+        const ctx = this.offscreenCanvas.getContext('2d');
+        
+        // Center position in offscreen canvas
+        const cx = size / 2;
+        const cy = size / 2;
+        
+        // Build puffs array
+        const puffs = this.puffData.map(puff => ({
+            x: cx + r * puff.offsetX,
+            y: cy + r * puff.offsetY,
+            r: r * puff.size,
+            data: puff
+        }));
+        
+        puffs.sort((a, b) => a.x - b.x);
+        
+        const bottomY = Math.max(...puffs.map(puff => puff.y + puff.r * 0.5));
+        
+        ctx.save();
+        
+        // Create clipping region
+        const leftmost = Math.min(...puffs.map(p => p.x - p.r)) - 20;
+        const rightmost = Math.max(...puffs.map(p => p.x + p.r)) + 20;
+        const topmost = Math.min(...puffs.map(p => p.y - p.r)) - 20;
+        
+        ctx.beginPath();
+        ctx.rect(leftmost, topmost, rightmost - leftmost, bottomY - topmost + 2);
+        ctx.clip();
+
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        
+        // Draw outline strokes (darker for background clouds, lighter for foreground)
+        if (this.isForeground && !this.isRaining) {
+            ctx.strokeStyle = 'hsl(200, 85%, 85%)';
+            ctx.lineWidth = 16;
+        } else if (this.isForeground && this.isRaining) {
+            ctx.strokeStyle = 'hsl(200, 30%, 20%)';
+            ctx.lineWidth = 16;
+        } else if (this.isBackground) {
+            ctx.strokeStyle = 'hsl(200, 30%, 50%)';
+            ctx.lineWidth = 6;
+        } else {
+            ctx.strokeStyle = 'hsl(200, 80%, 80%)';
+            ctx.lineWidth = 12;
+        }
+        
+        for (let puff of puffs) {
+            ctx.beginPath();
+            ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
+            ctx.stroke();
+        }
+        
+        // Fill all puffs (darker for background clouds, white for others)
+        if (this.isBackground) {
+            ctx.fillStyle = 'hsl(0, 0%, 65%)';
+        } else if (this.isForeground && !this.isRaining) {
+            ctx.fillStyle = 'hsl(0, 0%, 100%)';
+        } else if (this.isForeground && this.isRaining) {
+            ctx.fillStyle = 'hsl(0, 0%, 50%)';
+        } else {
+            ctx.fillStyle = 'hsl(0, 0%, 95%)';
+        }
+        for (let puff of puffs) {
+            ctx.beginPath();
+            ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        // Draw pouty face on foreground rainy clouds
+        if (this.isForeground && this.isRaining) {
+            const faceY = cy + r * 0.1;
+            const eyeOffsetX = r * 0.2;
+            const eyeOffsetY = r * 0.1;
+            const eyeRadiusX = r * 0.05;
+            const eyeRadiusY = r * 0.08;
+            
+            // Left eye
+            ctx.fillStyle = 'hsl(0, 0%, 10%)';
+            ctx.beginPath();
+            ctx.ellipse(cx - eyeOffsetX, faceY - eyeOffsetY, eyeRadiusX, eyeRadiusY, 0, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Right eye
+            ctx.beginPath();
+            ctx.ellipse(cx + eyeOffsetX, faceY - eyeOffsetY, eyeRadiusX, eyeRadiusY, 0, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Pouty mouth
+            const mouthWidth = r * 0.25;
+            const mouthHeight = r * 0.05;
+            ctx.beginPath();
+            ctx.moveTo(cx - mouthWidth / 2, faceY + r * 0.14);
+            ctx.quadraticCurveTo(cx, faceY + r * 0.1 - mouthHeight, cx + mouthWidth / 2, faceY + r * 0.1);
+            ctx.strokeStyle = 'hsl(0, 0%, 10%)';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+        }
+        
+        ctx.restore();
+        
+        // Draw bottom edge (darker for background clouds)
+        const bottomTraceY = bottomY + 1;
+        if (this.isBackground) {
+            ctx.strokeStyle = 'hsla(200, 30%, 50%, 1)';
+            ctx.lineWidth = 3;
+        } else if (this.isForeground && !this.isRaining) {
+            ctx.strokeStyle = 'hsl(200, 85%, 85%)';
+            ctx.lineWidth = 7;
+        } else if (this.isForeground && this.isRaining) {
+            ctx.strokeStyle = 'hsla(200, 30%, 20%, 1)';
+            ctx.lineWidth = 7;
+        } else {
+            ctx.strokeStyle = 'hsla(200, 80%, 80%, 1)';
+            ctx.lineWidth = 5;
+        }
+        
+        ctx.beginPath();
+        for (let i = 0; i < puffs.length; i++) {
+            const puff = puffs[i];
+            const dy = bottomY - puff.y;
+            if (dy < puff.r && dy > -puff.r) {
+                const ratio = Math.min(1, Math.max(-1, dy / puff.r));
+                const angle = Math.acos(ratio);
+                const extend = puff.r * 0.1;
+                const leftX = puff.x - puff.r * Math.sin(angle) - (i === 0 ? extend : 0);
+                const rightX = puff.x + puff.r * Math.sin(angle) + (i === puffs.length - 1 ? extend : 0);
+                ctx.moveTo(leftX, bottomTraceY);
+                ctx.lineTo(rightX, bottomTraceY);
+            }
+        }
+        ctx.stroke();
+        
+        // Store the offset for drawing
+        this.offsetX = size / 2;
+        this.offsetY = size / 2;
+    }
+    update(dt) {
+        // Move cloud from right to left
+        this.x -= this.speed * dt;
+    }
+    draw() {
+        // Draw the pre-rendered cloud image
+        const cx = this.x * cScale;
+        const cy = canvas.height - this.y * cScale;
+        c.drawImage(this.offscreenCanvas, cx - this.offsetX, cy - this.offsetY);
+        
+        // Draw text only on initial foreground cloud during its first pass
+        if (this.isForeground && initialForegroundCloudTextVisible) {
+            const r = this.radius * cScale;
+            c.fillStyle = 'hsl(200, 60%, 30%)';
+            c.font = `bold ${r * 0.4}px monospace`;
+            c.textAlign = 'center';
+            c.textBaseline = 'middle';
+            c.fillText("B 0 I D S", cx, cy + r * 0.25);
+        }
+    }
+}
+
+//  MOVING AIRPLANE CLASS ---------------------------------------------------------------------
+class AIRPLANE {
+    constructor(y, speed, size, respawnDelay, passNumber) {
+        // On first four passes, try to spawn above the topmost cloud
+        if (passNumber <= 4) {
+            this.y = this.pickAltitudeAboveClouds();
+        } else {
+            // Randomize vertical position avoiding cloud elevations
+            this.y = this.pickSafeAltitude();
+        }
+        this.baseY = this.y; // Store initial y for loop calculation
+        this.speed = speed; // Units per second
+        this.baseSpeed = speed; // Store base speed
+        this.size = size; // Width/height of the cloud
+        this.radius = size * 0.7; // Effective radius for collision detection
+        this.respawnDelay = respawnDelay; // Seconds to wait before respawning
+        this.isWaiting = false;
+        this.waitTimer = 0;
+        this.propellerAngle = 0; // For spinning propeller effect
+        this.angle = 0; // Current orientation angle
+        this.isUpsideDown = false; // Whether plane is flying upside-down
+        
+        // Determine if plane should be upside-down (only if in top 30% and NOT in first four passes)
+        const topThreshold = simHeight * 0.7; // 30% from top
+        if (passNumber > 4 && this.y > topThreshold) {
+            this.isUpsideDown = Math.random() < 0.5; // 50% chance
+            if (this.isUpsideDown) {
+                this.angle = Math.PI; // Start upside-down
+            }
+        }
+        
+        // Direction: 1 = left to right, -1 = right to left
+        // Pass 1: right to left, Pass 2: left to right, Pass 3: right to left, Pass 4: left to right
+        if (passNumber === 1) {
+            this.direction = -1;
+            this.x = simWidth + size; // Start from right
+        } else if (passNumber === 2) {
+            this.direction = 1;
+            this.x = -size; // Start from left
+        } else if (passNumber === 3) {
+            this.direction = -1;
+            this.x = simWidth + size; // Start from right
+        } else if (passNumber === 4) {
+            this.direction = 1;
+            this.x = -size; // Start from left
+        } else {
+            this.direction = 1;
+            this.x = -size; // Start from left
+        }
+        
+        // Set image based on direction and upside-down state
+        if (this.isUpsideDown) {
+            // Upside-down: use reverse image for right-going, normal for left-going
+            this.image = this.direction === 1 ? kittyPlaneReverseImage : kittyPlaneImage;
+        } else {
+            // Right-side up: use normal image for right-going, reverse for left-going
+            this.image = this.direction === 1 ? kittyPlaneImage : kittyPlaneReverseImage;
+        }
+        
+        // Loop-the-loop parameters (clothoid trajectory)
+        this.loopStartX = 0.4 * simWidth; // Where the loop begins
+        this.loopRadius = 0.35 * simHeight; // Radius of the loop
+        this.loopPhase = 0; // Current phase through the loop (0 = before, 1-2 = during, 3+ = after)
+        this.pathDistance = 0; // Total distance traveled
+        this.loopProgress = 0; // Progress through the loop (0 to 1)
+        this.willDoLoop = false; // Whether this pass will do a loop
+        this.loopDecided = false; // Whether we've decided about the loop yet
+        
+        // Propeller trails
+        this.propTrail1 = []; // Trail for first blade tip
+        this.propTrail2 = []; // Trail for second blade tip
+        this.maxTrailLength = 120; // Number of trail points to keep
+        
+        // Banner properties
+        this.passNumber = passNumber; // Track which pass we're on (1, 2, 3, 4, etc.)
+        this.bannerWavePhase = 0; // Animation phase for banner waving
+        this.firstPassBannerText = "Fly with me to Cutetopia";
+        this.secondPassBannerText = "Double-click to add clouds";
+        this.thirdPassBannerText = "Right-click to remove";
+        this.fourthPassBannerText = "Spacebar to PARTY!";
+        
+        // Set banner text based on pass number
+        if (this.passNumber === 1) {
+            this.bannerText = this.firstPassBannerText;
+        } else if (this.passNumber === 2) {
+            this.bannerText = this.secondPassBannerText;
+        } else if (this.passNumber === 3) {
+            this.bannerText = this.thirdPassBannerText;
+        } else if (this.passNumber === 4) {
+            this.bannerText = this.fourthPassBannerText;
+        } else {
+            this.bannerText = ""; // No banner after fourth pass
+        }
+    }
+    pickAltitudeAboveClouds() {
+        const minY = simHeight * 0.05;
+        const maxY = simHeight * 0.9;
+        const buffer = 0.15;
+        
+        if (Clouds.length === 0) {
+            // No clouds, use regular method
+            return this.pickSafeAltitude();
+        }
+        
+        // Find the highest cloud (largest y value)
+        let highestCloudBottom = -Infinity;
+        for (let cloud of Clouds) {
+            const cloudBottom = cloud.y + cloud.radius * 0.5;
+            if (cloudBottom > highestCloudBottom) {
+                highestCloudBottom = cloudBottom;
+            }
+        }
+        
+        // Try to spawn above the highest cloud
+        const targetY = highestCloudBottom + buffer;
+        
+        // Check if there's enough room above
+        if (targetY + 0.1 <= maxY) {
+            // There's room, pick a random position above the highest cloud
+            return targetY + Math.random() * (maxY - targetY);
+        } else {
+            // Not enough room above, use regular method
+            return this.pickSafeAltitude();
+        }
+    }
+    pickSafeAltitude() {
+        const minY = simHeight * 0.05;
+        const maxY = simHeight * 0.9;
+        const buffer = 0.15; // Extra spacing buffer around clouds
+        // Try to find a safe altitude (max 20 attempts)
+        for (let attempt = 0; attempt < 20; attempt++) {
+            const candidateY = minY + Math.random() * (maxY - minY);
+            let isSafe = true;
+            // Check against all cloud Clouds
+            for (let cloud of Clouds) {
+                // In simulation coordinates: higher y = higher up on screen
+                const cloudBottom = cloud.y + cloud.radius * 0.5; // Flat bottom (crop line)
+                const cloudTop = cloud.y - cloud.radius * 1.2; // Approximate top below center
+                
+                // Cloud occupies the vertical range from cloudTop (lower y) to cloudBottom (higher y)
+                const effectiveTop = cloudTop - buffer; // Extend safe zone below cloud
+                const effectiveBottom = cloudBottom + buffer; // Extend safe zone above cloud
+                
+                // Check if candidate altitude conflicts with this cloud
+                // Plane is unsafe if it's between the cloud's top and bottom
+                if (candidateY >= effectiveTop && candidateY <= effectiveBottom) {
+                    isSafe = false;
+                    break;
+                }
+            }
+            if (isSafe) {
+                return candidateY;
+            }
+        }
+        // If no safe altitude found after attempts, return a default safe position
+        return simHeight * 0.2; // Low altitude as fallback
+    }
+    update(dt) {
+        if (this.isWaiting) {
+            // Count down the respawn timer
+            this.waitTimer -= dt;
+            
+            if (this.waitTimer <= 0) {
+                // Increment pass number
+                this.passNumber++;
+                
+                // For first four passes: set specific directions for each pass
+                if (this.passNumber <= 4) {
+                    if (this.passNumber === 1) {
+                        this.direction = -1;
+                        this.x = simWidth + this.size; // Start from right
+                    } else if (this.passNumber === 2) {
+                        this.direction = 1;
+                        this.x = -this.size; // Start from left
+                    } else if (this.passNumber === 3) {
+                        this.direction = -1;
+                        this.x = simWidth + this.size; // Start from right
+                    } else if (this.passNumber === 4) {
+                        this.direction = 1;
+                        this.x = -this.size; // Start from left
+                    }
+                    this.y = this.pickAltitudeAboveClouds();
+                    this.isUpsideDown = false;
+                } else {
+                    // After four passes: alternate directions and allow upside-down
+                    this.direction *= -1;
+                    if (this.direction === 1) {
+                        this.x = -this.size; // Start from left
+                    } else {
+                        this.x = simWidth + this.size; // Start from right
+                    }
+                    this.y = this.pickSafeAltitude();
+                    
+                    // Determine if plane should be upside-down (only if in top 30%)
+                    const topThreshold = simHeight * 0.7;
+                    this.isUpsideDown = false;
+                    if (this.y > topThreshold) {
+                        this.isUpsideDown = Math.random() < 0.5;
+                    }
+                }
+                
+                this.baseY = this.y;
+                
+                // Set image based on direction and upside-down state
+                if (this.isUpsideDown) {
+                    this.image = this.direction === 1 ? kittyPlaneReverseImage : kittyPlaneImage;
+                } else {
+                    this.image = this.direction === 1 ? kittyPlaneImage : kittyPlaneReverseImage;
+                }
+                
+                // Set banner text based on pass number
+                if (this.passNumber === 1) {
+                    this.bannerText = this.firstPassBannerText;
+                } else if (this.passNumber === 2) {
+                    this.bannerText = this.secondPassBannerText;
+                } else if (this.passNumber === 3) {
+                    this.bannerText = this.thirdPassBannerText;
+                } else if (this.passNumber === 4) {
+                    this.bannerText = this.fourthPassBannerText;
+                } else {
+                    this.bannerText = ""; // No banner after fourth pass
+                }
+                
+                // Reset loop parameters
+                this.pathDistance = 0;
+                this.loopPhase = 0;
+                this.loopProgress = 0;
+                this.angle = this.isUpsideDown ? Math.PI : 0;
+                this.loopDecided = false;
+                this.willDoLoop = false;
+                this.isWaiting = false;
+                
+                // Clear propeller trails
+                this.propTrail1 = [];
+                this.propTrail2 = [];
+            }
+        } else {
+            // Check if we've reached the loop start point
+            const loopTrigger = this.direction === 1 ? 
+                this.x >= this.loopStartX : 
+                this.x <= (simWidth - this.loopStartX);
+                
+            if (this.loopPhase === 0 && loopTrigger && !this.isUpsideDown) {
+                // Decide whether to do a loop (50% chance) - only if not upside-down
+                // and only if plane is within bottom 25% of screen
+                // No loops during first four passes
+                const isInBottomQuarter = this.baseY <= simHeight * 0.35;
+                
+                if (!this.loopDecided && isInBottomQuarter && this.passNumber > 4) {
+                    this.willDoLoop = Math.random() < 0.5;
+                    this.loopDecided = true;
+                }
+                
+                if (this.willDoLoop) {
+                    this.loopPhase = 1;
+                    this.loopProgress = 0;
+                } else {
+                    // Skip the loop, go straight to phase 2
+                    this.loopPhase = 2;
+                }
+            }
+            
+            if (this.loopPhase === 0) {
+                // Before the loop - straight flight
+                this.x += this.speed * dt * this.direction;
+                this.y = this.baseY;
+                this.angle = this.isUpsideDown ? Math.PI : 0;
+                this.speed = this.baseSpeed;  
+            } else if (this.loopPhase === 1) {
+                // During the loop - follow circular trajectory
+                const loopCircumference = 2 * Math.PI * this.loopRadius;
+                const progressSpeed = this.baseSpeed / loopCircumference;
+                
+                // Advance through the loop based on time
+                this.loopProgress += progressSpeed * dt;
+                
+                if (this.loopProgress >= 1.0) {
+                    // Loop complete
+                    this.loopPhase = 2;
+                    this.loopProgress = 0;
+                    this.y = this.baseY;
+                    this.angle = 0;
+                    this.speed = this.baseSpeed;
+                    // Continue moving forward after loop
+                    this.x += this.speed * dt * this.direction;
+                } else {
+                    // Smooth continuous trajectory
+                    const p = this.loopProgress;
+                    
+                    // Smooth ease-in/ease-out using cosine
+                    const easeProgress = 0.5 - 0.5 * Math.cos(p * Math.PI);
+                    
+                    // Full 2π rotation (base theta is always positive)
+                    const theta = easeProgress * 2 * Math.PI;
+                    
+                    // Smooth speed variation
+                    const speedMult = 0.85 + 0.15 * Math.sin(theta * 0.5);
+                    this.speed = this.baseSpeed * speedMult;
+                    
+                    // Move along the circular path - velocity is tangent to the circle
+                    // X movement direction depends on flight direction
+                    this.x += this.speed * Math.cos(theta) * dt * this.direction;
+                    // Y movement is always upward for the loop
+                    this.y += this.speed * Math.sin(theta) * dt;
+                    
+                    // Plane angle follows the tangent (flip for reverse direction)
+                    this.angle = theta * this.direction;
+                }
+            } else {
+                // After the loop - straight flight
+                this.x += this.speed * dt * this.direction;
+                this.y = this.baseY;
+                this.angle = this.isUpsideDown ? Math.PI : 0;
+                this.speed = this.baseSpeed;
+            }
+            
+            // Check if passed far beyond the edge (simWidth distance)
+            const passedEdge = this.direction === 1 ? 
+                this.x - this.size > simWidth * 2 : 
+                this.x + this.size < -simWidth;
+            if (passedEdge) {
+                // Start waiting timer (no delay for first four passes)
+                this.isWaiting = true;
+                this.waitTimer = this.passNumber < 4 ? 0 : this.respawnDelay;
+            }
+        }
+        // Spin the propeller (faster when going faster)
+        this.propellerAngle += dt * 20 * (this.speed / this.baseSpeed);
+        
+        // Animate banner wave for first four passes
+        if (this.passNumber <= 4) {
+            this.bannerWavePhase += dt * 3;
+        }
+        
+        // Store propeller tip positions for trails (in world coordinates)
+        // Continue storing even when off-screen to let trails fade naturally
+        if (!this.isWaiting) {
+            // Calculate propeller tip positions in world space
+            const drawSize = this.size;
+            let propX, propY;
+            if (this.isUpsideDown) {
+                propX = this.direction === 1 ? -drawSize * 0.452 : drawSize * 0.452;
+                propY = -drawSize * 0.125; // Negative because rotation system
+            } else {
+                propX = this.direction === 1 ? drawSize * 0.452 : -drawSize * 0.452;
+                propY = -drawSize * 0.125; // Negative because rotation system
+            }
+            const propLength = drawSize * 0.25;
+            
+            // Transform propeller tips to world coordinates
+            const cos = Math.cos(this.angle);
+            const sin = Math.sin(this.angle);
+            
+            // Tip 1 (vertical blade)
+            const tip1LocalX = propX;
+            const tip1LocalY = propY + Math.cos(this.propellerAngle) * propLength;
+            const tip1WorldX = this.x + (tip1LocalX * cos - tip1LocalY * sin);
+            const tip1WorldY = this.y + (tip1LocalX * sin + tip1LocalY * cos);
+            
+            // Tip 2 (second blade, 90 degrees out of phase)
+            const tip2LocalX = propX;
+            const tip2LocalY = propY + Math.cos(this.propellerAngle + Math.PI) * propLength;
+            const tip2WorldX = this.x + (tip2LocalX * cos - tip2LocalY * sin);
+            const tip2WorldY = this.y + (tip2LocalX * sin + tip2LocalY * cos);
+            
+            // Add to trails
+            this.propTrail1.push({ x: tip1WorldX, y: tip1WorldY });
+            this.propTrail2.push({ x: tip2WorldX, y: tip2WorldY });
+            
+            // Limit trail length
+            if (this.propTrail1.length > this.maxTrailLength) {
+                this.propTrail1.shift();
+            }
+            if (this.propTrail2.length > this.maxTrailLength) {
+                this.propTrail2.shift();
+            }
+        }
+    }
+    contains(x, y) {
+        // Use rectangular collision for the moving planes
+        return x >= this.x - this.size/2 && x <= this.x + this.size/2 &&
+                y >= this.y - this.size/2 && y <= this.y + this.size/2;
+    }
+    drawBanner(drawSize) {
+        // Banner parameters
+        const bannerLength = drawSize * 2.8; // Length of the banner
+        const bannerHeight = drawSize * 0.35; // Height of the banner
+        const towLineLength = drawSize * 0.8; // Distance from plane to banner
+        const segments = 30; // Number of segments for wave effect
+        
+        // Calculate attachment point on plane (tail)
+        const attachX = this.x * cScale - drawSize * 0.45 * this.direction;
+        const attachY = canvas.height - this.y * cScale + bannerHeight * 0.5;
+        
+        c.save();
+        
+        // Draw main tow line to Y junction point
+        c.strokeStyle = 'black';
+        c.lineWidth = 1.0;
+        c.beginPath();
+        
+        // Start from plane attachment point
+        c.moveTo(attachX, attachY);
+        
+        // Draw wavy line to Y junction (80% of tow line length)
+        const yJunctionRatio = 0.8;
+        let yJunctionX, yJunctionY;
+        for (let i = 0; i <= 10; i++) {
+            const t = i / 10;
+            const x = attachX - (towLineLength * yJunctionRatio) * t * this.direction;
+            const waveAmp = drawSize * 0.04 * t;
+            const y = attachY + Math.sin(this.bannerWavePhase + t * Math.PI * 2) * waveAmp;
+            c.lineTo(x, y);
+            if (i === 10) {
+                yJunctionX = x;
+                yJunctionY = y;
+            }
+        }
+        c.stroke();
+        
+        // Banner start position (right after tow line)
+        const bannerStartX = attachX - towLineLength * this.direction;
+        const bannerStartY = attachY;
+        
+        // Draw banner segments with wave
+        const points = [];
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const x = bannerStartX - (bannerLength * t) * this.direction;
+            // Increased wave frequency and amplitude that grows toward the end (flapping effect)
+            const waveAmp = drawSize * 0.12 * (0.3 + 0.7 * t * t); // More wave at the end
+            const waveFreq = 4; // Waves along the banner
+            const y = bannerStartY + Math.sin(this.bannerWavePhase - t * Math.PI * waveFreq) * waveAmp;
+            
+            // Calculate angle for this segment (tangent to the wave)
+            const prevT = Math.max(t - 0.01, 0);
+            const prevWaveAmp = drawSize * 0.12 * (0.3 + 0.7 * prevT * prevT);
+            const prevY = bannerStartY + Math.sin(this.bannerWavePhase - prevT * Math.PI * waveFreq) * prevWaveAmp;
+            const dy = y - prevY;
+            const dx = (bannerLength * 0.01);
+            const waveAngle = Math.atan2(dy, dx);
+            
+            // Clamp angle to prevent extreme rotations and blend from front to back
+            const maxAngle = Math.PI / 6; // Max 30 degrees
+            const clampedAngle = Math.max(-maxAngle, Math.min(maxAngle, waveAngle));
+            // Negate angle for left-traveling plane to match direction
+            const angle = clampedAngle * (t * t * t) * this.direction;
+            
+            points.push({x, y, t, angle});
+        }
+        
+        // Get the actual top and bottom corners from the first banner point
+        const firstPoint = points[0];
+        const offsetY = bannerHeight / 2;
+        const topCornerX = firstPoint.x - Math.sin(firstPoint.angle) * offsetY;
+        const topCornerY = firstPoint.y - Math.cos(firstPoint.angle) * offsetY;
+        const bottomCornerX = firstPoint.x + Math.sin(firstPoint.angle) * offsetY;
+        const bottomCornerY = firstPoint.y + Math.cos(firstPoint.angle) * offsetY;
+        
+        // Draw Y-yoke lines from junction to banner corners
+        c.strokeStyle = 'black';
+        c.lineWidth = 1.0;
+        
+        // Top yoke line
+        c.beginPath();
+        c.moveTo(yJunctionX, yJunctionY);
+        c.lineTo(topCornerX, topCornerY);
+        c.stroke();
+        
+        // Bottom yoke line
+        c.beginPath();
+        c.moveTo(yJunctionX, yJunctionY);
+        c.lineTo(bottomCornerX, bottomCornerY);
+        c.stroke();
+        
+        // Draw banner background (white with slight transparency)
+        c.fillStyle = 'hsla(0, 0%, 100%, 0.9)';
+        c.strokeStyle = 'hsl(0, 0%, 20%)';
+        c.lineWidth = 3;
+        c.beginPath();
+        
+        // Top edge
+        for (let i = 0; i < points.length; i++) {
+            const p = points[i];
+            const offsetY = bannerHeight / 2;
+            const topX = p.x - Math.sin(p.angle) * offsetY;
+            const topY = p.y - Math.cos(p.angle) * offsetY;
+            
+            if (i === 0) {
+                c.moveTo(topX, topY);
+            } else {
+                c.lineTo(topX, topY);
+            }
+        }
+        
+        // Bottom edge (reverse)
+        for (let i = points.length - 1; i >= 0; i--) {
+            const p = points[i];
+            const offsetY = bannerHeight / 2;
+            const bottomX = p.x + Math.sin(p.angle) * offsetY;
+            const bottomY = p.y + Math.cos(p.angle) * offsetY;
+            c.lineTo(bottomX, bottomY);
+        }
+        
+        c.closePath();
+        c.fill();
+        c.stroke();
+        
+        // Draw text on banner - warp each character along the banner curve
+        c.fillStyle = 'hsl(320, 90%, 50%)';
+        c.font = `bold ${drawSize * 0.2}px comic sans ms, sans-serif`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        
+        // Calculate total text width to center it on banner
+        const totalTextWidth = c.measureText(this.bannerText).width;
+        const startOffset = 0.5 - (totalTextWidth / (bannerLength * 2)); // Center on banner
+        
+        // Draw each character individually along the banner curve
+        let currentOffset = startOffset;
+        for (let charIndex = 0; charIndex < this.bannerText.length; charIndex++) {
+            const char = this.bannerText[charIndex];
+            const charWidth = c.measureText(char).width;
+            
+            // Find position along banner (as fraction from 0 to 1)
+            const rawT = currentOffset + (charWidth / (bannerLength * 2));
+            // Reverse t based on direction so text always reads correctly
+            const t = this.direction === -1 ? rawT : (1 - rawT);
+            
+            // Make sure we're within banner bounds
+            if (t >= 0 && t <= 1) {
+                // Interpolate position and angle from points array
+                const segmentIndex = Math.floor(t * (points.length - 1));
+                const segmentT = (t * (points.length - 1)) - segmentIndex;
+                const p1 = points[segmentIndex];
+                const p2 = points[Math.min(segmentIndex + 1, points.length - 1)];
+                
+                // Interpolate position
+                const charX = p1.x + (p2.x - p1.x) * segmentT;
+                const charY = p1.y + (p2.y - p1.y) * segmentT;
+                const charAngle = p1.angle + (p2.angle - p1.angle) * segmentT;
+                
+                // Draw the character
+                c.save();
+                c.translate(charX, charY);
+                c.rotate(-charAngle); // Rotate to follow banner (same for both directions)
+                c.fillText(char, 0, drawSize * 0.02); // Offset down slightly
+                c.restore();
+            }
+            
+            // Move to next character position
+            currentOffset += charWidth / bannerLength;
+        }
+        
+        c.restore();
+    }
+    draw() {
+        // Only draw the airplane if it's visible or nearby
+        if (this.image && this.image.complete && !this.isWaiting) {
+            const drawSize = this.size * cScale;
+            const centerX = this.x * cScale;
+            const centerY = canvas.height - this.y * cScale;
+            
+            // Draw banner on first four passes
+            if (this.passNumber <= 4) {
+                this.drawBanner(drawSize);
+            }
+            
+            // Draw propeller trail 1 behind the airplane
+            if (this.propTrail1.length > 1) {
+                c.lineCap = 'round';
+                c.lineJoin = 'round';
+                for (let i = 0; i < this.propTrail1.length - 1; i++) {
+                    const alpha = (i / this.propTrail1.length) * 0.2;
+                    //const width = Math.min(10, 5 / (i / this.propTrail1.length));
+                    const maxWidth = Math.min(10, 3 / (i / this.propTrail1.length));
+                    const point1 = this.propTrail1[i];
+                    const point2 = this.propTrail1[i + 1];
+                    c.strokeStyle = `hsla(200, 15%, 50%, ${alpha})`;
+                    c.lineWidth = maxWidth;
+                    c.beginPath();
+                    c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale + maxWidth);
+                    c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale - maxWidth);
+                    c.stroke();
+                }
+            }
+
+            // Translate to airplane center and rotate
+            c.save();
+            c.translate(centerX, centerY);
+            c.rotate(-this.angle); // Negative because canvas Y is inverted
+
+            // Draw the airplane image centered at origin
+            c.drawImage(
+                this.image,
+                -drawSize / 2,
+                -drawSize / 2,
+                drawSize,
+                drawSize
+            );
+            
+            // Draw spinning propeller effect
+            let propX, propY;
+            if (this.isUpsideDown) {
+                // When upside-down, flip the horizontal position
+                propX = this.direction === 1 ? -drawSize * 0.452 : drawSize * 0.452;
+                propY = drawSize * 0.125; // Keep same vertical offset (rotation handles the flip)
+            } else {
+                propX = this.direction === 1 ? drawSize * 0.452 : -drawSize * 0.452;
+                propY = drawSize * 0.125; // Slight vertical offset
+            }
+            const propLength = drawSize * 0.25;
+            // Calculate apparent width based on rotation angle (3D effect)
+            const width1 = Math.cos(this.propellerAngle) * propLength;
+            const width2 = Math.cos(this.propellerAngle + Math.PI / 2) * propLength;
+            // Draw propeller blades with varying width (simulating 3D rotation)
+            c.strokeStyle = 'hsla(200, 90%, 70%, 0.6)';
+            c.lineWidth = 6;
+            c.lineCap = 'round';
+            // Vertical blade (appears to change width as it rotates)
+            c.beginPath();
+            c.moveTo(propX, propY - width1);
+            c.lineTo(propX, propY + width1);
+            c.stroke();
+            // Second blade 90 degrees out of phase
+            c.beginPath();
+            c.moveTo(propX, propY - width2);
+            c.lineTo(propX, propY + width2);
+            c.stroke();
+            
+            c.restore();
+
+            // Draw propeller trail 2 in front of airplane
+            if (this.propTrail1.length > 1) {
+                c.lineCap = 'round';
+                c.lineJoin = 'round';
+                let width;
+                // Draw 
+                for (let i = 0; i < this.propTrail2.length - 1; i++) {
+                    const alpha = (i / this.propTrail2.length) * 0.2;
+                    //const width = Math.min(10, 50 / (i / this.propTrail1.length));
+                    //width += 10;
+                    const maxWidth = Math.min(10, 5 / (i / this.propTrail1.length));
+                    const point1 = this.propTrail2[i];
+                    const point2 = this.propTrail2[i + 1];
+                    c.strokeStyle = `hsla(200, 20%, 70%, ${alpha})`;
+                    c.lineWidth = maxWidth;
+                    c.beginPath();
+                    c.moveTo(point1.x * cScale, canvas.height - point1.y * cScale + maxWidth);
+                    c.lineTo(point2.x * cScale, canvas.height - point2.y * cScale - maxWidth);
+                    c.stroke();
+                }
+            }
+        }
+    }
+}
+
+//  MAKE CLOUDS  ---------------------------------------------------------------------
+function findSafeCloudAltitude(isBackground, existingClouds) {
+    // Both cloud types spawn in upper 75% of screen (higher y values)
+    const minY = simHeight * 0.25;
+    const maxY = isBackground ? simHeight * 0.9 : simHeight * 0.85;
+    const minSeparation = 0.3; // Minimum vertical separation between clouds
+    
+    // Try to find a safe altitude (max 20 attempts)
+    for (let attempt = 0; attempt < 20; attempt++) {
+        const candidateY = minY + Math.random() * (maxY - minY);
+        let isSafe = true;
+        
+        // Check against all existing clouds
+        for (let cloud of existingClouds) {
+            if (Math.abs(cloud.y - candidateY) < minSeparation) {
+                isSafe = false;
+                break;
+            }
+        }
+        
+        if (isSafe) {
+            return candidateY;
+        }
+    }
+    
+    // If no safe position found, return a random position
+    return minY + Math.random() * (maxY - minY);
+}
+
+function makeBackgroundClouds() {
+    BackgroundClouds = [];
+    const isBackground = true;
+    const isForeGround = false;
+    const raining = false;
+    // Spawn in upper 75% of screen (25% to 90% height)
+    BackgroundClouds.push(new CLOUD(0.3 * simWidth, simHeight * (0.25 + Math.random() * 0.65), 
+        isBackground, isForeGround, raining));
+    BackgroundClouds.push(new CLOUD(0.6 * simWidth, simHeight * (0.25 + Math.random() * 0.65), 
+        isBackground, isForeGround, raining));
+    BackgroundClouds.push(new CLOUD(0.85 * simWidth, simHeight * (0.25 + Math.random() * 0.65), 
+        isBackground, isForeGround, raining));
+}
+
+function makeForegroundClouds() {
+    ForegroundCloud = [];
+    const isBackground = false;
+    const isForeGround = true;
+    const raining = false;
+
+    ForegroundCloud.push(new CLOUD(
+        0.5 * simWidth, simHeight * (0.25 + Math.random() * 0.6), 
+        isBackground, isForeGround, raining));
+}
+
+function makeInitialClouds() {
+    Clouds = [];
+    const isBackground = false;
+    const isForeGround = false;
+    const raining = false;
+    Clouds.push(new CLOUD(0.8 * simWidth, 0.45 * simHeight, isBackground, isForeGround, raining));
+    Clouds.push(new CLOUD(0.25 * simWidth, 0.65 * simHeight, isBackground, isForeGround, raining));
+}    
+
+//  MAKE AIRPLANE  ---------------------------------------------------------------------
+let initialForegroundCloudTextVisible = true; // Track if initial cloud text should show
+function makeAirplane() {
+    Airplane = [];
+    const y = 0.3 * simHeight;
+    const speed = 0.6;
+    const size = 0.3;
+    const respawnDelay = 30.0;
+    const passNumber = 1; // Start with pass 1
+    Airplane.push(new AIRPLANE(y, speed, size, respawnDelay, passNumber));
+} 
+
+//  BOID CLASS ---------------------------------------------------------------------
+class BOID {
+    constructor(pos, vel, hue, whiteBoid, blackBoid) {
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.hue = hue;
+        this.saturation = 0;
+        this.lightness = 0;
+        this.manualHue = false; // Flag to control if hue is manually set
+        this.manualLightness = false; // Flag to control if lightness is manually set
+        this.manualSaturation = false; // Flag to control if saturation is manually set
+        this.radius = boidRadius;
+        this.angle = 0;
+        this.hueCounter = 70;
+        this.speedAdjust = 0;
+        this.whiteBoid = whiteBoid;
+        this.blackBoid = blackBoid;
+        this.arrow = true;
+        this.circle = false;
+        this.airfoil = false;
+        this.flashing = false;
+        this.flashTimer = 0; // Timer for flash duration
+        this.flashDuration = 0.1; // How long the flash lasts (100ms)
+        this.flashCooldown = 0; // Cooldown timer to prevent immediate re-flashing
+        this.flashCooldownDuration = 0.3; // Must wait this long before flashing again (300ms)
+        this.lastFlashCycle = -1; // Track which cycle last triggered this boid
+        this.tail = [];
+        this.tailStartIndex = 0; // Ring buffer start index
+        // Cached color strings to avoid garbage collection
+        this.cachedFillStyle = '';
+        this.cachedStrokeStyle = '';
+        this.cachedTailStyle = '';
+        this.lastHue = -1;
+        this.lastSaturation = -1;
+        this.lastLightness = -1;
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+    simulate() {
+        // Enforce speed limit
+        if (this.vel.length() > boidProps.speedLimit) {
+            this.vel.normalize();
+            this.vel.scale(boidProps.speedLimit);
+        }
+        // Update position based on velocity
+        this.pos.x += this.vel.x * deltaT;
+        this.pos.y += this.vel.y * deltaT;
+        // Maintain tail (avoid array operations to reduce garbage collection)
+        if (boidProps.doTails == true && boidProps.tailLength > 0) {
+            this.tail.push([this.pos.x, this.pos.y]);
+            // Remove old elements from front to keep most recent at end
+            if (this.tail.length > boidProps.tailLength) {
+                this.tail.splice(0, this.tail.length - boidProps.tailLength);
+            }
+        }
+    }
+    draw() {
+        // scale size based on velocity
+        const radScale = this.radius * cScale;
+        this.speedAdjust = this.vel.length() / boidProps.speedLimit;
+
+        // arrow dimensions ----------
+        const arrowLength = Math.max((this.speedAdjust) * 1.5 * radScale, 1 * radScale);
+        const arrowWidth = Math.min((1/this.speedAdjust) * 0.8 * radScale, 1.5 * radScale);
+        const arrowDent = Math.min((1/this.speedAdjust) * 1.0 * radScale, 0.7 * radScale);
+
+        // Update hue counter for cycling after making boids ----------
+        if (boidCountLocked) {
+            //this.hueCounter += 0.01;
+            this.hueCounter += boidProps.hueTicker;
+            if (this.hueCounter >= 360) {
+                this.hueCounter = 0;
+            }
+        }
+
+        // code hsl based on speed and height ----------
+        // Only auto-calculate hue if not manually controlled
+        if (!this.manualHue) {
+            this.hue = 360 - this.speedAdjust * boidProps.hueSensitivity + this.hueCounter;
+        } 
+        // Only auto-calculate saturation if not manually controlled
+        if (!this.manualSaturation) {
+            this.saturation = 85;
+        }
+        // Only auto-calculate lightness if not manually controlled
+        if (!this.manualLightness) {
+            this.lightness = 35 + (1 - (this.pos.y / simHeight)) * 35;
+        }
+        
+        // Cache color strings if they've changed (reduces garbage collection)
+        const hueRounded = Math.round(this.hue);
+        const satRounded = Math.round(this.saturation);
+        const lightRounded = Math.round(this.lightness);
+        if (hueRounded !== this.lastHue || satRounded !== this.lastSaturation || lightRounded !== this.lastLightness) {
+            this.cachedFillStyle = `hsl(${hueRounded}, ${satRounded}%, ${lightRounded}%)`;
+            this.cachedStrokeStyle = `hsl(${hueRounded - 70}, ${satRounded}%, ${Math.round(lightRounded * 0.8)}%)`;
+            this.cachedTailStyle = `hsla(${hueRounded}, ${satRounded}%, ${lightRounded}%, 0.5)`;
+            this.lastHue = hueRounded;
+            this.lastSaturation = satRounded;
+            this.lastLightness = lightRounded;
+        } 
+
+        // Draw tail ----------
+        if (boidProps.doTails == true && boidProps.tailLength > 0 && this.tail.length > 0) {
+            c.beginPath();
+            c.moveTo(cX({x: this.tail[0][0]}), cY({y: this.tail[0][1]}));
+            for (var point of this.tail) {
+                c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
+                
+            }
+            
+            // Apply tail color based on tailColorMode
+            if (tailColorMode === 0) {
+                // Black tail
+                c.strokeStyle = 'hsla(0, 0%, 10%, 0.3)';
+            } else if (tailColorMode === 1) {
+                // White tail
+                c.strokeStyle = 'hsla(0, 0%, 95%, 0.5)';
+            } else if (tailColorMode === 2) {
+                // Selected hue tail (use cached)
+                c.strokeStyle = this.cachedTailStyle;
+            } else if (tailColorMode === 3) {
+                // Alternate hue tail
+                c.strokeStyle = `hsla(${Math.round(this.hue - 70)}, ${Math.round(this.saturation)}%, ${Math.round(this.lightness)}%, 0.5)`;
+            }
+
+            //c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
+            // line width scales with boid size and inversely with speed, and with tail width slider
+            c.lineWidth = (0.3 + (1 - this.speedAdjust)) * radScale * 0.5 * boidProps.tailWidth;
+            // Override for special boids
+            if (this.whiteBoid) {
+                c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
+                c.lineWidth = 4 * boidProps.tailWidth;
+            } else if (this.blackBoid && !this.flashing) {
+                c.strokeStyle = `hsla(0, 0%, 5%, 0.5)`;
+                c.lineWidth = 4 * boidProps.tailWidth;
+            } else if (this.flashing && !this.blackBoid) {
+                c.strokeStyle = `hsla(0, 0%, ${this.lightness * 1.5}%, 1.0)`;
+                c.lineWidth = (1.0 + (1 - this.speedAdjust) * 1.0) * boidProps.tailWidth;
+            } else if (this.flashing && this.blackBoid) {
+                c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
+                c.lineWidth = (1.0 + (1 - this.speedAdjust) * 1.0) * boidProps.tailWidth;
+            }
+            
+            c.lineJoin = 'butt';
+            c.lineCap = 'round';
+            c.stroke();
+        }
+
+        // Draw arrow boid --------------------------------------------
+        if (this.arrow && !this.circle && !this.airfoil) {
+            const angle = Math.atan2(this.vel.y, this.vel.x);
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+            c.rotate(-angle); // for arrows
+            
+            // fill body ----------
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-arrowLength, -arrowWidth / 2);
+            c.lineTo(-arrowLength + arrowDent, 0);
+            c.lineTo(-arrowLength, arrowWidth / 2);
+            c.closePath();
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.fillStyle = this.cachedFillStyle;
+            } else if (this.whiteBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+            } else if (this.blackBoid && !this.flashing) {
+                c.fillStyle = 'hsl(0, 0%, 10%)';
+            } else if (this.flashing && !this.blackBoid) {
+                c.fillStyle = `hsl(${Math.round(this.hue + 70)}, ${Math.round(this.saturation)}%, ${Math.round(this.lightness * 1.5)}%)`;
+            } else if (this.flashing && this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+            }
+            c.fill();
+
+            // draw arrow edges/wings ----------
+            c.beginPath();
+            c.moveTo(arrowLength, 0);
+            c.lineTo(-arrowLength, -arrowWidth / 2);
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.strokeStyle = this.cachedStrokeStyle;
+            } else if (this.whiteBoid) {
+                c.strokeStyle = 'hsl(0, 0%, 100%)';
+            } else if (this.blackBoid) {
+                c.strokeStyle = 'hsl(0, 0%, 0%)';
+            } else if (this.flashing && !this.blackBoid) {
+                c.strokeStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${Math.round(this.lightness * 1.5)}%)`;
+            } else if (this.flashing && this.blackBoid) {
+                c.strokeStyle = 'hsl(0, 0%, 100%)';
+            }
+            c.lineWidth = 1.0;
+            c.stroke();
+            c.beginPath();
+            c.moveTo(-arrowLength, arrowWidth / 2);
+            c.lineTo(arrowLength, 0);
+            c.stroke();
+            c.restore();
+        }
+            
+        // Draw airfoil boid --------------------------------------------
+        if (!this.arrow && !this.circle && this.airfoil) {
+            const angle = Math.atan2(this.vel.y, this.vel.x);
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+            c.rotate(.5 * Math.PI - angle); // for teadrops
+        
+            const numPoints = 32; 
+            const a = 0.2;
+            const b = 1.5;
+            const pivotOffsetX = 0;
+            const pivotOffsetY = -b * radScale;  // Centroid of bulb head
+            c.beginPath();  
+            for (let i = 0; i <= numPoints; i++) {
+                const t = Math.PI / 2 + (i / numPoints) * (2 * Math.PI);
+                const x = (2 * a * Math.cos(t) - a * Math.sin(2 * t)) * radScale;
+                const y = b * Math.sin(t) * radScale;
+                if (i === 0) {
+                    c.moveTo(x - pivotOffsetX, y - pivotOffsetY);
+                } else {
+                    c.lineTo(x - pivotOffsetX, y - pivotOffsetY);
+                }
+            }  
+            c.closePath();
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.fillStyle = this.cachedFillStyle;
+                c.strokeStyle = this.cachedStrokeStyle;
+            } else if (this.whiteBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+                c.strokeStyle = 'hsl(0, 0%, 100%)';
+            } else if (this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 10%)';
+                c.strokeStyle = 'hsl(0, 0%, 0%)';
+            } else if (this.flashing) {
+                const flashLight = Math.round(this.lightness * 1.5);
+                c.fillStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+                c.strokeStyle = `hsl(${Math.round(this.hue - 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+            }
+            c.fill();
+            c.lineWidth = 1.0;
+            c.stroke();
+            c.restore();
+        }
+
+        // Draw circle boid --------------------------------------------
+        if (!this.arrow && this.circle && !this.airfoil) {
+            //c.save();
+            //c.translate(cX(this.pos), cY(this.pos));
+            c.beginPath();
+            //c.arc(0, 0, radScale, 0, 2 * Math.PI);
+            c.arc(cX(this.pos), cY(this.pos), 0.6 * radScale, 0, 2 * Math.PI);
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.fillStyle = this.cachedFillStyle;
+                c.strokeStyle = this.cachedStrokeStyle;
+            } else if (this.whiteBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+                c.strokeStyle = 'hsl(0, 0%, 100%)';
+            } else if (this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 10%)';
+                c.strokeStyle = 'hsl(0, 0%, 0%)';
+            } else if (this.flashing && !this.blackBoid) {
+                const flashLight = Math.round(this.lightness * 1.5);
+                c.fillStyle = `hsl(${Math.round(this.hue + 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+                c.strokeStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+            } else if (this.flashing && this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+                c.strokeStyle = 'hsl(0, 0%, 100%)';
+            }
+            c.fill();
+            c.lineWidth = 1.0;
+            c.stroke();
+            //c.restore();
+        }
+    }
+}
+
+//  CHANGE BOID TYPES ---------------------------------------------------------------------
+function doArrowBoids() {
+    for (let boid of Boids) {
+        boid.arrow = true;
+        boid.circle = false;
+        boid.airfoil = false;
+    }
+}   
+
+function doCircleBoids() {
+    for (let boid of Boids) {
+        boid.arrow = false;
+        boid.circle = true;
+        boid.airfoil = false;
+    }
+}   
+
+function doAirfoilBoids() {
+    for (let boid of Boids) {
+        boid.arrow = false;
+        boid.circle = false;
+        boid.airfoil = true;
+    }
+}  
+
+function doNoneBoids() {
+    for (let boid of Boids) {
+        boid.arrow = false;
+        boid.circle = false;
+        boid.airfoil = false;
+    }
+}  
+
+function drawMainMenu() {
+    // Only draw menu if it has some opacity
+    if (mainMenuOpacity <= 0) return;
+    
+    const ellipsisWorldX = 0.05;
+    const ellipsisWorldY = simHeight - 0.05;
+    const ellipsisX = ellipsisWorldX * cScale;
+    const ellipsisY = canvas.height - ellipsisWorldY * cScale;
+    
+    // Menu dimensions (horizontal layout)
+    const itemHeight = 0.12 * cScale;
+    const itemWidth = 0.24 * cScale;
+    const padding = 0.02 * cScale;
+    const iconSize = 0.06 * cScale;
+    const menuHeight = itemHeight + (padding * 2);
+    const menuWidth = (itemWidth * 3) + (padding * 4);
+    
+    // Menu position - to the right of ellipsis with animation
+    // Position menu so it extends downward and is clearly visible
+    const menuBaseX = ellipsisX + 0.08 * cScale;
+    const menuX = menuBaseX + mainMenuXOffset * cScale;
+    const menuY = ellipsisY - 0.04 * cScale; // Position top of menu slightly above ellipsis center
+    
+    c.save();
+    c.globalAlpha = mainMenuOpacity;
+    
+    // Draw menu background with rounded corners
+    const cornerRadius = 0.02 * cScale;
+    c.beginPath();
+    c.moveTo(menuX + cornerRadius, menuY);
+    c.lineTo(menuX + menuWidth - cornerRadius, menuY);
+    c.quadraticCurveTo(menuX + menuWidth, menuY, menuX + menuWidth, menuY + cornerRadius);
+    c.lineTo(menuX + menuWidth, menuY + menuHeight - cornerRadius);
+    c.quadraticCurveTo(menuX + menuWidth, menuY + menuHeight, menuX + menuWidth - cornerRadius, menuY + menuHeight);
+    c.lineTo(menuX + cornerRadius, menuY + menuHeight);
+    c.quadraticCurveTo(menuX, menuY + menuHeight, menuX, menuY + menuHeight - cornerRadius);
+    c.lineTo(menuX, menuY + cornerRadius);
+    c.quadraticCurveTo(menuX, menuY, menuX + cornerRadius, menuY);
+    c.closePath();
+    
+    const menuGradient = c.createLinearGradient(menuX, menuY, menuX, menuY + menuHeight);
+    menuGradient.addColorStop(0, `hsla(210, 0%, 10%, 0.6)`);
+    menuGradient.addColorStop(1, `hsla(210, 0%, 20%, 0.6)`);
+    c.fillStyle = menuGradient;
+    c.fill();
+    
+    // Menu items configuration
+    const menuItems = [
+        { label: 'Simulation', active: menuVisible, icon: 'sim' },
+        { label: 'Paint', active: colorMenuVisible, icon: 'paint' },
+        { label: 'Sky', active: skyMenuVisible, icon: 'sky' }
+    ];
+    
+    // Draw menu items
+    for (let i = 0; i < menuItems.length; i++) {
+        const item = menuItems[i];
+        const itemX = menuX + padding + (i * (itemWidth + padding));
+        const itemY = menuY + padding;
+
+        // Draw item background with rounded corners
+        c.beginPath();
+        c.moveTo(itemX + cornerRadius * 0.5, itemY);
+        c.lineTo(itemX + itemWidth - cornerRadius * 0.5, itemY);
+        c.quadraticCurveTo(itemX + itemWidth, itemY, itemX + itemWidth, itemY + cornerRadius * 0.5);
+        c.lineTo(itemX + itemWidth, itemY + itemHeight - cornerRadius * 0.5);
+        c.quadraticCurveTo(itemX + itemWidth, itemY + itemHeight, itemX + itemWidth - cornerRadius * 0.5, itemY + itemHeight);
+        c.lineTo(itemX + cornerRadius * 0.5, itemY + itemHeight);
+        c.quadraticCurveTo(itemX, itemY + itemHeight, itemX, itemY + itemHeight - cornerRadius * 0.5);
+        c.lineTo(itemX, itemY + cornerRadius * 0.5);
+        c.quadraticCurveTo(itemX, itemY, itemX + cornerRadius * 0.5, itemY);
+        c.closePath();
+        // Draw item background (highlight if active)
+        if (item.active) {
+            if (item.icon === 'sim') {
+                c.fillStyle = `hsla(210, 90%, 60%, 0.3)`;
+            } else if (item.icon === 'paint') {
+                c.fillStyle = `hsla(0, 0%, 80%, 0.3)`;
+            } else if (item.icon === 'sky') {
+                c.fillStyle = `hsla(30, 90%, 60%, 0.3)`;
+            }
+        } else {
+            c.fillStyle = `hsla(0, 0%, 15%, 0.6)`;
+        }
+        c.fill();
+        
+        // Draw icon (centered horizontally in item)
+        const iconX = itemX + itemWidth / 2;
+        const iconY = itemY + itemHeight / 2 - padding;
+        const iconColor = item.active ? 
+            `hsla(120, 0%, 90%, 1.0)` : 
+            `hsla(0, 0%, 30%, 1.0)`;
+        
+        c.strokeStyle = iconColor;
+        c.fillStyle = iconColor;
+        c.lineWidth = 0.006 * cScale;
+        c.lineCap = 'round';
+        c.lineJoin = 'round';
+        
+        // Draw sim icon --------------------
+        if (item.icon === 'sim') {
+            // Draw gear icon with flat-topped teeth
+            const numTeeth = 8;
+            const outerRadius = iconSize * 0.45;
+            const innerRadius = iconSize * 0.32;
+            const centerRadius = iconSize * 0.18;
+            const toothFlatWidth = 0.2; // Width of flat top in radians
+            c.beginPath();
+            for (let t = 0; t < numTeeth; t++) {
+                const baseAngle = (t * 2 * Math.PI) / numTeeth;
+                const nextBaseAngle = ((t + 1) * 2 * Math.PI) / numTeeth;
+                
+                // Left edge of flat top
+                const outerLeft = baseAngle - toothFlatWidth / 2;
+                const x1 = iconX + Math.cos(outerLeft) * outerRadius;
+                const y1 = iconY + Math.sin(outerLeft) * outerRadius;
+                if (t === 0) c.moveTo(x1, y1);
+                else c.lineTo(x1, y1);
+                
+                // Right edge of flat top (draws the flat top as a line segment)
+                const outerRight = baseAngle + toothFlatWidth / 2;
+                const x2 = iconX + Math.cos(outerRight) * outerRadius;
+                const y2 = iconY + Math.sin(outerRight) * outerRadius;
+                c.lineTo(x2, y2);
+                
+                // Down to valley
+                const valleyAngle = (baseAngle + nextBaseAngle) / 2;
+                const x3 = iconX + Math.cos(valleyAngle) * innerRadius;
+                const y3 = iconY + Math.sin(valleyAngle) * innerRadius;
+                c.lineTo(x3, y3);
+            }
+            c.closePath();
+            c.fill();
+
+            // Draw center circle
+            c.fillStyle = `hsla(0, 0%, 15%, 0.6)`;
+            c.beginPath();
+            c.arc(iconX, iconY, centerRadius, 0, 2 * Math.PI);
+            c.fill();
+
+        // Draw paint icon --------------------
+        } else if (item.icon === 'paint') {
+            // Draw color wheel icon (using pre-generated color wheel)
+            const wheelRadius = iconSize * 0.45;
+            if (colorWheelCanvas) {
+                c.save();
+                
+                // Dim when not active
+                if (!item.active) {
+                    c.globalAlpha = mainMenuOpacity * 0.4;
+                }
+                c.beginPath();
+                c.arc(iconX, iconY, wheelRadius, 0, 2 * Math.PI);
+                c.clip();
+                // Draw the color wheel
+                c.drawImage(
+                    colorWheelCanvas,
+                    iconX - wheelRadius,
+                    iconY - wheelRadius,
+                    wheelRadius * 2,
+                    wheelRadius * 2
+                );
+                
+                c.restore();
+                
+                // Draw outer ring to clean up edges
+                c.strokeStyle = iconColor;
+                c.lineWidth = iconSize * 0.06;
+                c.beginPath();
+                c.arc(iconX, iconY, wheelRadius, 0, 2 * Math.PI);
+                c.stroke();
+            }
+
+        // Draw sky icon --------------------
+        } else if (item.icon === 'sky') {
+            // Draw asymmetrical cloud icon with truly flat bottom using clipping
+            const cloudRadius = iconSize * 0.35;
+            const flatBottomY = iconY + cloudRadius * 1.2;
+            
+            c.save();
+            
+            // Create clipping rectangle to cut off bottom at flat line
+            const clipLeft = iconX - cloudRadius * 1.8;
+            const clipRight = iconX + cloudRadius * 1.8;
+            const clipTop = iconY - cloudRadius * 1.5;
+            c.beginPath();
+            c.rect(clipLeft, clipTop, clipRight - clipLeft, flatBottomY - clipTop);
+            c.clip();
+            
+            // Now draw the circles - they'll be clipped at the bottom
+            c.fillStyle = iconColor;
+            c.beginPath();
+            // Left puff (medium)
+            c.arc(iconX - cloudRadius * 0.95, flatBottomY - cloudRadius * 0.5, cloudRadius * 0.82, 0, 2 * Math.PI);
+            c.fill();
+            c.beginPath();
+            // Center puff (largest)
+            c.arc(iconX, flatBottomY, cloudRadius * 1.05, 0, 2 * Math.PI);
+            c.fill();
+            c.beginPath();
+            // Right puff (small)
+            c.arc(iconX + cloudRadius * 0.9, flatBottomY - cloudRadius * 0.55, cloudRadius * 0.7, 0, 2 * Math.PI);
+            c.fill();
+            c.beginPath();
+            // Fourth puff adds height above center-left
+            c.arc(iconX - cloudRadius * 0.3, iconY - cloudRadius * 0.15, cloudRadius * 0.88, 0, 2 * Math.PI);
+            c.fill();
+            
+            c.restore();
+        }
+        
+        // Draw label text (centered below icon)
+        c.fillStyle = item.active ? 
+            `hsla(210, 0%, 90%, 1.0)` : 
+            `hsla(210, 0%, 80%, 1.0)`;
+        c.font = `bold ${0.028 * cScale}px verdana`;
+        c.textAlign = 'center';
+        c.textBaseline = 'top';
+        c.fillText(item.label, iconX, iconY + iconSize * 0.75);
+    }
+    
+    c.restore();
+}
+
+function drawSimMenu() {
+    // Draw ellipsis button (in world coordinates)
+    const ellipsisWorldX = 0.05;
+    const ellipsisWorldY = simHeight - 0.05;
+    const ellipsisX = ellipsisWorldX * cScale;
+    const ellipsisY = canvas.height - ellipsisWorldY * cScale;
+    const dotRadius = 0.006 * cScale;
+    const dotSpacing = 0.016 * cScale;
+
+    // Draw three dots for ellipsis
+    c.fillStyle = `hsla(210, 60%, 80%, 0.8)`;
+    for (let i = 0; i < 3; i++) {
+        c.beginPath();
+        c.arc(ellipsisX + i * dotSpacing, ellipsisY, dotRadius, 0, 2 * Math.PI);
+        c.fill();
+    }
+    
+    // Only draw menu if it has some opacity
+    if (menuOpacity <= 0) return;
+    
+    // variables to control:
+    
+    // numBoids - range from 100 to 5000, integer
+    // boidRadius - range from 1 to 10, integer
+    // visualRange - range from 0.05 to 0.5
+    // speedLimit - range from 0.1 to 3.0
+
+    // Rule #1: minDistance - range from 0.0 to 0.2
+    // Rule #1: avoidFactor - range from 0 to 100, integer
+    // Rule #2: matchingFactor - range from 0 to 50, integer
+    // Rule #3: centeringFactor - range from 0 to 20, integer
+
+    // turnFactor - range from 0 to 100, integer
+    // trailLength - range from 0 to 100, integer
+
+    // fps display
+
+    const menuItems = [
+        boidProps.numBoids, boidProps.boidRadius, boidProps.visualRange, boidProps.speedLimit,
+        null, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
+        boidProps.turnFactor, boidProps.tailLength, boidProps.tailWidth];
+
+    // Define min/max ranges for each parameter
+    const ranges = [
+        {min: 100, max: 5000},      // numBoids
+        {min: 1, max: 10},           // boidRadius (scaled by 100)
+        {min: 0.05, max: 0.5},       // visualRange
+        {min: 0.1, max: 3.0},        // speedLimit
+        {min: 0.0, max: 0.2},        // (removed) was minDistance
+        {min: 0, max: 100},          // avoidFactor
+        {min: 0, max: 50},           // matchingFactor
+        {min: 0, max: 20},           // centeringFactor
+        {min: 0, max: 5},            // turnFactor
+        {min: 0, max: 100},          // trailLength
+        {min: 1.0, max: 5.0}         // tailWidth
+    ];
+
+    const knobRadius = 0.1 * cScale;
+    const knobSpacing = knobRadius * 3;
+    const menuTopMargin = 0.2 * knobRadius; // Control vertical offset of elements within the menu
+    const menuUpperLeftX = menuX * cScale;
+    const menuUpperLeftY = canvas.height - menuY * cScale;
+    const fullMeterSweep = 1.6 * Math.PI;
+    const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+
+    c.save();
+    c.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
+    /*
+    drawKittyLamp(
+        menuUpperLeftX + 3.3 * knobRadius, 
+        menuUpperLeftY + 4.5 * knobRadius,
+        menuOpacity);
+    */
+
+    // Draw overall menu background with rounded corners
+    const menuWidth = knobSpacing * 3;
+    const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
+    const padding = 1.7 * knobRadius;
+    const cornerRadius = 0.05 * cScale;
+    c.beginPath();
+    c.moveTo(-padding + cornerRadius, -padding);
+    c.lineTo(menuWidth + padding - cornerRadius, -padding);
+    c.quadraticCurveTo(menuWidth + padding, -padding, menuWidth + padding, -padding + cornerRadius);
+    c.lineTo(menuWidth + padding, menuHeight + padding - cornerRadius);
+    c.quadraticCurveTo(menuWidth + padding, menuHeight + padding, menuWidth + padding - cornerRadius, menuHeight + padding);
+    c.lineTo(-padding + cornerRadius, menuHeight + padding);
+    c.quadraticCurveTo(-padding, menuHeight + padding, -padding, menuHeight + padding - cornerRadius);
+    c.lineTo(-padding, -padding + cornerRadius);
+    c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
+    c.closePath();
+    //c.fillStyle = `hsla(210, 80%, 10%, ${0.4 * menuOpacity})`;
+    c.strokeStyle = `hsla(210, 60%, 80%, ${menuOpacity})`;
+    c.lineWidth = 0.004 * cScale;
+    const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsla(210, 80%, 20%, ${0.9 * menuOpacity})`);
+    menuGradient.addColorStop(1, `hsla(210, 80%, 5%, ${0.9 * menuOpacity})`);
+    c.fillStyle = menuGradient;
+    c.fill();
+    c.stroke();
+
+    // Draw title
+    c.fillStyle = `hsla(210, 80%, 80%, ${menuOpacity})`;
+    c.font = `bold ${0.05 * cScale}px verdana`;
+    c.textAlign = 'center';
+    c.fillText('SIMULATION', menuWidth / 2, -padding + 0.04 * cScale);
+    
+    // Draw close icon in upper left corner (round button)
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+    
+    // Red background circle
+    c.beginPath();
+    c.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(0, 70%, 40%, ${menuOpacity})`;
+    c.fill();
+    
+    // Black X
+    c.strokeStyle = `hsla(0, 0%, 0%, ${menuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.lineCap = 'round';
+    const xSize = closeIconRadius * 0.4;
+    c.beginPath();
+    c.moveTo(closeIconX - xSize, closeIconY - xSize);
+    c.lineTo(closeIconX + xSize, closeIconY + xSize);
+    c.moveTo(closeIconX + xSize, closeIconY - xSize);
+    c.lineTo(closeIconX - xSize, closeIconY + xSize);
+    c.stroke();
+
+    // Draw knobs ---------------------------------------------
+    c.lineCap = 'round';
+    for (var knob = 0; knob < menuItems.length; knob++) {
+        if (knob === 4) continue; // Skip removed knob
+        // fill and trace knob background
+        const layoutIndex = knob > 4 ? knob - 1 : knob;
+        const row = Math.floor(layoutIndex / 4);
+        const col = layoutIndex % 4;
+        const knobX = col * knobSpacing;
+        const knobY = row * knobSpacing + menuTopMargin;
+        c.beginPath();
+        c.arc(knobX, knobY, 1.05 *knobRadius, 0, 2 * Math.PI, false);
+        c.fillStyle = `hsla(210, 40%, 15%, ${0.9 * menuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(210, 40%, 50%, ${menuOpacity})`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+
+        // draw needle / knob indicator
+        let knobValue = menuItems[knob];
+        // Normalize the value based on its range
+        let normalizedValue;
+        if (knob === 0) {
+            // numBoids: use actual count instead of target
+            normalizedValue = (Boids.length - ranges[knob].min) / (ranges[knob].max - ranges[knob].min);
+        } else if (knob === 1) {
+            // boidRadius needs to be scaled by 100
+            normalizedValue = (boidRadius * 100 - ranges[knob].min) / (ranges[knob].max - ranges[knob].min);
+        } else {
+            normalizedValue = (knobValue - ranges[knob].min) / (ranges[knob].max - ranges[knob].min);
+        }
+        
+        // normalize to 0-1 range
+        normalizedValue = Math.max(0, Math.min(1, normalizedValue));
+        const angle = meterStart + normalizedValue * fullMeterSweep;
+        const indicatorLength = knobRadius * 1.0;
+        const indicatorX = knobX + Math.cos(angle) * indicatorLength;
+        const indicatorY = knobY + Math.sin(angle) * indicatorLength;
+
+        // draw meter arc
+        const gradient = c.createLinearGradient(
+            knobX + Math.cos(meterStart) * knobRadius,
+            knobY + Math.sin(meterStart) * knobRadius,
+            knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+            knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+        );
+        gradient.addColorStop(0, `hsla(190, 40%, 50%, ${menuOpacity})`);
+        gradient.addColorStop(0.5, `hsla(170, 40%, 50%, ${menuOpacity})`);
+        c.strokeStyle = gradient;
+        c.beginPath();
+        c.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
+        c.lineWidth = 0.02 * cScale;
+        c.stroke();
+
+        // Draw needle
+        const pointerAngle = meterStart + fullMeterSweep * normalizedValue;
+        const pointerLength = knobRadius * 0.6;
+        const pointerEndX = knobX + Math.cos(pointerAngle) * pointerLength;
+        const pointerEndY = knobY + Math.sin(pointerAngle) * pointerLength;
+        c.beginPath();
+        c.moveTo(knobX, knobY);
+        c.lineTo(pointerEndX, pointerEndY);
+        c.strokeStyle = `hsla(210, 80%, 80%, ${menuOpacity})`;
+        c.lineWidth = 0.008 * cScale;
+        c.stroke();
+
+        // draw knob label
+        c.lineWidth = 0.03 * knobRadius;
+        c.lineJoin = 'round';
+        
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        let label = '';
+        switch (knob) {
+            case 0: label = "Number of Boids"; break;
+            case 1: label = 'Size'; break;
+            case 2: label = 'Visual Range'; break;
+            case 3: label = 'Speed Limit'; break;
+            case 4: label = 'blank'; break;
+            case 5: label = 'Rule 1: Separation'; break;
+            case 6: label = 'Rule 2: Alignment'; break;
+            case 7: label = 'Rule 3: Cohesion'; break;
+            case 8: label = 'Confinement'; break;
+            case 9: label = 'Tail Length'; break;
+            case 10: label = 'Tail Width'; break;
+        }
+        c.font = `${0.29 * knobRadius}px verdana`;
+        c.strokeStyle = `hsla(210, 80%, 0%, ${0.6 * menuOpacity})`;
+        c.strokeText(label, 0.04 * knobRadius + knobX, 0.04 * knobRadius + (knobY + 1.35 * knobRadius));
+        c.font = ` ${0.29 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(210, 80%, 95%, ${menuOpacity})`;
+        c.fillText(label, knobX, knobY + 1.35 * knobRadius);
+
+        // draw knob value
+        let valueText = '';
+        switch (knob) {
+            case 0: valueText = Boids.length; break;
+            case 1: valueText = (boidRadius * 100).toFixed(1); break;
+            case 2: valueText = (boidProps.visualRange).toFixed(2); break;
+            case 3: valueText = (boidProps.speedLimit).toFixed(1); break;
+            case 5: valueText = (boidProps.avoidFactor).toFixed(0); break;
+            case 6: valueText = (boidProps.matchingFactor).toFixed(1); break;
+            case 7: valueText = (boidProps.centeringFactor).toFixed(1); break;
+            case 8: valueText = (boidProps.turnFactor).toFixed(1); break;
+            case 9: valueText = boidProps.tailLength.toString(); break;
+            case 10: valueText = (boidProps.tailWidth).toFixed(1); break;
+        }
+        c.font = `${0.25 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
+        c.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
+    }
+
+    // Draw tail color radio buttons below tail length knob (knob 9)
+    const tailColorRadioRadius = knobRadius * 0.25;
+    const tailKnobRow = 2;
+    const tailButtonsCenterX = 0.5; // Center between columns 0 and 1
+    const tailRadioLabels = ['Black', 'White', 'Hue', 'Hue2'];
+    
+    for (let i = 0; i < 4; i++) {
+        const buttonX = tailButtonsCenterX * knobSpacing + (i - 1.5) * knobRadius * 1.0;
+        const buttonY = tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin;
+        
+        // Draw outer circle
+        c.beginPath();
+        c.arc(buttonX, buttonY, tailColorRadioRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+        c.lineWidth = 0.04 * knobRadius;
+        c.stroke();
+        
+        // Draw filled center if selected
+        if (tailColorMode === i) {
+            c.beginPath();
+            c.arc(buttonX, buttonY, tailColorRadioRadius * 0.5, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
+            c.fill();
+        }
+
+        // Draw label below button
+        c.textAlign = 'center';
+        c.textBaseline = 'top';
+        c.font = `${0.24 * knobRadius}px verdana`;
+        c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
+        c.lineWidth = 0.02 * knobRadius;
+        c.strokeText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
+        c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
+        c.fillText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
+    }
+    
+    // Draw radio buttons for boid type selection (vertically stacked)
+    const radioButtonRadius = knobRadius * 0.25;
+    const radioCol = 2;
+    const radioLabels = ['Arrows', 'Circles', 'Teardrops', 'None'];
+    
+    for (let i = 0; i < 4; i++) {
+        const buttonX = radioCol * knobSpacing - 0.5 * knobRadius;
+        const buttonY = (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius) + menuTopMargin;
+        
+        // Draw outer circle
+        c.beginPath();
+        c.arc(buttonX, buttonY, radioButtonRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+        c.lineWidth = 0.05 * knobRadius;
+        c.stroke();
+        
+        // Draw filled center if selected
+        if (selectedBoidType === i) {
+            c.beginPath();
+            c.arc(buttonX, buttonY, radioButtonRadius * 0.5, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
+            c.fill();
+        }
+
+        // Draw label to the right of button - shadow for contrast
+        c.textAlign = 'left';
+        c.textBaseline = 'middle';
+        c.font = ` ${0.3 * knobRadius}px verdana`;
+        c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
+        c.strokeText(radioLabels[i], 0.04 * knobRadius + buttonX + radioButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + buttonY);
+
+        // Draw label to the right of button
+        //c.font = `${0.25 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
+        c.fillText(radioLabels[i], buttonX + radioButtonRadius + 0.2 * knobRadius, buttonY);
+    }
+    
+    // Draw reset button --------------------------------------
+    const resetButtonRadius = knobRadius * 0.5;
+    const resetButtonX = 3 * knobSpacing;
+    const resetButtonY = 2.1 * knobSpacing + menuTopMargin;
+    
+    // Draw reset button
+    c.fillStyle = `hsla(60, 80%, 50%, ${menuOpacity})`;
+    c.beginPath();
+    c.arc(resetButtonX, resetButtonY, 0.7 * resetButtonRadius, 0, 2 * Math.PI);
+    c.closePath();
+    c.fill();
+
+    // Draw "RESET" text in arc above button
+    const resetText = "RESET";
+    const arcRadius = resetButtonRadius * 1.8;
+    const totalArcAngle = Math.PI * 0.6; // 60 degrees total arc
+    const startAngle = -Math.PI / 2 - totalArcAngle / 2; // Center the arc above
+    
+    c.font = `bold ${0.4 * knobRadius}px verdana`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    for (let i = 0; i < resetText.length; i++) {
+        const angle = startAngle + (i / (resetText.length - 1)) * totalArcAngle;
+        const x = resetButtonX + Math.cos(angle) * arcRadius;
+        const y = resetButtonY + (0.1 * knobRadius) + Math.sin(angle) * arcRadius;
+        c.save();
+        c.translate(x, y);
+        c.rotate(angle + Math.PI / 2); // Rotate to follow arc
+        c.fillStyle = `hsla(0, 80%, 0%, ${0.7 *menuOpacity})`;
+        c.fillText(resetText[i], 0.08 * knobRadius, 0.06 * knobRadius);
+        c.fillStyle = `hsla(210, 80%, 80%, ${menuOpacity})`;
+        c.fillText(resetText[i], 0, 0);
+        c.restore();
+    }
+    
+    // Draw FPS counter in bottom right of menu -------------------------------
+    c.textAlign = 'right';
+    c.textBaseline = 'bottom';
+    const fpsText = `${currentFPS.toFixed(0)}`;
+    // Color code based on FPS: green (57+) to yellow to red
+    let fpsHue;
+    if (currentFPS >= 57) {
+        fpsHue = 120; // Green
+    } else if (currentFPS >= 45) {
+        // Interpolate from red (0) to yellow (60)
+        const t = (currentFPS - 45) / (57 - 45);
+        fpsHue = t * 60;
+    } else {
+        // Full red for very low FPS
+        fpsHue = 0;
+    }
+    
+    // draw dark heavy background line for FPS text
+    const fpsTextWidth = c.measureText(fpsText).width;
+    c.beginPath();
+    c.moveTo(menuWidth + padding - 2.5 * knobRadius, menuHeight + padding - 2.55 * knobRadius);
+    c.lineTo(menuWidth + padding - 0.9 *knobRadius, menuHeight + padding - 2.55 * knobRadius);
+    c.lineWidth = 0.5 * knobRadius;
+    c.strokeStyle = `hsla(0, 0%, 0%, ${0.7 * menuOpacity})`;
+    c.lineCap = 'round';
+    c.stroke();
+
+    // Draw FPS value
+    c.font = `${0.4 * knobRadius}px monospace`;
+    c.fillStyle = `hsla(${fpsHue}, 90%, 60%, ${menuOpacity})`;
+    c.fillText(fpsText, menuWidth + padding - 1.9 * knobRadius, menuHeight + padding - 2.3 * knobRadius);
+    
+    // Draw 'FPS' label
+    c.font = `${0.4 * knobRadius}px monospace`;
+    c.fillStyle = `hsla(0, 0%, 80%, ${menuOpacity})`;
+    c.fillText('fps', menuWidth + padding - 1.0 * knobRadius, menuHeight + padding - 2.3 * knobRadius);
+    
+    // Draw magnet toggle button --------------------------------------
+    const magnetButtonRadius = 0.065 * cScale;
+    const magnetButtonX = 3 * knobSpacing;
+    const magnetButtonY = menuHeight + padding - 1.2 * knobRadius;
+
+    // Draw magnet sphere
+    c.beginPath();
+    const lightness = Magnet[0].lightness;
+    c.arc(magnetButtonX, magnetButtonY, magnetButtonRadius, 0, 2 * Math.PI);
+    const sphereGradient = c.createRadialGradient(
+        magnetButtonX -0.1 * magnetButtonRadius, 
+        magnetButtonY -0.15 * magnetButtonRadius,
+        0,
+        magnetButtonX -0.1 * magnetButtonRadius, 
+        magnetButtonY -0.15 * magnetButtonRadius,
+        magnetButtonRadius);
+    sphereGradient.addColorStop(0, `hsl(200, 80%, 100%)`);
+    sphereGradient.addColorStop(1, `hsl(200, 80%, 20%)`);
+    c.fillStyle = sphereGradient;
+    c.fill();
+
+        /*// Draw glowing aura 
+        c.beginPath();
+        c.arc(0, 0, this.effectRadius * cScale, 0, 2 * Math.PI);
+        const auraGradient = c.createRadialGradient(
+            0, 
+            0, 
+            0, 
+            0, 
+            0, 
+            this.effectRadius * cScale);
+        auraGradient.addColorStop(0, `hsl(180, 80%, ${lightness * 50}%, 0.3)`);
+        auraGradient.addColorStop(1, `hsl(180, 80%, ${lightness * 20}%, 0.0)`);
+        c.fillStyle = auraGradient;
+        c.fill();*/
+
+
+    c.restore();
+}
+
+//  DRAW COLOR MENU  ---------------------------------------------------------------------
+function drawColorMenu() {
+    // Only draw menu if it has some opacity
+    if (colorMenuOpacity <= 0) return;
+    
+    const knobRadius = 0.1 * cScale;
+    const colorWheelRadius = knobRadius * 1.7;
+    const sliderWidth = knobRadius * 0.6;
+    const sliderHeight = colorWheelRadius * 2;
+    const spacing = knobRadius * 0.5;
+    
+    const menuUpperLeftX = colorMenuX * cScale;
+    const menuUpperLeftY = canvas.height - colorMenuY * cScale;
+    
+    c.save();
+    c.translate(menuUpperLeftX, menuUpperLeftY);
+    
+    // Calculate menu dimensions (include space for preset buttons, knobs, and segregation buttons)
+    const buttonRowHeight = spacing * 2;
+    const knobRowHeight = knobRadius * 3;
+    const segRadioRowHeight = knobRadius * 3.0 + spacing * 2; // Space for radio buttons, labels, and bottom margin
+    const menuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 1.5;
+    // Shorter menu when spray tool is active (omit knobs and radio buttons)
+    const menuHeight = spraypaintActive ? spacing * 10 : spacing * 20;
+    const padding = 0.8 * knobRadius;
+    
+    const cornerRadius = 0.05 * cScale;
+    c.beginPath();
+    c.moveTo(-padding + cornerRadius, -padding);
+    c.lineTo(menuWidth + padding - cornerRadius, -padding);
+    c.quadraticCurveTo(menuWidth + padding, -padding, menuWidth + padding, -padding + cornerRadius);
+    c.lineTo(menuWidth + padding, menuHeight + padding - cornerRadius);
+    c.quadraticCurveTo(menuWidth + padding, menuHeight + padding, menuWidth + padding - cornerRadius, menuHeight + padding);
+    c.lineTo(-padding + cornerRadius, menuHeight + padding);
+    c.quadraticCurveTo(-padding, menuHeight + padding, -padding, menuHeight + padding - cornerRadius);
+    c.lineTo(-padding, -padding + cornerRadius);
+    c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
+    c.closePath();
+    
+    const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsla(210, 0%, 20%, ${0.9 * colorMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsla(210, 0%, 5%, ${0.9 * colorMenuOpacity})`);
+    c.fillStyle = menuGradient;
+    c.fill();
+    c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.004 * cScale;
+    c.stroke();
+
+    // Draw title
+    c.fillStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
+    c.font = `bold ${0.05 * cScale}px verdana`;
+    c.textAlign = 'center';
+    c.fillText('PAINT', menuWidth / 2, -padding + 0.04 * cScale);
+    
+    
+    // Draw close icon in upper left corner
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+    
+    // Red background circle
+    c.beginPath();
+    c.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(0, 70%, 40%, ${colorMenuOpacity})`;
+    c.fill();
+    
+    // Black X
+    c.strokeStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.lineCap = 'round';
+    const xSize = closeIconRadius * 0.4;
+    c.beginPath();
+    c.moveTo(closeIconX - xSize, closeIconY - xSize);
+    c.lineTo(closeIconX + xSize, closeIconY + xSize);
+    c.moveTo(closeIconX + xSize, closeIconY - xSize);
+    c.lineTo(closeIconX - xSize, closeIconY + xSize);
+    c.stroke();
+    
+    // Draw color wheel from offscreen canvas
+    const wheelCenterX = colorWheelRadius;
+    const wheelCenterY = colorWheelRadius;
+    
+    c.save();
+    c.globalAlpha = colorMenuOpacity;
+    c.drawImage(colorWheelCanvas, 
+        0, 0, colorWheelCanvas.width, colorWheelCanvas.height,
+        wheelCenterX - colorWheelRadius, wheelCenterY - colorWheelRadius,
+        colorWheelRadius * 2, colorWheelRadius * 2);
+    c.restore();
+    
+    // Draw painted color dots on color wheel
+    for (let dot of paintedColorDots) {
+        const dotAngle = dot.hue * Math.PI / 180;
+        const dotRadius = (dot.saturation / 100) * colorWheelRadius;
+        const dotX = wheelCenterX + dotRadius * Math.cos(dotAngle);
+        const dotY = wheelCenterY + dotRadius * Math.sin(dotAngle);
+        
+        c.beginPath();
+        c.arc(dotX, dotY, knobRadius * 0.08, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 100%, ${colorMenuOpacity * 0.9})`;
+        c.fill();
+    }
+    
+    // Draw selection indicator on color wheel
+    const angle = selectedHue * Math.PI / 180;
+    const radius = (selectedSaturation / 100) * colorWheelRadius;
+    const selectorX = wheelCenterX + radius * Math.cos(angle);
+    const selectorY = wheelCenterY + radius * Math.sin(angle);
+    
+    c.beginPath();
+    c.arc(selectorX, selectorY, knobRadius * 0.2, 0, 2 * Math.PI);
+    c.strokeStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.005 * cScale;
+    c.stroke();
+    
+    // Draw lightness slider
+    const lightnessSliderX = colorWheelRadius * 2 + spacing;
+    const lightnessSliderY = 0;
+    // Draw gradient for lightness
+    const lightnessGradient = c.createLinearGradient(lightnessSliderX, lightnessSliderY, lightnessSliderX, lightnessSliderY + sliderHeight);
+    lightnessGradient.addColorStop(0, `hsla(${selectedHue}, ${selectedSaturation}%, 100%, ${colorMenuOpacity})`);
+    lightnessGradient.addColorStop(0.5, `hsla(${selectedHue}, ${selectedSaturation}%, 50%, ${colorMenuOpacity})`);
+    lightnessGradient.addColorStop(1, `hsla(${selectedHue}, ${selectedSaturation}%, 0%, ${colorMenuOpacity})`);
+    c.fillStyle = lightnessGradient;
+    c.fillRect(lightnessSliderX, lightnessSliderY, sliderWidth, sliderHeight);
+    
+    // Draw border around slider
+    c.strokeStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity * 0.5})`;
+    c.lineWidth = 0.005 * cScale;
+    c.strokeRect(lightnessSliderX, lightnessSliderY, sliderWidth, sliderHeight);
+    
+    // Draw lightness selector
+    const lightnessIndicatorY = lightnessSliderY + (1 - selectedLightness / 100) * sliderHeight;
+    c.beginPath();
+    c.moveTo(lightnessSliderX, lightnessIndicatorY);
+    c.lineTo(lightnessSliderX + sliderWidth, lightnessIndicatorY);
+    c.strokeStyle = `hsla(0, 0%, ${selectedLightness > 90 ? 50 : 100}%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.007 * cScale;
+    c.stroke();
+    
+    // Draw spraypaint icon (aerosol can in profile) ---------
+    const spraypaintX = lightnessSliderX + sliderWidth + spacing + knobRadius * 0.85;
+    const spraypaintY = colorWheelRadius * 0.8;
+    const canRadius = knobRadius * 1.2; // 2x larger
+    
+    c.save();
+    c.translate(spraypaintX, spraypaintY);
+    
+    // Main cylinder body with gradient for 3D effect
+    const bodyGradient = c.createLinearGradient(-canRadius * 0.35, 0, canRadius * 0.35, 0);
+    const bodyColor = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity})`;
+    const darkBodyColor = `hsla(${selectedHue}, ${selectedSaturation}%, ${Math.max(0, selectedLightness - 20)}%, ${colorMenuOpacity})`;
+    const lightBodyColor = `hsla(${selectedHue}, ${selectedSaturation}%, ${Math.min(100, selectedLightness + 15)}%, ${colorMenuOpacity})`;
+    bodyGradient.addColorStop(0, darkBodyColor);
+    bodyGradient.addColorStop(0.25, lightBodyColor);
+    bodyGradient.addColorStop(0.5, bodyColor);
+    bodyGradient.addColorStop(1, darkBodyColor);
+    c.fillStyle = bodyGradient;
+    c.beginPath();
+    c.moveTo(-canRadius * 0.35, canRadius * 0.7);
+    c.lineTo(-canRadius * 0.35, -canRadius * 0.48);
+    c.quadraticCurveTo(-canRadius * 0.35, -canRadius * 0.53, -canRadius * 0.32, -canRadius * 0.55);
+    c.lineTo(canRadius * 0.32, -canRadius * 0.55);
+    c.quadraticCurveTo(canRadius * 0.35, -canRadius * 0.53, canRadius * 0.35, -canRadius * 0.48);
+    c.lineTo(canRadius * 0.35, canRadius * 0.7);
+    c.fill();
+
+    // Valve stem
+    c.fillStyle = `hsla(0, 0%, 75%, ${colorMenuOpacity})`;
+    c.fillRect(-canRadius * 0.04, -canRadius * 0.88, canRadius * 0.08, canRadius * 0.22);
+    
+    // Spray cap and paint  
+    if (spraypaintActive) {
+        // Draw spray particles inside the wedge
+        const nozzleX = canRadius * 0.15;
+        const nozzleY = -canRadius * 0.93 * 0.93;
+        const lineLength = canRadius * 1.0;
+        const angleSpread = 30 * Math.PI / 180; // 15 degrees = half of 30 degree spread
+        const particleCount = 22;
+        for (let i = 0; i < particleCount; i++) {
+            const t = (i + 1) / particleCount; // Distance from nozzle (0 to 1)
+            const distance = t * lineLength * 0.85;
+            const angle = (Math.random() - 0.5) * 2 * angleSpread; // Random angle within spread
+            const spread = Math.random() * 0.2; // Random lateral spread
+            
+            const particleX = nozzleX + distance * Math.cos(angle) + spread * (Math.random() - 0.5) * canRadius;
+            const particleY = nozzleY - distance * Math.sin(angle) + spread * (Math.random() - 0.5) * canRadius;
+            
+            const particleSize = canRadius * 0.05 * (1 - t * 0.5); // Smaller as distance increases
+            const particleAlpha = colorMenuOpacity * (1 - t * 0.7); // Fade as distance increases
+            
+            c.fillStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${particleAlpha})`;
+            c.beginPath();
+            c.arc(particleX, particleY, particleSize, 0, 2 * Math.PI);
+            c.fill();
+        }            
+        // Black spray cap
+        const capGradient = c.createLinearGradient(
+            -canRadius * 0.1, 
+            0, 
+            canRadius * 0.1, 
+            0);
+        capGradient.addColorStop(0, `hsla(0, 0%, 5%, ${colorMenuOpacity})`);
+        capGradient.addColorStop(0.3, `hsla(0, 0%, 25%, ${colorMenuOpacity})`);
+        capGradient.addColorStop(0.7, `hsla(0, 0%, 15%, ${colorMenuOpacity})`);
+        capGradient.addColorStop(1, `hsla(0, 0%, 5%, ${colorMenuOpacity})`);
+        c.fillStyle = capGradient;
+        c.fillRect(
+            -canRadius * 0.1, 
+            -canRadius * 1.025 * 0.93, 
+            canRadius * 0.2, 
+            canRadius * 0.195);
+        
+        // White spray orifice 
+        c.fillStyle = `hsla(0, 0%, 95%, ${colorMenuOpacity})`;
+        c.beginPath();
+        c.ellipse(
+            canRadius * 0.08, 
+            -canRadius * 0.93 * 0.93, 
+            canRadius * 0.025, 
+            canRadius * 0.045, 
+            0, 
+            0, 
+            2 * Math.PI);
+        c.fill();
+    } else {
+        // button not pushed: draw cap and orifice only
+        // Black spray cap
+        const capGradient = c.createLinearGradient(
+            -canRadius * 0.1, 
+            0, 
+            canRadius * 0.1, 
+            0);
+        capGradient.addColorStop(0, `hsla(0, 0%, 5%, ${colorMenuOpacity})`);
+        capGradient.addColorStop(0.3, `hsla(0, 0%, 25%, ${colorMenuOpacity})`);
+        capGradient.addColorStop(0.7, `hsla(0, 0%, 15%, ${colorMenuOpacity})`);
+        capGradient.addColorStop(1, `hsla(0, 0%, 5%, ${colorMenuOpacity})`);
+        c.fillStyle = capGradient;
+        c.fillRect(
+            -canRadius * 0.1, 
+            -canRadius * 1.025, 
+            canRadius * 0.2, 
+            canRadius * 0.195);
+        
+        // White spray orifice 
+        c.fillStyle = `hsla(0, 0%, 95%, ${colorMenuOpacity})`;
+        c.beginPath();
+        c.ellipse(
+            canRadius * 0.08, 
+            -canRadius * 0.93, 
+            canRadius * 0.025, 
+            canRadius * 0.045, 
+            0, 
+            0, 
+            2 * Math.PI);
+        c.fill();
+        
+    }
+
+    // Domed valve cup
+    const domeGradient = c.createRadialGradient(
+        -canRadius * 0.1, 
+        -canRadius * 0.68, 
+        0, 
+        0, 
+        -canRadius * 0.68, 
+        canRadius * 0.45);
+    domeGradient.addColorStop(0, `hsla(0, 0%, 85%, ${colorMenuOpacity})`);
+    domeGradient.addColorStop(0.3, `hsla(0, 0%, 30%, ${colorMenuOpacity})`);
+    //domeGradient.addColorStop(0.35, `hsla(0, 0%, 30%, ${colorMenuOpacity})`);
+    domeGradient.addColorStop(1, `hsla(0, 0%, 0%, ${colorMenuOpacity})`);
+    c.fillStyle = domeGradient;
+    c.beginPath();
+    c.ellipse(
+        0, 
+        -1.0 * canRadius * 0.58, 
+        canRadius * 0.2, 
+        canRadius * 0.16, 
+        0, 
+        Math.PI,
+        0);
+    c.fill();
+    
+    // Valve cup rim (metallic flange)
+    const rimGradient = c.createLinearGradient(
+        -canRadius * 0.5, 
+        0, 
+        canRadius * 0.5, 
+        0);
+    rimGradient.addColorStop(0, `hsla(0, 0%, 20%, ${colorMenuOpacity})`);
+    rimGradient.addColorStop(0.35, `hsla(0, 0%, 75%, ${colorMenuOpacity})`);
+    rimGradient.addColorStop(0.45, `hsla(0, 0%, 40%, ${colorMenuOpacity})`);
+    rimGradient.addColorStop(1, `hsla(0, 0%, 10%, ${colorMenuOpacity})`);
+    // Draw rim
+    c.fillStyle = rimGradient;
+    c.beginPath();
+    c.ellipse(
+        0, 
+        -canRadius * 0.54, 
+        canRadius * 0.31, 
+        canRadius * 0.1, 
+        0, 
+        Math.PI, 
+        0);
+    c.fill();
+
+    // top cap with a line
+    c.strokeStyle = rimGradient;
+    c.beginPath();
+    c.lineWidth = 0.005 * cScale;
+    c.moveTo(-canRadius * 0.34, -canRadius * 0.53);
+    c.lineTo(canRadius * 0.34, -canRadius * 0.53);
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    c.stroke();
+
+    // Bottom cap with a line
+    c.strokeStyle = rimGradient;
+    c.beginPath();
+    c.lineWidth = 0.005 * cScale;
+    c.moveTo(-canRadius * 0.34, canRadius * 0.7);
+    c.lineTo(canRadius * 0.34, canRadius * 0.7);
+    c.stroke();
+    
+    // Draw spray radius slider below the can
+    const spraySldrWidth = canRadius * 1.4;
+    const spraySldrHeight = knobRadius * 0.25;
+    // Bottom aligned with lightness slider bottom (lightness slider is at Y=0 to colorWheelRadius*2)
+    // Spraypaint icon is at Y=colorWheelRadius*0.8, so bottom should be at colorWheelRadius*2 - colorWheelRadius*0.8 = colorWheelRadius*1.2
+    const spraySldrBottomY = colorWheelRadius * 0.9;
+    const spraySldrX = -spraySldrWidth / 2;
+    
+    // Draw slider background - wedge shape (shorter on left, taller on right)
+    // Left and right sides are vertical, bottom is horizontal, top angles downward from left to right
+    c.fillStyle = `hsla(210, 80%, 10%, ${0.5 * colorMenuOpacity})`;
+    c.beginPath();
+    const leftHeight = spraySldrHeight; // Shorter on left
+    const rightHeight = spraySldrHeight * 1.8; // Taller on right
+    c.moveTo(spraySldrX, spraySldrBottomY - leftHeight); // Top left
+    c.lineTo(spraySldrX + spraySldrWidth, spraySldrBottomY - rightHeight); // Top right (angled top line)
+    c.lineTo(spraySldrX + spraySldrWidth, spraySldrBottomY); // Bottom right (vertical)
+    c.lineTo(spraySldrX, spraySldrBottomY); // Bottom left (horizontal)
+    c.closePath();
+    c.fill();
+    c.strokeStyle = `hsla(210, 60%, 80%, ${colorMenuOpacity * 0.3})`;
+    c.lineWidth = 0.004 * cScale;
+    c.stroke();
+    
+    // Calculate slider position (0.05 to 0.5 range)
+    const sliderValue = (spraypaintRadius - 0.05) / (0.5 - 0.05);
+    const sliderKnobX = spraySldrX + sliderValue * spraySldrWidth;
+    // Knob Y should follow the angled top line
+    const knobHeightAtPos = leftHeight - (leftHeight - rightHeight) * sliderValue;
+    const sliderKnobRadius = knobRadius * 0.25;
+    const sliderKnobY = spraySldrBottomY - knobHeightAtPos / 2;
+    
+    // Draw slider knob
+    c.beginPath();
+    c.arc(sliderKnobX, sliderKnobY, sliderKnobRadius, 0, 2 * Math.PI);
+    const sliderKnobGradient = c.createRadialGradient(
+        sliderKnobX - sliderKnobRadius * 0.3,
+        sliderKnobY - sliderKnobRadius * 0.3,
+        0,
+        sliderKnobX,
+        sliderKnobY,
+        sliderKnobRadius
+    );
+    sliderKnobGradient.addColorStop(0, `hsla(210, 0%, 80%, ${colorMenuOpacity})`);
+    sliderKnobGradient.addColorStop(1, `hsla(210, 0%, 50%, ${colorMenuOpacity})`);
+    c.fillStyle = sliderKnobGradient;
+    c.fill();
+    c.strokeStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`; 
+    c.lineWidth = 0.005 * cScale;
+    c.stroke();
+    
+    // Draw value label
+    c.font = `${0.28 * knobRadius}px verdana`;
+    c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+    c.textAlign = 'center';
+    c.textBaseline = 'top';
+    c.fillText('Spray ∅', 0, spraySldrBottomY + 0.27 * knobRadius);
+    
+    c.restore();
+    
+    // Draw three color preset buttons below the color wheel ---------
+    const buttonRadius = knobRadius * 0.35;
+    const buttonY = colorWheelRadius * 2 + spacing * 1.5;
+    const buttonSpacing = knobRadius * 1.2;
+    // Position fourth button centered below lightness slider
+    const lightnessSliderCenterX = lightnessSliderX + sliderWidth / 2;
+    const buttonStartX = lightnessSliderCenterX - buttonSpacing * 3;
+    
+    // Black button
+    c.beginPath();
+    c.arc(buttonStartX, buttonY, buttonRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.01 * cScale;
+    c.stroke();
+    
+    // Black and white button
+    c.beginPath();
+    c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0.5 * Math.PI, 1.5 * Math.PI);
+    c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
+    c.fill();
+    c.beginPath();
+    c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0.5 * Math.PI, 1.5 * Math.PI, true);
+    c.fillStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
+    c.fill();
+    c.beginPath();
+    c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0, 2 * Math.PI);
+    c.stroke();
+    
+    // White button
+    c.beginPath();
+    c.arc(buttonStartX + buttonSpacing * 2, buttonY, buttonRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(0, 0%, 100%, ${colorMenuOpacity})`;
+    c.fill();
+    c.stroke();
+    
+    // Selected color button
+    c.beginPath();
+    c.arc(buttonStartX + buttonSpacing * 3, buttonY, buttonRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity})`;
+    c.fill();
+    c.stroke();
+    
+    // Only draw knobs and segregation buttons when spray tool is not active
+    if (!spraypaintActive) {
+        // Calculate knob positions first (needed for segregation button placement)
+        const hueTickerTargetX = lightnessSliderX + sliderWidth / 2; // Center below lightness slider
+        const hueTickerOriginalX = colorWheelRadius + knobRadius * 2.4;
+        const knobOffset = hueTickerTargetX - hueTickerOriginalX; // Calculate offset
+        const hueSensitivityKnobX = knobRadius + knobOffset; // Move by same offset
+        const hueSensitivityKnobY = colorWheelRadius * 2 + buttonRowHeight + knobRadius * 1.5 + knobRadius / 3;
+        const hueTickerKnobX = hueTickerTargetX;
+        const hueTickerKnobY = hueSensitivityKnobY;
+        
+        // Draw segregation radio buttons below the knobs
+        const segRadioRadius = knobRadius * 0.25;
+        const segButtonY = hueTickerKnobY + knobRadius * 2.6;
+        const segButtonSpacing = knobRadius * 1.3;
+        const segButtonStartX = colorWheelRadius - segButtonSpacing * 0.5;
+        const segLabels = ['None', 'Partial', 'Total'];
+        const segModeMap = [0, 2, 1]; // Map visual position to segregationMode value
+    
+    for (let i = 0; i < 3; i++) {
+        const segBtnX = segButtonStartX + i * segButtonSpacing;
+        
+        // Draw outer circle
+        c.beginPath();
+        c.arc(segBtnX, segButtonY, segRadioRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(210, 0%, 20%, ${0.3 * colorMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.04 * knobRadius;
+        c.stroke();
+        
+        // Draw filled center if selected
+        if (segregationMode === segModeMap[i]) {
+            c.beginPath();
+            c.arc(segBtnX, segButtonY, segRadioRadius * 0.5, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+            c.fill();
+        }
+        
+        // Draw label below button
+        c.textAlign = 'center';
+        c.textBaseline = 'top';
+        
+        // Stroke and fill text for better visibility
+        c.font = `${0.24 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(0, 0%, 0%, ${0.5 * colorMenuOpacity})`;
+        c.fillText(segLabels[i], segBtnX + 2, segButtonY + segRadioRadius + 0.15 * knobRadius + 2);
+        c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+        c.fillText(segLabels[i], segBtnX, segButtonY + segRadioRadius + 0.15 * knobRadius);
+    }
+
+    // Draw "Color Separation" label above buttons
+    c.font = `${0.3 * knobRadius}px verdana`;
+    c.fillStyle = `hsla(0, 0%, 0%, ${0.5 * colorMenuOpacity})`;
+    //c.lineWidth = 0.02 * knobRadius;
+    c.fillText('Flocking by Color', (segButtonStartX + segButtonSpacing) + 2, (segButtonY + 3.3 * segRadioRadius) + 2);
+    c.fillStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.02 * knobRadius;
+    c.fillText('Flocking by Color', segButtonStartX + segButtonSpacing, segButtonY + 3.3 * segRadioRadius);
+            
+    // Draw hueSensitivity knob
+    const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - 1.6 * Math.PI);
+    const fullMeterSweep = 1.6 * Math.PI;
+    
+    // Draw background circle
+    c.beginPath();
+    c.arc(hueSensitivityKnobX, hueSensitivityKnobY, 1.05 * knobRadius, 0, 2 * Math.PI, false);
+    c.fillStyle = `hsla(210, 0%, 15%, ${0.9 * colorMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(210, 0%, 50%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    
+    // Calculate normalized value
+    const normalizedValue = (boidProps.hueSensitivity - 0) / (360 - 0);
+    
+    // Draw arc meter
+    const gradient = c.createLinearGradient(
+        hueSensitivityKnobX + Math.cos(meterStart) * knobRadius,
+        hueSensitivityKnobY + Math.sin(meterStart) * knobRadius,
+        hueSensitivityKnobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+        hueSensitivityKnobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+    );
+    gradient.addColorStop(0, `hsla(190, 0%, 60%, ${colorMenuOpacity})`);
+    gradient.addColorStop(0.5, `hsla(170, 0%, 80%, ${colorMenuOpacity})`);
+    c.strokeStyle = gradient;
+    c.beginPath();
+    c.arc(hueSensitivityKnobX, hueSensitivityKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
+    c.lineWidth = 0.02 * cScale;
+    c.stroke();
+    
+    // Draw needle
+    const needleAngle = meterStart + normalizedValue * fullMeterSweep;
+    const pointerLength = knobRadius * 0.6;
+    const pointerEndX = hueSensitivityKnobX + Math.cos(needleAngle) * pointerLength;
+    const pointerEndY = hueSensitivityKnobY + Math.sin(needleAngle) * pointerLength;
+    c.beginPath();
+    c.moveTo(hueSensitivityKnobX, hueSensitivityKnobY);
+    c.lineTo(pointerEndX, pointerEndY);
+    c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.008 * cScale;
+    c.stroke();
+
+    // Draw value label
+    c.font = `${0.25 * knobRadius}px verdana`;
+    c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
+    c.fillText((boidProps.hueSensitivity / 3.6).toFixed(0), hueSensitivityKnobX, hueSensitivityKnobY + 0.5 * knobRadius);
+    
+    // Draw label
+    c.font = `${0.29 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(210, 80%, 0%, ${0.6 * colorMenuOpacity})`;
+    c.lineWidth = 0.03 * knobRadius;
+    c.lineJoin = 'round';
+    c.strokeText('Speed', 0.04 * knobRadius + hueSensitivityKnobX, 0.04 * knobRadius + (hueSensitivityKnobY + 1.35 * knobRadius));
+    c.strokeText('Sensitivity', 0.04 * knobRadius + hueSensitivityKnobX, 0.04 * knobRadius + (hueSensitivityKnobY + 1.7 * knobRadius));
+    c.fillStyle = `hsla(210, 80%, 95%, ${colorMenuOpacity})`;
+    c.fillText('Speed', hueSensitivityKnobX, hueSensitivityKnobY + 1.35 * knobRadius);
+    c.fillText('Sensitivity', hueSensitivityKnobX, hueSensitivityKnobY + 1.7 * knobRadius);
+    
+    // Draw hueTicker knob (to the right of hueSensitivity knob)
+    // (hueTickerKnobX and hueTickerKnobY already defined above)
+    
+    // Draw background circle
+    c.beginPath();
+    c.arc(hueTickerKnobX, hueTickerKnobY, 1.05 * knobRadius, 0, 2 * Math.PI, false);
+    c.fillStyle = `hsla(210, 0%, 15%, ${0.9 * colorMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(210, 0%, 50%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    
+    // Convert hueTicker to normalized value using logarithmic scale
+    const tickerLogMin = Math.log(0.01);
+    const tickerLogMax = Math.log(10.0);
+    const tickerLogValue = Math.log(Math.max(0.01, Math.min(10.0, boidProps.hueTicker)));
+    const tickerNormalized = (tickerLogValue - tickerLogMin) / (tickerLogMax - tickerLogMin);
+    
+    // Draw arc meter
+    const tickerGradient = c.createLinearGradient(
+        hueTickerKnobX + Math.cos(meterStart) * knobRadius,
+        hueTickerKnobY + Math.sin(meterStart) * knobRadius,
+        hueTickerKnobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+        hueTickerKnobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+    );
+    tickerGradient.addColorStop(0, `hsla(190, 0%, 60%, ${colorMenuOpacity})`);
+    tickerGradient.addColorStop(0.5, `hsla(170, 0%, 80%, ${colorMenuOpacity})`);
+    c.strokeStyle = tickerGradient;
+    c.beginPath();
+    c.arc(hueTickerKnobX, hueTickerKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * tickerNormalized);
+    c.lineWidth = 0.02 * cScale;
+    c.stroke();
+    
+    // Draw needle
+    const tickerNeedleAngle = meterStart + tickerNormalized * fullMeterSweep;
+    const tickerPointerLength = knobRadius * 0.6;
+    const tickerPointerEndX = hueTickerKnobX + Math.cos(tickerNeedleAngle) * tickerPointerLength;
+    const tickerPointerEndY = hueTickerKnobY + Math.sin(tickerNeedleAngle) * tickerPointerLength;
+    c.beginPath();
+    c.moveTo(hueTickerKnobX, hueTickerKnobY);
+    c.lineTo(tickerPointerEndX, tickerPointerEndY);
+    c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.008 * cScale;
+    c.stroke();
+
+    // Draw value label
+    c.font = `${0.25 * knobRadius}px verdana`;
+    c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
+    if (boidProps.hueTicker < 0.1) {
+        c.fillText((boidProps.hueTicker).toFixed(2), hueTickerKnobX, hueTickerKnobY + 0.5 * knobRadius);
+    } else {
+    c.fillText((boidProps.hueTicker).toFixed(1), hueTickerKnobX, hueTickerKnobY + 0.5 * knobRadius);
+    }
+
+    // Draw label
+    c.font = `${0.29 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
+    c.lineWidth = 0.03 * knobRadius;
+    c.lineJoin = 'round';
+    c.strokeText('Color', 0.04 * knobRadius + hueTickerKnobX, 0.04 * knobRadius + (hueTickerKnobY + 1.35 * knobRadius));
+    c.strokeText('Cycling', 0.04 * knobRadius + hueTickerKnobX, 0.04 * knobRadius + (hueTickerKnobY + 1.7 * knobRadius));
+    c.fillStyle = `hsla(210, 0%, 95%, ${colorMenuOpacity})`;
+    c.fillText('Color', hueTickerKnobX, hueTickerKnobY + 1.35 * knobRadius);
+    c.fillText('Cycling', hueTickerKnobX, hueTickerKnobY + 1.7 * knobRadius);
+    } 
+    
+    c.restore();
+}
+
+//  MAKE BOIDS  ---------------------------------------------------------------------
+function resetParameters() {
+    // Reset all parameters to defaults
+    boidRadius = 0.02;
+    boidProps.numBoids = 2200;
+    boidProps.minDistance = Math.max(0.08, 5.0 * boidRadius);
+    boidProps.avoidFactor = 50.0;
+    boidProps.matchingFactor = 10.0;
+    boidProps.visualRange = 10.0 * boidRadius;
+    boidProps.centeringFactor = 5.0;
+    boidProps.speedLimit = 1.1;
+    boidProps.turnFactor = 1.0;
+    boidProps.tailLength = 10;
+    boidProps.tailWidth = 1.0;
+    
+    // Reset tail color mode to black
+    tailColorMode = 0;
+    
+    // Reset boid type to arrows
+    selectedBoidType = 0;
+    doArrowBoids();
+    
+    // Update all boid radii
+    for (let i = 0; i < Boids.length; i++) {
+        Boids[i].radius = boidRadius;
+    }
+    
+    // Reset boid count to the final count established during startup
+    if (finalBoidCount > 0) {
+        const currentCount = Boids.length;
+        
+        if (currentCount > finalBoidCount) {
+            // Remove excess boids
+            const removeCount = currentCount - finalBoidCount;
+            cullBoids(removeCount);
+        } else if (currentCount < finalBoidCount) {
+            // Add boids to reach final count
+            const addCount = finalBoidCount - currentCount;
+            const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
+            
+            for (let i = 0; i < addCount; i++) {
+                const ang = Math.random() * 2 * Math.PI;
+                const pos = new Vector2(
+                    0.5 * simWidth + Math.cos(ang) * spawnRadius,
+                    0.5 * simHeight + Math.sin(ang) * spawnRadius);
+                const vel = new Vector2(0, 0);
+                const hue = 0;
+                
+                const newBoid = new BOID(pos, vel, hue, false, false);
+                newBoid.arrow = selectedBoidType === 0;
+                newBoid.circle = selectedBoidType === 1;
+                newBoid.airfoil = selectedBoidType === 2;
+                
+                // Insert before the last 2 special boids
+                Boids.splice(Boids.length - 2, 0, newBoid);
+            }
+        }
+    }
+}
+
+function makeBoids() {
+    Boids = [];
+    boidRadius = 0.02;
+
+    boidProps = {
+        numBoids: 2200,
+        marginX: simWidth * 0.2,
+        marginY: simHeight * 0.2,
+        minDistance: 5.0 * boidRadius, // Rule #1 - The distance to stay away from other Boids
+        avoidFactor: 50.0, // Rule #1 -Adjust velocity by this %
+        matchingFactor: 10.0, // Rule #2 - Adjust velocity by this %
+        visualRange: 10.0 * boidRadius, // How far Boids can see each other
+        centeringFactor: 5.0, // Rule #3 - Adjust velocity by this %
+        speedLimit: 1.1, // clamp speed to this value
+        turnFactor: 1.0, // How strongly Boids turn back when near edge
+        tailLength: 10, // Number of trail points to keep (negative for last N points)
+        tailWidth: 1.0, // Width of tail line (1.0 to 5.0)
+        doTails: true,
+        blackBoidFlashInterval: 5.0, // Flash every 5 seconds
+        blackBoidFlashTimer: 0,
+        currentFlashCycle: 0, // Track which flash cycle we're in
+        hueSensitivity: 40, // How much the hue changes based on speed
+        hueTicker: 0.01, // How fast the hue cycles
+    };
+
+    // (no trails for phone?)  ---------
+    if (simWidth < simHeight) {
+        boidProps.doTails = true;
+    } else {
+        boidProps.doTails = true;
+    }
+
+    // Start with only 100 boids (will ramp up gradually)
+    const initialBoidCount = 100;
+    const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
+    let pos, vel, ang;
+    for (var i = 0; i < initialBoidCount; i += 1) {
+        // Spawn from anywhere around the circle
+        ang = Math.random() * 2 * Math.PI;
+        pos = new Vector2(
+            0.5 * simWidth + Math.cos(ang) * spawnRadius,
+            0.5 * simHeight + Math.sin(ang) * spawnRadius);
+        vel = new Vector2(0, 0);
+        hue = 0;
+        if (i == 0) {
+            // White boid
+            Boids.push(new BOID(pos, vel, hue, true, false));
+        } else if (i == 1) {
+            // Black boid
+            Boids.push(new BOID(pos, vel, hue, false, true));
+        } else {
+            Boids.push(new BOID(pos, vel, hue, false, false));
+        }
+    }
+}
+
+// HANDLE BOID BOUNDS -------------
+function handleBounds(boid) {
+    if (boid.pos.x <= boidProps.marginX) {
+        boid.vel.x += boidProps.turnFactor * deltaT;
+    }
+    if (boid.pos.x >= simWidth - boidProps.marginX) {
+        boid.vel.x -= boidProps.turnFactor * deltaT;
+    }
+    if (boid.pos.y <= boidProps.marginY) {
+        boid.vel.y += boidProps.turnFactor * deltaT;
+    }
+    if (boid.pos.y >= simHeight - boidProps.marginY) {
+        boid.vel.y -= boidProps.turnFactor * deltaT;
+    }
+}
+
+// MAGNET CLASS -------------
+class MAGNET {
+    constructor() {
+        this.x = 0.5 * simWidth;
+        this.y = 0.5 * simHeight;
+        this.radius = 0.04 * Math.min(simWidth, simHeight);
+        this.effectRadius = 0.5 * Math.min(simWidth, simHeight);
+        this.pulser = 0;
+        this.lightness = 1.0;
+    }
+    draw() {
+        this.pulser += 0.05;
+        if (this.pulser >= 2 *Math.PI) {
+            this.pulser = 0;
+        }
+        this.lightness = Math.abs(Math.cos(this.pulser)) * 0.4 + 0.6;
+        c.save();
+        c.translate(this.x * cScale, canvas.height - this.y * cScale);
+
+        // Draw magnet sphere
+        c.beginPath();
+        c.arc(0, 0, this.radius * cScale, 0, 2 * Math.PI);
+        const sphereGradient = c.createRadialGradient(
+            -0.2 * this.radius * cScale, 
+            -0.3 * this.radius * cScale,
+            0,
+            -0.2 * this.radius * cScale, 
+            -0.3 * this.radius * cScale,
+            this.radius * cScale);
+        sphereGradient.addColorStop(0, `hsl(200, 80%, ${this.lightness * 60}%)`);
+        sphereGradient.addColorStop(1, `hsl(200, 80%, ${this.lightness * 20}%)`);
+        c.fillStyle = sphereGradient;
+        c.fill();
+
+        // Draw glowing aura 
+        c.beginPath();
+        c.arc(0, 0, this.effectRadius * cScale, 0, 2 * Math.PI);
+        const auraGradient = c.createRadialGradient(
+            0, 
+            0, 
+            0, 
+            0, 
+            0, 
+            this.effectRadius * cScale);
+        auraGradient.addColorStop(0, `hsl(180, 80%, ${this.lightness * 50}%, 0.3)`);
+        auraGradient.addColorStop(1, `hsl(180, 80%, ${this.lightness * 20}%, 0.0)`);
+        c.fillStyle = auraGradient;
+        c.fill();
+
+        c.restore();
+    }
+}
+
+// Define magnet -------------
+function makeMagnet() {
+    Magnet = [];
+    Magnet.push(new MAGNET);
+}
+
+//  HANDLE MAGNET -------------
+function handleMagnet(boid) {
+    if (magnetActive) {
+        const magnetDx = Magnet[0].x - boid.pos.x;
+        const magnetDy = Magnet[0].y - boid.pos.y;
+        const magnetDistSq = magnetDx * magnetDx + magnetDy * magnetDy;
+        const magnetEffectRadius = Magnet[0].effectRadius;
+        const radiusSq = magnetEffectRadius * magnetEffectRadius;
+        
+        if (magnetDistSq < radiusSq && magnetDistSq > 0) {
+            // Only compute sqrt when we know we need it
+            const magnetDist = Math.sqrt(magnetDistSq);
+            const magnetStrength = 7;
+            boid.vel.x += magnetDx * magnetStrength * deltaT;
+            boid.vel.y += magnetDy * magnetStrength * deltaT;
+        }
+    }
+}
+
+//  HANDLE CLOUDS -------------
+function handleClouds(boid) {
+    // CLOUD AVOIDANCE - loop through all Clouds
+    if (showClouds) {
+        for (let cloud of Clouds) {
+            const cloudDx = boid.pos.x - cloud.x;
+            const cloudDy = boid.pos.y - cloud.y;
+            const cloudDistSq = cloudDx * cloudDx + cloudDy * cloudDy;
+            const cloudAvoidRadius = cloud.radius + boidProps.minDistance * 1.5;
+            const radiusSq = cloudAvoidRadius * cloudAvoidRadius;
+            
+            if (cloudDistSq < radiusSq && cloudDistSq > 0) {
+                // Only compute sqrt when we know we need it
+                const cloudDist = Math.sqrt(cloudDistSq);
+                const cloudStrength = boidProps.avoidFactor * 3.0 * (cloudAvoidRadius - cloudDist) / cloudDist;
+                boid.vel.x += cloudDx * cloudStrength * deltaT;
+                boid.vel.y += cloudDy * cloudStrength * deltaT;
+            }
+        }
+    }
+    
+    // MOVING AIRPLANE AVOIDANCE
+    if (showPlane) {
+        for (let plane of Airplane) {
+            const planeDx = boid.pos.x - plane.x;
+            const planeDy = boid.pos.y - plane.y;
+            const planeDistSq = planeDx * planeDx + planeDy * planeDy;
+            const cloudAvoidRadius = plane.radius + boidProps.minDistance * 1.5;
+            const radiusSq = cloudAvoidRadius * cloudAvoidRadius;
+            
+            if (planeDistSq < radiusSq && planeDistSq > 0) {
+                const planeDist = Math.sqrt(planeDistSq);
+                const planeStrength = boidProps.avoidFactor * 3.0 * (cloudAvoidRadius - planeDist) / planeDist;
+                boid.vel.x += planeDx * planeStrength * deltaT;
+                boid.vel.y += planeDy * planeStrength * deltaT;
+            }
+        }
+    }
+
+    // BALLOON AVOIDANCE
+    if (showBalloons) {
+        for (let balloon of Balloons) {
+            const balloonDx = boid.pos.x - balloon.pos.x;
+            const balloonDy = boid.pos.y - balloon.pos.y;
+            const balloonDistSq = balloonDx * balloonDx + balloonDy * balloonDy;
+            const balloonAvoidRadius = balloon.radius + boidProps.minDistance * 1.5;
+            const radiusSq = balloonAvoidRadius * balloonAvoidRadius;
+            
+            if (balloonDistSq < radiusSq && balloonDistSq > 0) {
+                const balloonDist = Math.sqrt(balloonDistSq);
+                const balloonStrength = boidProps.avoidFactor * 3.0 * (balloonAvoidRadius - balloonDist) / balloonDist;
+                boid.vel.x += balloonDx * balloonStrength * deltaT;
+                boid.vel.y += balloonDy * balloonStrength * deltaT;
+            }
+        }
+    }
+}
+
+//  HANDLE FLASHING -------------
+function handleFlashing(boid) {
+    // Update flash timer
+    if (boid.flashing) {
+        boid.flashTimer += deltaT;
+        if (boid.flashTimer >= boid.flashDuration) {
+            boid.flashing = false;
+            boid.flashTimer = 0;
+            boid.flashCooldown = boid.flashCooldownDuration; // Start cooldown
+        }
+    }
+    
+    // Update cooldown timer
+    if (boid.flashCooldown > 0) {
+        boid.flashCooldown -= deltaT;
+        if (boid.flashCooldown < 0) {
+            boid.flashCooldown = 0;
+        }
+    }
+    
+    // Check if nearby boids are flashing and respond
+    // Only respond if not currently flashing, not in cooldown, not the blackBoid,
+    // and hasn't already flashed in this cycle
+    if (!boid.flashing && boid.flashCooldown <= 0 && !boid.blackBoid && boid.lastFlashCycle < boidProps.currentFlashCycle) {
+        const nearbyBoids = SpatialGrid.getNearby(boid, boidProps.visualRange);
+        const flashRangeSq = boidProps.visualRange * boidProps.visualRange;
+        
+        for (let otherBoid of nearbyBoids) {
+            if (otherBoid !== boid && otherBoid.flashing && otherBoid.flashTimer > 0) {
+                const dx = boid.pos.x - otherBoid.pos.x;
+                const dy = boid.pos.y - otherBoid.pos.y;
+                const distSq = dx * dx + dy * dy;
+                
+                if (distSq < flashRangeSq) {
+                    // Trigger flash with a small random delay
+                    //const delay = Math.random() * 0.05; // 0-50ms delay
+                    const delay = 0.01 + Math.random() * 0.04;
+                    boid.flashTimer = -delay;
+                    boid.flashing = true;
+                    boid.lastFlashCycle = boidProps.currentFlashCycle; // Mark this cycle as processed
+                    break;
+                }
+            }
+        }
+    }
+}
+
+//  HANDLE BOID RULES -------------
+function handleBoidRules(boid) {
+    let separationX = 0;
+    let separationY = 0;
+    let avgVelX = 0;
+    let avgVelY = 0;
+    let centerX = 0;
+    let centerY = 0;
+    let neighborCount = 0;
+    
+    // Get nearby boids from spatial hash
+    const nearbyBoids = SpatialGrid.getNearby(boid, boidProps.visualRange);
+    const visualRangeSq = boidProps.visualRange * boidProps.visualRange;
+    const minDistSq = boidProps.minDistance * boidProps.minDistance;
+    const avoidFactor = boidProps.avoidFactor;
+    const minDistance = Math.max(0.08, 5.0 * boidRadius); // Use this to keep separation consistent if boidRadius changes
+    
+    // Use traditional for loop for better performance
+    for (let i = 0; i < nearbyBoids.length; i++) {
+        const otherBoid = nearbyBoids[i];
+        if (otherBoid !== boid) {
+            const dx = boid.pos.x - otherBoid.pos.x;
+            const dy = boid.pos.y - otherBoid.pos.y;
+            const distSq = dx * dx + dy * dy;
+            
+            if (distSq < visualRangeSq && distSq > 0) {
+                // Check if segregation mode is active and hues match (within tolerance)
+                const hueMatch = segregationMode === 0 || Math.abs(boid.hue - otherBoid.hue) < 10;
+                
+                // RULE #2 - ALIGNMENT: accumulate velocities (only if hue matches in segregate modes)
+                if (hueMatch) {
+                    avgVelX += otherBoid.vel.x;
+                    avgVelY += otherBoid.vel.y;
+                }
+                
+                // RULE #3 - COHESION: accumulate positions (only if hue matches in segregate modes)
+                if (hueMatch) {
+                    centerX += otherBoid.pos.x;
+                    centerY += otherBoid.pos.y;
+                }
+                
+                // RULE #1 - SEPARATION: depends on mode (mode 1: same hue only, mode 2: all boids)
+                const applyRule1 = (segregationMode === 0) || (segregationMode === 1 && hueMatch) || (segregationMode === 2);
+                if (applyRule1 && distSq < minDistSq) {
+                    const dist = Math.sqrt(distSq);
+                    const strength = avoidFactor * (minDistance - dist) / dist;
+                    separationX += dx * strength;
+                    separationY += dy * strength;
+                }
+
+                // Only count as neighbor for alignment/cohesion if hue matches in segregate modes
+                if (hueMatch) {
+                    neighborCount++;
+                }
+            }
+        }
+    }
+
+    // RULE #1 - SEPARATION
+    boid.vel.x += separationX * deltaT;
+    boid.vel.y += separationY * deltaT;
+    
+    if (neighborCount > 0) {
+        // RULE #2 - ALIGNMENT
+        const invNeighborCount = 1.0 / neighborCount;
+        avgVelX *= invNeighborCount;
+        avgVelY *= invNeighborCount;
+        boid.vel.x += (avgVelX - boid.vel.x) * boidProps.matchingFactor * deltaT;
+        boid.vel.y += (avgVelY - boid.vel.y) * boidProps.matchingFactor * deltaT;
+        
+        // RULE #3 - COHESION
+        centerX *= invNeighborCount;
+        centerY *= invNeighborCount;
+        boid.vel.x += (centerX - boid.pos.x) * boidProps.centeringFactor * deltaT;
+        boid.vel.y += (centerY - boid.pos.y) * boidProps.centeringFactor * deltaT;
+    }
+}
+
+function drawSkyMenu() {
+    // Only draw menu if it has some opacity
+    if (skyMenuOpacity <= 0 || !window.skyRenderer) return;
+    
+    const skyCtrl = window.skyRenderer.effectController;
+    const menuItems = [
+        skyCtrl.turbidity,
+        skyCtrl.rayleigh,
+        skyCtrl.mieCoefficient,
+        skyCtrl.mieDirectionalG,
+        skyCtrl.azimuth,
+        -skyCtrl.rotationSpeed,
+        skyCtrl.elevation,
+        skyCtrl.exposure,
+        skyCtrl.fov,
+        autoElevationRate
+    ];
+    
+    const ranges = [
+        {min: 0, max: 20},           // turbidity
+        {min: 0, max: 4},             // rayleigh
+        {min: 0, max: 0.1},           // mieCoefficient
+        {min: 0, max: 1},             // mieDirectionalG
+        {min: 0, max: 359},           // azimuth
+        {min: -2, max: 2},            // rotationSpeed
+        {min: -2, max: 10},           // elevation
+        {min: 0, max: 1},             // exposure
+        {min: 10, max: 120},          // fov
+        {min: 0.01, max: 0.10}        // autoElevationRate
+    ];
+    
+    const labels = ['Turbidity', 'Rayleigh Scattering', 'Mie Scattering', 'Scatter Focus', 'Sun Azimuth', 'Auto Azimuth', 'Sun Elevation', 'Exposure', 'Field of View', 'Auto Elevation'];
+    
+    const knobRadius = 0.1 * cScale;
+    const knobSpacing = knobRadius * 3;
+    const menuUpperLeftX = skyMenuX * cScale;
+    const menuUpperLeftY = canvas.height - skyMenuY * cScale;
+    const fullMeterSweep = 1.6 * Math.PI;
+    const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+    
+    c.save();
+    c.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
+    
+    // Draw overall menu background with rounded corners
+    const menuWidth = knobSpacing * 3;
+    const menuHeight = knobSpacing * 2.25;
+    const padding = 1.7 * knobRadius;
+    
+    const cornerRadius = 0.05 * cScale;
+    c.beginPath();
+    c.moveTo(-padding + cornerRadius, -padding);
+    c.lineTo(menuWidth + padding - cornerRadius, -padding);
+    c.quadraticCurveTo(menuWidth + padding, -padding, menuWidth + padding, -padding + cornerRadius);
+    c.lineTo(menuWidth + padding, menuHeight + padding - cornerRadius);
+    c.quadraticCurveTo(menuWidth + padding, menuHeight + padding, menuWidth + padding - cornerRadius, menuHeight + padding);
+    c.lineTo(-padding + cornerRadius, menuHeight + padding);
+    c.quadraticCurveTo(-padding, menuHeight + padding, -padding, menuHeight + padding - cornerRadius);
+    c.lineTo(-padding, -padding + cornerRadius);
+    c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
+    c.closePath();
+    c.strokeStyle = `hsla(30, 80%, 60%, ${skyMenuOpacity})`;
+    c.lineWidth = 0.004 * cScale;
+    const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsla(30, 70%, 25%, ${0.9 * skyMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsla(30, 70%, 10%, ${0.9 * skyMenuOpacity})`);
+    c.fillStyle = menuGradient;
+    c.fill();
+    c.stroke();
+    
+    // Draw close icon in upper left corner (round button)
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+    
+    // Red background circle
+    c.beginPath();
+    c.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(0, 70%, 40%, ${skyMenuOpacity})`;
+    c.fill();
+    
+    // Black X
+    c.strokeStyle = `hsla(0, 0%, 0%, ${skyMenuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.lineCap = 'round';
+    const xSize = closeIconRadius * 0.4;
+    c.beginPath();
+    c.moveTo(closeIconX - xSize, closeIconY - xSize);
+    c.lineTo(closeIconX + xSize, closeIconY + xSize);
+    c.moveTo(closeIconX + xSize, closeIconY - xSize);
+    c.lineTo(closeIconX - xSize, closeIconY + xSize);
+    c.stroke();
+    
+    // Draw title
+    c.fillStyle = `hsla(30, 80%, 80%, ${skyMenuOpacity})`;
+    c.font = `bold ${0.05 * cScale}px verdana`;
+    c.textAlign = 'center';
+    c.fillText('SKY', menuWidth / 2, -padding + 0.04 * cScale);
+    
+    // Draw knobs for each parameter
+    for (let i = 0; i < menuItems.length && i < 10; i++) {
+        let x = (i % 4) * knobSpacing;
+        let y = Math.floor(i / 4) * knobSpacing;
+        // Special positioning for exposure knob (index 7) - move to column 1, row 2
+        if (i === 7) {
+            x = 1 * knobSpacing;
+            y = 2 * knobSpacing;
+        }
+        // Special positioning for FOV knob (index 8) - move to column 3, row 2
+        if (i === 8) {
+            x = 3 * knobSpacing;
+            y = 2 * knobSpacing;
+        }
+        // Special positioning for autoElevationRate knob (index 9) - move to column 3, row 1
+        if (i === 9) {
+            x = 3 * knobSpacing;
+            y = 1 * knobSpacing;
+        }
+        
+        const value = menuItems[i];
+        const range = ranges[i];
+        const normalized = (value - range.min) / (range.max - range.min);
+        
+        // Draw knob background circle
+        c.beginPath();
+        c.arc(x, y, knobRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(30, 40%, 15%, ${0.9 *skyMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.003 * cScale;
+        c.stroke();
+        
+        // Draw meter arc - for azimuth (index 4), draw full circle
+        c.beginPath();
+        if (i === 4) {
+            // Azimuth - draw full circle
+            c.arc(x, y, knobRadius * 0.85, 0, 2 * Math.PI);
+        } else if (i === 8) {
+            // FOV knob - draw inverted arc
+            c.arc(x, y, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * (1 - normalized));
+        } else {
+            // Other knobs - draw partial arc
+            c.arc(x, y, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalized);
+        }
+        const gradient = c.createLinearGradient(
+            x + Math.cos(meterStart) * knobRadius,
+            y + Math.sin(meterStart) * knobRadius,
+            x + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+            y + Math.sin(meterStart + fullMeterSweep) * knobRadius
+        );
+        gradient.addColorStop(0, `hsla(20, 80%, 60%, ${skyMenuOpacity})`);
+        gradient.addColorStop(0.5, `hsla(35, 80%, 60%, ${skyMenuOpacity})`);
+        c.strokeStyle = gradient;
+        //c.strokeStyle = `hsla(30, 80%, 60%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.02 * cScale;
+        c.stroke();
+        
+        // Draw knob pointer
+        let pointerAngle;
+        if (i === 4) {
+            // Azimuth - full 360 degree rotation (reversed)
+            pointerAngle = (1 - normalized) * 2 * Math.PI;
+        } else if (i === 8) {
+            // FOV - inverted
+            pointerAngle = meterStart + fullMeterSweep * (1 - normalized);
+        } else {
+            // Other knobs - normal
+            pointerAngle = meterStart + fullMeterSweep * normalized;
+        }
+        const pointerLength = knobRadius * 0.6;
+        const pointerEndX = x + Math.cos(pointerAngle) * pointerLength;
+        const pointerEndY = y + Math.sin(pointerAngle) * pointerLength;
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(pointerEndX, pointerEndY);
+        c.strokeStyle = `hsla(30, 80%, 80%, ${skyMenuOpacity})`;
+        c.lineWidth = 0.008 * cScale;
+        c.stroke();
+        
+        // Draw label
+        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+        c.font = `${0.032 * cScale}px sans-serif`;
+        c.textAlign = 'center';
+        c.fillText(labels[i], x, y + knobRadius + 0.04 * cScale);
+        
+        // Draw value
+        let decimals;
+        if (i === 1 || i === 5 || i === 7 || i === 9) decimals = 2; // Concentration, sun movement, exposure, auto elevation rate
+        else if (i === 4) decimals = 0; // Azimuth
+        else if (i === 6) decimals = 1; // Elevation
+        else decimals = value < 1 ? 3 : value < 10 ? 1 : 0; // Default logic
+        let displayValue = value.toFixed(decimals);
+        if (i === 4 || i === 8) displayValue += '°'; // Add degree symbol for azimuth and FOV
+        c.fillStyle = `hsla(150, 50%, 60%, ${skyMenuOpacity})`;
+        c.font = `${0.025 * cScale}px sans-serif`;
+        c.fillText(displayValue, x, y + knobRadius * 0.60);
+    }
+    
+    // Draw toggle buttons below the knobs
+    const buttonY = knobSpacing * 2;
+    const checkboxRadius = knobRadius * 0.25;
+    
+    // Auto Rotate checkbox (centered under Rotation Speed knob at col 1, row 1)
+    const autoRotateX = knobSpacing * 1.0;
+    const autoRotateY = knobSpacing * 1.0;
+    
+    // Draw outer circle with knob fill color
+    c.beginPath();
+    c.arc(autoRotateX, autoRotateY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(30, 40%, 15%, ${0.9 * skyMenuOpacity})`; // Knob fill color
+    c.fill();
+    c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    
+    // Draw filled center (green when on, red when off)
+    c.beginPath();
+    c.arc(autoRotateX, autoRotateY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+    if (skyCtrl.autoRotate) {
+        c.fillStyle = `hsla(120, 80%, 50%, ${skyMenuOpacity})`; // Green when active
+    } else {
+        c.fillStyle = `hsla(0, 80%, 50%, ${skyMenuOpacity})`; // Red when inactive
+    }
+    c.fill();
+    
+    // Auto Elevation checkbox (centered under Elevation Rate knob at col 3, row 1)
+    const autoElevationX = knobSpacing * 3.0;
+    const autoElevationY = knobSpacing * 1.0;
+    
+    // Draw outer circle with knob fill color
+    c.beginPath();
+    c.arc(autoElevationX, autoElevationY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(30, 40%, 15%, ${0.9 * skyMenuOpacity})`; // Knob fill color
+    c.fill();
+    c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    
+    // Draw filled center (green when on, red when off)
+    c.beginPath();
+    c.arc(autoElevationX, autoElevationY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+    if (autoElevation) {
+        c.fillStyle = `hsla(120, 80%, 50%, ${skyMenuOpacity})`; // Green when active
+    } else {
+        c.fillStyle = `hsla(0, 80%, 50%, ${skyMenuOpacity})`; // Red when inactive
+    }
+    c.fill();
+    
+    // Show Grid checkbox (centered under FOV knob at col 3, row 2)
+    const showGridX = knobSpacing * 3.0;
+    const showGridY = knobSpacing * 2.0;
+    
+    // Draw outer circle with knob fill color
+    c.beginPath();
+    c.arc(showGridX, showGridY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(30, 40%, 15%, ${0.9 * skyMenuOpacity})`; // Knob fill color
+    c.fill();
+    c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    
+    // Draw filled center (green when on, red when off)
+    c.beginPath();
+    c.arc(showGridX, showGridY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+    if (skyCtrl.showGrid) {
+        c.fillStyle = `hsla(120, 80%, 50%, ${skyMenuOpacity})`; // Green when active
+    } else {
+        c.fillStyle = `hsla(0, 80%, 50%, ${skyMenuOpacity})`; // Red when inactive
+    }
+    c.fill();
+    
+    // Object visibility toggle buttons - 2x2 grid centered below azimuth knob (column 0)
+    const buttonRowY = buttonY;
+    const buttonSpacing = knobRadius * 1.5;
+    const gridCenterX = knobSpacing * 0.0; // Column 0 (azimuth)
+    const buttonRowSpacing = knobRadius * 1.2;
+    
+    // Clouds toggle (top-left)
+    const cloudsX = gridCenterX - 0.5 * buttonSpacing;
+    const cloudsY = buttonRowY - 0.5 * buttonRowSpacing;
+    c.beginPath();
+    c.arc(cloudsX, cloudsY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    if (showClouds) {
+        c.beginPath();
+        c.arc(cloudsX, cloudsY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+        c.fill();
+    }
+    c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+    c.font = `${0.028 * cScale}px sans-serif`;
+    c.fillText('Clouds', cloudsX, cloudsY + knobRadius * 0.5);
+    
+    // Plane toggle (top-right)
+    const planeX = gridCenterX + 0.5 * buttonSpacing;
+    const planeY = buttonRowY - 0.5 * buttonRowSpacing;
+    c.beginPath();
+    c.arc(planeX, planeY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    if (showPlane) {
+        c.beginPath();
+        c.arc(planeX, planeY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+        c.fill();
+    }
+    c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+    c.fillText('Airplane', planeX, planeY + knobRadius * 0.5);
+    
+    // Balloons toggle (bottom-left)
+    const balloonsX = gridCenterX - 0.5 * buttonSpacing;
+    const balloonsY = buttonRowY + 0.5 * buttonRowSpacing;
+    c.beginPath();
+    c.arc(balloonsX, balloonsY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    if (showBalloons) {
+        c.beginPath();
+        c.arc(balloonsX, balloonsY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+        c.fill();
+    }
+    c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+    c.fillText('Party', balloonsX, balloonsY + knobRadius * 0.50);
+    c.fillText('Balloons', balloonsX, balloonsY + knobRadius * 0.80);
+    
+    // Hot Air Balloon toggle (bottom-right)
+    const hotAirBalloonX = gridCenterX + 0.5 * buttonSpacing;
+    const hotAirBalloonY = buttonRowY + 0.5 * buttonRowSpacing;
+    c.beginPath();
+    c.arc(hotAirBalloonX, hotAirBalloonY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    if (showHotAirBalloon) {
+        c.beginPath();
+        c.arc(hotAirBalloonX, hotAirBalloonY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+        c.fill();
+    }
+    c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+    c.fillText('Hot Air', hotAirBalloonX, hotAirBalloonY + knobRadius * 0.50);
+    c.fillText('Balloon', hotAirBalloonX, hotAirBalloonY + knobRadius * 0.80);
+    
+    // Draw camera icon (in column 2, row 2)
+    const camX = knobSpacing * 2.0;
+    const camSize = knobRadius * 1.5; 
+    
+    // Draw movie camera icon (no background box)
+    c.fillStyle = skyHandActive ? 
+        `hsla(120, 90%, 60%, ${skyMenuOpacity})` : 
+        `hsla(0, 50%, 40%, ${skyMenuOpacity})`;
+    c.strokeStyle = `hsla(0, 0%, 10%, ${skyMenuOpacity})`
+    c.lineWidth = 0.003 * cScale;
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+
+    // Triangular lens on right side (pointing left, but wide at right)
+    const lensY = (buttonY - camSize * 0.12) + (camSize * 0.35 / 2);
+    c.beginPath();
+    c.moveTo(camX + camSize * 0.45, lensY - camSize * 0.25);
+    c.lineTo(camX - camSize * 0.10, lensY);
+    c.lineTo(camX + camSize * 0.45, lensY + camSize * 0.25);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    
+    // Camera body (rectangle) - on the left
+    c.beginPath();
+    c.rect(
+        camX - camSize * 0.5, 
+        buttonY - camSize * 0.12, 
+        camSize * 0.6, 
+        camSize * 0.35);
+    c.fill();
+    c.stroke();
+    
+    // Film reels on top (left smaller, right larger)
+    const leftReelX = camX - camSize * 0.4;
+    const leftReelY = buttonY - camSize * 0.3;
+    const leftReelRadius = camSize * 0.16;
+    
+    const rightReelX = camX - camSize * 0.02;
+    const rightReelY = buttonY - camSize * 0.36;
+    const rightReelRadius = camSize * 0.22;
+    
+    // Draw left reel (smaller)
+    c.beginPath();
+    c.arc(leftReelX, leftReelY, leftReelRadius, 0, 2 * Math.PI);
+    c.fill();
+    c.stroke();
+    
+    // Draw rotating circles on left reel when active (faster rotation)
+    if (skyHandActive) {
+        const time = Date.now() / 1000;
+        const leftReelRotation = -time * 4; // 4 radians per second
+        const leftReelDots = 4;
+        const leftReelDotRadius = leftReelRadius * 0.7;
+        const leftReelDotSize = camSize * 0.03;
+        
+        c.fillStyle = `hsla(0, 0%, 0%, ${skyMenuOpacity})`;
+        for (let i = 0; i < leftReelDots; i++) {
+            const angle = leftReelRotation + (i * 2 * Math.PI / leftReelDots);
+            const dotX = leftReelX + Math.cos(angle) * leftReelDotRadius;
+            const dotY = leftReelY + Math.sin(angle) * leftReelDotRadius;
+            c.beginPath();
+            c.arc(dotX, dotY, leftReelDotSize, 0, 2 * Math.PI);
+            c.fill();
+        }
+    }
+    
+    // Draw right reel (larger)
+    c.fillStyle = skyHandActive ? 
+        `hsla(120, 90%, 60%, ${skyMenuOpacity})` : 
+        `hsla(0, 50%, 40%, ${skyMenuOpacity})`;
+    c.beginPath();
+    c.arc(rightReelX, rightReelY, rightReelRadius, 0, 2 * Math.PI);
+    c.fill();
+    c.stroke();
+    
+    // Draw rotating circles on right reel when active (slower rotation, opposite direction)
+    if (skyHandActive) {
+        const time = Date.now() / 1000;
+        const rightReelRotation = time * 2.5; // Negative for opposite rotation
+        const rightReelDots = 5;
+        const rightReelDotRadius = rightReelRadius * 0.7;
+        const rightReelDotSize = camSize * 0.04;
+        
+        c.fillStyle = `hsla(0, 0%, 0%, ${skyMenuOpacity})`;
+        for (let i = 0; i < rightReelDots; i++) {
+            const angle = rightReelRotation + (i * 2 * Math.PI / rightReelDots);
+            const dotX = rightReelX + Math.cos(angle) * rightReelDotRadius;
+            const dotY = rightReelY + Math.sin(angle) * rightReelDotRadius;
+            c.beginPath();
+            c.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
+            c.fill();
+        }
+    }
+
+    // Draw lock icon only if skyHandActive is false
+    if (!skyHandActive) {
+        const lockSize = 40;
+        const lockY = -lockSize / 4; // Position slightly above center
+        
+        // Draw lock body (rectangle)
+        c.fillStyle = 'hsl(0, 0%, 70%)';
+        c.fillRect(camX - lockSize/4, buttonY + lockY, lockSize/2, lockSize/2.5);
+        
+        // Draw lock shackle (arc on top)
+        c.strokeStyle = 'hsl(0, 0%, 90%)';
+        c.lineWidth = 3;
+        c.beginPath();
+        c.arc(camX, buttonY +(lockY - 0.15 * lockSize), lockSize/6, Math.PI, 0, false);
+        c.stroke();
+
+        // Draw shackle straight lengths
+        c.beginPath();
+        c.moveTo(camX - lockSize/6, buttonY + lockY);
+        c.lineTo(camX - lockSize/6, buttonY + (lockY - 0.15 * lockSize));
+        c.moveTo(camX + lockSize/6, buttonY + lockY);
+        c.lineTo(camX + lockSize/6, buttonY + (lockY - 0.15 * lockSize));
+        c.stroke();
+    }
+    
+    // Label
+    c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
+    c.font = `${0.028 * cScale}px sans-serif`;
+    c.textAlign = 'center';
+    c.fillText('Adjust Sky Camera', camX, buttonY + knobRadius * 0.7);
+    
+    // Credit link at bottom left - split into two parts
+    c.font = `${0.032 * cScale}px sans-serif`;
+    c.textAlign = 'left';
+    const creditX = -padding + 0.3 * knobRadius;
+    const creditY = menuHeight + padding - 0.3 * knobRadius;
+    
+    // Draw first part in tan
+    c.fillStyle = `hsla(30, 50%, 70%, ${skyMenuOpacity})`;
+    const prefixText = 'Sun and sky shader by '; 
+    c.fillText(prefixText, creditX, creditY);
+    
+    // Draw ThreeJS.org in green
+    const prefixWidth = c.measureText(prefixText).width;
+    c.fillStyle = `hsla(120, 80%, 60%, ${skyMenuOpacity})`;
+    c.fillText('ThreeJS.org', creditX + prefixWidth, creditY);
+    
+    c.restore();
+}
+
+function drawKittyLamp(lampX, lampY, menuOpacity) {
+    // Draw kitty lamp last (on top of everything)
+    if (kittyLampImage && kittyLampImage.complete) {
+        const targetHeight = simHeight * 0.22 * cScale; // Size in canvas pixels
+        const aspectRatio = kittyLampImage.width / kittyLampImage.height;
+        const lampWidth = targetHeight * aspectRatio;
+        const lampHeight = targetHeight;
+        //const lampX = 0.5 * canvas.width; // Bottom right in canvas coords
+        //const lampY = canvas.height - 0.5 * lampHeight;
+        
+        c.save();
+        //c.rotate(-0.2); // Slight tilt for effect
+        c.globalAlpha = 0.8 * menuOpacity;
+        c.drawImage(
+            kittyLampImage,
+            lampX - lampWidth / 2,
+            lampY - lampHeight / 2,
+            lampWidth,
+            lampHeight
+        );
+        c.restore();
+    } else if (kittyLampImage) {
+        // Debug: show if image is still loading
+        console.log('Kitty lamp image loading...', kittyLampImage.complete, kittyLampImage.src);
+    }
+}
+
+// Main animation loop  ------------
+function simulateEverything() {
+    // Update main menu opacity and animation for fade in/out and slide (hide when sky camera is active)
+    if (mainMenuVisible && !skyHandActive) {
+        if (mainMenuOpacity < 1) {
+            mainMenuOpacity = Math.min(1, mainMenuOpacity + mainMenuFadeSpeed * deltaT);
+        }
+        // Slide right (from negative offset to 0)
+        if (mainMenuXOffset < 0) {
+            mainMenuXOffset = Math.min(0, mainMenuXOffset + mainMenuAnimSpeed * deltaT);
+        }
+    } else {
+        if (mainMenuOpacity > 0) {
+            mainMenuOpacity = Math.max(0, mainMenuOpacity - mainMenuFadeSpeed * deltaT);
+        }
+        // Slide left (from 0 to negative offset)
+        if (mainMenuXOffset > -1.0) {
+            mainMenuXOffset = Math.max(-1.0, mainMenuXOffset - mainMenuAnimSpeed * deltaT);
+        }
+    }
+    
+    // Update menu opacity for fade in/out (hide when sky camera is active)
+    if (menuVisible && menuOpacity < 1 && !skyHandActive) {
+        menuOpacity = Math.min(1, menuOpacity + menuFadeSpeed * deltaT);
+    } else if ((!menuVisible || skyHandActive) && menuOpacity > 0) {
+        menuOpacity = Math.max(0, menuOpacity - menuFadeSpeed * deltaT);
+    }
+    
+    // Update color menu opacity for fade in/out (hide when sky camera is active)
+    if (colorMenuVisible && colorMenuOpacity < 1 && !skyHandActive) {
+        colorMenuOpacity = Math.min(1, colorMenuOpacity + menuFadeSpeed * deltaT);
+    } else if ((!colorMenuVisible || skyHandActive) && colorMenuOpacity > 0) {
+        colorMenuOpacity = Math.max(0, colorMenuOpacity - menuFadeSpeed * deltaT);
+    }
+    
+    // Update sky menu opacity for fade in/out
+    if (skyMenuVisible && skyMenuOpacity < 1) {
+        skyMenuOpacity = Math.min(1, skyMenuOpacity + menuFadeSpeed * deltaT);
+    } else if (!skyMenuVisible && skyMenuOpacity > 0) {
+        skyMenuOpacity = Math.max(0, skyMenuOpacity - menuFadeSpeed * deltaT);
+    }
+    
+    // Update auto elevation if enabled
+    if (autoElevation && window.skyRenderer) {
+        autoElevationPhase += deltaT * autoElevationRate;
+        const skyCtrl = window.skyRenderer.effectController;
+        // Oscillate between (initial - 1) and (initial + 3)
+        const center = autoElevationInitial + 1; // Center point
+        const amplitude = 2; // Half of the 4-unit range
+        skyCtrl.elevation = center + amplitude * Math.sin(autoElevationPhase);
+    }
+    
+    // Update spray particles
+    for (let i = sprayParticles.length - 1; i >= 0; i--) {
+        if (!sprayParticles[i].update(deltaT)) {
+            sprayParticles.splice(i, 1); // Remove dead particles
+        }
+    }
+    
+    // Generate idle spray particles when spray tool is active but not painting
+    if (spraypaintActive && !isSpraying) {
+        const idleParticlesPerFrame = 0.5; // Generate less frequently
+        for (let i = 0; i < idleParticlesPerFrame; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Math.random() * (spraypaintRadius / 3); // Limit to third of normal radius
+            const px = mouseX + Math.cos(angle) * distance;
+            const py = mouseY + Math.sin(angle) * distance;
+            sprayParticles.push(new SprayParticle(px, py, selectedHue, selectedSaturation, selectedLightness));
+        }
+    }
+    
+    // Draw hot air balloon 
+    for (let hotAirBalloon of HotAirBalloon) {
+        hotAirBalloon.simulate();
+    }
+
+    // Update background clouds
+    for (let i = BackgroundClouds.length - 1; i >= 0; i--) {
+        const cloud = BackgroundClouds[i];
+        cloud.update(deltaT);
+        
+        // Check if cloud has moved off-screen to the left (account for visual size)
+        // Clouds are rendered ~3x larger than their radius
+        if (cloud.x + cloud.radius * 2 < 0) {
+            // Remove this cloud and spawn a new one on the right
+            BackgroundClouds.splice(i, 1);
+            const newY = findSafeCloudAltitude(true, [...BackgroundClouds, ...Clouds]);
+            BackgroundClouds.push(new CLOUD(simWidth + cloud.radius * 2, newY, true));
+        }
+    }
+    
+    // Update foreground clouds
+    for (let i = Clouds.length - 1; i >= 0; i--) {
+        const cloud = Clouds[i];
+        cloud.update(deltaT);
+        
+        // Check if cloud has moved off-screen to the left (account for visual size)
+        // Clouds are rendered ~3x larger than their radius
+        if (cloud.x + cloud.radius * 2 < 0) {
+            // Remove this cloud and spawn a new one on the right
+            Clouds.splice(i, 1);
+            const newY = findSafeCloudAltitude(false, [...BackgroundClouds, ...Clouds, ...ForegroundCloud]);
+            Clouds.push(new CLOUD(simWidth + cloud.radius * 2, newY, false, false));
+        }
+    }
+    
+    // Update foreground (non-interactive) clouds
+    for (let i = ForegroundCloud.length - 1; i >= 0; i--) {
+        const cloud = ForegroundCloud[i];
+        cloud.update(deltaT);
+        
+        // Check if cloud has moved off-screen to the left
+        if (cloud.x + cloud.radius * 2 < 0) {
+            // Remove this cloud and spawn a new one on the right
+            ForegroundCloud.splice(i, 1);
+            initialForegroundCloudTextVisible = false; // Text only on first cloud
+            const newY = findSafeCloudAltitude(false, [...BackgroundClouds, ...Clouds, ...ForegroundCloud]);
+            if (Math.random() < 0.1) { // 10% chance of rain
+                var raining = true;
+            } else {
+                var raining = false;
+            }
+            ForegroundCloud.push(new CLOUD(simWidth + cloud.radius * 2, newY, false, true, raining));
+        }
+    }
+    
+    // Trigger blackBoid flash periodically
+    boidProps.blackBoidFlashTimer += deltaT;
+    if (boidProps.blackBoidFlashTimer >= boidProps.blackBoidFlashInterval) {
+        // Find the blackBoid and check if it's in the central 25% of screen
+        for (let boid of Boids) {
+            if (boid.blackBoid) {
+                // Check if blackBoid is within central 25% of screen
+                const centerMinX = simWidth * 0.375;
+                const centerMaxX = simWidth * 0.625;
+                const centerMinY = simHeight * 0.375;
+                const centerMaxY = simHeight * 0.625;
+                
+                if (boid.pos.x >= centerMinX && boid.pos.x <= centerMaxX &&
+                    boid.pos.y >= centerMinY && boid.pos.y <= centerMaxY) {
+                    // BlackBoid is in central area, trigger flash
+                    boidProps.blackBoidFlashTimer = 0; // Reset timer
+                    boidProps.currentFlashCycle++; // Start a new flash cycle
+                    boid.flashing = true;
+                    boid.flashTimer = 0;
+                    boid.lastFlashCycle = boidProps.currentFlashCycle;
+                }
+                // If not in center, timer stays at max and waits for blackBoid to enter center
+                break;
+            }
+        }
+    }
+    
+    // Update boids
+    for (var i = 0; i < Boids.length; i++) {
+        var boid = Boids[i];
+        handleFlashing(boid);
+        handleBoidRules(boid);
+        handleClouds(boid);
+        handleMagnet(boid);
+        handleBounds(boid);
+        boid.simulate();
+    }
+
+    // Rebuild spatial grid after all boid positions are updated
+    SpatialGrid.clear();
+    for (let boid of Boids) {
+        SpatialGrid.insert(boid);
+    }
+
+    // Update balloon ---------
+    // Handle spacebar rapid spawning
+    if (spacebarHeld) {
+        spacebarBalloonTimer += deltaT;
+        if (spacebarBalloonTimer >= spacebarBalloonInterval) {
+            spawnBalloon();
+            spacebarBalloonTimer = 0;
+        }
+    } else {
+        // Normal timer-based spawning
+        // Timer starts at -initialDelay, reaches 0 after initialDelay time
+        // After each spawn, resets to -spawnInterval
+        balloonSpawnTimer += deltaT;
+        
+        if (balloonSpawnTimer >= 0) {
+            spawnBalloon();
+            balloonSpawnTimer = -balloonProps.balloonSpawnInterval;
+        }
+    }
+    
+    for (let balloon of Balloons) {
+        balloon.simulate();
+    }
+
+    // Check balloon-airplane collisions
+    if (doKitty && Airplane.length > 0 && Balloons.length > 0) {
+        plane = Airplane[0];
+        for (let balloon of Balloons) {
+            if (!balloon.popping) {
+                // Simple distance-based collision detection
+                const dx = balloon.pos.x - plane.x;
+                const dy = balloon.pos.y - plane.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const collisionDist = balloon.radius + plane.radius;
+                
+                if (dist < collisionDist) {
+                    // Collision detected - pop the balloon
+                    balloon.popping = true;
+                    balloon.popStartTime = performance.now();
+                }
+            }
+        }
+    }
+
+    // Update airplane
+    if (doKitty == true) {
+        for (let plane of Airplane) {
+            plane.update(deltaT);
+        }
+    }
+
+    // Update Rain --------
+    for (let rainDrop of Rain) {
+        rainDrop.simulate();
+    }
+}
+
+//  DRAW EVERYTHING  ------------
+function drawEverything() {
+    // Clear canvas
+    c.clearRect(0, 0, width, height);
+
+    // Draw hot air balloon 
+    if (showHotAirBalloon) {
+        for (let hotAirBalloon of HotAirBalloon) {
+            hotAirBalloon.draw();
+        }
+    }
+    
+    // Draw background clouds first
+    if (showClouds) {
+        for (let cloud of BackgroundClouds) {
+            cloud.draw();
+        }
+    }
+    
+    // Draw foreground clouds
+    if (showClouds) {
+        for (let cloud of Clouds) {
+            cloud.draw();
+        }
+    }
+
+    // Draw boids
+    for (var b = 0; b < Boids.length; b++) {
+        boid = Boids[b];
+        boid.draw();
+        
+        // Draw visual range circle for white and black boids when menu is active
+        if (menuVisible && (boid.whiteBoid || boid.blackBoid)) {
+            c.beginPath();
+            c.arc(cX(boid.pos), cY(boid.pos), boidProps.visualRange * cScale, 0, 2 * Math.PI);
+            c.strokeStyle = boid.whiteBoid ? 'hsla(0, 0%, 90%, 0.5)' : 'hsla(0, 0%, 10%, 0.5)';
+            c.lineWidth = 2;
+            c.stroke();
+        }
+    }
+    
+    // Draw airplane
+    if (doKitty == true && showPlane) {
+        // Draw airplane
+        for (let plane of Airplane) {
+            plane.draw();
+        }
+    }
+
+    // Draw balloon ---------
+    if (showBalloons) {
+        for (let balloon of Balloons) {
+            balloon.draw();
+        }
+    }
+    
+    // Draw Rain --------
+    for (let rainDrop of Rain) {
+        rainDrop.draw();
+    }
+
+    // Draw big foreground cloud (non-interactive) last --------
+    if (showClouds) {
+        for (let cloud of ForegroundCloud) {
+            cloud.draw();
+            if (cloud.isRaining) {
+                makeItRain(cloud);
+            }
+        }
+    }
+    
+    // Draw spray particles --------
+    for (let particle of sprayParticles) {
+        particle.draw();
+    }
+
+    // Draw magnet --------
+    if (magnetActive) {
+        for (let magnet of Magnet) {
+            magnet.draw();
+        }
+    }
+
+    // Draw menus in z-order (lowest to highest so highest is on top) --------
+    const menus = [
+        {draw: drawSkyMenu, z: skyMenuZOrder},
+        {draw: drawColorMenu, z: colorMenuZOrder},
+        {draw: drawSimMenu, z: menuZOrder}
+    ];
+    menus.sort((a, b) => a.z - b.z);
+    for (let menu of menus) {
+        menu.draw();
+    }
+    
+    // Draw main menu on top of everything
+    drawMainMenu();
+    
+    // Draw spraypaint cursor
+    if (spraypaintActive) {
+        canvas.style.cursor = 'default';
+        const cursorX = mouseX * cScale;
+        const cursorY = canvas.height - mouseY * cScale;
+        const canSize = 0.04 * cScale;
+        
+        // Draw spray radius indicator
+        c.beginPath();
+        c.arc(cursorX, cursorY, spraypaintRadius * cScale, 0, 2 * Math.PI);
+        c.strokeStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, 0.5)`;
+        c.lineWidth = 2;
+        c.stroke();
+    }
+    
+    // Draw camera cursor when skyHandActive
+    if (skyHandActive && !spraypaintActive) {
+        canvas.style.cursor = 'none';
+        const cursorX = mouseX * cScale;
+        const cursorY = canvas.height - mouseY * cScale;
+        const camSize = 0.1 * cScale;
+        
+        c.fillStyle = 'hsla(120, 0%, 70%, 0.9)';
+        c.strokeStyle = 'hsla(30, 0%, 0%, 0.9)';
+        c.lineWidth = 0.002 * cScale;
+        c.lineCap = 'round';
+        c.lineJoin = 'round';
+
+        const lensY = (cursorY - camSize * 0.12) + (camSize * 0.35 / 2);
+        // Triangular lens on right side
+        c.beginPath();
+        c.moveTo(cursorX + camSize * 0.45, lensY - camSize * 0.25);
+        c.lineTo(cursorX - camSize * 0.10, lensY);
+        c.lineTo(cursorX + camSize * 0.45, lensY + camSize * 0.25);
+        c.closePath();
+        c.fill();
+        c.stroke();
+        
+        // Camera body (rectangle) - on the left
+        c.beginPath();
+        c.rect(
+            cursorX - camSize * 0.5, 
+            cursorY - camSize * 0.12, 
+            camSize * 0.6, 
+            camSize * 0.35);
+        c.fill();
+        c.stroke();
+
+        // Film reels on top
+        const leftReelX = cursorX - camSize * 0.4;
+        const leftReelY = cursorY - camSize * 0.3;
+        const leftReelRadius = camSize * 0.16;
+        
+        const rightReelX = cursorX - camSize * 0.02;
+        const rightReelY = cursorY - camSize * 0.36;
+        const rightReelRadius = camSize * 0.22;
+        
+        // Draw left reel (smaller, faster)
+        c.beginPath();
+        c.arc(leftReelX, leftReelY, leftReelRadius, 0, 2 * Math.PI);
+        c.fill();
+        c.stroke();
+        
+        // Draw rotating circles on left reel (faster rotation)
+        const time = Date.now() / 1000;
+        const leftReelRotation = -time * 4; // 4 radians per second
+        const leftReelDots = 4;
+        const leftReelDotRadius = leftReelRadius * 0.7;
+        const leftReelDotSize = camSize * 0.03;
+        
+        c.fillStyle = 'hsla(0, 0%, 0%, 0.9)';
+        for (let i = 0; i < leftReelDots; i++) {
+            const angle = leftReelRotation + (i * 2 * Math.PI / leftReelDots);
+            const dotX = leftReelX + Math.cos(angle) * leftReelDotRadius;
+            const dotY = leftReelY + Math.sin(angle) * leftReelDotRadius;
+            c.beginPath();
+            c.arc(dotX, dotY, leftReelDotSize, 0, 2 * Math.PI);
+            c.fill();
+        }
+        
+        // Draw right reel (larger, slower)
+        c.fillStyle = 'hsla(120, 0%, 70%, 0.9)';
+        c.beginPath();
+        c.arc(rightReelX, rightReelY, rightReelRadius, 0, 2 * Math.PI);
+        c.fill();
+        c.stroke();
+        
+        // Draw rotating circles on right reel (slower rotation, opposite direction)
+        const rightReelRotation = time * 2.5; // Negative for opposite rotation
+        const rightReelDots = 5;
+        const rightReelDotRadius = rightReelRadius * 0.7;
+        const rightReelDotSize = camSize * 0.04;
+        
+        c.fillStyle = 'hsla(0, 0%, 0%, 0.9)';
+        for (let i = 0; i < rightReelDots; i++) {
+            const angle = rightReelRotation + (i * 2 * Math.PI / rightReelDots);
+            const dotX = rightReelX + Math.cos(angle) * rightReelDotRadius;
+            const dotY = rightReelY + Math.sin(angle) * rightReelDotRadius;
+            c.beginPath();
+            c.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
+            c.fill();
+        }
+    } else if (!spraypaintActive) {
+        canvas.style.cursor = 'default';
+    }
+
+    drawStats();
+}
+
+//  FPS MONITORING WITH RAMP-UP  ------------------------------------------------
+let fpsFrameTimes = [];
+let currentFPS = 60;
+let lastFrameTime = performance.now();
+let fpsCheckTimer = 0;
+let fpsCheckInterval = 0.5; // Check FPS every 0.25 seconds
+let minStableFPS = 58; // Target FPS threshold
+let fpsStableTimer = 0;
+let fpsStableThreshold = 1.0; // FPS must be stable for 0.5 seconds before increasing
+let isRampingUp = true; // Track if we're still ramping up
+let maxBoidsReached = false; // Track if we've hit the limit
+let safetyMarginApplied = false; // Track if we've applied the 200 boid safety reduction
+let stabilityTimerAfterMax = 0; // Timer to wait before applying safety margin
+let lastSafeBoidCount = 100; // Track the last known safe boid count
+let justReverted = false; // Track if we just reverted to safe count
+let revertVerificationTimer = 0; // Timer to verify stability after revert
+let revertVerificationPeriod = 5.0; // Wait 5 seconds after reverting before allowing further drops
+let startupWarmupTimer = 0; // Timer for startup warm-up period
+let startupWarmupPeriod = 3.0; // Wait 3 seconds after startup before monitoring FPS
+let isWarmedUp = false; // Track if warm-up period is complete
+let runtimeTimer = 0; // Track total runtime
+let runtimeLockPeriod = 30.0; // Lock boid count after 60 seconds
+let boidCountLocked = false; // Track if boid count is locked
+let fadeOutDuration = 5.0; // Fade out over 5 seconds
+let fadeOutTimer = 0; // Track fade out progress
+let finalBoidCount = 0; // Store the final boid count after startup completes
+
+function updateFPS() {
+    const currentTime = performance.now();
+    const frameTime = currentTime - lastFrameTime;
+    lastFrameTime = currentTime;
+    
+    // Prevent invalid frame times (can happen on page refresh or tab switching)
+    if (frameTime > 100 || frameTime <= 0) {
+        return; // Skip this frame
+    }
+    
+    // Keep last 60 frame times (1 second at 60fps) - longer window for better stability check
+    fpsFrameTimes.push(frameTime);
+    if (fpsFrameTimes.length > 60) {
+        fpsFrameTimes.shift();
+    }
+    
+    // Calculate average FPS
+    if (fpsFrameTimes.length > 0) {
+        const avgFrameTime = fpsFrameTimes.reduce((a, b) => a + b) / fpsFrameTimes.length;
+        currentFPS = 1000 / avgFrameTime;
+    }
+}
+
+// Helper function to remove boids, prioritizing those outside visible canvas
+function cullBoids(removeCount) {
+    if (removeCount <= 0 || Boids.length <= 2) return;
+    
+    // Identify boids outside the visible canvas (excluding last 2 special boids)
+    const regularBoids = Boids.slice(0, -2);
+    const specialBoids = Boids.slice(-2);
+    
+    const outsideBoids = [];
+    const insideBoids = [];
+    
+    for (let i = 0; i < regularBoids.length; i++) {
+        const boid = regularBoids[i];
+        
+        // Never cull whiteBoid or blackBoid
+        if (boid.whiteBoid || boid.blackBoid) {
+            continue;
+        }
+        
+        const isOutside = boid.pos.x < 0 || boid.pos.x > simWidth || 
+                        boid.pos.y < 0 || boid.pos.y > simHeight;
+        
+        if (isOutside) {
+            outsideBoids.push(i);
+        } else {
+            insideBoids.push(i);
+        }
+    }
+    
+    // Build list of indices to remove (prioritize outside boids)
+    const toRemove = [];
+    let removed = 0;
+    
+    // First remove outside boids
+    for (let i = outsideBoids.length - 1; i >= 0 && removed < removeCount; i--) {
+        toRemove.push(outsideBoids[i]);
+        removed++;
+    }
+    
+    // If we need to remove more, take from inside boids (from the end)
+    for (let i = insideBoids.length - 1; i >= 0 && removed < removeCount; i--) {
+        toRemove.push(insideBoids[i]);
+        removed++;
+    }
+    
+    // Sort indices in descending order to remove from end first (prevents index shifting issues)
+    toRemove.sort((a, b) => b - a);
+    
+    // Remove the boids
+    for (let idx of toRemove) {
+        regularBoids.splice(idx, 1);
+    }
+    
+    // Reconstruct the Boids array
+    Boids = [...regularBoids, ...specialBoids];
+}
+
+function checkAndAdjustBoids() {
+    // Track runtime and lock after specified period
+    runtimeTimer += deltaT;
+    if (runtimeTimer >= runtimeLockPeriod && !boidCountLocked) {
+        boidCountLocked = true;
+        isRampingUp = false;
+        fadeOutTimer = 0; // Start fade out
+        finalBoidCount = Boids.length; // Store the final boid count
+    }
+    
+    // Update fade out timer if locked
+    if (boidCountLocked && fadeOutTimer < fadeOutDuration) {
+        fadeOutTimer += deltaT;
+    }
+    
+    // If locked, don't adjust boids anymore
+    if (boidCountLocked) {
+        return;
+    }
+    
+    // Handle startup warm-up period
+    if (!isWarmedUp) {
+        startupWarmupTimer += deltaT;
+        
+        if (startupWarmupTimer >= startupWarmupPeriod) {
+            isWarmedUp = true;
+            // Reset FPS tracking after warm-up to start fresh
+            fpsFrameTimes = [];
+            lastFrameTime = performance.now();
+            currentFPS = 60;
+        } else {
+            // During warm-up, just return without adjusting boids
+            return;
+        }
+    }
+    
+    fpsCheckTimer += deltaT;
+    
+    if (fpsCheckTimer >= fpsCheckInterval) {
+        fpsCheckTimer = 0;
+        
+        // Calculate how many frames are significantly slower
+        let unstableFrames = 0;
+        let maxFrameTime = 0;
+        let minFrameTime = Infinity;
+        
+        for (let frameTime of fpsFrameTimes) {
+            const fps = 1000 / frameTime;
+            if (fps < minStableFPS) {
+                unstableFrames++;
+            }
+            maxFrameTime = Math.max(maxFrameTime, frameTime);
+            minFrameTime = Math.min(minFrameTime, frameTime);
+        }
+        
+        // Calculate variance to check consistency
+        const variance = maxFrameTime - minFrameTime;
+        const isConsistent = variance < 15; // Less than 15ms variance between frames
+        
+        // Update revert verification timer if we just reverted
+        if (justReverted) {
+            if (currentFPS >= minStableFPS && isConsistent) {
+                revertVerificationTimer += fpsCheckInterval;
+                
+                if (revertVerificationTimer >= revertVerificationPeriod) {
+                    // Verification period complete, system is stable at safe count
+                    justReverted = false;
+                    revertVerificationTimer = 0;
+                }
+            } else {
+                // Still unstable during verification - reset timer to keep waiting
+                revertVerificationTimer = 0;
+            }
+        }
+        
+        // Check if FPS is unstable or too low
+        if (currentFPS < minStableFPS || unstableFrames > fpsFrameTimes.length * 0.25) {
+            // Only revert if not currently in verification period
+            if (!justReverted && Boids.length > lastSafeBoidCount && lastSafeBoidCount >= 100) {
+                const removeCount = Boids.length - lastSafeBoidCount;
+                
+                // Remove boids, prioritizing those outside canvas
+                if (removeCount > 0) {
+                    cullBoids(removeCount);
+                }
+                isRampingUp = false; // Stop ramping up
+                maxBoidsReached = true; // We've found the limit
+                justReverted = true; // Start verification period
+                revertVerificationTimer = 0;
+            }
+            fpsStableTimer = 0; // Reset stability timer
+            stabilityTimerAfterMax = 0; // Reset stability timer for safety margin
+        } else if (isRampingUp && !maxBoidsReached && currentFPS >= minStableFPS && !justReverted) {
+            // FPS is good, increment stability timer
+            fpsStableTimer += fpsCheckInterval;
+            
+            // Once FPS has been stable for the threshold period, add more boids
+            if (fpsStableTimer >= fpsStableThreshold && Boids.length < boidProps.numBoids) {
+                fpsStableTimer = 0; // Reset timer
+                
+                // Save current count as last safe before adding more
+                lastSafeBoidCount = Boids.length;
+                
+                // Add 100 more boids
+                const addCount = Math.min(100, boidProps.numBoids - Boids.length);
+                const spawnRadius = Math.sqrt(simWidth * simWidth + simHeight * simHeight) * 0.6;
+                
+                for (let i = 0; i < addCount; i++) {
+                    // Spawn from anywhere around the circle
+                    const ang = Math.random() * 2 * Math.PI;
+                    const pos = new Vector2(
+                        0.5 * simWidth + Math.cos(ang) * spawnRadius,
+                        0.5 * simHeight + Math.sin(ang) * spawnRadius);
+                    const vel = new Vector2(0, 0);
+                    const hue = 0;
+                    
+                    // Create new boid and set type based on selectedBoidType
+                    const newBoid = new BOID(pos, vel, hue, false, false);
+                    newBoid.arrow = selectedBoidType === 0;
+                    newBoid.circle = selectedBoidType === 1;
+                    newBoid.airfoil = selectedBoidType === 2;
+                    
+                    // Insert before the last 2 special boids
+                    Boids.splice(Boids.length - 2, 0, newBoid);
+                }
+                
+                // Check if we've reached the target
+                if (Boids.length >= boidProps.numBoids) {
+                    isRampingUp = false;
+                    maxBoidsReached = true;
+                }
+            }
+        } else if (maxBoidsReached && !safetyMarginApplied && currentFPS >= minStableFPS && isConsistent) {
+            // Max reached, wait for stability then apply safety margin
+            stabilityTimerAfterMax += fpsCheckInterval;
+            
+            if (stabilityTimerAfterMax >= 3.0 && Boids.length > 200) {
+                // Remove 200 boids as safety margin
+                //const removeCount = Math.min(200, Boids.length - 100);
+                const removeCount = 100;
+                if (removeCount > 0) {
+                    cullBoids(removeCount);
+                }
+                
+                safetyMarginApplied = true;
+            }
+        }
+    }
+}
+
+function drawStats() {
+    // Calculate opacity based on fade out
+    let opacity = 1.0;
+    if (boidCountLocked) {
+        if (fadeOutTimer >= fadeOutDuration) {
+            return; // Completely faded out, don't draw
+        }
+        opacity = 1.0 - (fadeOutTimer / fadeOutDuration);
+    }
+    
+    // Draw FPS and boid count at bottom right
+    c.save();
+    
+    // Set text properties
+    c.font = '16px monospace';
+    c.textAlign = 'right';
+    c.textBaseline = 'bottom';
+    c.globalAlpha = opacity; // Apply fade opacity
+    
+    // Prepare text
+    //const fpsText = `${currentFPS.toFixed(0)} fps`;
+    const boidText = `please wait... making ${Boids.length} boids`;
+    const boidLockedText = `settled on ${Boids.length} boids`;
+    
+    // Position at bottom right with padding
+    const padding = 10;
+    const lineHeight = 20;
+    const x = canvas.width - padding;
+    let y = canvas.height - padding;
+
+    // Draw boid count
+    // White text
+    if (currentFPS >= 58) {
+        c.fillStyle = '#00ff00'; // Green
+    } else if (currentFPS >= 45) {
+        c.fillStyle = '#ffff00'; // Yellow
+    } else {
+        c.fillStyle = '#ff0000'; // Red
+    }
+    // Use different text based on whether boid count is locked
+    const displayText = boidCountLocked ? boidLockedText : boidText;
+    //c.fillText('Please wait', x - 2 *padding, y - lineHeight);
+    c.fillText(displayText, x, y);
+    
+    /*
+    // Draw FPS above it
+    y -= lineHeight;
+    // Color based on FPS
+    if (currentFPS >= 58) {
+        c.fillStyle = '#00ff00'; // Green
+    } else if (currentFPS >= 45) {
+        c.fillStyle = '#ffff00'; // Yellow
+    } else {
+        c.fillStyle = '#ff0000'; // Red
+    }
+    c.fillText(fpsText, x, y);
+    */
+    c.restore();
+}
+
+//  SETUP SCENE  ------------
+function setupScene() {
+    deltaT = 1/60;
+    lastFrameTime = performance.now();
+    
+    // Load plane images
+    doKitty = true;
+    kittyPlaneImage = new Image();
+    kittyPlaneImage.src = 'kitty_plane.png';
+    kittyPlaneReverseImage = new Image();
+    kittyPlaneReverseImage.src = 'kitty_plane_reverse.png';
+    // Load kitty lamp image
+    kittyLampImage = new Image();
+    kittyLampImage.src = 'kitty_lamp.png';
+
+    // make Boids ----------
+    makeBoids();
+    // make Background Clouds ----------
+    makeBackgroundClouds();
+    // make Foreground Clouds (non-interactive) ----------
+    makeForegroundClouds();
+    // make Interactive Clouds ----------
+    makeInitialClouds();
+    // make Airplane ----------
+    makeAirplane();
+    // make balloon ----------
+    initBalloon();
+    // make hot air balloon ----------
+    makeHotAirBalloon()
+    // Make magnet ----------
+    makeMagnet(); 
+    // make spatial grid ----------
+    makeSpatialGrid();
+    SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+    
+    // Initialize auto elevation and auto azimuth if sky renderer is available
+    if (window.skyRenderer) {
+        const skyCtrl = window.skyRenderer.effectController;
+        skyCtrl.autoRotate = true;
+        autoElevationInitial = skyCtrl.elevation;
+    }
+
+    /*
+    // Load and play audio from GitHub LFS
+    const audio = new Audio('https://media.githubusercontent.com/media/frank-maiello/frank-maiello.github.io/main/audio.mp3');
+    audio.loop = true; // Loop the audio
+    audio.volume = 0.5; // Set volume to 50%
+    
+    // Try to play audio immediately, or wait for user interaction if blocked
+    audio.play().catch(function(error) {
+        console.log('Audio autoplay blocked. Waiting for user interaction...');
+        // Play on first click anywhere on the page
+        document.addEventListener('click', function() {
+            audio.play();
+        }, { once: true });
+    });
+    */
+}
+
+//  RUN  ------------------------------------------------
+// Ensure only one animation loop is running
+let animationFrameId = null;
+let isRunning = false;
+
+setupScene();
+function update() {
+    if (isRunning) {
+        updateFPS();
+        checkAndAdjustBoids();
+        simulateEverything();
+        drawEverything();
+    }
+    animationFrameId = requestAnimationFrame(update);
+}
+
+// Start the animation loop
+isRunning = true;
+update();
+
+// Cleanup on page unload to prevent resource accumulation
+window.addEventListener('beforeunload', function() {
+    isRunning = false;
+    if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+    }
+    // Stop sky renderer if it exists
+    if (window.skyRenderer && window.skyRenderer.stop) {
+        window.skyRenderer.stop();
+    }
+});
