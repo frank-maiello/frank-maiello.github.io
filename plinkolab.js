@@ -1,0 +1,5016 @@
+/*
+PLINK(0) LAB 3.51 :: a simulated particle kinetics toy ::
+copyright 2025 :: Frank Maiello :: maiello.frank@gmail.com ::
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. In no event shall the author or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort or otherwise, arising from, our of or in, connection with the software or the use of other dealings in the Software.
+*/
+
+// fix bumper positioner
+// speed and energy stats
+// fix higher-lower ball math with solo ball
+// bumper array probability from center
+// progressively sized bumpers - pyramid
+// fix box size?
+// add touch control
+// export settings
+
+//  CANVAS SETUP AND SCALING --------------------------------------------------------------
+canvas = document.getElementById("myCanvas");
+    c = canvas.getContext("2d");
+    canvas.style.cursor = "pointer";
+    if (window.innerWidth < window.innerHeight) {
+        canvas.width = window.innerWidth - 40;
+        canvas.height = window.innerHeight - 140; //124 for phone
+    } else if (window.innerWidth > 1.75 * window.innerHeight) {
+        canvas.width = window.innerWidth - 40;
+        canvas.height = window.innerHeight - 30;
+    } else {
+        canvas.width = window.innerWidth - 40;
+        canvas.height = window.innerHeight - 200;
+    }
+    simMinWidth = 2.0;
+    cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+    simWidth = canvas.width / cScale;
+    simHeight = canvas.height / cScale;
+    topMargin = 0;
+    bottomMargin = 0;
+
+function resizeCanvas() {
+    canvas = document.getElementById("myCanvas");
+    c = canvas.getContext("2d");
+    canvas.style.cursor = "pointer";
+    if (window.innerWidth < window.innerHeight) {
+        canvas.width = window.innerWidth - 40;
+        canvas.height = window.innerHeight - 140; //124 for phone
+    } else if (window.innerWidth > 1.75 * window.innerHeight) {
+        canvas.width = window.innerWidth - 40;
+        canvas.height = window.innerHeight - 26;
+    } else {
+        canvas.width = window.innerWidth - 40;
+        canvas.height = window.innerHeight - 250;
+    }
+    simMinWidth = 2.0;
+    cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+    simWidth = canvas.width / cScale;
+    simHeight = canvas.height / cScale;
+    physProps.worldSize = new Vector2(simWidth, simHeight);
+    topMargin = 0;
+    bottomMargin = 0;
+}
+
+window.addEventListener("resize", resizeCanvas);
+
+//  KEYBOARD SHORTCUTS -----------------------------------------------------
+document.addEventListener('keydown', event => {
+    switch(event.key) {
+        case 'n': physProps.paused = false; simulate(); physProps.paused = true; break;
+        case 'N': physProps.paused = false; simulate(); physProps.paused = true; break;
+        case 'm': physProps.paused = !physProps.paused; break;
+        case 'M': physProps.paused = !physProps.paused; break;
+        case 'p': physProps.paused = !physProps.paused; break;
+        case 'P': physProps.paused = !physProps.paused; break;
+        case 'r': forcedWipeRestart();
+        case 'R': forcedWipeRestart();
+    }
+});
+
+//  KEYBOARD PADDLE CONTROL  -----------------------------------------------------
+document.addEventListener("keydown", keyDownHandler, false);
+document.addEventListener("keyup", keyUpHandler, false);
+
+let rightPressed = false;
+let leftPressed = false;
+let upPressed = false;
+let downPressed = false;
+
+let littleRightPressed = false;
+let littleLeftPressed = false;
+let littleUpPressed = false;
+let littleDownPressed = false;
+
+function keyDownHandler(u) {
+    if (u.key == "ArrowRight") {
+    rightPressed = true;
+    } else if (u.key == "ArrowLeft") {
+    leftPressed = true;
+    }
+}
+
+function keyUpHandler(u) {
+    if (u.key == "ArrowRight") {
+    rightPressed = false
+    } else if (u.key == "ArrowLeft") {
+    leftPressed = false;
+    } 
+}
+
+//  MOUSE -------------------------------------------------------------------
+let cursorX = simWidth / 2;
+let cursorY = 0;
+
+// CLICK MOUSE
+canvas.addEventListener('mousedown', mouseDownHandler);
+
+// UN-CLICK MOUSE
+canvas.addEventListener('mouseup', mouseUp);
+//canvas.addEventListener('mouseup', setBox);
+
+let newX = 0, newY = 0, startX = 0, startY = 0;
+
+function mouseDownHandler() {
+    puck1 = Puck[0];
+    puck2 = Puck[1];
+    puck3 = Puck[2];
+    hungryPuck = Hungrypuck[0];
+    hungryPuck2 = Hungrypuck[1];
+    hungryPuck3 = Mistermister[0];
+    fan1 = Fan1[0];
+    fan2 = Fan2[0];
+    strut = Strut[0];
+    clock = Clock[0];
+    target = Target[0];
+
+    bounds = canvas.getBoundingClientRect();
+    mX = event.clientX - bounds.left - canvas.clientLeft;
+    mY = event.clientY - bounds.top - canvas.clientTop;
+
+    cursorX = mX / cScale;
+    cursorY = (canvas.height - mY) / cScale;
+    mousePos = new Vector2(cursorX, cursorY)
+    
+    startX = event.clientX;
+    startY = canvas.height - event.clientY;
+
+    firstCornerX = mX;
+    firstCornerY = mY;
+    
+    // ESTABLISH OBJECT DISTANCES TO MOUSE POSITION  ------------------------
+    dirTarget = new Vector2();
+    dirTarget.subtractVectors(mousePos, target.pos);
+    dTarget = dirTarget.length();
+
+    dirHungryPuck = new Vector2();
+    dirHungryPuck.subtractVectors(mousePos, hungryPuck.pos);
+    dHungryPuck = dirHungryPuck.length();
+
+    dirHungryPuck2 = new Vector2();
+    dirHungryPuck2.subtractVectors(mousePos, hungryPuck2.pos);
+    dHungryPuck2 = dirHungryPuck2.length();
+
+    dirHungryPuck3 = new Vector2();
+    dirHungryPuck3.subtractVectors(mousePos, hungryPuck3.pos);
+    dHungryPuck3 = dirHungryPuck3.length();
+
+    dirPuck1 = new Vector2();
+    dirPuck1.subtractVectors(mousePos, puck1.pos);
+    dPuck1 = dirPuck1.length();
+
+    dirPuck2= new Vector2();
+    dirPuck2.subtractVectors(mousePos, puck2.pos);
+    dPuck2 = dirPuck2.length();
+
+    dirPuck3 = new Vector2();
+    dirPuck3.subtractVectors(mousePos, puck3.pos);
+    dPuck3 = dirPuck3.length();
+
+    dirFan1 = new Vector2();
+    dirFan1.subtractVectors(mousePos, fan1.hub);
+    dFan1 = dirFan1.length();
+
+    dirFan2 = new Vector2();
+    dirFan2.subtractVectors(mousePos, fan2.hub);
+    dFan2 = dirFan2.length();
+
+    dirStrut = new Vector2();
+    dirStrut.subtractVectors(mousePos, strut.pos);
+    dStrut = dirStrut.length();
+
+    dirClock = new Vector2();
+    dirClock.subtractVectors(mousePos, clock.pos);
+    dClock = dirClock.length();
+
+    // CHOOSE FOREGROUND OBJECTS UNDER CURSOR TO MOVE  ---------------------
+    if (dTarget < target.radius) {
+        dX = startX / cScale - target.pos.x;
+        dY = startY / cScale - target.pos.y;
+        document.addEventListener('mousemove', mouseTargetMove)
+    } else {
+    if (dFan2 < fan2.radius && showStrutButton.checked == false) {
+        dX = startX / cScale - fan2.hub.x;
+        dY = startY / cScale - fan2.hub.y;
+        document.addEventListener('mousemove', mouseFan2Move)
+    } else {
+    if (dFan1 < fan1.radius && showStrutButton.checked == false) {
+        dX = startX / cScale - fan1.hub.x;
+        dY = startY / cScale - fan1.hub.y;
+        document.addEventListener('mousemove', mouseFan1Move)
+    } else {
+    if (dHungryPuck3 < hungryPuck3.radius) {
+        dX = startX / cScale - hungryPuck3.pos.x;
+        dY = startY / cScale - hungryPuck3.pos.y;
+        document.addEventListener('mousemove', mouseHungryPuck3Move)
+    } else {
+    if (dHungryPuck2 < hungryPuck2.radius) {
+        dX = startX / cScale - hungryPuck2.pos.x;
+        dY = startY / cScale - hungryPuck2.pos.y;
+        document.addEventListener('mousemove', mouseHungryPuck2Move)
+    } else {
+    if (dHungryPuck < hungryPuck.radius) {
+        dX = startX / cScale - hungryPuck.pos.x;
+        dY = startY / cScale - hungryPuck.pos.y;
+        document.addEventListener('mousemove', mouseHungryPuckMove)
+    } else {
+    if (dClock < clock.radius) {
+        dX = startX / cScale - clock.pos.x;
+        dY = startY / cScale - clock.pos.y;
+        document.addEventListener('mousemove', mouseClockMove)
+    } else {
+    if (dPuck3 < puck3.radius) {
+        dX = startX / cScale - puck3.pos.x;
+        dY = startY / cScale - puck3.pos.y;
+        document.addEventListener('mousemove', mousePuck3Move)
+    } else {
+    if (dPuck2 < puck2.radius) {
+        dX = startX / cScale - puck2.pos.x;
+        dY = startY / cScale - puck2.pos.y;
+        document.addEventListener('mousemove', mousePuck2Move)
+    } else {
+    if (dPuck1 < puck1.radius) {
+        dX = startX / cScale - puck1.pos.x;
+        dY = startY / cScale - puck1.pos.y;
+        document.addEventListener('mousemove', mousePuck1Move)
+    } else {
+    if (dStrut < 5 * strut.radius) {
+        dX = startX / cScale - strut.pos.x;
+        dY = startY / cScale - strut.pos.y;
+        document.addEventListener('mousemove', mouseStrutMove)
+    } else {
+        //document.addEventListener('mousemove', mouseBoxDraw)
+        }}}}}}}}}}}
+}
+
+//function mouseBumperMove() {
+//    for (b=0; b < Bumpers.length; b++) {  
+//        bumper = Bumpers[b];
+//        newY = event.clientY;   
+//        startY = event.clientY;
+//        bumper.pos.y = (simHeight - newY / cScale) - dY;
+//    }
+//}
+
+//function mouseBoxDraw() {
+//    c.beginPath();
+//    c.rect(firstCornerX, firstCornerY, event.clientX - firstCornerX, event.clientY - firstCornerY);
+//    c.fillStyle = "hsl(180, 50%, 50%)";
+//    c.fill();
+//    firstCorner = new Vector2(firstCornerX, firstCornerY);
+//    boxWidth = event.clientX - firstCornerX;
+//    boxHeight = event.clientY - firstCornerY;
+//    boxColor = "white";
+//}
+
+//var xBox = 0;
+//function setBox() {
+//    Box.push(new BOX(firstCorner, boxWidth, boxHeight, boxColor));
+//    box = Box[xBox];
+//    xBox += 1;
+//}
+function mouseTargetRotate() {
+    target = Target[0];
+    newX = event.clientX;
+    newY = event.clientY;   
+    startX = event.clientX;
+    startY = event.clientY;
+    targetX = (newX / cScale) - dX;
+    targetY = (simHeight - newY / cScale) - dY;
+}
+function mouseTargetMove() {
+    target = Target[0];
+    newX = event.clientX;
+    newY = event.clientY;   
+    startX = event.clientX;
+    startY = event.clientY;
+    
+    target.pos.x = (newX / cScale) - dX;
+    target.pos.y = (simHeight - newY / cScale) - dY;
+}
+function mouseHungryPuckMove() {
+    hungryPuck = Hungrypuck[0];
+    newX = event.clientX;
+    newY = event.clientY;   
+    startX = event.clientX;
+    startY = event.clientY;
+    hungryPuck.pos.x = (newX / cScale) - dX;
+    hungryPuck.pos.y = (simHeight - newY / cScale) - dY;
+}
+function mouseHungryPuck2Move() {
+    hungryPuck2 = Hungrypuck[1];
+    newX = event.clientX;
+    newY = event.clientY;   
+    startX = event.clientX;
+    startY = event.clientY;
+    hungryPuck2.pos.x = (newX / cScale) - dX;
+    hungryPuck2.pos.y = (simHeight - newY / cScale) - dY;
+}
+function mouseHungryPuck3Move() {
+    hungryPuck3 = Mistermister[0];
+    newX = event.clientX;
+    newY = event.clientY;   
+    startX = event.clientX;
+    startY = event.clientY;
+    hungryPuck3.pos.x = (newX / cScale) - dX;
+    hungryPuck3.pos.y = (simHeight - newY / cScale) - dY;
+}
+function mousePuck1Move() {
+    puck = Puck[0];
+    newX = event.clientX;
+    newY = event.clientY;   
+    startX = event.clientX;
+    startY = event.clientY;
+    puck.pos.x = (newX / cScale) - dX;
+    puck.pos.y = (simHeight - newY / cScale) - dY;
+}
+function mousePuck2Move() {
+    puck = Puck[1];
+    newX = event.clientX;
+    newY = event.clientY;   
+    startX = event.clientX;
+    startY = event.clientY;
+    puck.pos.x = (newX / cScale) - dX;
+    puck.pos.y = (simHeight - newY / cScale) - dY;
+}
+function mousePuck3Move() {
+    puck = Puck[2];
+    newX = event.clientX;
+    newY = event.clientY;   
+    startX = event.clientX;
+    startY = event.clientY;
+    puck.pos.x = (newX / cScale) - dX;
+    puck.pos.y = (simHeight - newY / cScale) - dY;
+}
+function mouseClockMove() {
+    puck = Clock[0];
+    newX = event.clientX;
+    newY = event.clientY;   
+    startX = event.clientX;
+    startY = event.clientY;
+    clock.pos.x = (newX / cScale) - dX;
+    clock.pos.y = (simHeight - newY / cScale) - dY;
+}
+function mouseFan1Move() {
+    for (f=0; f < Fan1.length; f++) {  
+        fan = Fan1[f];
+        newX = event.clientX;
+        newY = event.clientY;   
+        startX = event.clientX;
+        startY = event.clientY;
+        fan.hub.x = (newX / cScale) - dX;
+        fan.hub.y = (simHeight - newY / cScale) - dY;
+    }
+}
+function mouseFan2Move() {
+    for (f=0; f < Fan2.length; f++) {  
+        fan = Fan2[f];
+        newX = event.clientX;
+        newY = event.clientY;   
+        startX = event.clientX;
+        startY = event.clientY;
+        fan.hub.x = (newX / cScale) - dX;
+        fan.hub.y = (simHeight - newY / cScale) - dY; 
+    }
+}
+function mouseStrutMove() {
+    strut = Strut[0];
+    newX = event.clientX;
+    newY = event.clientY;   
+    startX = event.clientX;
+    startY = event.clientY;
+    strut.pos.x = (newX / cScale) - dX;
+    strut.pos.y = (simHeight - newY / cScale) - dY;
+}
+function mouseUp() {
+    document.removeEventListener('mousemove', mouseTargetMove);
+    document.removeEventListener('mousemove', mouseHungryPuckMove);
+    document.removeEventListener('mousemove', mouseHungryPuck2Move);
+    document.removeEventListener('mousemove', mouseHungryPuck3Move);
+    document.removeEventListener('mousemove', mouseClockMove);
+    document.removeEventListener('mousemove', mousePuck1Move);
+    document.removeEventListener('mousemove', mousePuck2Move);
+    document.removeEventListener('mousemove', mousePuck3Move);
+    document.removeEventListener('mousemove', mouseFan1Move);
+    document.removeEventListener('mousemove', mouseFan2Move);
+    document.removeEventListener('mousemove', mouseStrutMove);
+    //document.removeEventListener('mousemove', mouseBoxDraw);
+    //document.removeEventListener('mousemove', mouseBumperMove);
+}
+
+//  BASIC FUNCTIONS -----------------------------------------------------------------------
+function wipeRestart() {
+    if (wormsButton.checked == false) {
+        c.fillStyle = 'hsl(0, 0%, 0%)';
+        c.fillRect(0, 0, canvas.width, canvas.height);
+        ballHits = 0;
+        bumperHits = 0;
+        wallHits = 0;
+        puckHits = 0;
+        ballDrops = 0;
+        setupScene()
+    }
+}
+function forcedWipeRestart() {
+    c.fillStyle = 'hsl(0, 0%, 0%)';
+    c.fillRect(0, 0, canvas.width, canvas.height);
+    ballHits = 0;
+    bumperHits = 0;
+    wallHits = 0;
+    puckHits = 0;
+    ballDrops = 0;
+    setupScene()
+}
+function pause() {
+    physProps.paused = !physProps.paused;
+    let input = document.querySelectorAll('.checkbox-pause');
+    if (physProps.paused == true) { 
+        for (i = 0; i < input.length; i++) {
+            input[i].checked = true;
+        }
+    } else {
+        for (i = 0; i < input.length; i++) {
+        input[i].checked = false;
+        }
+    }
+}
+function pauseAndStep() {
+    let input = document.querySelectorAll('.checkbox-pause');
+    for (i = 0; i < input.length; i++) {
+        input[i].checked = true;
+    }
+    physProps.paused = false;
+    simulate();
+    physProps.paused = true
+}
+function drawCircle(x, y, radius) {
+    c.beginPath();			
+    c.arc(x, y, radius, 0.0, 2.0 * Math.PI) 
+    c.closePath();
+}
+function drawEllipse(x, y, radiusX, radiusY) {
+    c.beginPath();			
+    c.ellipse(x * cScale, y * cScale, radiusX * cScale, radiusY * cScale, 0, 0, 2 * Math.PI) 
+    c.closePath();
+}
+function wipe() {
+    c.fillStyle = 'hsl(0, 0%, 0%)';
+    c.fillRect(0, 0, canvas.width, canvas.height)
+}
+function resetStats() {
+    if (statsButton.checked == true) {
+        ballHits = 0;
+        bumperHits = 0;
+        puckHits = 0;
+        wallHits = 0;
+        ballChks = 0;
+        bumperChks = 0;
+        puckChks = 0;
+        wallChks = 0
+        ballDrops = 0;
+    }
+}
+function reverseDir() {
+    for (i = 0; i < Balls.length; i++) {
+        var ball = Balls[i];
+        ball.vel.x *= -1;
+        ball.vel.y *= -1
+    }
+}
+function turnStuffOnOff() { 
+    if (fan1Button.checked == true || fan2Button.checked == true || 
+    showStrutButton.checked == true || showPuckButton.checked == true || 
+    clockButton.checked) {
+        stuff = true;
+    } else {
+        stuff = false;
+    }
+
+    if (stuff == true) {
+        fan1Was = fan1Button.checked;
+        fan2Was = fan2Button.checked
+        strutWas = showStrutButton.checked;
+        puckWas = showPuckButton.checked;
+        clockWas = clockButton.checked;
+
+        fan1Button.checked = false;
+        fan2Button.checked = false;
+        showStrutButton.checked = false;
+        showPuckButton.checked = false;
+        clockButton.checked = false;
+        stuff = false;
+    } else {
+        fan1Button.checked = fan1Was;
+        fan2Button.checked = fan2Was;
+        showStrutButton.checked = strutWas;
+        showPuckButton.checked = puckWas;
+        clockButton.checked = clockWas;
+        stuff = true;
+    }
+}
+
+function rigForBallistics() {
+    showBumperEntry.checked = false;
+    showPuckButton.checked = false;
+    showHungryPuckButton.checked = false;
+    pacMan.checked = false;
+    fan1Button.checked = false;
+    fan2Button.checked = false;
+    showStrutButton.checked = false;
+    showPuckButton.checked = false;
+    clockButton.checked = false;
+    stuff = false;
+    shower.checked = true;
+
+    floorButton.checked = true;
+    leftWallButton.checked = true;
+    rightWallButton.checked = true;
+    ceilingButton.checked = true;
+    
+    oneShotButton.checked = true;
+    sendMortar.checked = false;
+    physProps.dt = 1/15;
+    physProps.ballRest = 1.01;
+    physProps.wallRest = 1.01;
+    gravitySlider.value = 0;
+    physProps.gravity = new Vector2(0, 1);
+    for (r = 0; r < Balls.length; r++) {
+        ball = Balls[r];
+        ball.vel.x *= 0.1;
+        ball.vel.y *= 0.1;
+    }
+    for (t=1; t < 81; t++) {
+        setTimeout(function() {
+            mortar.checked = !mortar.checked;
+        }, t * 125);  
+    }
+    setTimeout(function() {
+        physProps.gravity = new Vector2(0, 1);
+        gravitySlider.value = 0;
+        physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+
+    }, 500);  
+    setTimeout(function() {
+        for (r = 0; r < Balls.length; r++) {
+            ball = Balls[r];
+            ball.vel.x = 0;
+            ball.vel.y =Math.abs(ball.vel.y);
+        }
+        physProps.ballRest = ballRestSlider.value / 20;
+        physProps.wallRest = bumperRestSlider.value / 20;
+        physProps.ballRest = 1.0;
+        physProps.wallRest = 1.0;
+        timeSlider.value = 100;
+        gravitySlider.value = 8;
+        physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+        physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);
+    }, 1000);
+    setTimeout(function() {
+        for (r = 0; r < Balls.length; r++) {
+            ball = Balls[r];
+            ball.vel.x = 0;
+            ball.vel.y = -1.5 * Math.abs(ball.vel.y);
+        }
+        physProps.ballRest = ballRestSlider.value / 20;
+        physProps.wallRest = bumperRestSlider.value / 20;
+        showTarget = true;
+        showReticle = true;
+    }, 2000);
+    setTimeout(function() {
+        for (r = 0; r < Balls.length; r++) {
+            ball = Balls[r];
+            ball.vel.x = 0;
+            ball.vel.y = -Math.abs(ball.vel.y);
+        }
+        ceilingButton.checked = false;
+    }, 3000);
+    setTimeout(function() {
+        for (r = 0; r < Balls.length; r++) {
+            ball = Balls[r];
+            ball.vel.x = 0;
+            ball.vel.y = -Math.abs(ball.vel.y);
+        }
+    }, 4000);
+    setTimeout(function() {
+        for (r = 0; r < Balls.length; r++) {
+            ball = Balls[r];
+            ball.vel.x = 0;
+            ball.vel.y = -Math.abs(ball.vel.y);
+            gravitySlider.value = 2;
+            physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+        }
+    }, 5000);
+    setTimeout(function() {
+        for (r = 0; r < Balls.length; r++) {
+            ball = Balls[r];
+            ball.vel.x = 0;
+            ball.vel.y = -Math.abs(ball.vel.y);
+        }
+    }, 6000);
+    setTimeout(function() {
+        for (r = 0; r < Balls.length; r++) {
+            ball = Balls[r];
+            ball.vel.x = 0;
+            ball.vel.y = -Math.abs(ball.vel.y);
+        }
+        trailSlider.value = 12;
+    }, 7000);
+    setTimeout(function() {
+        for (r = 0; r < Balls.length; r++) {
+            ball = Balls[r];
+            ball.vel.x = 0;
+            ball.vel.y = -Math.abs(0.5 * ball.vel.y);
+        }
+        gravitySlider.value = 1;
+        physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+    }, 8000);
+    setTimeout(function() {
+        for (r = 0; r < Balls.length; r++) {
+            ball = Balls[r];
+            ball.vel.x = 0;
+            ball.vel.y = 0;
+        }
+        gravitySlider.value = 0;
+        physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+        mortar.checked = true;
+        sendMortar.checked = true;
+        floorButton.checked = true;
+        leftWallButton.checked = false;
+        rightWallButton.checked = false;
+
+    }, 10000);
+}
+
+//  TARGET CONSTRUCTOR  ---------------------------------------------------------------------
+class TARGET {
+    constructor(pos, radius, angle) {
+        this.pos = pos;
+        this.radius = radius;
+        this.angle = angle;
+    }
+    simulate() {
+        this.angle = (628 - sendAngle.value ) / 100;
+        }
+    draw() {
+        if (showReticle == true) {
+            // reticle
+            drawCircle(cX(this.pos), cY(this.pos), 0.8 * this.radius * cScale);
+            c.fillStyle = 'hsla(0, 0%, 0%, 30%)';
+            if (sendMortar.checked == true) {
+                c.strokeStyle = 'hsla(120, 100%, 50%, 70%)';
+            } else {
+                c.strokeStyle = 'hsla(30, 100%, 50%, 70%)';
+            }
+            c.lineWidth = 3;
+            c.fill();
+            c.stroke();
+            // crosshairs
+            c.strokeStyle = 'hsl(0, 0%, 70%)';
+            c.lineWidth = 1;
+            c.moveTo((this.pos.x - this.radius) * cScale, (simHeight - this.pos.y) * cScale);
+            c.lineTo((this.pos.x + this.radius) * cScale, (simHeight - this.pos.y) * cScale);
+            c.moveTo(this.pos.x * cScale, (simHeight - this.pos.y - this.radius) * cScale);
+            c.lineTo(this.pos.x * cScale, (simHeight - this.pos.y + this.radius) * cScale);
+            c.stroke();
+            // dot
+            drawCircle(cX(this.pos), cY(this.pos), mortarRadius.value/1000 * cScale);
+            c.strokeStyle = 'yellow';
+            c.stroke();
+            }
+        // incoming direction
+        c.beginPath();
+        c.moveTo(this.pos.x * cScale + 1.5 * this.radius * Math.cos(this.angle) * cScale, (simHeight - this.pos.y) * cScale + (simHeight - 1.5 * this.radius * Math.sin(this.angle) * cScale))
+        c.lineTo(this.pos.x * cScale + (sendVel.value/2000 + 0.3) * Math.cos(this.angle) * cScale, (simHeight - this.pos.y) * cScale + (simHeight - (sendVel.value/2000 + 0.3) * Math.sin(this.angle) * cScale));
+        c.strokeStyle = `hsla(181, ${sendVel.value/20 + 15}%, 50%, 50%)`;
+        c.lineWidth = 3 + 15 * sendVel.value/2000;
+        c.setLineDash([15, 8]);
+        c.stroke();
+        c.setLineDash([]);
+        // end grab circle
+        drawCircle(this.pos.x * cScale + (sendVel.value/2000 + 0.37) * Math.cos(this.angle) * cScale, (simHeight - this.pos.y) * cScale + (simHeight - (sendVel.value/2000 + 0.37) * Math.sin(this.angle) * cScale), 0.4 * this.radius * cScale);
+        c.strokeStyle = 'yellow';
+        c.lineWidth = 15 * sendVel.value/2000;
+        c.closePath();
+        c.stroke();
+        // arrowheads
+        c.beginPath()
+        c.moveTo(this.pos.x * cScale + 0.2 * Math.cos(this.angle + .4) * cScale, (simHeight - this.pos.y) * cScale + (simHeight - 0.2 * Math.sin(this.angle + .4) * cScale));
+        c.lineTo(this.pos.x * cScale + 1.5 * this.radius * Math.cos(this.angle) * cScale, (simHeight - this.pos.y) * cScale + (simHeight - 1.5 * this.radius * Math.sin(this.angle) * cScale));
+        c.lineTo(this.pos.x * cScale + 0.2 * Math.cos(this.angle - .4) * cScale, (simHeight - this.pos.y) * cScale + (simHeight - 0.2 * Math.sin(this.angle - .4) * cScale));
+        c.strokeStyle = 'hsl(181, 50%, 50%)';
+        c.lineWidth = 3 + 15 * sendVel.value/2000;
+        c.stroke();
+    }
+}
+
+function sendIt() {
+    target = Target[0];
+    radius = mortarRadius.value/1000;
+    mass = 2 * Math.PI * radius * radius; 
+    //pos = new Vector2(target.pos.x + simWidth * Math.cos(target.angle), target.pos.y + simWidth * Math.sin(target.angle))
+    pos = new Vector2(target.pos.x + (sendVel.value/2000 + 0.37) * Math.cos(target.angle), 
+    target.pos.y + (sendVel.value/2000 + 0.37) * Math.sin(target.angle));
+    vel = new Vector2(-sendVel.value/100 * Math.cos((628 - sendAngle.value)/100), -sendVel.value/100 * Math.sin((628 - sendAngle.value)/100));
+    color = 'yellow';
+    hiColor = 'yellow';
+    Balls.push(new BALL(radius, mass, pos, vel, color, hiColor));
+    showTarget = true;
+    showReticle = false;
+    sendMortar.checked = true;
+}
+
+function toggleTargeting() {
+    showTarget = !showTarget;
+    if (showTarget == true) {
+        showReticle = true;
+    } else {
+        showReticle = false;
+    }
+}
+
+//  VECTOR OPERATIONS ---------------------------------------------------------------------
+class Vector2 {
+    constructor(x = 0.0, y = 0.0) {
+        this.x = x; 
+        this.y = y;
+    }
+    set(v) {
+        this.x = v.x; 
+        this.y = v.y;
+    }
+    clone() {
+        return new Vector2(this.x, this.y);
+    }
+    add(v, s=1) {
+        this.x += v.x * s;
+        this.y += v.y * s;
+        return this;
+    }
+    addVectors(a, b) {
+        this.x = a.x + b.x;
+        this.y = a.y + b.y;
+        return this;
+    }
+    subtract(v, s = 1.0) {
+        this.x -= v.x * s;
+        this.y -= v.y * s;
+        return this;
+    }
+    subtractVectors(a, b) {
+        this.x = a.x - b.x;
+        this.y = a.y - b.y;
+        return this;			
+    }
+    length() {
+        return Math.sqrt(this.x * this.x + this.y * this.y);
+    }
+    scale(s) {
+        this.x *= s;
+        this.y *= s;
+    }
+    dot(v) {
+        return this.x * v.x + this.y * v.y;
+    }
+    perp() {
+        return new Vector2(-this.y, this.x);
+    }
+}
+
+function closestPointOnSegment(p, a, b) 
+{
+    var ab = new Vector2();
+    ab.subtractVectors(b, a);
+    var t = ab.dot(ab);
+    if (t == 0.0)
+        return a.clone();
+    t = Math.max(0.0, Math.min(1.0, (p.dot(ab) - a.dot(ab)) / t));
+    var closest = a.clone();
+    return closest.add(ab, t);
+}
+
+function cX(pos) {
+    return pos.x * cScale;
+}
+function cY(pos) {
+    return canvas.height - pos.y * cScale;
+}
+
+//  WORLD PROPERTIES INIT DEFINITIONS ----------------------------------------------
+var physProps = {
+    gravity : new Vector2(0.0, -2.0),
+    dt : 1 / 60,
+    worldSize : new Vector2(simWidth, simHeight),
+
+    ballRest : 0.90,
+    floorRest : 0.80,
+    floorBumperRest : 0.85,
+    wallRest : 0.80,
+    ceilingRest : 0.80,
+    bumperRest : 0.80,
+    puckRest: 0.90,
+    roverRest: 1.0,
+    fanRest: 0.90,
+    
+    persistence: 0,
+    paused : false,
+    
+    //rampRest : 0.80,
+    //rampSlope : rampSlopeSlider.value / 1000,
+    //rampHeight : Math.abs(rampSlopeSlider.value / 1000 * simWidth),
+    //rampAngle : Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth),
+    //rampSine : Math.sin(Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth)),
+    //rampCosine : Math.cos(Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth))
+}
+
+class RAMP {
+    constructor (rampSlope, rampHeight, rampAngle, rampSine, rampCosine) {
+        this.rampSlope = rampSlope;
+        this.rampHeight = rampHeight;
+        this.rampAngle = rampAngle;
+        this.rampSine = rampSine;
+        this.rampCosine = rampCosine;
+    }
+    simulate() {
+        this.rampSlope = rampSlopeSlider.value / 1000;
+        this.rampHeight = Math.abs(rampSlopeSlider.value / 1000 * simWidth);
+        this.rampAngle = Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth);
+        this.rampSine = Math.sin(Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth));
+        this.rampCosine = Math.cos(Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth));
+    }
+    draw() {
+        if (rampButton.checked == true && this.rampSlope > 0) {
+            if (brightnessSlider.value > 50) {
+                // ramp fill
+                c.beginPath();
+                c.moveTo(0, cScale * simHeight);
+                c.lineTo(cScale * simWidth, cScale * (simHeight - this.rampSlope * simWidth));
+                c.lineTo(cScale * simWidth, cScale * simHeight);
+                c.closePath();
+                c.fillStyle = "hsla(0, 0%, 60%, 50%)";
+                c.fill();
+                // ramp edge
+                c.lineWidth = 2;
+                c.beginPath();
+                c.moveTo(0, cScale*simHeight);
+                c.lineTo(cScale * simWidth, cScale * (simHeight - this.rampSlope * simWidth));
+                c.strokeStyle = "hsl(120, 60%, 35%)";
+                c.stroke();
+            } else {
+                // ramp fill
+                c.beginPath();
+                c.moveTo(0, cScale * simHeight);
+                c.lineTo(cScale * simWidth, cScale * (simHeight - this.rampSlope * simWidth));
+                c.lineTo(cScale * simWidth, cScale * simHeight);
+                c.closePath();
+                c.fillStyle = "hsl(0, 20%, 10%, 80%)";
+                c.fill();
+                // ramp edge
+                c.lineWidth = 2;
+                c.beginPath();
+                c.moveTo(0, cScale*simHeight);
+                c.lineTo(cScale * simWidth, cScale * (simHeight - this.rampSlope * simWidth));
+                c.strokeStyle = "hsla(0, 0%, 40%, 80%)";
+                c.stroke();
+            }
+        }
+        if (rampButton.checked == true && this.rampSlope < 0) {
+            if (brightnessSlider.value > 50) {
+                // ramp fill
+                c.beginPath();
+                c.moveTo(0, cScale * (simHeight + this.rampSlope * simWidth));
+                c.lineTo(cScale * simWidth, cScale * simHeight);
+                c.lineTo(0, cScale * simHeight);
+                c.closePath();
+                c.fillStyle = "hsla(0, 0%, 60%, 50%)";
+                c.fill();
+                // ramp edge
+                c.lineWidth = 2;
+                c.beginPath();
+                c.moveTo(0, cScale * (simHeight + this.rampSlope * simWidth));
+                c.lineTo(cScale * simWidth, cScale * simHeight);
+                c.strokeStyle = "hsl(120, 60%, 35%)";
+                c.stroke();
+            } else {
+                // ramp fill
+                c.beginPath();
+                c.moveTo(0, cScale * (simHeight + this.rampSlope * simWidth));
+                c.lineTo(cScale * simWidth, cScale * simHeight);
+                c.lineTo(0, cScale * simHeight);
+                c.closePath();
+                c.fillStyle = `hsla(90, 20%, 8%, 80%)`;
+                c.fill();
+                // ramp edge
+                c.lineWidth = 2;
+                c.beginPath();
+                c.moveTo(0, cScale * (simHeight + this.rampSlope * simWidth));
+                c.lineTo(cScale * simWidth, cScale * simHeight);
+                c.strokeStyle = "hsla(0, 0%, 40%, 80%)";
+                c.stroke();
+            }
+        }
+    }
+}
+
+//  CLOCK CONSTRUCTOR  ------------------------------------------------------------------------
+class CLOCK {
+    constructor(pos, radius, handAngle) {
+        this.pos = pos.clone();
+        this.radius = radius;
+        this.handAngle = handAngle;
+    }
+    simulate() {
+        if (clockButton.checked == true) {
+            this.handAngle = mSecs/1000 * 2*Math.PI;
+            simClockAngle += (physProps.dt) * 2*Math.PI;
+        }
+    }
+    draw() {
+        c.strokeStyle = `hsl(0, 0%, 100%)`;
+        c.lineWidth = 2;
+        if (brightnessSlider.value < 50) {
+            c.shadowBlur = 10;
+        } 
+        // face
+        drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+        c.stroke();
+        c.shadowBlur = 0;
+        c.fillStyle = `hsla(0, 0%, 0%, 30%)`;
+        c.fill();
+        // sim hand dot
+        drawCircle(cX(this.pos) + (0.7 * this.radius * Math.cos(simClockAngle) * cScale), 
+        cY(this.pos) + (0.7 * this.radius * Math.sin(simClockAngle) * cScale), 
+        this.radius * .07 * cScale);
+        c.fillStyle = `hsl(160, 80%, 60%)`;
+        c.fill();
+        // main hand
+        c.beginPath();
+        c.moveTo(cX(this.pos), cY(this.pos));
+        c.lineTo((cX(this.pos) + (0.7 * this.radius * Math.cos(this.handAngle) * cScale)), 
+        (cY(this.pos) + (0.7 * this.radius * Math.sin(this.handAngle) * cScale)));
+        c.strokeStyle = `hsl(0, 0%, 90%)`;
+        c.stroke();
+        // main hand dot
+        drawCircle(cX(this.pos) + (0.7 * this.radius * Math.cos(this.handAngle) * cScale), 
+        cY(this.pos) + (0.7 * this.radius * Math.sin(this.handAngle) * cScale), 
+        this.radius * .1 * cScale);
+        c.fillStyle = `hsl(0, 0%, 100%)`;
+        c.fill();
+        // pinion
+        drawCircle(cX(this.pos), cY(this.pos), 0.05 * this.radius * cScale)
+        c.fillStyle = 'hsl(0, 0%, 0%)';
+        c.fill();
+        // logo
+        c.font = `${.2 * this.radius * cScale}px verdana`;
+        c.fillStyle = "hsl(0, 0%, 75%)";
+        c.textAlign = "center";
+        c.verticalAlign = "center";
+        c.fillText("Ω", cX(this.pos), cY(this.pos) - .4 * this.radius * cScale);
+    }
+}
+
+//  PADDLE CONSTRUCTOR
+class PADDLE {
+    constructor(radius, width, pos) {
+        this.radius = radius;
+        this.width = width;
+        this.pos = pos.clone();
+    }
+    simulate() {
+        if (leftPressed) {
+            this.pos.x -= 0.05;
+            if (this.pos.x < 0.5 * this.width) {
+                this.pos.x = 0.5 * this.width;
+            }
+        }
+        if (rightPressed) {
+            this.pos.x += 0.05;
+            if (this.pos.x > simWidth - 0.5 * this.width) {
+                this.pos.x = simWidth - 0.5 * this.width;
+            }
+        }
+        this.pos.y = 0.2 * simHeight;
+    }
+    draw() {
+        c.beginPath();
+        //  bar
+        c.rect((this.pos.x - 0.5 * this.width) * cScale, (simHeight - this.pos.y - this.radius) * cScale, this.width * cScale, 2 * this.radius * cScale);
+        if (brightnessSlider.value < 50) {
+            c.fillStyle = 'hsl(0, 0%, 80%)';
+        } else {
+            c.fillStyle = 'hsl(0, 0%, 10%)';
+        }
+        c.closePath();
+        c.fill();
+        // ends 
+        drawCircle((this.pos.x - 0.5 * this.width) * cScale, (simHeight - this.pos.y) * cScale, this.radius * cScale);
+        c.fill();
+        drawCircle((this.pos.x + 0.5 * this.width) * cScale, (simHeight - this.pos.y) * cScale, this.radius * cScale);
+        c.fill();
+    }
+    get left() {
+        return this.pos.x - 0.5 * this.width;
+    }
+    get right() {
+        return this.pos.x + 0.5 * this.width;
+    }
+}
+
+//  BOX CONSTRUCTOR  ------------------------------------------------------------------------
+class BOX {
+    constructor(corner, width, height, color) {
+        this.corner = corner.clone(); 
+        this.width = width;
+        this.height = height;
+        this.color = color;
+    }
+}
+
+//  PAC-MAN DIRECTION CHOOSER ---------------------------------------------------------------
+function setNewPacDir() {
+    var dirSeed = Math.random();
+    const pacman = Pacman[0];
+    // ...if going right...
+    if (pacman.vel.x > 0) {
+        if (dirSeed < 0.33) {
+            pacDir = 'up';
+        } else if (dirSeed < 0.67) {
+                pacDir = 'right';
+            } else if (dirSeed < 1.00) {
+                pacDir = 'down';
+        }
+    }
+    // ...if going left...
+    if (pacman.vel.x < 0) {
+        if (dirSeed < 0.33) {
+                pacDir = 'up';
+            } else if (dirSeed < 0.67) {
+                pacDir = 'left';
+        } else if (dirSeed < 1.00) {
+                pacDir = 'down';
+            }
+    }
+    // ...if going up...
+    if (pacman.vel.y > 0) {
+        if (dirSeed < 0.33) {
+            pacDir = 'left';
+        } else if (dirSeed < 0.67) {
+            pacDir = 'up';
+        } else if (dirSeed < 1.00) {
+            pacDir = 'right';
+        }
+    }
+    // ...if going down...
+    if (pacman.vel.y < 0) {
+        if (dirSeed < 0.33) {
+            pacDir = 'left';
+        } else if (dirSeed < 0.67) {
+            pacDir = 'down';
+        } else if (dirSeed < 1.00) {
+            pacDir = 'right';
+        }
+    }
+}
+
+//  PAC-MAN CONSTRUCTOR  ------------------------------------------------------------------------
+class PACMAN {
+    constructor(radius, pos, vel, rot) {
+        this.radius = radius;
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.rot = rot;
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+    simulate() {
+        this.radius = pacmanRadiusSlider.value / 1000;
+        
+        mouthMotor += 0.1;
+        mouthSize = 0.05 * Math.PI + 0.55 * Math.PI * Math.abs(Math.cos(mouthMotor));
+
+        // CHANGE DIRECTION ...
+        // ...while moving right...
+        if (this.vel.x > 0 && this.pos.x >= walkoutH) {
+                breadcrumbX1 = this.pos.x;
+                if (pacDir == 'up') {
+                    oldpacDirX = 'up';
+                    this.pos.x = walkoutH;
+                    this.vel.x = 0;
+                    this.vel.y = 0.7;
+                }
+                if (pacDir == 'down') {
+                    oldpacDirX = 'down';
+                    this.pos.x = walkoutH;
+                    this.vel.x = 0;
+                    this.vel.y = -0.7;
+                }
+        }
+        // ....while moving left...
+        if (this.vel.x < 0 && this.pos.x <= walkoutH) {
+                breadcrumbX2 = this.pos.x;
+                if (pacDir == 'up') {
+                    oldpacDirX = 'up';
+                    this.pos.x = walkoutH;
+                    this.vel.x = 0;
+                    this.vel.y = 0.7;
+                }
+                if (pacDir == 'down') {
+                    oldpacDirX = 'down';
+                    this.pos.x = walkoutH;
+                    this.vel.x = 0;
+                    this.vel.y = -0.7;
+                }
+        }
+        // ....while moving up...
+        if (this.vel.y > 0 && this.pos.y >= walkoutV) {
+                breadcrumbY1 = this.pos.y;
+                if (pacDir == 'left') {
+                    oldpacDirY = 'left';
+                    this.pos.y = walkoutV;
+                    this.vel.x = -0.7;
+                    this.vel.y = 0;
+                }
+                if (pacDir == 'right') {
+                    oldpacDirY = 'right';
+                    this.pos.y = walkoutV;
+                    this.vel.x = 0.7;
+                    this.vel.y = 0;
+                }
+        }
+        // ....while moving down...
+        if (this.vel.y < 0 && this.pos.y <= walkoutV) {
+                breadcrumbY2 = this.pos.y;
+                if (pacDir == 'left'){
+                    oldpacDirY = 'left';
+                    this.pos.y = walkoutV;
+                    this.vel.x = -0.7;
+                    this.vel.y = 0;
+                }
+                if (pacDir == 'right') {
+                    oldpacDirY = 'right';
+                    this.pos.y = walkoutV;
+                    this.vel.x = 0.7;
+                    this.vel.y = 0;
+                }
+        }
+
+        // overrun RIGHT side  ------------
+        if (this.pos.x > simWidth + 2 * this.radius) {
+            this.vel.x *= -1.0;
+            var oldPacHeight = this.pos.y;
+            var randPacHeight = this.radius + Math.random() * (simHeight - this.radius);
+            var tries = 0;
+            while (randPacHeight < oldPacHeight + 3 * this.radius && randPacHeight > oldPacHeight - 3 * this.radius) {
+                randPacHeight = this.radius + Math.random() * (simHeight - this.radius);
+                tries += 1;
+                if (tries > 10) {
+                    break
+                }
+            }
+            this.pos.y = randPacHeight;
+            walkoutH = 0.2 * simWidth + 0.8 * simWidth * Math.random();
+            setNewPacDir();
+        }
+        // overrun left side --------------
+        if (this.pos.x < -2 * this.radius) {
+            this.vel.x *= -1.0;
+            var oldPacHeight = this.pos.y;
+            var randPacHeight = Math.random() * simHeight;
+            var tries = 0;
+            while (randPacHeight < oldPacHeight + this.radius && randPacHeight > oldPacHeight - this.radius) {
+                randPacHeight = this.radius + Math.random() * (simHeight - this.radius);
+                tries += 1;
+                if (tries > 10) {
+                    tries = 0;
+                    break
+                }
+            }
+            this.pos.y = randPacHeight;
+            walkoutH = 0.2 * simWidth + 0.8 * simWidth * Math.random();
+            setNewPacDir();
+        }
+        // overrun floor --------------
+        if (this.pos.y < -2 * this.radius) {
+            this.vel.y *= -1.0;
+            var oldPacLateral = this.pos.x;
+            var randPacLateral = Math.random() * simWidth;
+            var tries = 0;
+            while (randPacLateral < oldPacLateral + this.radius && randPacLateral > oldPacLateral - this.radius) {
+                randPacLateral = this.radius + Math.random() * (simHeight - this.radius);
+                tries += 1;
+                if (tries > 10) {
+                    tries = 0;
+                    break
+                }
+            }
+            this.pos.x = randPacLateral;
+            walkoutV = 0.2 * simHeight + 0.8 * simHeight * Math.random();
+            setNewPacDir();
+        }
+        // overrun ceiling --------------
+        if (this.pos.y > 2 * this.radius + simHeight) {
+            this.vel.y *= -1.0;
+            var oldPacLateral = this.pos.x;
+            var randPacLateral = Math.random() * simWidth;
+            var tries = 0;
+            while (randPacLateral < oldPacLateral + this.radius && randPacLateral > oldPacLateral - this.radius) {
+                randPacLateral = this.radius + Math.random() * (simHeight - this.radius);
+                tries += 1;
+                if (tries > 10) {
+                    tries = 0;
+                    break
+                }
+            }
+            this.pos.x = randPacLateral;
+            walkoutV = 0.2 * simHeight + 0.8 * simHeight * Math.random();
+            setNewPacDir();
+        }
+        this.pos.add(this.vel, 1/60);
+    }
+    draw() {
+        c.beginPath();
+        if (this.vel.x > 0) {  // RIGHT
+            // body
+            c.arc(cX(this.pos), cY(this.pos), this.radius * cScale, 0.5 * mouthSize, 2 * Math.PI - 0.5 * mouthSize);
+            // top jaw
+            c.moveTo((cX(this.pos) + this.radius * cScale * Math.sin(0.5 * mouthSize + 0.5 * Math.PI)), 
+            cY(this.pos) + this.radius * cScale * Math.cos(0.5 * mouthSize + 0.5 * Math.PI));
+            // center
+            c.lineTo((this.pos.x - 0.4 * this.radius) * cScale, (simHeight - this.pos.y) * cScale);
+            // bottom jaw
+            c.lineTo((cX(this.pos) + this.radius * cScale * Math.sin(0.5 * mouthSize + 0.5 * Math.PI)), 
+            cY(this.pos) - this.radius * cScale * Math.cos(0.5 * mouthSize + 0.5 * Math.PI));
+        } 
+        if (this.vel.x < 0) {  // LEFT 
+            // body
+            c.arc(cX(this.pos), cY(this.pos), this.radius * cScale, 0.5 * mouthSize + Math.PI, 2 * Math.PI - 0.5 * mouthSize + Math.PI);
+            // bottom jaw
+            c.moveTo((cX(this.pos) - this.radius * cScale * Math.sin(0.5 * mouthSize + 0.5 * Math.PI)), 
+            cY(this.pos) - this.radius * cScale * Math.cos(0.5 * mouthSize + 0.5 * Math.PI));
+            // center
+            c.lineTo((this.pos.x + 0.4 * this.radius) * cScale, (simHeight - this.pos.y) * cScale);
+            // top jaw
+            c.lineTo((cX(this.pos) - this.radius * cScale * Math.sin(0.5 * mouthSize + 0.5 * Math.PI)), 
+            cY(this.pos) + this.radius * cScale * Math.cos(0.5 * mouthSize + 0.5 * Math.PI));
+        }
+        if (this.vel.y > 0) { // UP
+            // body
+            c.arc(cX(this.pos), cY(this.pos), this.radius * cScale, -0.5*Math.PI + 0.5 * mouthSize, -0.5*Math.PI - 0.5 * mouthSize);
+            // top jaw
+            c.moveTo((cX(this.pos) + this.radius * cScale * Math.cos(0.5 * mouthSize + .5 * Math.PI)), 
+            cY(this.pos) - this.radius * cScale * Math.sin(0.5 * mouthSize + 0.5 * Math.PI));
+            // center
+            c.lineTo((this.pos.x) * cScale, (simHeight - this.pos.y + 0.4 * this.radius) * cScale);
+            // bottom jaw
+            c.lineTo((cX(this.pos) - this.radius * cScale * Math.cos(0.5 * mouthSize + 0.5 * Math.PI)), 
+            cY(this.pos) + this.radius * cScale * Math.sin(0.5 * mouthSize - 0.5 * Math.PI));
+        } 
+
+        if (this.vel.y < 0) { // DOWN
+            // body
+            c.arc(cX(this.pos), cY(this.pos), this.radius * cScale, 0.5*Math.PI + 0.5 * mouthSize, 0.5*Math.PI - 0.5 * mouthSize);
+            // bottom jaw
+            c.lineTo((cX(this.pos) - this.radius * cScale * Math.cos(0.5 * mouthSize + 0.5 * Math.PI)), 
+            cY(this.pos) - this.radius * cScale * Math.sin(0.5 * mouthSize - 0.5 * Math.PI));
+            // center
+            c.lineTo((this.pos.x) * cScale, (simHeight - this.pos.y - 0.4 * this.radius) * cScale);
+            // top jaw
+            c.moveTo((cX(this.pos) + this.radius * cScale * Math.cos(0.5 * mouthSize + .5 * Math.PI)), 
+            cY(this.pos) + this.radius * cScale * Math.sin(0.5 * mouthSize + 0.5 * Math.PI));
+        } 
+        
+        if (brightnessSlider.value > 50) {
+            c.strokeStyle = 'black';
+            c.lineWidth = 4;
+            c.stroke();
+
+            c.font = `${0.8 * this.radius * cScale}px Andale Mono`;
+            c.fillStyle = "hsl(0, 0%, 10%)";
+            c.textAlign = "center";
+            c.verticalAlign = "center";
+            c.fillText("1UP", cX(this.pos), cY(this.pos) - 1.4 * this.radius * cScale);
+        }
+        c.fillStyle = 'yellow';
+        c.shadowColor = 'yellow';
+        c.shadowBlur = 15;
+        c.fill();
+        c.shadowBlur = 0;
+        //c.strokeStyle = 'yellow';
+        //c.lineWidth = 4;
+        //c.stroke();
+    }
+}
+
+//  GHOST CONSTRUCTOR  ------------------------------------------------------------------------
+class GHOST {
+    constructor(radius, pos, vel, color) {
+        this.radius = radius;
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.color = color;
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+    simulate() {
+        this.radius = pacmanRadiusSlider.value / 1000;
+        this.pos.add(this.vel, 1/60);
+        //  right  ------------------------------------------
+        if (this.vel.x > 0 && this.pos.x >= breadcrumbX1) {  
+            if(oldpacDirY == 'up') {
+                this.vel.x = 0;
+                this.vel.y = 0.7;
+                ghostDir = 'up';
+            } else 
+            if (oldpacDirY =='down') {
+                this.vel.x = 0;
+                this.vel.y = -0.7;
+                ghostDir = 'down';
+            }
+        }
+        //  left  -------------------------------------------
+        if (this.vel.x < 0 && this.pos.x <= breadcrumbX2) {  
+            if(oldpacDirY == 'up') {
+                this.vel.x = 0;
+                this.vel.y = 0.7;
+                ghostDir = 'up';
+            } else 
+            if (oldpacDirY =='down') {
+                this.vel.x = 0;
+                this.vel.y = -0.7;
+                ghostDir = 'down';
+            }
+        } 
+        //  up  ----------------------------------------------
+        if (this.vel.y > 0 && this.pos.y >= breadcrumbY1) {  
+            if(oldpacDirX == 'left') {
+                this.vel.x = -0.7;
+                this.vel.y = 0;
+                ghostDir = 'left';
+            } else 
+            if (oldpacDirX =='right') {
+                this.vel.x = 0.7;
+                this.vel.y = 0;
+                ghostDir = 'right';
+            }
+        } 
+        //  down  --------------------------------------------
+        if (this.vel.y < 0 && this.pos.y <= breadcrumbY2) {  
+            if(oldpacDirX == 'left') {
+                this.vel.x = -0.7;
+                this.vel.y = 0;
+                ghostDir = 'left';
+            } else 
+            if (oldpacDirX =='right') {
+                this.vel.x = 0.7;
+                this.vel.y = 0;
+                ghostDir = 'right';
+            }
+        }
+        
+        //  world bounds right ------------------------------
+        if (this.pos.x > simWidth + 2 * this.radius) {
+            this.vel.x *= -1.0;
+            pacman = Pacman[0];
+            this.pos.y = pacman.pos.y + 0.35 * this.radius;
+            ghostDir = 'left';
+
+            var c = Math.random();
+            if (c < 0.25) {
+                this.color = '#f9a300';  // clyde - orange
+            } else if (c < 0.50) {
+                this.color = '#fc2502';  // blinky - red
+            } else if (c < 0.75) {
+                this.color = '#feb3b1';  // pinky - pink
+            } else if (c < 1.00) {
+                this.color = '#01dde1';  // inky - cyan
+            }
+        }
+        //  world bounds left ------------------------------
+        if (this.pos.x < -2 * this.radius) {
+            this.vel.x *= -1.0;
+            pacman = Pacman[0];
+            this.pos.y = pacman.pos.y + 0.3 * this.radius;
+            ghostDir = 'right';
+
+            var c = Math.random();
+            if (c < 0.25) {
+                this.color = '#f9a300';  // clyde - orange
+            } else if (c < 0.50) {
+                this.color = '#fc2502';  // blinky - red
+            } else if (c < 0.75) {
+                this.color = '#feb3b1';  // pinky - pink
+            } else if (c < 1.00) {
+                this.color = '#01dde1';  // inky - cyan
+            }
+        }
+        //  world bounds top ------------------------------
+        if (this.pos.y > simHeight + 2 * this.radius) {
+            this.vel.y *= -1.0;
+            pacman = Pacman[0];
+            this.pos.x = pacman.pos.x;
+            ghostDir = 'down';
+
+            var c = Math.random();
+            if (c < 0.25) {
+                this.color = '#f9a300';  // clyde - orange
+            } else if (c < 0.50) {
+                this.color = '#fc2502';  // blinky - red
+            } else if (c < 0.75) {
+                this.color = '#feb3b1';  // pinky - pink
+            } else if (c < 1.00) {
+                this.color = '#01dde1';  // inky - cyan
+            }
+        }
+        //  world bounds bottom ------------------------------
+        if (this.pos.y < 2 * this.radius) {
+            this.vel.y *= -1.0;
+            pacman = Pacman[0];
+            this.pos.x = pacman.pos.x;
+            ghostDir = 'up';
+
+            var c = Math.random();
+            if (c < 0.25) {
+                this.color = '#f9a300';  // clyde - orange
+            } else if (c < 0.50) {
+                this.color = '#fc2502';  // blinky - red
+            } else if (c < 0.75) {
+                this.color = '#feb3b1';  // pinky - pink
+            } else if (c < 1.00) {
+                this.color = '#01dde1';  // inky - cyan
+            }
+        }
+    }
+    draw() {
+        c.beginPath();
+        c.fillStyle = this.color;
+        c.lineWidth = 1;
+        // head
+        c.arc(cX(this.pos), cY(this.pos), this.radius * cScale, 0, 2 * Math.PI);
+        // body
+        c.rect((this.pos.x - this.radius) * cScale, (simHeight - this.pos.y) * cScale, 2 * this.radius * cScale, 1.1 * this.radius * cScale);
+        // skirt
+        c.moveTo((this.pos.x - this.radius) * cScale, (simHeight - this.pos.y + 1.1 * this.radius) * cScale);
+        if (mSecs > 0 && mSecs < 125 || mSecs > 250 && mSecs < 375 || 
+            mSecs > 500 && mSecs < 625 || mSecs > 750 && mSecs < 875) {
+                c.lineTo((this.pos.x - this.radius) * cScale, (simHeight - this.pos.y + 1.1 * this.radius + 0.3 * this.radius) * cScale);
+            }
+        if (this.vel.x < 0 || this.vel.x > 0 || this.vel.y > 0 || this.vel.y < 0) { // right
+            if (mSecs > 0 && mSecs < 125 || mSecs > 250 && mSecs < 375 || 
+            mSecs > 500 && mSecs < 625 || mSecs > 750 && mSecs < 875) {
+                for (h = 1; h < 7; h++) {
+                if (bottom == false) {
+                    c.lineTo((this.pos.x - this.radius + h * 2*this.radius/6) * cScale, (simHeight - this.pos.y + 1.1 * this.radius) * cScale);
+                    bottom = true;
+                } else 
+                if (bottom == true) {
+                    c.lineTo((this.pos.x - this.radius + h * 2*this.radius/6) * cScale, (simHeight - this.pos.y + 1.1 * this.radius + 0.3 * this.radius) * cScale);
+                    bottom = false;
+                }
+            }
+            } else {
+                for (h = 1; h < 7; h++) {
+                    if (bottom == false) {
+                        c.lineTo((this.pos.x - this.radius + h * 2*this.radius/6) * cScale, (simHeight - this.pos.y + 1.1 * this.radius + 0.3 * this.radius) * cScale);
+                        bottom = true;
+                    } else 
+                    if (bottom == true) {
+                        c.lineTo((this.pos.x - this.radius + h * 2*this.radius/6) * cScale, (simHeight - this.pos.y + 1.1 * this.radius) * cScale);
+                        bottom = false;
+                    }
+                }
+            }  
+        } 
+        c.lineTo((this.pos.x + this.radius) * cScale, (simHeight - this.pos.y + 1.1 * this.radius) * cScale);
+        c.shadowColor = this.color;
+        c.shadowBlur = 20;
+        //c.stroke();
+        c.fill();
+        c.shadowBlur = 0;
+        // white paper
+        if (brightnessSlider.value > 50) {
+            c.strokeStyle = 'black';
+            c.lineWidth = 4;
+            c.stroke();
+            c.fill();
+
+            c.font = `${.7 * this.radius * cScale}px Andale Mono`;
+            c.fillStyle = "hsl(0, 0%, 10%)";
+            c.textAlign = "center";
+            c.verticalAlign = "center";
+
+            if (this.color == '#f9a300') {name = 'clyde';}
+            if (this.color == '#fc2502') {name = 'blinky';}
+            if (this.color == '#feb3b1') {name = 'pinky';}
+            if (this.color == '#01dde1') {name = 'inky';}
+            c.fillText(`${name}`, cX(this.pos), cY(this.pos) - 1.4 * this.radius * cScale)
+        }
+        // eyeballs
+        c.shadowBlur = 5;
+        c.shadowColor = 'black';
+        c.fillStyle = 'white';
+        // pupils
+        if (this.vel.x > 0) { // LEFT
+            drawCircle((this.pos.x - .4 * this.radius) * cScale, (simHeight - this.pos.y) * cScale, 0.32 * this.radius * cScale)
+            c.fill();
+            drawCircle((this.pos.x + .4 * this.radius) * cScale, (simHeight - this.pos.y) * cScale, 0.32 * this.radius * cScale)
+            c.fill();
+
+            c.fillStyle = 'black';
+            drawCircle((this.pos.x - .37 * this.radius + 0.16 * this.radius) * cScale, (simHeight - this.pos.y) * cScale, 0.18 * this.radius * cScale)
+            c.fill();
+            drawCircle((this.pos.x + .43 * this.radius + 0.16 * this.radius) * cScale, (simHeight - this.pos.y) * cScale, 0.18 * this.radius * cScale)
+            c.fill();
+        } 
+        if (this.vel.x < 0) { // RIGHT
+            drawCircle((this.pos.x - .4 * this.radius) * cScale, (simHeight - this.pos.y) * cScale, 0.32 * this.radius * cScale)
+            c.fill();
+            drawCircle((this.pos.x + .4 * this.radius) * cScale, (simHeight - this.pos.y) * cScale, 0.32 * this.radius * cScale)
+            c.fill();
+
+            c.fillStyle = 'black';
+            drawCircle((this.pos.x - .37 * this.radius - 0.16 * this.radius) * cScale, (simHeight - this.pos.y) * cScale, 0.18 * this.radius * cScale)
+            c.fill();
+            drawCircle((this.pos.x + .43 * this.radius - 0.16 * this.radius) * cScale, (simHeight - this.pos.y) * cScale, 0.18 * this.radius * cScale)
+            c.fill();
+        }
+        if (this.vel.y > 0) { // UP
+            drawCircle((this.pos.x - .4 * this.radius) * cScale, (simHeight - this.pos.y - 0.3 * this.radius) * cScale, 0.32 * this.radius * cScale)
+            c.fill();
+            drawCircle((this.pos.x + .4 * this.radius) * cScale, (simHeight - this.pos.y - 0.3 * this.radius) * cScale, 0.32 * this.radius * cScale)
+            c.fill();
+
+            c.fillStyle = 'black';
+            drawCircle((this.pos.x - .4 * this.radius) * cScale, (simHeight - this.pos.y - 0.46 * this.radius) * cScale, 0.18 * this.radius * cScale)
+            c.fill();
+            drawCircle((this.pos.x + .4 * this.radius) * cScale, (simHeight - this.pos.y - 0.46 * this.radius) * cScale, 0.18 * this.radius * cScale)
+            c.fill();
+        }
+        if (this.vel.y < 0) { // DOWN
+            drawCircle((this.pos.x - .4 * this.radius) * cScale, (simHeight - this.pos.y + 0.3 * this.radius) * cScale, 0.32 * this.radius * cScale)
+            c.fill();
+            drawCircle((this.pos.x + .4 * this.radius) * cScale, (simHeight - this.pos.y + 0.3 * this.radius) * cScale, 0.32 * this.radius * cScale)
+            c.fill();
+
+            c.fillStyle = 'black';
+            drawCircle((this.pos.x - .4 * this.radius) * cScale, (simHeight - this.pos.y + 0.46 * this.radius) * cScale, 0.18 * this.radius * cScale)
+            c.fill();
+            drawCircle((this.pos.x + .4 * this.radius) * cScale, (simHeight - this.pos.y + 0.46 * this.radius) * cScale, 0.18 * this.radius * cScale)
+            c.fill();
+        }
+        c.shadowBlur = 0;
+    }
+}
+
+//  BALL CONSTRUCTOR  -----------------------------------------------------------------------
+class BALL {
+    constructor(radius, mass, pos, vel, color, hiColor) {
+        this.radius = radius;
+        this.mass = mass;
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.color = color;
+        this.hiColor = hiColor
+    }
+    get top() {
+        return this.pos.y + this.radius;
+    }
+    get bottom() {
+        return this.pos.y - this.radius;
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+    simulate() {
+        this.vel.add(physProps.gravity, physProps.dt);
+        this.pos.add(this.vel, physProps.dt)
+    }
+    draw() {
+        if (ballSphere.checked == true) {
+            const shineOffsetX = cScale * this.radius * 0.3; // old masterShineShiftX;
+            const shineOffsetY = cScale * this.radius * 0.4; // old masterShineShiftY;
+            const shineVector = Math.sqrt(shineOffsetX * shineOffsetX + shineOffsetY * shineOffsetY);
+            const shineRadius = 0.9 * cScale * this.radius + shineVector;
+            
+            const shading = c.createRadialGradient(cX(this.pos) - shineOffsetX, cY(this.pos) - shineOffsetY, shineRadius, cX(this.pos) - shineOffsetX, cY(this.pos) - shineOffsetY, 0);
+            shading.addColorStop(0, this.color);
+            shading.addColorStop(1, this.hiColor);
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = shading;
+            c.fill()
+        } 
+        if (ballDisc.checked == true) {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);    
+            
+            if (ballFill.checked == true) {
+                c.fillStyle = this.hiColor;
+                c.fill();
+            }
+            //drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            if (brightnessSlider.value < 50) {
+                c.strokeStyle = `hsl(0, 0%, 70%)`;
+            } else {
+                c.strokeStyle = `hsl(0, 0%, 10%)`; 
+            }
+            c.lineWidth = 0.15 * this.radius * cScale;
+            c.stroke();
+        }
+        if (ballSquare.checked == true) {
+            c.beginPath();
+            c.rect(cX(this.pos) - this.radius * cScale, cY(this.pos) - this.radius * cScale, 2*this.radius*cScale, 2*this.radius*cScale);
+            c.closePath();
+            if (ballFill.checked == true) {
+                c.fillStyle = this.hiColor;
+                c.fill();
+            }
+            if (brightnessSlider.value < 50) {
+                c.strokeStyle = `hsl(0, 0%, 80%)`;
+            } else {
+                c.strokeStyle = `hsl(0, 0%, 10%)`; 
+            }
+            c.lineWidth = 0.15 * this.radius * cScale;
+            c.stroke();
+        }
+        if (ballTriangle.checked == true) {
+            c.beginPath();
+            c.moveTo(cX(this.pos) - 0.9 * this.radius * cScale, cY(this.pos) + 0.9 * this.radius * cScale);
+            c.lineTo(cX(this.pos), cY(this.pos) - this.radius * cScale);
+            c.lineTo(cX(this.pos) + 0.9 * this.radius * cScale, cY(this.pos) + 0.9 * this.radius * cScale);
+            c.closePath();
+            if (ballFill.checked == true) {
+                c.fillStyle = this.hiColor;
+                c.fill();
+            }
+            if (brightnessSlider.value < 50) {
+                c.strokeStyle = `hsl(0, 0%, 80%)`;
+            } else {
+                c.strokeStyle = `hsl(0, 0%, 10%)`; 
+            }
+            c.lineWidth = 0.15 * this.radius * cScale;
+            c.stroke();
+        }
+    }
+}
+
+//  BUMPER CONSTRUCTOR  ---------------------------------------------------------------------
+class BUMPER {
+    constructor(radius, pos) {
+        this.radius = radius;
+        this.pos = pos.clone();
+        this.OGpos = pos.clone();
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+    draw() {
+        if (brightnessSlider.value < 50) {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = `hsl(0, 0%, 70%)`;
+            c.fill();
+            drawCircle(cX(this.pos), cY(this.pos), (this.radius - .002 * simWidth) * cScale);
+            c.fillStyle = `hsl(0, 0%, 30%)`;
+            c.fill();
+        } else {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = `hsl(0, 0%, 30%)`;
+            c.fill();
+            drawCircle(cX(this.pos), cY(this.pos), (this.radius - .002 * simWidth) * cScale);
+            c.fillStyle = `hsl(0, 0%, 80%)`;
+            c.fill();  
+        }
+    }
+}
+
+//  FLOOR BUMPER CONSTRUCTOR  ---------------------------------------------------------------
+class FLOORBUMPER {
+    constructor(radius, pos) {
+        this.radius = radius;
+        this.pos = pos.clone();
+    }
+    draw() {
+        if (brightnessSlider.value < 50) {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = "hsla(0, 20%, 10%, 75%)";
+            c.fill();
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.strokeStyle = "hsl(0, 0%, 50%)";
+            c.lineWidth = 2;
+            c.stroke();
+            c.stroke();
+        } else {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            drawCircle(cX(this.pos), cY(this.pos), 0.999 * this.radius * cScale);
+            c.fillStyle = "hsla(0, 20%, 10%, 75%)";
+            c.fill();
+        }
+    }
+    get top() {
+        return this.pos.y + this.radius
+    }
+}
+
+//  PENDULUM CONSTRUCTOR -----------------------------------------------------------------------
+class PENDULUM {
+    constructor(radius, length, origin, pos, angle, color) {
+        this.radius = radius;
+        this.length = length;
+        this.origin = origin.clone();
+        this.pos = pos.clone();
+        this.angle = angle;
+        this.color = color;
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+    simulate() {
+        this.origin.y = -simHeight * pendulumOriginSlider.value / 100;
+        this.length = simHeight * pendulumLengthSlider.value / 100;
+        angAcc = -1 * physProps.gravity.y / this.length * Math.sin(this.angle);
+        angVel += angAcc * physProps.dt / 10;
+        this.angle += angVel;
+        this.pos.x = this.origin.x - this.length * Math.sin(Math.PI + this.angle); 
+        this.pos.y = this.origin.y - this.length * Math.cos(this.angle);
+    }
+}
+
+//  PUCK CONSTRUCTOR -----------------------------------------------------------------------
+class PUCK {
+    constructor(radius, pos, color) {
+        this.radius = radius;
+        this.pos = pos.clone();
+        this.color = color;
+    }
+    draw() {
+        if (brightnessSlider.value < 50) {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = this.color;
+            if (p == 2) {
+                c.shadowBlur = 15;
+                c.shadowColor = "black";
+            } else {
+                c.shadowBlur = 10;
+            }
+            c.fill();
+            c.shadowBlur = 0;
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            if (p == 2) {
+                c.strokeStyle = `hsl(0, 0%, 60%)`;
+                c.lineWidth = 5;
+                c.stroke(); 
+            } else {
+                c.strokeStyle = `hsl(0, 0%, 75%)`;
+                c.lineWidth = 4;
+                c.stroke(); 
+            }
+        } else {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = `hsl(0, 0%, 30%)`;
+            c.fill(); 
+            drawCircle(cX(this.pos), cY(this.pos), (this.radius - .003 * simWidth) * cScale);
+            c.fillStyle = `hsl(0, 0%, 80%)`;
+            c.fill();
+        }
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+}
+
+document.getElementById('puckRadiusSlider').oninput = function() {
+    for (p = 0; p < Puck.length; p++) {
+        puck = Puck[p];
+        if (p == 0) {puck.radius = 1.0 * puckRadiusSlider.value / 1000}
+        if (p == 1) {puck.radius = 0.7 * puckRadiusSlider.value / 1000}
+        if (p == 2) {puck.radius = 0.4 * puckRadiusSlider.value / 1000}
+    }
+}
+
+//  HUNGRY PUCK CONSTRUCTOR ----------------------------------------------------------------
+class HUNGRYPUCK {
+    constructor(radius, pos, vel, color) {
+        this.radius = radius;
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.color = color;
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+    draw1() {
+        if (brightnessSlider.value < 50) {
+            // body
+            const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * this.radius * cScale, 
+            cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+            grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+            grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+            c.fillStyle = grd;
+            drawCircle(cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+            c.fill();
+            // eyes
+            c.strokeStyle = "hsl(120, 50%, 50%)";
+            c.lineWidth = 0.04 * this.radius * cScale;
+            c.beginPath();
+            c.moveTo(cX(this.pos) + 0.2 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+            c.lineTo(cX(this.pos) + 0.5 * this.radius * cScale, cY(this.pos) - 0.3 * this.radius * cScale);
+            c.stroke();
+            c.beginPath();
+            c.moveTo(cX(this.pos) - 0.2 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+            c.lineTo(cX(this.pos) - 0.5 * this.radius * cScale, cY(this.pos) - 0.3 * this.radius * cScale);
+            c.stroke();
+            // mouth
+            c.strokeStyle = "hsl(90, 40%, 20%)";
+            c.lineWidth = 0.06 * this.radius * cScale;
+            c.beginPath();
+            c.arc(cX(this.pos), cY(this.pos), 0.9 * this.radius * cScale, 0, Math.PI) 
+            c.stroke();
+            // dimples
+            c.fillStyle = "hsl(90, 40%, 30%)";
+            drawCircle(cX(this.pos) + 0.9 * this.radius * cScale, cY(this.pos), 0.07 * this.radius * cScale);
+            c.fill();
+            drawCircle(cX(this.pos) - 0.9 * this.radius * cScale, cY(this.pos), 0.07 * this.radius * cScale);
+            c.fill();
+        } else {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = `hsl(0, 0%, 80%)`;
+            c.fill();
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.strokeStyle = `hsl(0, 50%, 50%)`;
+            c.lineWidth = 0.005 * simHeight * cScale;
+            c.stroke(); 
+            // text label
+            c.font = `${.2 * this.radius * cScale}px monospace`;
+            c.fillStyle = "hsl(0, 50%, 50%)";
+            c.textAlign = "center";
+            c.verticalAlign = "center";
+            c.fillText("feed me", cX(this.pos), cY(this.pos) + .05 * this.radius * cScale)
+        }
+    }  
+    draw2() {
+        if (brightnessSlider.value < 50) {
+            // body
+            const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * this.radius * cScale, 
+            cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+            grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+            grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+            c.fillStyle = grd;
+            drawCircle(cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+            c.fill();
+            // eyes
+            c.strokeStyle = "hsl(335, 70%, 60%)";
+            c.lineWidth = 0.04 * this.radius * cScale;
+            c.beginPath();
+            c.moveTo(cX(this.pos) + 0.25 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+            c.lineTo(cX(this.pos) + 0.55 * this.radius * cScale, cY(this.pos) - 0.25 * this.radius * cScale);
+            c.stroke();
+            c.beginPath();
+            c.moveTo(cX(this.pos) - 0.25 * this.radius * cScale, cY(this.pos) - 0.2 * this.radius * cScale);
+            c.lineTo(cX(this.pos) - 0.55 * this.radius * cScale, cY(this.pos) - 0.25 * this.radius * cScale);
+            c.stroke();
+            // mouth
+            c.strokeStyle = "hsl(335, 50%, 45%)";
+            c.lineWidth = 0.05 * this.radius * cScale;
+            c.beginPath();
+            c.arc(cX(this.pos), cY(this.pos) + 0.4 * this.radius * cScale, 0.2 * this.radius * cScale, Math.PI, 0);
+            c.stroke();
+            // cheeks
+            c.fillStyle = "hsl(335, 40%, 20%)";
+            drawCircle(cX(this.pos) + 0.8 * this.radius * cScale, cY(this.pos) + 0.2 * this.radius * cScale, 0.2 * this.radius * cScale);
+            c.fill();
+            drawCircle(cX(this.pos) - 0.8 * this.radius * cScale, cY(this.pos) + 0.2 * this.radius * cScale, 0.2 * this.radius * cScale);
+            c.fill();
+        } else {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = `hsl(0, 0%, 80%)`;
+            c.fill();
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.strokeStyle = `hsl(0, 50%, 50%)`;
+            c.lineWidth = 0.005 * simHeight * cScale;
+            c.stroke(); 
+            c.font = `${.2 * this.radius * cScale}px monospace`;
+            c.fillStyle = "hsl(0, 50%, 50%)";
+            c.textAlign = "center";
+            c.verticalAlign = "center";
+            c.fillText("feed me", cX(this.pos), cY(this.pos) + .05 * this.radius * cScale)
+        }  
+    }
+}
+
+document.getElementById("misterMode").oninput = function() {
+    if (misterMode.value == "billiard") {
+        mrMr = Mistermister[0];
+        mrMr.vel.x = .5;
+        mrMr.vel.y = 0.2;
+    }    
+}
+
+document.getElementById('hungryPuckRadiusSlider').oninput = function() {
+        hungryPuck = Hungrypuck[0];
+        hungryPuck.radius = 1.0 * hungryPuckRadiusSlider.value / 1000;
+}
+
+
+//  MR. MISTER CONSTRUCTOR ----------------------------------------------------------------
+class MISTERMISTER {
+    constructor(radius, pos, vel, color) {
+        this.radius = radius;
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.color = color;
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+    simulate() {
+        if (misterMode.value == "idle") {
+        }
+        if (misterMode.value == "billiard") {
+            this.pos.add(this.vel, physProps.dt)
+        }
+        if (misterMode.value == "pendulum") {
+            var pendulum = Pendulum[0];
+            this.pos.x = pendulum.pos.x;
+            this.pos.y = simHeight - pendulum.pos.y;
+        }
+        if (misterMode.value == "typewriter") {
+            if (goLeft == false) {
+                this.pos.x += this.vel.x * physProps.dt * misterSpeedSlider.value / 100;
+                    if (this.pos.x > simWidth) {
+                        goLeft = true;
+                    }
+            }
+            if (goLeft == true) {
+                this.pos.x -= this.vel.x * 5 * physProps.dt * misterSpeedSlider.value / 100;
+                    if (this.pos.x < 0) {
+                        goLeft = false;
+                    };
+            }
+        }
+        if (misterMode.value == "printer") {
+            if (goLeft == false) {
+                this.pos.x += this.vel.x * physProps.dt * misterSpeedSlider.value / 100;
+                    if (this.pos.x > simWidth) {
+                        goLeft = true;
+                    }
+            }
+            if (goLeft == true) {
+                this.pos.x -= this.vel.x * physProps.dt * misterSpeedSlider.value / 100;
+                    if (this.pos.x < 0) {
+                        goLeft = false;
+                    };
+            }
+        }
+        if (misterMode.value == "scanner") {
+            if (this.pos.x < 1.5 * this.radius + simWidth) {
+                this.pos.x += this.vel.x * physProps.dt * misterSpeedSlider.value / 100;
+            }
+            if (this.pos.x > 1.5 * this.radius + simWidth) {
+                this.pos.x = -1.5 * this.radius;
+            }
+        }
+        if (misterMode.value == "sineScanner") {
+            if (this.pos.x < 1.5 * this.radius + simWidth) {
+                this.pos.x += this.vel.x * physProps.dt * misterSpeedSlider.value / 100;
+                var scan = this.pos.x * sineFreqSlider.value * (Math.PI / simWidth);
+                this.pos.y = simHeight * (pendulumOriginSlider.value / 100) + (1 + pendulumLengthSlider.value/100 * Math.sin(scan)) * 0.5 * simHeight;
+            }
+            if (this.pos.x > 1.5 * this.radius + simWidth) {
+                this.pos.x = -1.5 * this.radius;
+            }
+        }
+        if (misterMode.value == "circle") {
+            delta += physProps.dt * misterSpeedSlider.value / 50;
+            this.pos.x = pendulumOriginSlider.value/100 * simWidth + pendulumLengthSlider.value / 400 * 0.5 * simWidth * Math.cos(delta);
+            this.pos.y = 0.5 * simHeight + pendulumLengthSlider.value / 400 * 0.5 * simWidth * Math.sin(delta);
+        }
+        if (misterMode.value == "bernoulli") {
+            delta += physProps.dt * misterSpeedSlider.value / 50;
+            var pathScale = 2 / (3 - Math.cos(2 * delta));
+            this.pos.x = (0.5 * simWidth) + (pendulumOriginSlider.value/100 * 0.5 * simWidth) * pathScale * Math.cos(delta);
+            this.pos.y = (0.5 * simHeight) + (pendulumOriginSlider.value/100 * 0.5 * simWidth) * pathScale * Math.sin(2 * delta) / 2;
+        }
+    }
+    draw() {
+    mrMrTimer += .05;
+    var eyeLight = 30 + 70 * Math.abs(Math.sin(mrMrTimer));
+    this.radius = (700 * dumpSlider2.value / 100) / 1000 ;
+        if (brightnessSlider.value < 50) {
+            if (dumpSlider2.value > 20) {
+                // body
+                const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * this.radius * cScale, 
+                cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+                grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+                grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+                c.fillStyle = grd;
+                drawCircle(cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+                c.fill();
+                // eyes
+                c.strokeStyle = `hsl(200, 80%, ${eyeLight}%)`;
+                c.lineWidth = 0.04 * this.radius * cScale;
+                c.beginPath();
+                c.moveTo(cX(this.pos) + 0.3 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+                c.lineTo(cX(this.pos) + 0.6 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+                c.stroke();
+                c.beginPath();
+                c.moveTo(cX(this.pos) - 0.3 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+                c.lineTo(cX(this.pos) - 0.6 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+                c.stroke();
+                // mouth
+                drawCircle(cX(this.pos), cY(this.pos) + 0.4 * this.radius * cScale, .4 * this.radius * cScale);
+                c.lineWidth = 0.06 * this.radius * cScale;
+                c.strokeStyle = "hsl(0, 0%, 55%)";
+                c.fillStyle = `hsl(${huePos}, 50%, 20%)`;
+                c.fill();
+                c.stroke();
+            } 
+            if (dumpSlider2.value <= 20) {
+                // body
+                const grd = c.createRadialGradient(cX(this.pos), cY(this.pos), 1.2 * 0.15 * cScale, 
+                cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+                grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+                grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+                c.fillStyle = grd;
+                drawCircle(cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+                c.fill();
+                // eyes
+                c.strokeStyle = `hsl(200, 80%, ${eyeLight}%)`;
+                c.lineWidth = 0.04 * 0.2 * cScale;
+                c.beginPath();
+                c.moveTo(cX(this.pos) + 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+                c.lineTo(cX(this.pos) + 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+                c.stroke();
+                c.beginPath();
+                c.moveTo(cX(this.pos) - 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+                c.lineTo(cX(this.pos) - 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+                c.stroke();
+                // mouth
+                drawCircle(cX(this.pos), cY(this.pos) + 0.45 * this.radius * cScale, .5 * this.radius * cScale);
+                c.lineWidth = 0.06 * this.radius * cScale;
+                c.strokeStyle = "hsl(0, 0%, 55%)";
+                c.stroke();
+            }
+        } else {
+            // body
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = `hsl(0, 0%, 80%)`;
+            c.fill();
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.strokeStyle = `hsl(0, 50%, 50%)`;
+            c.lineWidth = 0.005 * simHeight * cScale;
+            c.stroke(); 
+            // eyes
+            c.strokeStyle = `hsl(0, 50%, 50%)`;
+            c.lineWidth = 0.04 * this.radius * cScale;
+            c.beginPath();
+            c.moveTo(cX(this.pos) + 0.3 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+            c.lineTo(cX(this.pos) + 0.6 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+            c.stroke();
+            c.beginPath();
+            c.moveTo(cX(this.pos) - 0.3 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+            c.lineTo(cX(this.pos) - 0.6 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+            c.stroke();
+            // mouth
+            drawCircle(cX(this.pos), cY(this.pos) + 0.45 * this.radius * cScale, .4 * this.radius * cScale);
+            c.lineWidth = 0.06 * this.radius * cScale;
+            c.strokeStyle = `hsl(0, 50%, 50%)`
+            c.stroke();
+        }
+    }
+    draw2() {
+    mrMrTimer += .05;
+    var eyeLight = 30 + 70 * Math.abs(Math.cos(mrMrTimer));
+    this.radius = (700 * dumpSlider2.value / 100) / 1000 ;
+        if (brightnessSlider.value < 50) {
+            if (dumpSlider2.value > 20) {
+                // body
+                const grd = c.createRadialGradient(simWidth * cScale - cX(this.pos), cY(this.pos), 1.2 * this.radius * cScale, 
+                simWidth * cScale - cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+                grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+                grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+                c.fillStyle = grd;
+                drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos), 1.6 * this.radius * cScale);
+                c.fill();
+                // eyes
+                c.strokeStyle = `hsl(305, 80%, ${eyeLight}%)`;
+                c.lineWidth = 0.04 * this.radius * cScale;
+                c.beginPath();
+                c.moveTo(simWidth * cScale - cX(this.pos) + 0.3 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+                c.lineTo(simWidth * cScale - cX(this.pos) + 0.6 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+                c.stroke();
+                c.beginPath();
+                c.moveTo(simWidth * cScale - cX(this.pos) - 0.3 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+                c.lineTo(simWidth * cScale - cX(this.pos) - 0.6 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+                c.stroke();
+                // mouth
+                drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos) + 0.4 * this.radius * cScale, .4 * this.radius * cScale);
+                c.lineWidth = 0.06 * this.radius * cScale;
+                c.strokeStyle = "hsl(0, 0%, 55%)";
+                c.fillStyle = `hsl(${huePos + 120}, 50%, 20%)`;
+                c.fill();
+                c.stroke();
+            } 
+            if (dumpSlider2.value <= 20) {
+                // body
+                const grd = c.createRadialGradient(simWidth * cScale - cX(this.pos), cY(this.pos), 1.2 * 0.15 * cScale, 
+                simWidth * cScale - cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+                grd.addColorStop(0.0, `hsla(0, 0%, 0%, 100%)`);
+                grd.addColorStop(1.0, `hsla(0, 0%, 0%, 0%)`);
+                c.fillStyle = grd;
+                drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos), 1.6 * 0.15 * cScale);
+                c.fill();
+                // eyes
+                c.strokeStyle = "hsl(0, 0%, 60%)";
+                c.lineWidth = 0.04 * 0.2 * cScale;
+                c.beginPath();
+                c.moveTo(simWidth * cScale - cX(this.pos) + 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+                c.lineTo(simWidth * cScale - cX(this.pos) + 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+                c.stroke();
+                c.beginPath();
+                c.moveTo(simWidth * cScale - cX(this.pos) - 0.3 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+                c.lineTo(simWidth * cScale - cX(this.pos) - 0.6 * 0.15 * cScale, cY(this.pos) - 0.35 * 0.15 * cScale);
+                c.stroke();
+                // mouth
+                drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos) + 0.45 * this.radius * cScale, .5 * this.radius * cScale);
+                c.lineWidth = 0.06 * this.radius * cScale;
+                c.strokeStyle = "hsl(0, 0%, 55%)";
+                c.stroke();
+            }
+        } else {
+            // body
+            drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = `hsl(0, 0%, 80%)`;
+            c.fill();
+            drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.strokeStyle = `hsl(0, 50%, 50%)`;
+            c.lineWidth = 0.005 * simHeight * cScale;
+            c.stroke(); 
+            // eyes
+            c.strokeStyle = `hsl(0, 50%, 50%)`;
+            c.lineWidth = 0.04 * this.radius * cScale;
+            c.beginPath();
+            c.moveTo(simWidth * cScale - cX(this.pos) + 0.3 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+            c.lineTo(simWidth * cScale - cX(this.pos) + 0.6 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+            c.stroke();
+            c.beginPath();
+            c.moveTo(simWidth * cScale - cX(this.pos) - 0.3 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+            c.lineTo(simWidth * cScale - cX(this.pos) - 0.6 * this.radius * cScale, cY(this.pos) - 0.35 * this.radius * cScale);
+            c.stroke();
+            // mouth
+            drawCircle(simWidth * cScale - cX(this.pos), cY(this.pos) + 0.45 * this.radius * cScale, .4 * this.radius * cScale);
+            c.lineWidth = 0.06 * this.radius * cScale;
+            c.strokeStyle = `hsl(0, 50%, 50%)`
+            c.stroke();
+        }
+    }
+}
+
+//  ROVER CONSTRUCTOR ----------------------------------------------------------------------
+class ROVER {
+    constructor(radius, mass, pos, vel, color) {
+        this.radius = roverSizeSlider.value / 1000;
+        this.mass = mass;
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.color = color;
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+    simulate() {
+        //this.vel.x += 1 * (-.5 + Math.random());
+        //if (this.vel.x > 2) {this.vel.x = 2}
+        //if (this.vel.x < -2) {this.vel.x = -2}
+        //this.vel.y += 1.5 * (-.5 + Math.random());
+        //if (this.vel.y > 2) {this.vel.y = 2}
+        //if (this.vel.y < -2) {this.vel.y = -2}
+        if (roverGravityButton.checked == true) {
+            this.vel.add(physProps.gravity, physProps.dt);
+        }
+        this.pos.add(this.vel, physProps.dt)
+        this.radius = roverSizeSlider.value / 1000;
+    }
+    draw() {
+        /*const grd = c.createRadialGradient(cX(this.pos) + (0.2 * this.radius * cScale), cY(this.pos) + (0.3 * this.radius * cScale), 0.1 * this.radius * cScale, 
+            cX(this.pos) + (0.2 * this.radius * cScale), cY(this.pos) + (0.3 * this.radius * cScale), 1.1 * this.radius * cScale);
+            grd.addColorStop(0, `hsla(0, 0%, 0%, 30%)`);
+            grd.addColorStop(.8, `hsla(0, 0%, 0%, 10%)`);
+            grd.addColorStop(1, `hsla(0, 0%, 0%, 0%)`);
+            c.fillStyle = grd;
+            drawCircle(cX(this.pos) + (0.2 * this.radius * cScale), cY(this.pos) + (0.3 * this.radius * cScale), 1.1 * this.radius * cScale);
+            c.fill();
+        */
+        if (brightnessSlider.value < 50) {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);  
+            c.fillStyle = roverColor;
+            c.fill(); 
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.strokeStyle = `hsl(0, 0%, 80%)`;
+            c.lineWidth = 2;
+            c.stroke();
+        } else {
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = `hsl(0, 0%, 0%)`;
+            c.fill(); 
+            drawCircle(cX(this.pos), cY(this.pos), 0.90 * this.radius * cScale);  
+            c.fillStyle = `hsl(0, 0%, 80%)`;
+            c.fill();
+            c.font = `${.2 * this.radius * cScale}px monospace`;
+            c.fillStyle = "hsl(0, 50%, 50%)";
+            c.textAlign = "center";
+            c.verticalAlign = "center";
+            c.fillText("don't care", cX(this.pos), cY(this.pos) + .05 * this.radius * cScale);
+        }  
+    }
+}
+
+function slowRover() {
+    rover = Rover[0];
+    rover.vel.x *= 0.9;
+    rover.vel.y *= 0.9;
+}
+
+//  FAN CONSTRUCTOR ---------------------------------------------------------------------------
+class FAN1 {
+    constructor(radius, mass, angle, spoke, hub, pos, vel, color) {
+        this.radius = radius;
+        this.mass = mass;
+        this.angle = angle;
+        this.spoke = spoke;
+        this.hub = hub.clone();
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.color = color;
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+    simulate(skipHubResize, s) {
+        var oldAngle = this.angle;
+
+        if (oscillateFanButton.checked == true) { 
+            runX += .00125;
+            this.angle += (Math.sin(runX) * fanSpeedSlider.value / 10) * physProps.dt;
+        } else {
+            this.angle += (fanSpeedSlider.value / 10) * physProps.dt;
+        }
+
+        var spokeGrowIncrement = (fanSpokeLengthSlider.value/100 - fanSpokeLengthSlider.value/100 * fanSpokeMinSlider.value/100) / (Fan1.length - 1);
+        if (s < Fan1.length - 1) {
+            this.spoke = (2 * this.radius) + simWidth * (fanSpokeLengthSlider.value/100 * fanSpokeMinSlider.value/100 + (s * spokeGrowIncrement));
+        }
+
+        this.pos.x = this.hub.x + this.spoke * Math.cos(this.angle);
+        this.pos.y = this.hub.y + this.spoke * Math.sin(this.angle);
+
+        var arcSpeed = (this.angle - oldAngle) * this.spoke / physProps.dt;
+        this.vel.x = -arcSpeed * Math.sin(this.angle);
+        this.vel.y = arcSpeed * Math.cos(this.angle);
+
+        if (skipHubResize == true) {
+            this.radius = 100 / 1000;
+        } else {
+            this.radius = fanBallRadiusSlider.value/1000;
+            fanHue += Math.pow(10, fanHueCycleSlider.value/10) * 60 * physProps.dt;
+            hueFanSlice = 180 * (s / fan1BallNum.value);
+            saturationSlice = 80 * (s / fan1BallNum.value);
+            this.color = `hsla(${20 + fanHue}, ${saturationSlice + 20}%, 50%, 50%)`;
+        }
+
+        if (showStrutButton.checked == true) {
+            var strut = Strut[0];
+            this.hub.x = strut.pos.x + Math.sin(Math.PI - strut.angle) * 0.5 * strut.length;
+            this.hub.y = strut.pos.y + Math.cos(Math.PI - strut.angle) * 0.5 * strut.length;
+        }
+    }
+    draw(s){
+        // spokes
+        c.beginPath();
+        c.moveTo(cX(this.hub), cY(this.hub));
+        c.lineTo(this.pos.x * cScale, (simHeight - this.pos.y) * cScale);
+        // wider spoke background
+        c.strokeStyle = 'hsla(0, 0%, 80%, 60%)';
+        c.lineWidth = 5;
+        c.shadowColor = "black";
+        c.shadowBlur = 5;
+        c.stroke();
+        c.shadowBlur = 0;
+        // spoke fill color
+        if (brightnessSlider.value < 50) {
+            c.strokeStyle = this.color;
+            c.lineWidth = 3;
+            c.stroke();
+        }
+        // major outline
+        //drawCircle(cX(this.hub), cY(this.hub), (this.spoke + this.radius) * cScale);
+        //c.strokeStyle = 'hsl(0, 0%, 65%)';
+        //c.strokeWidth = 5;
+        //c.stroke();
+        // attachement point hub
+        drawCircle(cX(this.pos), cY(this.pos), 0.3 * this.radius * cScale);
+        c.fillStyle = 'hsl(0, 0%, 65%)';
+        c.fill();
+        // attachement point color overlay
+        drawCircle(cX(this.pos), cY(this.pos), 0.3 * this.radius * cScale);
+        c.fillStyle = this.color;
+        c.fill();
+        // attachment point tire
+        drawCircle(cX(this.pos), cY(this.pos), 0.3 * this.radius * cScale);
+        c.strokeStyle = 'hsl(0, 0%, 60%)';
+        c.lineWidth = 4;
+        c.shadowBlur = 10;
+        c.stroke();
+        c.shadowBlur = 0;
+        // tire inline
+        drawCircle(cX(this.pos), cY(this.pos), 0.28 * this.radius * cScale);
+        c.strokeStyle = 'hsl(0, 0%, 5%)';
+        c.lineWidth = 1;
+        c.stroke();
+        // tire outline
+        drawCircle(cX(this.pos), cY(this.pos), 0.33 * this.radius * cScale);
+        c.strokeStyle = 'hsl(0, 0%, 10%)';
+        c.lineWidth = 2;
+        c.stroke();
+        if (brightnessSlider.value < 50) {     
+        //little discs
+            for (var d=0; d < fan1BallNum.value; d++) {
+            var wedge = 2*Math.PI / fan1BallNum.value;
+            var dotRadius = 0.15 * this.radius * cScale
+            drawCircle(this.pos.x * cScale + 0.65 * this.radius * Math.cos(wedge * d - this.spoke * -this.angle) * cScale, 
+            (simHeight - this.pos.y) * cScale + 0.65 * this.radius * Math.sin(wedge * d - this.spoke * -this.angle) * cScale, 
+            dotRadius);
+            c.fillStyle = `hsla(200, 90%, 20%, 50%)`;
+            c.fill();
+            c.strokeStyle = 'hsl(0, 0%, 80%)';
+            c.lineWidth = 1;
+            c.stroke();
+            //c.font = `${.15 * this.radius * cScale}px verdana`;
+            //c.fillStyle = "hsl(0, 0%, 75%)";
+            //c.textBaseline = "middle";       
+            //c.shadowColor = "black";
+            //c.shadowBlur = 10;
+            //c.fillText(d, this.pos.x * cScale + 0.65 * this.radius * Math.cos(wedge * d - this.spoke * -this.angle) * cScale, (simHeight - this.pos.y) * cScale + 0.65 * this.radius * Math.sin(wedge * d - - this.spoke * this.angle) * cScale);
+            //c.shadowBlur = 0;
+        }
+        // disc
+        drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+        c.fillStyle = this.color;
+        c.fill();
+        // disc outline
+        drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+        c.strokeStyle = 'hsl(0, 0%, 60%)';
+        c.lineWidth = 4;
+        c.shadowColor = "black";
+        c.shadowBlur = 10;
+        c.stroke();
+        c.shadowBlur = 0;
+        c.strokeStyle = 'hsl(0, 0%, 80%)';
+        c.lineWidth = 2;
+        c.stroke();
+        // disc inner ring
+        drawCircle(cX(this.pos), cY(this.pos), 0.96 * this.radius * cScale);
+        c.strokeStyle = 'hsl(0, 0%, 20%)';
+        c.lineWidth = 1;
+        c.stroke();           
+        // fan hub index
+        if (s == fan1BallNum.value) {
+            drawCircle(cX(this.pos) + cScale * ((0.7 * this.radius) * Math.sin(this.angle + (0.5 * Math.PI))), cY(this.pos) + cScale * ((0.7 * this.radius) * Math.cos(this.angle + (0.5 * Math.PI))), .1 * this.radius * cScale);
+            c.fillStyle = 'hsl(0, 0%, 85%)';
+            c.fill();
+        } 
+        } else {             
+            // disc
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = this.color;
+            c.fill();
+            // disc outline
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.strokeStyle = 'hsl(0, 0%, 60%)';
+            c.lineWidth = 4;
+            c.shadowColor = "black";
+            c.shadowBlur = 10;
+            c.stroke();
+            c.shadowBlur = 0;
+            // bright center of outline
+            c.strokeStyle = 'hsl(0, 0%, 80%)';
+            c.lineWidth = 2;
+            c.stroke();
+            // disc inner ring
+            drawCircle(cX(this.pos), cY(this.pos), 0.96 * this.radius * cScale);
+            c.strokeStyle = 'hsl(0, 0%, 20%)';
+            c.lineWidth = 1;
+            c.stroke();
+            // this petal outline
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.lineWidth = 2;
+            c.stroke();
+            // this fill color
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);  
+            c.fillStyle = this.color;
+            c.fill();
+            // this hub index
+            if (s == fan1BallNum.value) {
+                drawCircle(cX(this.pos) + cScale * ((0.7 * this.radius) * Math.sin(this.angle + (0.5 * Math.PI))), cY(this.pos) + cScale * ((0.7 * this.radius) * Math.cos(this.angle + (0.5 * Math.PI))), .1 * this.radius * cScale);
+                c.fillStyle = `hsl(0, 0%, 85%)`;
+                c.fill();
+            }  
+        }  
+    }
+}
+
+//  SECOND FAN CONSTRUCTOR ---------------------------------------------------------------------------
+class FAN2 {
+    constructor(radius, mass, angle, spoke, hub, pos, vel, color) {
+        this.radius = radius;
+        this.mass = mass;
+        this.angle = angle;
+        this.spoke = spoke;
+        this.hub = hub.clone();
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.color = color;
+    }
+    get left() {
+        return this.pos.x - this.radius;
+    }
+    get right() {
+        return this.pos.x + this.radius;
+    }
+    simulate(skipHubResize, s) {
+        var oldAngle = this.angle ;
+    
+        if (oscillateFanButton.checked == true) { 
+            if (fanSyncDirButton.checked == true) {
+                runX2 += .00125 * (-fanSyncSpeedSlider.value / 100);
+                this.angle -= (Math.sin(runX2) * fanSpeedSlider.value / 100) * 10 * physProps.dt;
+            } else {
+                runX2 += .00125 * (fanSyncSpeedSlider.value / 100);
+                this.angle -= (Math.sin(runX2) * fanSpeedSlider.value / 100) * 10 * physProps.dt; 
+            }
+        } else {
+            if (fanSyncDirButton.checked == true) {
+                this.angle += (fanSpeedSlider.value / 100) * 10 * physProps.dt * (-fanSyncSpeedSlider.value / 100);
+            } else {
+                this.angle += (fanSpeedSlider.value / 100) * 10 * physProps.dt * (fanSyncSpeedSlider.value / 100);
+            }
+        }
+
+        var spokeGrowIncrement = (fanSpokeLengthSlider.value/100 - fanSpokeLengthSlider.value/100 * fanSpokeMinSlider.value/100) / (Fan2.length - 1);
+        if (s < Fan2.length - 1) {
+    
+            this.spoke = (2 * this.radius) + simWidth * fan2SpokeLengthDifferenceSlider.value/100 * (fanSpokeLengthSlider.value/100 * fanSpokeMinSlider.value/100 + (s * spokeGrowIncrement));
+            //this.spoke = (2 * this.radius) + simWidth * (fanSpokeLengthSlider.value/100 * fanSpokeMinSlider.value/100 + (s * spokeGrowIncrement));
+        }
+
+        this.pos.x = this.hub.x + this.spoke * Math.cos(this.angle);
+        this.pos.y = this.hub.y + this.spoke * Math.sin(this.angle);
+        
+        var arcSpeed = (this.angle - oldAngle) * this.spoke / physProps.dt;
+        this.vel.x = -arcSpeed * Math.sin(this.angle);
+        this.vel.y = arcSpeed * Math.cos(this.angle);
+
+        if (skipHubResize == true) {
+            this.radius = 100 / 1000;
+        } else {
+            this.radius = fan2SpokePetalRadiusDifferenceSlider.value/100 * fanBallRadiusSlider.value/1000;
+            fanHue += Math.pow(10, fanHueCycleSlider.value/10) * 60 * physProps.dt;
+            hueFanSlice = 180 * (s / fan1BallNum.value);
+            saturationSlice = 80 * (s / fan1BallNum.value);
+            this.color = `hsla(${200 - fanHue}, ${saturationSlice + 20}%, 50%, 50%)`;
+        }
+
+        if (showStrutButton.checked == true) {
+        var strut = Strut[0];
+        this.hub.x = strut.pos.x - Math.sin(Math.PI - strut.angle) * 0.5 * strut.length;
+        this.hub.y = strut.pos.y - Math.cos(Math.PI - strut.angle) * 0.5 * strut.length;
+        }
+    }
+    draw(s){
+        // spokes
+        c.beginPath();
+        c.moveTo(cX(this.hub), cY(this.hub));
+        c.lineTo(this.pos.x * cScale, (simHeight - this.pos.y) * cScale);
+        // wider spoke background
+        c.strokeStyle = 'hsla(0, 0%, 80%, 60%)';
+        c.lineWidth = 5;
+        c.shadowColor = "black";
+        c.shadowBlur = 5;
+        c.stroke();
+        c.shadowBlur = 0;
+        // spoke fill color
+        if (brightnessSlider.value < 50) {
+            c.strokeStyle = this.color;
+            c.lineWidth = 3;
+            c.stroke();
+        }
+        // major outline
+        //drawCircle(cX(this.hub), cY(this.hub), (this.spoke + this.radius) * cScale);
+        //c.strokeStyle = 'hsl(0, 0%, 65%)';
+        //c.strokeWidth = 5;
+        //c.stroke();
+        // attachement point hub
+        drawCircle(cX(this.pos), cY(this.pos), 0.3 * this.radius * cScale);
+        c.fillStyle = 'hsl(0, 0%, 65%)';
+        c.fill();
+        // attachement point color overlay
+        drawCircle(cX(this.pos), cY(this.pos), 0.3 * this.radius * cScale);
+        c.fillStyle = this.color;
+        c.fill();
+        // attachment point tire
+        drawCircle(cX(this.pos), cY(this.pos), 0.3 * this.radius * cScale);
+        c.strokeStyle = 'hsl(0, 0%, 60%)';
+        c.lineWidth = 4;
+        c.shadowBlur = 10;
+        c.stroke();
+        c.shadowBlur = 0;
+        // tire inline
+        drawCircle(cX(this.pos), cY(this.pos), 0.28 * this.radius * cScale);
+        c.strokeStyle = 'hsl(0, 0%, 5%)';
+        c.lineWidth = 1;
+        c.stroke();
+        // tire outline
+        drawCircle(cX(this.pos), cY(this.pos), 0.33 * this.radius * cScale);
+        c.strokeStyle = 'hsl(0, 0%, 10%)';
+        c.lineWidth = 2;
+        c.stroke();
+        if (brightnessSlider.value < 50) {     
+        //little discs
+            for (var d=0; d < fan2BallNum.value; d++) {
+                var wedge = 2*Math.PI / fan2BallNum.value;
+                var dotRadius = 0.15 * this.radius * cScale
+                drawCircle(this.pos.x * cScale + 0.65 * this.radius * Math.cos(wedge * d - this.spoke * -this.angle) * cScale, 
+                (simHeight - this.pos.y) * cScale + 0.65 * this.radius * Math.sin(wedge * d - this.spoke * -this.angle) * cScale, 
+                dotRadius);
+                c.fillStyle = `hsla(200, 90%, 20%, 50%)`;
+                c.fill();
+                c.strokeStyle = 'hsl(0, 0%, 80%)';
+                c.lineWidth = 1;
+                c.stroke();
+
+                //c.font = `${.15 * this.radius * cScale}px verdana`;
+                //c.fillStyle = "hsl(0, 0%, 75%)";
+                //c.textBaseline = "middle";       
+                //c.shadowColor = "black";
+                //c.shadowBlur = 10;
+                //c.fillText(d, this.pos.x * cScale + 0.65 * this.radius * Math.cos(wedge * d - this.spoke * -this.angle) * cScale, (simHeight - this.pos.y) * cScale + 0.65 * this.radius * Math.sin(wedge * d - - this.spoke * this.angle) * cScale);
+                //c.shadowBlur = 0;
+            }
+            // disc
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = this.color;
+            c.fill();
+            // disc outline
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.strokeStyle = 'hsl(0, 0%, 60%)';
+            c.lineWidth = 4;
+            c.shadowColor = "black";
+            c.shadowBlur = 10;
+            c.stroke();
+            c.shadowBlur = 0;
+            c.strokeStyle = 'hsl(0, 0%, 80%)';
+            c.lineWidth = 2;
+            c.stroke();
+            // disc inner ring
+            drawCircle(cX(this.pos), cY(this.pos), 0.96 * this.radius * cScale);
+            c.strokeStyle = 'hsl(0, 0%, 20%)';
+            c.lineWidth = 1;
+            c.stroke();           
+            // fan hub index
+            if (s == fan2BallNum.value) {
+                drawCircle(cX(this.pos) + cScale * ((0.7 * this.radius) * Math.sin(this.angle + (0.5 * Math.PI))), cY(this.pos) + cScale * ((0.7 * this.radius) * Math.cos(this.angle + (0.5 * Math.PI))), .1 * this.radius * cScale);
+                c.fillStyle = 'hsl(0, 0%, 85%)';
+                c.fill();
+            } 
+            } else {             
+            // disc
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.fillStyle = this.color;
+            c.fill();
+            // disc outline
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.strokeStyle = 'hsl(0, 0%, 60%)';
+            c.lineWidth = 4;
+            c.shadowColor = "black";
+            c.shadowBlur = 10;
+            c.stroke();
+            c.shadowBlur = 0;
+            // bright center of outline
+            c.strokeStyle = 'hsl(0, 0%, 80%)';
+            c.lineWidth = 2;
+            c.stroke();
+            // disc inner ring
+            drawCircle(cX(this.pos), cY(this.pos), 0.96 * this.radius * cScale);
+            c.strokeStyle = 'hsl(0, 0%, 20%)';
+            c.lineWidth = 1;
+            c.stroke();
+            // this petal outline
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
+            c.lineWidth = 2;
+            c.stroke();
+            // this fill color
+            drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);  
+            c.fillStyle = this.color;
+            c.fill();
+            // this hub index
+            if (s == fan2BallNum.value) {
+                drawCircle(cX(this.pos) + cScale * ((0.7 * this.radius) * Math.sin(this.angle + (0.5 * Math.PI))), cY(this.pos) + cScale * ((0.7 * this.radius) * Math.cos(this.angle + (0.5 * Math.PI))), .1 * this.radius * cScale);
+                c.fillStyle = `hsl(0, 0%, 85%)`;
+                c.fill();
+            }  
+        }  
+    }
+}
+
+//  STRUT CONSTRUCTOR --------------------------------------------------------------
+class STRUT {
+    constructor(radius, pos, angle, length, color) {
+        this.radius = radius;
+        this.pos = pos.clone();
+        this.angle = angle;
+        this.length = simWidth * strutLengthSlider.value / 100;
+        this.color = color;
+        this.currentAngularVelocity = 0.0;
+    }
+    simulate() 
+    {
+        //var prevAngle = this.angle;
+        if (oscillateStrutButton.checked == true) { 
+            runStrut += .0125;
+            this.angle -= (Math.sin(runStrut) * strutSpeedSlider.value / 100) * 10 * physProps.dt;
+        } else {
+            this.angle += (strutSpeedSlider.value / 100) * 10 * physProps.dt;
+        }
+        //this.angle += (fanSpeedSlider.value / 100) * 10 * physProps.dt * (fanSyncSpeedSlider.value / 100);
+        //this.angle += (strutSpeedSlider.value / 100) * 10 * physProps.dt;
+        //this.currentAngularVelocity = this.angle - prevAngle / physProps.dt;
+        this.length = simWidth * strutLengthSlider.value / 100;
+        
+        spinOrbit += spinOrbitSlider.value / 10 * physProps.dt;
+
+        // figure-eight loop
+        if (orbitButton.checked == true) {
+            const strut = Strut[0];
+            document.getElementById("orbit").onchange = function() {
+            if (orbit.value == "circle") {
+                orbitDia.value = 30;
+            }
+            if (orbit.value == "ellipse") {
+                orbitDia.value = 50;
+                spiralTurnsSlider.value = 40;
+            }
+            if (orbit.value == "cardioid") {
+                orbitDia.value = 23;
+            }
+            if (orbit.value == "limacon") {
+                orbitDia.value = 35;
+            }
+            if (orbit.value == "heart") {
+                orbitDia.value = 35;
+            }
+            if (orbit.value == "lotus") {
+                orbitDia.value = 35;
+            }
+            if (orbit.value == "rose1/2" || orbit.value == "rose4/5" || orbit.value == "rose3" ||
+            orbit.value == "rose3" || orbit.value == "rose4" || orbit.value == "rose5" || orbit.value == "rose8") {
+                orbitDia.value = 30;
+            }
+            if (orbit.value == "bernoulli") {
+                orbitDia.value = 50;
+            }
+            if (orbit.value == "gerono") {
+                orbitDia.value = 50;
+            }
+            if (orbit.value == "archimedes") {
+                tourTimer = 0;
+                strut.pos.x = 0.5 * simWidth;
+                strut.pos.y = 0.5 * simHeight;
+                orbitDia.value = 200;
+                spiralTurnsSlider.value = 52;
+            }
+            if (orbit.value == "log") {
+                tourTimer = 0;
+                strut.pos.x = 0.5 * simWidth;
+                strut.pos.y = 0.5 * simHeight;
+                orbitDia.value = 10;
+                spiralTurnsSlider.value = 90;
+            }
+            if (orbit.value == "line") {
+                tourTimer = 0;
+                strut.pos.x = 0.5 * simWidth;
+                strut.pos.y = 0.5 * simHeight;
+                orbitDia.value = 50;
+            }
+            if (orbit.value == "parabola") {
+                tourTimer = -orbitDia.value / 100;
+                strut.pos.x = 0.5 * simWidth;
+                strut.pos.y = 0.25 * simHeight;
+                orbitDia.value = 60;
+                spiralTurnsSlider.value = 30;
+            }
+            if (orbit.value == "exp") {
+                tourTimer = 0;
+                strut.pos.x = 0;
+                strut.pos.y = -simHeight;
+                spiralTurnsSlider.value = 150;
+            }}
+
+            tourTimer += orbitSpeedSlider.value / 100 * physProps.dt;
+
+            if (orbit.value == "circle") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(tourTimer);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.sin(tourTimer);  
+            }
+            if (orbit.value == "ellipse") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(tourTimer);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * spiralTurnsSlider.value / 100 * Math.sin(tourTimer - spinOrbit);  
+            }
+            if (orbit.value == "cardioid") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * (1 + Math.sin(1 * tourTimer)) * Math.cos(tourTimer + spinOrbit);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * (1 + Math.sin(1 * tourTimer)) * Math.sin(tourTimer + spinOrbit);   
+            }
+            if (orbit.value == "limacon") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * (0.5 - Math.sin(1 * tourTimer)) * Math.cos(tourTimer + spinOrbit);
+                this.pos.y = (0.5 * simHeight) + (-orbitDia.value / 100 * 0.5 * simWidth) * (0.5 - Math.sin(1 * tourTimer)) * Math.sin(tourTimer + spinOrbit);
+            }
+            if (orbit.value == "heart") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 1500 * 0.5 * simWidth) * 16 * Math.pow(Math.sin(tourTimer), 3);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 1500 * 0.5 * simWidth) * (13 * Math.cos(tourTimer) - 5 * Math.cos(2 * tourTimer) - 2 * Math.cos(3 * tourTimer) - Math.cos(4 * tourTimer));   
+            }
+            if (orbit.value == "lotus") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * (Math.sin(tourTimer) + Math.sin(5 * (tourTimer / 2))) * Math.cos(tourTimer + spinOrbit);
+                this.pos.y = (0.33 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * (Math.sin(tourTimer) + Math.sin(5 * (tourTimer / 2))) * Math.sin(tourTimer + spinOrbit);
+            }
+            if (orbit.value == "rose1/2") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(1/2 * tourTimer) * Math.cos(tourTimer + spinOrbit);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(1/2 * tourTimer) * -1 * Math.sin(tourTimer + spinOrbit);
+            }
+            if (orbit.value == "rose4/5") {orbitSpeedSlider.value / 100 * physProps.dt;.005 * orbitSpeedSlider.value / 100;
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(4/5 * tourTimer) * Math.cos(tourTimer + spinOrbit);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(4/5 * tourTimer) * -1 * Math.sin(tourTimer + spinOrbit);
+            }
+            if (orbit.value == "rose3") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(3 * tourTimer) * Math.cos(tourTimer + spinOrbit);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(3 * tourTimer) * -1 * Math.sin(tourTimer + spinOrbit);
+            }
+            if (orbit.value == "rose4") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(2 * tourTimer) * Math.cos(tourTimer + spinOrbit);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(2 * tourTimer) * -1 * Math.sin(tourTimer + spinOrbit);
+            }
+            if (orbit.value == "rose5") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(5 * tourTimer) * Math.cos(tourTimer + spinOrbit);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(5 * tourTimer) * -1 * Math.sin(tourTimer + spinOrbit);
+            }
+            if (orbit.value == "rose8") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(4 * tourTimer) * Math.cos(tourTimer + spinOrbit);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(4 * tourTimer) * -1 * Math.sin(tourTimer + spinOrbit);
+            }
+            if (orbit.value == "bernoulli") {
+                var pathScale = 2 / (3 - Math.cos(2 * tourTimer));
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * pathScale * Math.cos(tourTimer);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * pathScale * Math.sin(2 * tourTimer) / 2;
+            } 
+            if (orbit.value == "gerono") {
+                this.pos.x = (0.5 * simWidth) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.cos(tourTimer);
+                this.pos.y = (0.5 * simHeight) + (orbitDia.value / 100 * 0.5 * simWidth) * Math.sin(2 * tourTimer) / 2;  
+            }
+            if (orbit.value == "archimedes") {
+                tourTimer2 += -orbitDir * orbitSpeedSlider.value / 100 * physProps.dt;
+                this.pos.x = (0.5 * simWidth) + ((tourTimer2 / simWidth) * orbitDia.value / 1000 * 0.5 * simWidth) * Math.cos(tourTimer2 + spinOrbit);
+                this.pos.y = (0.5 * simHeight) + ((tourTimer2 / simWidth) * orbitDia.value / 1000 * 0.5 * simWidth) * Math.sin(tourTimer2 + spinOrbit);
+                if (tourTimer2 > 10 * spiralTurnsSlider.value / 100 * Math.PI || tourTimer2 < 0) {
+                    orbitDir *= -1;
+                }
+            }
+            if (orbit.value == "log") {
+                tourTimer2 += -orbitDir * orbitSpeedSlider.value / 100 * physProps.dt;
+
+                this.pos.x = (0.5 * simWidth) +  orbitDia.value / 1000 * simWidth * Math.pow(2.718, .15 * tourTimer2) * Math.cos(tourTimer2 + spinOrbit);
+                this.pos.y = (0.5 * simHeight) + orbitDia.value / 1000 * simWidth * Math.pow(2.718, .15 * tourTimer2) * Math.sin(tourTimer2 + spinOrbit);
+                if (tourTimer2 > spiralTurnsSlider.value / 100 * 8 * Math.PI || tourTimer2 < 0) {
+                    orbitDir *= -1;
+                }
+            }
+            if (orbit.value == "line") {
+                tourTimer2 += -orbitDir * orbitSpeedSlider.value / 10000;
+                this.pos.x = 0.5 * simWidth + tourTimer2;
+                this.pos.y = 0.5 * simHeight;
+                if (tourTimer2 > orbitDia.value / 100 || tourTimer2 < -orbitDia.value / 100) {
+                        orbitDir *= -1;
+                }
+            }
+            if (orbit.value == "parabola") {
+                tourTimer2 += -orbitDir * orbitSpeedSlider.value / 10000;
+                this.pos.x = 0.5 * simWidth + tourTimer2;
+                this.pos.y = 0.25 * simHeight + spiralTurnsSlider.value / 10 * Math.pow(tourTimer2, 2); 
+                if (tourTimer2 >= orbitDia.value / 100 || tourTimer2 <= -orbitDia.value / 100) {
+                        orbitDir *= -1;
+                }
+            }
+            if (orbit.value == "exp") {
+                tourTimer2 += -orbitDir * orbitSpeedSlider.value / 100 * physProps.dt;
+                this.pos.x = 0.5 * tourTimer2;
+                this.pos.y = (Math.pow(spiralTurnsSlider.value / 60, tourTimer2)) / 100; 
+                if (this.pos.y > 1.5 * simHeight || tourTimer2 < 0) {
+                        orbitDir *= -1;
+                }
+            }
+        }
+    }
+    draw() {
+        // struts
+        if (fan1Button.checked == true) {
+                // outer line
+                c.beginPath();
+                c.moveTo(cX(this.pos) + (0.5 * this.length * Math.sin(this.angle) * cScale), cY(this.pos) + (0.5 * this.length * Math.cos(this.angle) * cScale));
+                c.lineTo(cX(this.pos), cY(this.pos));       
+                c.strokeStyle = "hsl(0, 0%, 70%)";
+                c.lineWidth = 2 * this.radius * cScale;
+                c.shadowBlur = 6;
+                c.stroke();
+                c.shadowBlur = 0;
+                // inner line
+                c.beginPath();
+                c.moveTo(cX(this.pos) + (0.5 * this.length * Math.sin(this.angle) * cScale), cY(this.pos) + (0.5 * this.length * Math.cos(this.angle) * cScale));
+                c.lineTo(cX(this.pos), cY(this.pos));
+                c.strokeStyle = this.color;
+                c.lineWidth = 1 * this.radius * cScale;
+                c.stroke();
+                
+            } 
+            if (fan2Button.checked == true) {
+                // outer line
+                c.beginPath();
+                c.moveTo(cX(this.pos) - (0.5 * this.length * Math.sin(this.angle) * cScale), cY(this.pos) - (0.5 * this.length * Math.cos(this.angle) * cScale));
+                c.lineTo(cX(this.pos), cY(this.pos));
+                c.strokeStyle = "hsl(0, 0%, 70%)";
+                c.lineWidth = 2 * this.radius * cScale;
+                c.shadowBlur = 10;
+                c.stroke();
+                c.shadowBlur = 0;
+                // inner line
+                c.beginPath();
+                c.moveTo(cX(this.pos) - (0.5 * this.length * Math.sin(this.angle) * cScale), cY(this.pos) - (0.5 * this.length * Math.cos(this.angle) * cScale));
+                c.lineTo(cX(this.pos), cY(this.pos));
+                c.strokeStyle = this.color;
+                c.lineWidth = 1 * this.radius * cScale;
+                c.stroke();
+            }
+            // hub body
+            drawCircle(cX(this.pos), cY(this.pos), 5 * this.radius * cScale);  
+            c.fillStyle = "hsl(0, 0%, 15%)";
+            c.shadowBlur = 10;
+            c.fill();
+            c.shadowBlur = 0;    
+            //hub outline
+            c.beginPath();
+            drawCircle(cX(this.pos), cY(this.pos), 5 * this.radius * cScale);  
+            c.strokeStyle = "hsl(0, 0%, 80%)";
+            c.lineWidth = .7 * simWidth;
+            c.stroke();
+            // index
+            drawCircle(cX(this.pos) + cScale * ((2 * this.radius) * Math.sin(this.angle + Math.PI)), cY(this.pos) + cScale * ((2 * this.radius) * Math.cos(this.angle + Math.PI)), .8 * this.radius * cScale);
+            c.fillStyle = `hsl(0, 0%, 80%)`;
+            c.fill();
+    }
+    get left() {
+        return this.pos.x - 5 * this.radius;
+    }
+    get right() {
+        return this.pos.x + 5 * this.radius;
+    }
+    getTip1() 
+    {
+        var angle = this.angle;
+        var dir = new Vector2(Math.cos(angle), Math.sin(angle));
+        var tip1 = this.dir.clone();
+        return tip1.add(dir, 0.5 * this.length);
+    }
+    getTip2()
+    {
+        var angle2 = Math.PI - this.angle;
+        var dir2 = new Vector2(-Math.cos(angle2), -Math.sin(angle2));
+        var tip2 = this.dir2.clone();
+        return tip2.add(dir, 0.5 * this.length);
+    }
+}
+
+//  GET WORLD PROPERTIES FROM SLIDERS ---------------------------------------------
+document.getElementById("timeSlider").oninput = function() {
+    physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);}
+document.getElementById("sloMoButton").onmousedown = function() {
+    physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value * 0.7) / 10))) + 6);}
+document.getElementById("sloMoButton").onmouseup = function() {
+    physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);} 
+document.getElementById("gravitySlider").oninput = function() {
+    if (showerUp.checked == true) {
+        physProps.gravity = new Vector2(0, -1 + 10 ** (gravitySlider.value/100));
+    } else {
+        physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));}}
+document.getElementById("antiGravityButton").onmousedown = function() {
+    physProps.gravity = new Vector2(0, 10);}
+document.getElementById("antiGravityButton").onmouseup = function() {
+    if (showerUp.checked == true) {
+        physProps.gravity = new Vector2(0, -1 + 10 ** (gravitySlider.value/100));
+    } else {
+        physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));}}
+document.getElementById("blowRightButton").onmousedown = function() {
+    if (showerUp.checked == true) {
+        physProps.gravity = new Vector2(50, -1 + 10 ** (gravitySlider.value/100));
+    } else {
+        physProps.gravity = new Vector2(50, 1 + -1 * (10 ** (gravitySlider.value/100)));}}
+document.getElementById("blowRightButton").onmouseup = function() {
+    if (showerUp.checked == true) {
+        physProps.gravity = new Vector2(0, -1 + 10 ** (gravitySlider.value/100));
+    } else {
+        physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));}}
+document.getElementById("blowLeftButton").onmousedown = function() {
+    if (showerUp.checked == true) {
+        physProps.gravity = new Vector2(-50, -1 + 10 ** (gravitySlider.value/100));
+    } else {
+        physProps.gravity = new Vector2(-50, 1 + -1 * (10 ** (gravitySlider.value/100)));}}
+document.getElementById("blowLeftButton").onmouseup = function() {
+    if (showerUp.checked == true) {
+        physProps.gravity = new Vector2(0, -1 + 10 ** (gravitySlider.value/100));
+    } else {
+        physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));}}
+document.getElementById("shower").oninput = function() {
+    physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+    dumpSlider.value = 50;
+    dumpMoveSlider.value = 0;
+    if (shower.checked == true) {
+        var puck1 = Hungrypuck[0];
+        var puck2 = Hungrypuck[1];
+        puck1.pos.y = -0.1 * puck1.radius;
+        puck2.pos.y = -0.1 * puck2.radius;
+    }
+}
+document.getElementById("showerUp").oninput = function() {
+    physProps.gravity = new Vector2(0, -1 + 10 ** (gravitySlider.value/100));
+    dumpSlider.value = 50;
+    dumpMoveSlider.value = 0;
+    if (showerUp.checked == true) {
+        var puck1 = Hungrypuck[0];
+        var puck2 = Hungrypuck[1];
+        puck1.pos.y = simHeight - 0.1 * puck1.radius;
+        puck2.pos.y = simHeight - 0.1 * puck2.radius;
+    }
+}
+document.getElementById("fountain").oninput = function() {
+    physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+    dumpSlider2.value = 30;
+    respawnDirSlider.value = 0;
+    sprinklerSpeedSlider.value = 0;
+    dumpMoveSlider.value = -40;
+    physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+    dumpSlider.value = 50;
+    if (fountain.checked == true) {
+        var puck1 = Hungrypuck[0];
+        var puck2 = Hungrypuck[1];
+        puck1.pos.y = -0.1 * puck1.radius;
+        puck2.pos.y = -0.1 * puck2.radius;
+    }
+}
+document.getElementById("duelingFountains").oninput = function() {
+    physProps.gravity = new Vector2(0, 1 + -1 * (10 ** (gravitySlider.value/100)));
+    dumpSlider2.value = 2;
+    dumpMoveSlider.value = -45;
+    //dumpSlider.value = 50;
+    respawnDirSlider.value = 610;
+    yeetSlider.value = 200;
+    if (duelingFountains.checked == true) {
+        var puck1 = Hungrypuck[0];
+        var puck2 = Hungrypuck[1];
+        puck1.pos.y = -0.1 * puck1.radius;
+        puck2.pos.y = -0.1 * puck2.radius;
+    }
+}
+document.getElementById("ballRestSlider").oninput = function() {
+    physProps.ballRest = ballRestSlider.value / 20;}
+document.getElementById("bumperRestSlider").oninput = function() {
+    physProps.bumperRest = bumperRestSlider.value / 20;
+    physProps.rampRest = bumperRestSlider.value / 20;
+    physProps.floorRest = bumperRestSlider.value / 20;
+    physProps.wallRest = bumperRestSlider.value / 20;}
+document.getElementById("puckRestSlider").oninput = function() {
+    physProps.puckRest = puckRestSlider.value / 20;}
+document.getElementById("rampSlopeSlider").oninput = function() {
+    rampSlope = rampSlopeSlider.value / 1000;
+    physProps.rampAngle = Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth);
+    physProps.rampHeight = Math.abs(rampSlopeSlider.value / 1000 * simWidth);
+    rampSine = Math.sin(Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth)),
+    rampCoine = Math.cos(Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth))}
+document.getElementById("melt").onmousedown = function() {
+    physProps.ballRest = 0.0;
+    physProps.bumperRest = 0.0;}
+document.getElementById("melt").onmouseup = function() {
+    physProps.ballRest = ballRestSlider.value / 20;
+    physProps.bumperRest = bumperRestSlider.value / 20;}
+document.getElementById("revTimeTrails").onmousedown = function() {
+    physProps.dt *= -.1;
+    trailSlider.value = 30;}
+document.getElementById("revTime").onmousedown = function() {
+    physProps.dt *= -1;
+    if (pacDir == 'left') {pacDir = 'right'};
+    if (pacDir == 'right') {pacDir = 'left'};
+    if (pacDir == 'up') {pacDir = 'down'};
+    if (pacDir == 'down') {pacDir = 'up'};
+    if (ghostDir == 'left') {ghostDir = 'right'};
+    if (ghostDir == 'right') {ghostDir = 'left'};
+    if (ghostDir == 'up') {ghostDir = 'down'};
+    if (ghostDir == 'down') {ghostDir = 'up'};
+    pacman = Pacman[0];
+    ghost = Ghost[0];
+    pacman.vel.x *= -1;
+    pacman.vel.y *= -1;
+    ghost.vel.x *= -1;
+    ghost.vel.y *= -1;}
+document.getElementById("revRevTime").onmousedown = function() {
+    physProps.dt *= -5;
+    if (pacDir == 'left') {pacDir = 'right'};
+    if (pacDir == 'right') {pacDir = 'left'};
+    if (pacDir == 'up') {pacDir = 'down'};
+    if (pacDir == 'down') {pacDir = 'up'};
+    if (ghostDir == 'left') {ghostDir = 'right'};
+    if (ghostDir == 'right') {ghostDir = 'left'};
+    if (ghostDir == 'up') {ghostDir = 'down'};
+    if (ghostDir == 'down') {ghostDir = 'up'};
+    pacman = Pacman[0];
+    ghost = Ghost[0];
+    pacman.vel.x *= -1;
+    pacman.vel.y *= -1;
+    ghost.vel.x *= -1;
+    ghost.vel.y *= -1;}
+document.getElementById("revTimeTrails").onmouseup = function() {
+    physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);
+    physProps.gravity = new Vector2(0, -10 * (gravitySlider.value/100));
+    trailSlider.value = 12;}
+document.getElementById("revTime").onmouseup = function() {
+    physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);
+    if (pacDir == 'left') {pacDir = 'right'};
+    if (pacDir == 'right') {pacDir = 'left'};
+    if (pacDir == 'up') {pacDir = 'down'};
+    if (pacDir == 'down') {pacDir = 'up'};
+    if (ghostDir == 'left') {ghostDir = 'right'};
+    if (ghostDir == 'right') {ghostDir = 'left'};
+    if (ghostDir == 'up') {ghostDir = 'down'};
+    if (ghostDir == 'down') {ghostDir = 'up'};
+    pacman = Pacman[0];
+    ghost = Ghost[0];
+    pacman.vel.x *= -1;
+    pacman.vel.y *= -1;
+    ghost.vel.x *= -1;
+    ghost.vel.y *= -1;}
+document.getElementById("revRevTime").onmouseup = function() {
+    physProps.dt = 1 / (Math.floor(Math.exp(((140 - timeSlider.value) / 10))) + 6);
+    if (pacDir == 'left') {pacDir = 'right'};
+    if (pacDir == 'right') {pacDir = 'left'};
+    if (pacDir == 'up') {pacDir = 'down'};
+    if (pacDir == 'down') {pacDir = 'up'};
+    if (ghostDir == 'left') {ghostDir = 'right'};
+    if (ghostDir == 'right') {ghostDir = 'left'};
+    if (ghostDir == 'up') {ghostDir = 'down'};
+    if (ghostDir == 'down') {ghostDir = 'up'};
+    pacman = Pacman[0];
+    ghost = Ghost[0];
+    pacman.vel.x *= -1;
+    pacman.vel.y *= -1;
+    ghost.vel.x *= -1;
+    ghost.vel.y *= -1;}
+document.getElementById("unityRestitution").onmousedown = function() {
+    physProps.ballRest = 1;
+    physProps.floorRest = 1;
+    physProps.wallRest = 1;
+    physProps.ceilingRest = 1;
+    physProps.bumperRest = 1;
+    physProps.puckRest = 1;
+    physProps.rampRest = 1;}
+document.getElementById("unityRestitution").onmouseup = function() {
+    physProps.ballRest = ballRestSlider.value / 20;
+    physProps.floorRest = bumperRestSlider.value / 20;
+    physProps.wallRest = bumperRestSlider.value / 20;
+    physProps.ceilingRest = bumperRestSlider.value / 20;
+    physProps.bumperRest = bumperRestSlider.value / 20;
+    physProps.puckRest = puckRestSlider.value / 20;
+    physProps.rampRest = bumperRestSlider.value / 20;}
+document.getElementById("flubberRestitution").onmousedown = function() {
+    physProps.ballRest = 1.05; 
+    physProps.floorRest = 1.05; 
+    physProps.wallRest = 1.05;
+    physProps.ceilingRest = 1.05; 
+    physProps.bumperRest = 1.05; 
+    physProps.puckRest = 1.05;}
+document.getElementById("flubberRestitution").onmouseup = function() {
+    physProps.ballRest = ballRestSlider.value / 20;
+    physProps.floorRest = bumperRestSlider.value / 20;
+    physProps.wallRest = bumperRestSlider.value / 20;
+    physProps.ceilingRest = bumperRestSlider.value / 20;
+    physProps.bumperRest = bumperRestSlider.value / 20;
+    physProps.puckRest = puckRestSlider.value / 20;}
+document.getElementById("ballSphere").oninput = function() {
+        lightnessSlider.value = 90;}
+document.getElementById("ballDisc").oninput = function() {
+        lightnessSlider.value = 40;}
+document.getElementById("ballSquare").oninput = function() {
+        lightnessSlider.value = 40;}
+document.getElementById("bumperUpDnSlider").oninput = function() {
+    for (t=0; t < Bumpers.length; t++) {
+        const bumper = Bumpers[t];
+        bumper.pos.y = bumper.OGpos.y + (simHeight * bumperUpDnSlider.value / 100);}}
+document.getElementById("bumperLeftRightSlider").oninput = function() {
+    for (r=0; r < Bumpers.length; r++) {
+        const bumper = Bumpers[r];
+        bumper.pos.x = bumper.OGpos.x + (simWidth * bumperLeftRightSlider.value / 100);}}
+document.getElementById("windButton").oninput = function() {
+    if (windButton.checked == false) {
+        physProps.gravity.x = 0}}
+document.getElementById("shimmyButton").oninput = function() {
+    if (shimmyButton.checked == false) {
+        physProps.gravity.x = 0}}
+document.getElementById("floorBumperHeightSlider").oninput = function() {
+    floorBumper = Floorbumper[0];
+    floorBumperHeight = simHeight * floorBumperHeightSlider.value / 100;
+    floorBumper.radius = ((simWidth * simWidth) / (8.0 * floorBumperHeight)) + (0.5 * floorBumperHeight);
+    floorBumperElevationDrop = -floorBumper.radius + floorBumperHeight;
+    floorBumper.pos.y = floorBumperElevationDrop;}
+
+// FPS ---------------------------------------------------------------
+var frameTime = 0, lastLoop = new Date, thisLoop;
+
+//  SETUP SCENE ======================================================
+function setupScene() {
+    Balls = [];
+    Bumpers = [];
+    Puck = [];
+    Hungrypuck = [];
+    Floorbumper = [];
+    Ramp = [];
+    Rover = [];
+    Fan1 = [];
+    Fan2 = [];
+    Strut = [];
+    Box = [];
+    Pacman = [];
+    Ghost = [];
+    Target = [];
+    Paddle = [];
+    Clock = [];
+    Pendulum = [];
+    Mistermister = [];
+    
+    physProps.paused = false;
+    let input = document.querySelectorAll('.checkbox-pause');
+    for (i = 0; i < input.length; i++) {
+        input[i].checked = false;
+    }
+
+    currentDate = new Date();
+    mSecs = currentDate.getMilliseconds();
+
+    physProps.ballRest = ballRestSlider.value / 20;
+    physProps.floorRest = bumperRestSlider.value / 20;
+    physProps.wallRest = bumperRestSlider.value / 20;
+    physProps.ceilingRest = bumperRestSlider.value / 20;
+    physProps.bumperRest = bumperRestSlider.value / 20;
+    physProps.puckRest = puckRestSlider.value / 20;
+
+    alpha = 0;
+    sweepDir = 1;
+    dir = 0;
+    ballHits = 0;
+    bumperHits = 0;
+    puckHits = 0;
+    wallHits = 0;
+    ballChks = 0;
+    bumperChks = 0;
+    puckChks = 0;
+    wallChks = 0;
+    ballDrops = 0;
+    highestBall = 0;
+    lowestBall = 0;
+    u = 0;
+    dir = 0;
+    spawnLeft = true;
+    wipeOpacity = 1;
+    windLeft = -1;
+    fanGrowChange = 1;
+    runX = 0;
+    runX2 = 0;
+    runStrut = 0;
+    hueFanSlice = 0;
+    huePos = 0;
+    fanHue = 0;
+    tourTimer = 0;
+    tourTimer2 = 0;
+    orbitDir = -1;
+    spinOrbit = 0;
+    pulseLightCounter = 0;
+    pulseHueCounter = 0;
+    delta = 0;
+    angAcc = 0;
+    angVel = 0;
+    angle = -0.5 * Math.PI;
+
+    goLeft = false;
+    mrMrTimer = 0;
+    
+    dirSeed = 0;
+    pacDir = 'up';
+    oldpacDirX = 'right';
+    oldpacDirY = 'up';
+    walkoutH = 0.8 * simWidth;
+    walkoutV = 0.6 * simHeight;
+    breadcrumbX1 = simWidth;
+    breadcrumbX2 = 0;
+    breadcrumbY1 = 0;
+    breadcrumbY2 = -simHeight;
+    ghostDir = 'right';
+    bottom = false;
+    mouthMotor = 0;
+    mouthSize = 0;
+
+    simClockAngle = 0;
+
+    showTarget = false;
+    turretScan = 0;
+    
+    fan1Was = fan1Button.checked;
+    fan2Was = fan2Button.checked
+    strutWas = showStrutButton.checked;
+    puckWas = showPuckButton.checked;
+    clockWas = clockButton.checked;
+
+    hueShift = hueSlider.value / 100;
+    hueShiftOffset = 0;
+    hueSaturation = saturationSlider.value;
+    ballLightness = lightnessSlider.value / 1;
+    
+    smallBallRadius = smallBallInput.value / 1000;
+    bigBallRadius = bigBallInput.value / 1000;
+    maxBallRadius = Math.max(smallBallRadius, bigBallRadius);
+    getNumBalls = ballsInput.value;
+    
+    ballJitter = ballJitterEntry.value / 100;
+    brakesX = brakesXEntry.value / 100;
+    brakesY = brakesYEntry.value / 100;
+    vertBias = simHeight * verticalBiasEntry.value / 100; 
+
+    rampSlope = 0;
+    rampHeight = 0;
+    rampAngle = 0;
+    rampSine = 0;
+    rampCosine = 0;
+    //  DEFINE BALLS IN ORDERED GRID -------------------------------------------
+    if (clusterRadiusEntry.value == 0) {  
+        counter = -1;
+        numCols = Math.floor(Math.sqrt(getNumBalls));
+        numRows = Math.floor(Math.sqrt(getNumBalls));
+        countDifference = getNumBalls - (numCols * numRows);
+        addedRows = Math.ceil(countDifference / numCols);
+        boxPadding = clusterPaddingEntry.value / 100;
+        boxWidth = (numCols * 2.0 * maxBallRadius) + (numCols * 2.0 * maxBallRadius * boxPadding);
+        boxHeight = ((numRows + addedRows) * 2.0 * maxBallRadius) + ((numRows + addedRows) * 2.0 * maxBallRadius * boxPadding);
+        horizBias = (simWidth - boxWidth) / 2;
+
+        for (j = 0; j < (numRows + addedRows); j++) {
+            for (i = 0; i < numCols; i++) {
+                    if (smallBallRadius == 0) {
+                        radius = bigBallRadius;
+                    } else {
+                        radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
+                    }          
+                    
+                    iPos = i / numCols;
+                    mass = 2 * Math.PI * radius * radius; 
+                    //mass = (4.0 / 3.0) * Math.PI * radius * radius * radius; //accurate for spheres, but hectic for smaller objects
+                    vel = new Vector2((-0.5 + 1.0 * Math.random()) * brakesX + dumpBlowSlider.value / 40, (-0.5 + 1.0 * Math.random()) * brakesY);
+                    randomSaturation = 0.2 + Math.random() * 0.8;
+                    
+                    if (huePickSlider.value < 1) {
+                        color = `hsl(${iPos * hueSlider.value}, ${randomSaturation * hueSaturation}%, 20%)`
+                        hiColor = `hsl(${iPos * hueSlider.value}, ${randomSaturation * hueSaturation}%, ${ballLightness}%)`
+                    } else {
+                        color = `hsl(${huePickSlider.value/1}, ${randomSaturation * 100}%, 20%)`
+                        hiColor = `hsl(${huePickSlider.value/1}, ${randomSaturation * 100}%, ${ballLightness}%)`
+                    }
+                boxedPosX = (i + 1) * (boxWidth / (numCols +1)) + (Math.random() * radius * ballJitter) + horizBias;
+                boxedPosY = (j + 1) * (boxHeight / (numRows + 1)) + vertBias;
+                pos = new Vector2(boxedPosX, boxedPosY);
+
+                counter = ++counter;
+                if (counter < (getNumBalls)) {
+                    Balls.push(new BALL(radius, mass, pos, vel, color, hiColor));
+                }
+            }
+        }
+    }
+    //  DEFINE BALLS IN ROUND CLUSTER -----------------------------------------------
+    if (clusterRadiusEntry.value > 0) {
+        for (q = 0; q < getNumBalls; q++) {
+            clusterRadius = 0.5 * (clusterRadiusEntry.value / 100) * simWidth;
+            randomRadius = Math.random() * clusterRadius;
+            randomTheta = Math.random() * 2 * Math.PI;
+            circleXpos = Math.cos(randomTheta) * randomRadius + simWidth / 2;
+            circleYpos = Math.sin(randomTheta) * randomRadius + vertBias;
+            hueAngle = hueShiftOffset + hueShift * (randomTheta / (2 * Math.PI) + (2 * Math.PI)) * 360; // rotate HSL sequence
+            randomSaturation = 0.2 + Math.random() * 0.8; 
+            ballLightness = lightnessSlider.value / 1;
+
+            if (smallBallRadius == 0.0) {
+                radius = bigBallRadius;
+                } else {
+                        radius = smallBallRadius + Math.random() * (bigBallRadius - smallBallRadius);
+            }
+            mass = 2 * Math.PI * radius * radius; 
+            //mass = (4.0 / 3.0) * Math.PI * radius * radius * radius; //accurate for spheres, but hectic for smaller objects
+            pos = new Vector2(circleXpos, circleYpos);   
+            vel = new Vector2(Math.cos(randomTheta) * brakesX + dumpBlowSlider.value / 40, Math.sin(randomTheta) * brakesY + 1);
+            
+            if (hueShift > 0) {
+                color = `hsl(${hueAngle}, ${randomSaturation * hueSaturation}%, 20%)`
+                hiColor = `hsl(${hueAngle}, ${randomSaturation * hueSaturation}%, ${ballLightness}%)`
+            } else {
+                color = `hsl(${hueAngle}, ${randomSaturation * 100}%, 20%)`
+                hiColor = `hsl(${hueAngle}, ${randomSaturation * 100}%, ${ballLightness}%)`
+            }
+    
+            Balls.push(new BALL(radius, mass, pos, vel, color, hiColor));
+        }   
+    }
+    //  DEFINE SPECIAL BALLS------------------------------------------------
+    specialBallNum = specialBallInput.value;
+    specialBallRadius = specialBallRadiusInput.value / 1000;
+    specialBallMass = (specialBallMassInput.value / 100) * (2 * Math.PI * specialBallRadius * specialBallRadius);
+    //specialBallMass = (specialBallMassInput.value / 100) * ((4 / 3) * Math.PI * specialBallRadius * specialBallRadius * specialBallRadius);
+    if (specialBallNum > 0) {
+        for (q = 0; q < specialBallNum; q++) {
+            qPos = 1.0 - (q / specialBallNum);    
+            radius = specialBallRadius;
+            mass = specialBallMass;
+            pos = new Vector2(q * (simWidth / specialBallNum) + simWidth / (specialBallNum * 2), radius);
+            vel = new Vector2(0.0, 0.2);
+            baseColor = Math.random() * 360;
+            color = `hsl(${qPos * 360}, 25%, 10%)`;
+            hiColor = `hsl(${qPos * 360}, 25%, 70%)`; 
+        
+            Balls.push(new BALL(radius, mass, pos, vel, color, hiColor));  
+        }
+    }
+    //  DEFINE BUMPERS --------------------------------------------------------------
+    bumperRows = rowsInput.value;
+    bumperRadius = bumperRadiusInput.value / 1000;
+    gapMultiplier = 1.0 + bumperGrace.value / 100;
+    smallBumperRatio = secondaryBumperRatio.value / 100;
+    vertBumperPadding = vertBumperPaddingEntry.value / 100;
+    bumperSpacing = (2 * maxBallRadius) * gapMultiplier;
+    combinedSpacing = (2 * bumperRadius) + bumperSpacing;
+    verticalBPD = vertBumperPadding * combinedSpacing;
+    combinedVerticalSpacing = (2 * bumperRadius) + bumperSpacing + verticalBPD;
+    paddingCorrectionShift = -0.5 * ((bumperRows - 1) * verticalBPD);
+    if (Math.trunc(simWidth / combinedSpacing) % 2 == 0) {
+        bumperCols = Math.trunc(simWidth / combinedSpacing); 
+    } else {
+        bumperCols = Math.trunc(simWidth / combinedSpacing) + 1; 
+    }
+    bumperBarLengthX = ((bumperCols - 1.0) * bumperSpacing) + ((2.0 * (bumperCols -1.0)) * bumperRadius);
+    bumperBarLengthY = ((bumperRows - 1.0) * bumperSpacing) + ((2.0 * (bumperRows -1.0)) * bumperRadius);
+    centeringOffsetX = (simWidth / 2.0) - (bumperBarLengthX / 2.0);
+    centeringOffsetY = (simHeight / 2.0) - (bumperBarLengthY / 2.0) + ((simHeight / 2.0) * (bumperUpDnSlider.value / 100)) + paddingCorrectionShift;
+    bottomMargin = ((simHeight - bumperBarLengthY) / 2) + 2 * bumperRadius;
+    topMargin = ((simHeight - bumperBarLengthY) / 2) + bumperBarLengthY + 2 * bumperRadius; 
+    centeringOffsetY - combinedVerticalSpacing/2
+    window.numBumpers = 0;
+    for (p = -1; p < bumperCols; p++) {
+        for (q = 0; q < bumperRows; q++) {
+            bumperChance = -1 + Math.random() + (makeBumperOddsValue.value / 100);
+            if (q % 2 == 0 && bumperChance > 0) {
+                Bumpers.push(new BUMPER(bumperRadius, new Vector2((p * combinedSpacing) + (combinedSpacing / 2.0) + centeringOffsetX, (q * combinedVerticalSpacing) + centeringOffsetY)));        
+                numBumpers += 1;
+            } else if (bumperChance > 0) {                
+                if (p > -1) {
+                    Bumpers.push(new BUMPER(bumperRadius * smallBumperRatio, new Vector2((p * combinedSpacing) + centeringOffsetX, (q * combinedVerticalSpacing) + centeringOffsetY)));
+                }     
+                numBumpers += 1;
+            }
+        }
+    }
+    //  DEFINE FLOOR BUMPER ---------------------------------------------------------
+    if (floorBumperHeightSlider.value > 0) {
+        floorBumperHeightRatio = floorBumperHeightSlider.value / 100;
+        floorBumperHeight = simHeight * floorBumperHeightRatio;
+        floorBumperRadius = ((simWidth * simWidth) / (8.0 * floorBumperHeight)) + (0.5 * floorBumperHeight);
+        floorBumperElevationDrop = -floorBumperRadius + floorBumperHeight;
+
+        Floorbumper.push (new FLOORBUMPER(floorBumperRadius, new Vector2(simWidth / 2.0 , floorBumperElevationDrop)));
+    }
+    //  DEFINE PUCKS -----------------------------------------------------------------         
+    puck1color = `hsla(70, 20%, 40%, 65%)`;
+    puck2color = `hsla(160, 20%, 30%, 65%)`;
+    puck3color = `hsla(0, 58%, 37%, 65%)`;
+    Puck.push (new PUCK(1.0 * puckRadiusSlider.value / 1000, new Vector2(simWidth - 1.7 * puckRadiusSlider.value / 1000, simHeight - 2.6 * puckRadiusSlider.value / 1000), puck1color));
+    Puck.push (new PUCK(0.4 * puckRadiusSlider.value / 1000, new Vector2(simWidth - 1.4 * puckRadiusSlider.value / 1000, simHeight - 2.4 * puckRadiusSlider.value / 1000), puck3color));
+    Puck.push (new PUCK(0.7 * puckRadiusSlider.value / 1000, new Vector2(1.4 * puckRadiusSlider.value / 1000, simHeight - 5.5 * puckRadiusSlider.value / 1000), puck2color));
+    //  DEFINE HUNGRY PUCKS ----------------------------------------------------------        
+    hungryPuckVel = new Vector2(0, 0);
+    Hungrypuck.push (new HUNGRYPUCK(hungryPuckRadiusSlider.value / 1000, new Vector2(0.6 * simWidth + hungryPuckRadiusSlider.value / 1000 * simWidth, -0.1 * hungryPuckRadiusSlider.value / 1000), hungryPuckVel, `hsl(0, 50%, 50%)`));
+    Hungrypuck.push (new HUNGRYPUCK(hungryPuckRadiusSlider.value / 1000, new Vector2(0.4 * simWidth - hungryPuckRadiusSlider.value / 1000 * simWidth, -0.1 * hungryPuckRadiusSlider.value / 1000), hungryPuckVel, `hsl(0, 50%, 50%)`));
+    // DEFINE MR. MISTER  ------------------------------------------------------------
+    mrMrVel = new Vector2(1, 0);
+    Mistermister.push (new MISTERMISTER(hungryPuckRadiusSlider.value / 1000, new Vector2(1.5 * hungryPuckRadiusSlider.value / 1000, 0.9 * simHeight), mrMrVel, `hsl(0, 50%, 50%)`));
+    // DEFINE PAC-MAN  ------------------------------------------------------
+    radius = pacmanRadiusSlider.value / 1000;
+    pos = new Vector2(.5 * simWidth, 0.5 * simHeight);
+    vel = new Vector2(0.7, 0);
+    rot = 0;
+    Pacman.push (new PACMAN(radius, pos, vel, rot));
+    // DEFINE GHOST  ----------------------------------------------------------------------------
+    radius = 0.15;
+    pos = new Vector2(0.3 * simWidth, 0.52 * simHeight);
+    vel = new Vector2(0.7, 0);
+    color =  '#f9a300';
+    Ghost.push (new GHOST(radius, pos, vel, color))
+    //  DEFINE ROVER -----------------------------------------------------------------          
+    roverRadius = 100 / 1000;
+    roverMass = 2 * Math.PI * roverRadius * roverRadius;
+    roverPos = new Vector2(simWidth * 0.2, simHeight * 0.8);
+    roverVel = new Vector2(1, 0.5);
+    roverColor = `hsl(290, 50%, 50%)`;
+    Rover.push (new ROVER(roverRadius, roverMass, roverPos, roverVel, roverColor));   
+    // DEFINE PENDULUM 
+    pendRadius = 50 / 1000;
+    pendLength = 0.5 * simHeight * pendulumLengthSlider.value / 100;
+    pendOrigin = new Vector2(0.5 * simWidth, simHeight);
+    pendPos = new Vector2();
+    pendAngle = 0.7 * Math.PI;
+    pendColor = "gray"
+    Pendulum.push (new PENDULUM(pendRadius,pendLength,pendOrigin,pendPos,pendAngle,pendColor));
+    //  DEFINE FIRST FAN ----------------------------------------------------------------------    
+    for (s=0; s < fan1BallNum.value; s++) {
+        fanRadius = 100 / 1000;
+        fanMass = 2 * Math.PI * fanRadius * fanRadius;
+        fanAngle = s * 2 * Math.PI/fan1BallNum.value;
+        fanRay = 0;
+        fanCenter = new Vector2(0.3 * simWidth, 0.5 * simHeight);
+        hueFanSlice = 180 * (s / fan1BallNum.value);
+        saturationSlice = 80 * (s / fan1BallNum.value);
+        fanColor = `hsla(20, ${saturationSlice + 20}%, 50%, 50%)`;
+        fanPos = new Vector2();
+        fanVel = new Vector2();
+        Fan1.push (new FAN1(fanRadius, fanMass, fanAngle, fanRay, fanCenter, fanPos, fanVel, fanColor));      
+    }
+    //  DEFINE FIRST FAN HUB ----------------------------------------------------------------------    
+    fanRadius = 100 / 1000;
+    fanMass = 2 * Math.PI * fanRadius * fanRadius;
+    fanAngle = 0;
+    fanRay = 0;
+    fanCenter = new Vector2(0.3 * simWidth, 0.5 * simHeight);
+    fanColor = `hsl(0, 0%, 10%)`;
+    fanPos = new Vector2();
+    fanVel = new Vector2();
+    Fan1.push (new FAN1(fanRadius, fanMass, fanAngle, fanRay, fanCenter, fanPos, fanVel, fanColor));
+    //  DEFINE SECOND FAN -------------------------------------------------------------------------------    
+    for (s=0; s < fan2BallNum.value; s++) {
+        fanRadius = 100 / 1000;
+        fanMass = 2 * Math.PI * fanRadius * fanRadius;
+        fanAngle = s * 2 * Math.PI/fan2BallNum.value;
+        fanRay = 0;
+        fanCenter = new Vector2(0.7 * simWidth, 0.5 * simHeight);
+        hueFanSlice = 180 * (s / fan2BallNum.value) + 180;
+        saturationSlice = 80 * (s / fan2BallNum.value);
+        fanColor = `hsla(200, ${saturationSlice + 20}%, 50%, 50%)`;
+        fanPos = new Vector2();
+        fanVel = new Vector2();
+        Fan2.push (new FAN2(fanRadius, fanMass, fanAngle, fanRay, fanCenter, fanPos, fanVel, fanColor));
+    }
+    //  DEFINE SECOND FAN HUB ----------------------------------------------------------------------    
+    fanRadius = 100 / 1000;
+    fanMass = 2 * Math.PI * fanRadius * fanRadius;
+    fanAngle = 0;
+    fanRay = 0;
+    fanCenter = new Vector2(0.7 * simWidth, 0.5 * simHeight);
+    fanColor = `hsl(0, 0%, 10%)`;
+    fanPos = new Vector2();
+    fanVel = new Vector2();
+    Fan2.push (new FAN2(fanRadius, fanMass, fanAngle, fanRay, fanCenter, fanPos, fanVel, fanColor));
+    //  DEFINE STRUT -----------------------------------------------------------------------------
+    strutRadius = 10 / 1000;
+    strutPos = new Vector2(0.5 * simWidth, 0.5 * simHeight);
+    strutAngle = 0;
+    strutLength = simWidth * strutLengthSlider.value / 100
+    strutColor = "hsl(0, 0%, 20%)";
+    Strut.push (new STRUT(strutRadius, strutPos, strutAngle, strutLength, strutColor));
+    //  DEFINE CLOCK -----------------------------------------------------------------------------
+    clockPos = new Vector2(1.4 * puckRadiusSlider.value / 1000, 1.45 * puckRadiusSlider.value / 1000);
+    clockRadius = 100 / 1000;
+    handAngle = mSecs/1000 * 2*Math.PI
+    Clock.push (new CLOCK(clockPos, clockRadius, handAngle));
+    //  DEFINE TARGET ------------------------------------------------------------
+    Target.push (new TARGET(new Vector2(0.5 * simWidth, 0.3 * simHeight), .1, (628 - sendAngle.value) / 100));
+    //  DEFINE PADDLE ------------------------------------------------------------
+    radius = 0.1;
+    width = 0.12 * simWidth;
+    pos = new Vector2(0.5 * simWidth, 0.2 * simHeight);
+    Paddle.push (new PADDLE(radius, width, pos));
+    //  DEFINE RAMP ---------------------------------------------------------------------
+    rampSlope = rampSlopeSlider.value / 1000;
+    rampHeight = Math.abs(rampSlopeSlider.value / 1000 * simWidth);
+    rampAngle = Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth);
+    rampSine = Math.sin(Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth));
+    rampCosine = Math.cos(Math.atan(Math.abs(rampSlopeSlider.value / 1000 * simWidth)/simWidth));
+    Ramp.push (new RAMP(rampSlope, rampHeight, rampAngle, rampSine, rampCosine));
+}  
+// END OF PUSH DEFINITIONS =======================================================
+
+//  DRAW EVERYTHING ==============================================================
+function drawEverything() {
+    if (wormsButton.checked == false) {
+        wipeOpacity = Math.pow(2.718, trailSlider.value / -10);
+        c.fillStyle = `hsla(0, 0%, ${brightnessSlider.value}%, ${wipeOpacity})`;
+        c.fillRect(0, 0, canvas.width, canvas.height);
+    } 
+
+    // DRAW GRID -----------------------------------------------------------------
+    if (gridButton.checked == true) {
+        gridSpacing = .07;
+        horizGrids = simWidth / gridSpacing;
+        vertGrids = simHeight / gridSpacing;
+        c.setLineDash([4, 4]);
+        for (h = 1; h < horizGrids; h++) {
+            if (h % 5 == 0) {
+                c.lineWidth = 2;
+            } else {
+                c.lineWidth = 1;
+            }
+            c.beginPath();
+            c.moveTo(h * gridSpacing * cScale, 0);
+            c.lineTo(h * gridSpacing * cScale, simHeight * cScale);
+            if (brightnessSlider.value < 50) {
+                c.strokeStyle = "hsl(0, 0%, 15%)";
+                } else {
+                c.strokeStyle = "hsl(209, 88%, 69%)"; 
+                }
+            c.stroke();
+        }
+        for (v = 1; v < vertGrids; v++) {
+            if (v % 5 == 0) {
+                c.lineWidth = 2;
+            } else {
+                c.lineWidth = 1;
+            }
+            c.beginPath();
+            c.moveTo(0, v * gridSpacing * cScale);
+            c.lineTo(simWidth * cScale, v * gridSpacing * cScale);
+            if (brightnessSlider.value < 50) {
+                c.strokeStyle = "hsl(0, 0%, 15%)";
+                } else {
+                c.strokeStyle = "hsl(209, 88%, 69%"; 
+                }
+            c.stroke();
+        }
+        c.setLineDash([0, 0]);
+    }
+
+    // DRAW ORBITS --------------------------------------------------------------------------
+    if (showOrbitButton.checked == true && orbitButton.checked == true && showStrutButton.checked == true) {
+        c.beginPath();
+        if (orbit.value == "circle") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 2 * Math.PI; f += .01) {
+                drawX = (0.5 * simWidth) +  (orbitDia.value / 200 * simWidth) * Math.cos(f);
+                drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * Math.sin(f);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "ellipse") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 2 * Math.PI; f += .01) {
+                drawX = (0.5 * simWidth) +  (orbitDia.value / 200 * simWidth) * Math.cos(f);
+                drawY = (0.5 * simHeight) + (orbitDia.value / 100 * spiralTurnsSlider.value / 100 * simWidth) * 0.5 * Math.sin(f + spinOrbit);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "cardioid") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 2 * Math.PI; f += 0.01) {
+                drawX = (0.5 * simWidth) +  (orbitDia.value / 200 * simWidth) * (1 + Math.sin(1 * f)) * Math.cos(f + spinOrbit);
+                drawY = (0.5 * simHeight) - (orbitDia.value / 200 * simWidth) * (1 + Math.sin(1 * f)) * Math.sin(f + spinOrbit);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "limacon") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 2 * Math.PI; f += 0.01) {
+                drawX = (0.5 * simWidth) +  (orbitDia.value / 200 * simWidth) * (0.5 - Math.sin(1 * f)) * Math.cos(f + spinOrbit);
+                drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * (0.5 - Math.sin(1 * f)) * Math.sin(f + spinOrbit);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "heart") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 2 * Math.PI; f += 0.01) {
+                drawX = (0.5 * simWidth) + (orbitDia.value / 1500 * 0.5 * simWidth) * 16 * Math.pow(Math.sin(f), 3);
+                drawY = (0.5 * simHeight) + (-orbitDia.value / 1500 * 0.5 * simWidth) * (13 * Math.cos(f) - 5 * Math.cos(2 * f) - 2 * Math.cos(3 * f) - Math.cos(4 * f));   
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "lotus") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 20 * Math.PI; f += 0.01) {
+                drawX = (0.5 * simWidth) + (orbitDia.value / 200 * simWidth) * (Math.sin(f) + Math.sin(5 * (f / 2))) * Math.cos(f + spinOrbit);
+                drawY = (0.67 * simHeight) + (-orbitDia.value / 200 * simWidth) * (Math.sin(f) + Math.sin(5 * (f / 2))) * Math.sin(f + spinOrbit);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "rose1/2") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 4 * Math.PI; f += 0.01) {
+                drawX = (0.5 * simWidth) + (orbitDia.value / 200 * simWidth) * Math.cos(1/2 * f) * Math.cos(f + spinOrbit);
+                drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * Math.cos(1/2 * f) * Math.sin(f + spinOrbit);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "rose4/5") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 10 * Math.PI; f += 0.01) {
+                drawX = (0.5 * simWidth) + (orbitDia.value / 200 * simWidth) * Math.cos(4/5 * f) * Math.cos(f + spinOrbit);
+                drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * Math.cos(4/5 * f) * Math.sin(f + spinOrbit);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "rose3") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+                for (f = 0; f < 2 * Math.PI; f += 0.01) {
+                    drawX = (0.5 * simWidth) +  (orbitDia.value / 200 * simWidth) * Math.cos(3 * f) * Math.cos(f + spinOrbit);
+                    drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * Math.cos(3 * f) * Math.sin(f + spinOrbit);
+                    c.lineTo(drawX * cScale, drawY * cScale)
+                }
+        }
+        if (orbit.value == "rose4") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 2 * Math.PI; f += 0.01) {
+                drawX = (0.5 * simWidth) +  (orbitDia.value / 200 * simWidth) * Math.cos(2 * f) * Math.cos(f + spinOrbit);
+                drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * Math.cos(2 * f) * Math.sin(f + spinOrbit);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "rose5") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 2 * Math.PI; f += 0.01) {
+                drawX = (0.5 * simWidth) +  (orbitDia.value / 200 * simWidth) * (Math.cos(5 * f)) * Math.cos(f + spinOrbit);
+                drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * (Math.cos(5 * f)) * Math.sin(f + spinOrbit);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "rose8") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 2 * Math.PI; f += 0.01) {
+                drawX = (0.5 * simWidth) + (orbitDia.value / 200 * simWidth) * Math.cos(4 * f) * Math.cos(f + spinOrbit);
+                drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * Math.cos(4 * f) * Math.sin(f + spinOrbit);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "bernoulli") {
+            var drawX = (0.5 * simWidth) + (orbitDia.value / 200 * simWidth) * pathScale;
+            var drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * pathScale * 0.5;
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 2 * Math.PI; f += 0.01) {
+                var pathScale = 2 / (3 - Math.cos(2 * f));
+                drawX = (0.5 * simWidth) + (orbitDia.value / 200 * simWidth) * pathScale * Math.cos(f);
+                drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * pathScale * Math.sin(2 * f) / 2;
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        } 
+        if (orbit.value == "gerono") { 
+            var drawX = (0.5 * simWidth) + (orbitDia.value / 200 * simWidth);
+            var drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * pathScale * 0.5;
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 2 * Math.PI; f += 0.01) {
+                drawX = (0.5 * simWidth) + (orbitDia.value / 200 * simWidth) * Math.cos(f);
+                drawY = (0.5 * simHeight) + (orbitDia.value / 200 * simWidth) * Math.sin(2 * f) /2;
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "archimedes") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < 10 * spiralTurnsSlider.value / 100 * Math.PI; f += 0.1) {
+                drawX = (0.5 * simWidth) + ((f / simWidth) * orbitDia.value / 1000 * 0.5 * simWidth) * Math.cos(f + spinOrbit);
+                drawY = (0.5 * simHeight) + ((-f / simWidth) * orbitDia.value / 1000 * 0.5 * simWidth) * Math.sin(f + spinOrbit);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "log") { 
+            c.moveTo((0.5 * simWidth + drawX) * cScale, (0.5 * simHeight + drawY) * cScale);
+            for (f = 0; f < spiralTurnsSlider.value / 100 * 8 * Math.PI; f += .01) {
+                drawX = (0.5 * simWidth) +   0.1 * orbitDia.value / 100 * simWidth * Math.pow(2.718, .15 * f) * Math.cos(f + spinOrbit);
+                drawY = (0.5 * simHeight) +  -0.1 * orbitDia.value / 100 * simWidth * Math.pow(2.718, .15 * f) * Math.sin(f + spinOrbit);
+                c.lineTo(drawX * cScale, drawY * cScale)
+            }
+        }
+        if (orbit.value == "line") { 
+            c.moveTo((0.5 * simWidth - orbitDia.value / 100) * cScale, 0.5 * simHeight * cScale);
+            for (f = -orbitDia.value / 100; f < orbitDia.value / 100; f += .01) {
+                drawX = 0.5 * simWidth + f;
+                drawY = 0.5 * simHeight;
+                c.lineTo(drawX * cScale, drawY * cScale);
+            }
+        }
+        if (orbit.value == "parabola") { 
+            c.moveTo((0.5 * simWidth - orbitDia.value / 100) * cScale, (0.75 * simHeight - spiralTurnsSlider.value / 10 * Math.pow(orbitDia.value/100, 2)) * cScale);
+            for (f = -orbitDia.value / 100; f < orbitDia.value / 100; f += .001) {
+                drawX = 0.5 * simWidth + f;
+                drawY = 0.75 * simHeight - spiralTurnsSlider.value / 10 * Math.pow(f, 2);
+                c.lineTo(drawX * cScale, drawY * cScale);
+            }
+        }
+        if (orbit.value == "exp") { 
+            c.moveTo(0, simHeight * cScale);
+            for (f = 0; f < 2 *simWidth; f += .1) {
+                drawX = 0.5 * f;
+                drawY = simHeight - ((Math.pow((spiralTurnsSlider.value / 60), f)) / 100);
+                c.lineTo(drawX * cScale, drawY * cScale);
+            }
+        }
+
+        // TRACE ORBIT
+        if (brightnessSlider.value < 50) {
+            pulseHue = 200 + 5 * pulseLightCounter;
+            pulseLight1 = Math.abs(Math.sin(0.5 * pulseLightCounter)) * 40;
+            c.strokeStyle = `hsla(${pulseHue}, 30%, ${pulseLight1}%, 20%)`;
+            c.lineWidth = 16;
+            c.stroke();
+            
+            pulseHue = 200 + 5 * pulseLightCounter;
+            pulseLight1 = Math.abs(Math.sin(0.5 * pulseLightCounter)) * 40;
+            c.strokeStyle = `hsla(${pulseHue}, 30%, ${pulseLight1}%, 40%)`;
+            c.lineWidth = 8;
+            c.stroke();
+            
+            pulseLight2 = 10 + Math.abs(Math.sin(0.5 * pulseLightCounter)) * 70;    
+            c.strokeStyle = `hsl(0, 0%, ${pulseLight2}%)`;
+            c.lineWidth = 2;
+            c.stroke();
+            pulseLightCounter -= 0.01;
+
+            // origin dot
+            if (orbit.value == "cardioid"|| orbit.value == "limacon"|| orbit.value == "rose3" || orbit.value == "rose4" || orbit.value == "rose5" || orbit.value == "rose8" || orbit.value == "rose1/2" || orbit.value == "rose4/5" || orbit.value == "bernoulli" || orbit.value == "gerono") {
+                drawCircle(0.5 * simWidth * cScale, 0.5 * simHeight * cScale, 1000 / cScale);
+                c.fillStyle = `hsl(0, 0%, ${pulseLight2}%)`;
+                c.fill();
+            }
+            if (orbit.value == "lotus") {
+                drawCircle(0.5 * simWidth * cScale, 0.67 * simHeight * cScale, 2800 / cScale);
+                c.fillStyle = `hsl(${pulseHue}, 40%, ${pulseLight2}%)`;
+                c.fill();
+            }
+            if (orbit.value == "parabola") {
+                drawCircle((0.5 * simWidth - orbitDia.value / 100) * cScale, (0.75 * simHeight - spiralTurnsSlider.value / 10 * Math.pow(orbitDia.value/100, 2)) * cScale, 1000 / cScale);
+                c.fillStyle = `hsl(0, 0%, ${pulseLight2}%)`;
+                c.fill();
+                drawCircle((0.5 * simWidth + orbitDia.value / 100) * cScale, (0.75 * simHeight - spiralTurnsSlider.value / 10 * Math.pow(orbitDia.value/100, 2)) * cScale, 1000 / cScale);
+                c.fillStyle = `hsl(0, 0%, ${pulseLight2}%)`;
+                c.fill();
+            }
+        } else {
+            c.strokeStyle = `hsl(115, 40%, 0%)`;
+            c.lineWidth = 4;
+            c.stroke();
+        }
+    }
+
+    // DRAW PADDLE ---------------------------------------------------------------
+    if (pong.checked == true) {
+        paddle = Paddle[0];
+        paddle.draw();
+    }
+    
+    // STATS -----------------------------------------------------------------------
+    if (statsButton.checked == true) {   
+        allHits = ballHits + bumperHits + puckHits + wallHits;   
+        allChks = ballChks + bumperChks + puckChks + wallChks;
+        //highestBallFeet = highestBall * (12/2) / 12;
+        //lowestBallFeet = lowestBall * (12/2) / 12;
+        totalBallDrops = ballsInput.value / 1 + ballDrops;
+        col1Spc = 2; col2Spc = 65; col3Spc = 185; 
+        col4Spc = 260; col5Spc = 390; col6Spc = 475;
+        bMar = 3; 
+        vSpac = 16;
+        var thisLoop = Date.now();
+        var fpsOut = 1000 / (thisLoop - lastLoop) + 1;
+        lastLoop = thisLoop;
+
+        // FIRST COLUMN -----
+        c.fillStyle = `hsl(160, 60%, 40%)`;
+        c.font = "10px verdana";
+        c.textAlign = "left";
+        c.fillText("1/dT",col1Spc, cScale * simHeight - bMar - 8*vSpac);
+        c.fillText("fps",col1Spc, cScale * simHeight - bMar - 7*vSpac);
+        c.fillText("balls sent",col1Spc, cScale * simHeight - bMar - 6*vSpac);
+        c.fillText("# bumpers",col1Spc, cScale * simHeight - bMar - 5*vSpac);
+        c.fillText("puck", col1Spc, cScale * simHeight - bMar - 4*vSpac);
+        c.fillText("walls",col1Spc, cScale * simHeight - bMar - 3*vSpac);
+        c.fillText("balls",col1Spc, cScale * simHeight - bMar - 2*vSpac);
+        c.fillText("bumpers",col1Spc, cScale * simHeight - bMar - vSpac);
+        c.fillText("all hits",col1Spc, cScale * simHeight - bMar);
+        
+        // SECOND COLUMN -----
+        c.font = "14px monospace";
+        c.fillText(Math.round(1/physProps.dt), col2Spc, cScale * simHeight - bMar - 8*vSpac);
+        c.fillText(Math.round(fpsOut), col2Spc, cScale * simHeight - bMar - 7*vSpac);
+        c.fillText(totalBallDrops.toLocaleString('en'), col2Spc, cScale * simHeight - bMar - 6*vSpac);
+        c.fillText(Bumpers.length.toLocaleString('en'), col2Spc, cScale * simHeight - bMar - 5*vSpac);
+        c.fillText(puckHits.toLocaleString('en'), col2Spc, cScale * simHeight - bMar - 4*vSpac);
+        c.fillText(wallHits.toLocaleString('en'), col2Spc, cScale * simHeight - bMar - 3*vSpac);
+        c.fillText(ballHits.toLocaleString('en'), col2Spc, cScale * simHeight - bMar - 2*vSpac);
+        c.fillText(bumperHits.toLocaleString('en'), col2Spc, cScale * simHeight  - bMar - vSpac);
+        c.fillText(allHits.toLocaleString('en'), col2Spc, cScale * simHeight - bMar);
+    
+        // THIRD COLUMN -----
+        c.font = "10px monospace";
+        c.fillText("puck", col3Spc, cScale * simHeight - bMar - 4*vSpac);
+        c.fillText("walls",col3Spc, cScale * simHeight - bMar - 3*vSpac);
+        c.fillText("balls",col3Spc, cScale * simHeight - bMar - 2*vSpac);
+        c.fillText("bumpers",col3Spc, cScale * simHeight - bMar - vSpac);
+        c.fillText("all checks",col3Spc, cScale * simHeight - bMar);
+
+        // FOURTH COLUMN -----
+        c.font = "14px monospace";
+        c.fillText(puckChks.toLocaleString('en'), col4Spc, cScale * simHeight - bMar - 4*vSpac);
+        c.fillText(wallChks.toLocaleString('en'), col4Spc, cScale * simHeight - bMar - 3*vSpac);
+        c.fillText(ballChks.toLocaleString('en'), col4Spc, cScale * simHeight - bMar - 2*vSpac);
+        c.fillText(bumperChks.toLocaleString('en'), col4Spc, cScale * simHeight  - bMar - vSpac);
+        c.fillText(allChks.toLocaleString('en'), col4Spc, cScale * simHeight - bMar);
+
+        //FIFTH COLUMN ----- uh oh
+        //c.font = "10px monospace";
+        //c.fillText("puck %", col5Spc, cScale * simHeight - bMar - 4*vSpac);
+        //c.fillText("walls %",col5Spc, cScale * simHeight - bMar - 3*vSpac);
+        //c.fillText("balls %",col5Spc, cScale * simHeight - bMar - 2*vSpac);
+        //c.fillText("highest ball",col5Spc, cScale * simHeight - bMar - vSpac);
+        //c.fillText("fps",col5Spc, cScale * simHeight - bMar);
+        
+        // SIXTH COLUMN -----
+        //c.font = "14px monospace";
+        //c.fillText(puckHitsPct, col6Spc, cScale * simHeight - bMar - 4*vSpac);
+        //c.fillText(wallHitsPct, col6Spc, cScale * simHeight - bMar - 3*vSpac);
+        //c.fillText(ballHitsPct, col6Spc, cScale * simHeight - bMar - 2*vSpac);
+        //c.fillText(highestBallFeet.toFixed(1), col6Spc, cScale * simHeight  - bMar - vSpac);
+        //c.fillText(Math.round(fpsOut), col6Spc, cScale * simHeight - bMar);
+    }
+
+    //  DRAW PENDULUM ----------------------------------------------------------------    
+    //var pendulum = Pendulum[0];
+    //c.beginPath();
+    //c.moveTo(pendulum.origin.x * cScale, -simHeight * cScale);
+    //c.lineTo(pendulum.pos.x * cScale, pendulum.pos.y * cScale);       
+    //c.lineWidth = 0.01 * cScale;
+    //c.strokeStyle = "hsl(0, 0%, 55%)";
+    //c.stroke();
+        
+    //c.fillStyle = pendulum.color;
+    //drawCircle(pendulum.pos.x * cScale, pendulum.pos.y * cScale, pendulum.radius * cScale);
+    //c.fillStyle = `hsl(200, 50%, 50%)`;
+    //c.fill();
+
+    // DRAW MR. MISTER --------------------------------------------------------------
+    if (fountain.checked == true || duelingFountains.checked == true) {
+        MrMr = Mistermister[0];
+        MrMr.draw();
+    }
+    // DRAW MR. & MRS. MISTER -------------------------------------------------------
+    if (duelingFountains.checked == true) {
+        MrsMr = Mistermister[0];
+        MrsMr.draw2();
+    }
+    //  DRAW BALLS-------------------------------------------------------------------
+    for (i = 0; i < Balls.length; i++) {
+        ball = Balls[i];
+        ball.draw();
+    }
+    // DRAW PAC-MAN  ----------------------------------------------------------------
+    if (pacMan.checked == true) {
+        pacman = Pacman[0];
+        pacman.draw();
+    }
+    // DRAW GHOST -------------------------------------------------------------------
+    if (pacMan.checked == true) {
+        ghost = Ghost[0];
+        ghost.draw();
+    }
+    //  DRAW BUMPERS ----------------------------------------------------------------
+    if (showBumperEntry.checked == true) {
+        for (k = 0; k < Bumpers.length; k++) {
+        bumpers = Bumpers[k];   
+        bumpers.draw();
+        }
+    }
+    //  DRAW ROVER ------------------------------------------------------------------    
+    if (roverButton.checked == true) {
+        var rover = Rover[0];
+        rover.draw();
+    }
+    //  DRAW HUNGRY PUCKS ---------------------------------------------------------------     
+    if (showHungryPuckButton.checked == true) {
+        // draw first hungry puck
+        var hungryPuck = Hungrypuck[0];
+        hungryPuck.draw1();
+        
+        // draw second hungry puck
+        var hungryPuck = Hungrypuck[1];
+        hungryPuck.draw2();
+    }
+    //  DRAW PUCKS ----------------------------------------------------------------         
+    if (showPuckButton.checked == true) {
+        for (p=0; p < Puck.length; p++) { 
+            var puck = Puck[p];
+            puck.draw();
+        }
+    }       
+    // DRAW CLOCK -----------------------------------------------------------------------------
+    if (clockButton.checked == true) {
+        var clock = Clock[0];
+        clock.draw();
+    }
+    // DRAW STRUT ----------------------------------------------------------------
+    if (showStrutButton.checked == true) {
+        for (p=0; p < Strut.length; p++) {
+            strut = Strut[p];
+            strut.draw();
+        }
+    }
+    //  DRAW FAN --------------------------------------------------------------------    
+    if (fan1Button.checked == true) {
+        for (s=0; s < Fan1.length; s++) {
+            var fan = Fan1[s];
+            fan.draw(s);
+        }
+    }
+    //  DRAW SECOND FAN --------------------------------------------------------------------    
+    if (fan2Button.checked == true) {
+        for (s=0; s < Fan2.length; s++) {
+            fan = Fan2[s];
+            fan.draw(s);
+        }
+    }
+    // DRAW RAMP -----------------------------------------------------------------
+    if (rampButton.checked == true) {
+        ramp = Ramp[0];
+        ramp.draw();
+    }
+    //  DRAW FLOOR BUMPER -------------------------------------------------------
+    if (showFloorBumperEntry.checked == true) {
+        for (m=0; m < Floorbumper.length; m++) {
+        var floorBumper = Floorbumper[m];
+        floorBumper.draw();
+        }
+    }
+    //  DRAW TARGET -------------------------------------------------------------
+    if (showTarget == true) {
+        target = Target[0];
+        target.draw();
+    }
+}
+
+// COLLISIONS AND BOUNDARIES =============================================================
+
+//  BALL TO BALL HITS --------------------------------------------------------------------
+function handleBallHits(ball1, ball2) 
+{
+    ++ballChks;
+    var dir = new Vector2();
+    dir.subtractVectors(ball2.pos, ball1.pos);
+    var d = dir.length();
+    if (d == 0.0 || d > ball1.radius + ball2.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    var corr = (ball1.radius + ball2.radius - d) / 2.0;
+    var v1 = ball1.vel.dot(dir);
+    var v2 = ball2.vel.dot(dir);
+    var m1 = ball1.mass;
+    var m2 = ball2.mass;
+    var newV1 = (m1 * v1 + m2 * v2 - m2 * (v1 - v2) * physProps.ballRest) / (m1 + m2);
+    var newV2 = (m1 * v1 + m2 * v2 - m1 * (v2 - v1) * physProps.ballRest) / (m1 + m2);
+
+    ball1.pos.add(dir, -corr);
+    ball2.pos.add(dir, corr);
+    ball1.vel.add(dir, newV1 - v1);
+    ball2.vel.add(dir, newV2 - v2);
+
+    ++ballHits;
+}
+//  ROVER HITS --------------------------------------------------------------------
+function handleRoverHits(ball1, rover)
+{
+    ++ballChks;
+    var dir = new Vector2();
+    dir.subtractVectors(rover.pos, ball1.pos);
+    var d = dir.length();
+    if (d == 0 || d > ball1.radius + rover.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    var corr = (ball1.radius + rover.radius - d);
+    var v1 = ball1.vel.dot(dir);
+    var v2 = rover.vel.dot(dir);
+    var m1 = ball1.mass;
+    var m2 = rover.mass;
+    var newV1 = (m1 * v1  +  m2 * v2 -  m2 * (v1 - v2) * physProps.ballRest) / (m1 + m2);
+
+    ball1.pos.add(dir, -corr);
+    ball1.vel.add(dir, newV1 - v1);
+
+    ++ballHits;
+}
+//  GHOST HITS --------------------------------------------------------------------
+function handleGhostHits(ball1, ghost)
+{
+    ++ballChks;
+    var dir = new Vector2();
+    dir.subtractVectors(ghost.pos, ball1.pos);
+    var d = dir.length();
+    if (d == 0 || d > ball1.radius + ghost.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    var corr = (ball1.radius + ghost.radius - d);
+    var v1 = ball1.vel.dot(dir);
+    var v2 = ghost.vel.dot(dir);
+    var m1 = ball1.mass;
+    var m2 = Math.PI * ghost.radius * ghost.radius;
+    var newV1 = (m1 * v1  +  m2 * v2 -  m2 * (v1 - v2) * physProps.ballRest) / (m1 + m2);
+
+    ball1.pos.add(dir, -corr);
+    ball1.vel.add(dir, newV1 - v1);
+
+    ++ballHits;
+}
+//  BALL TO FAN HITS ---------------------------------------------------------------
+function handleFanHits(ball1, fan)
+{
+    ++ballChks;
+    var dir = new Vector2();
+    dir.subtractVectors(fan.pos, ball1.pos);
+    var d = dir.length();
+    if (d == 0.0 || d > ball1.radius + fan.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    var corr = ball1.radius + fan.radius - d;
+    var v1 = ball1.vel.dot(dir);
+    var v2 = fan.vel.dot(dir);
+    var m1 = ball1.mass;
+    var m2 = fan.mass;
+    var newV1 = (m1 * v1 + m2 * v2 - m2 * (v1 - v2) * physProps.fanRest) / (m1 + m2);
+    
+    ball1.pos.add(dir, -corr);
+    ball1.vel.add(dir, newV1 - v1);
+
+    ++ballHits;
+}
+//  BALL TO STRUT HUB HITS ---------------------------------------------------------------
+function handleStrutHubHits(ball1, strut)
+{
+    ++ballChks;
+    var dir = new Vector2();
+    dir.subtractVectors(ball1.pos, strut.pos);
+    var d = dir.length();
+    if (d == 0.0 || d > ball1.radius + 5 * strut.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    var corr = (ball1.radius + 5 * strut.radius - d) / 2.0;
+    var v = ball1.vel.dot(dir);
+    ball1.pos.add(dir, corr);
+    ball1.vel.add(dir, v * -2.0 * physProps.bumperRest);
+
+    ++ballHits;
+}
+//  BALL TO STRUT HITS ------DOES NOT WORK---------------------------------------------------------
+function handleStrutHits(ball1, strut) 
+{
+    var closest = closestPointOnSegment(ball1.pos, strut.pos, strut.getTip1());
+    var dir = new Vector2();
+    dir.subtractVectors(ball1.pos, closest);
+    var d = dir.length();
+    if (d == 0.0 || d > ball1.radius + strut.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    var corr = (ball1.radius + strut.radius - d);
+    ball1.pos.add(dir, corr);
+    var radius = closest.clone();
+    radius.add(dir, strut.radius);
+    radius.subtract(strut.pos);
+    var surfaceVel = radius.perp();
+    surfaceVel.scale(strut.currentAngularVelocity);
+    var v = ball1.vel.dot(dir);
+    var vnew = surfaceVel.dot(dir);
+
+    ball1.vel.add(dir, vnew - v);
+}
+//  FAN1 TO ROVER HITS ---------------------------------------------------------------
+function handleFanRoverHits(rover, fan)
+{
+    ++puckChks;
+    var dir = new Vector2();
+    dir.subtractVectors(rover.pos, fan.pos);
+    var d = dir.length();
+    if (d == 0.0 || d > rover.radius + fan.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    var corr = (rover.radius + fan.radius - d) / 2.0;
+    var v = rover.vel.dot(dir);
+
+    rover.pos.add(dir, corr);
+    rover.vel.add(dir, v * -2.0 * physProps.roverRest);
+
+    ++puckHits;
+}
+//  BUMPER HITS ------------------------------------------------------------------- 
+function handleBumperHits(ball, bumper) 
+{
+    ++bumperChks;
+    var dir = new Vector2();
+    dir.subtractVectors(ball.pos, bumper.pos);
+    var d = dir.length();
+    if (d == 0.0 || d > ball.radius + bumper.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    var corr = (ball.radius + bumper.radius - d) / 2.0;
+    var v = ball.vel.dot(dir);
+    ball.pos.add(dir, corr);
+    ball.vel.add(dir, v * -2.0 * physProps.bumperRest);
+
+    ++bumperHits;
+}
+//  FLOOR BUMPER HITS ------------------------------------------------------------------- 
+function handleFloorBumperHits(ball, floorBumper) 
+{
+    ++bumperChks;
+    var dir = new Vector2();
+    dir.subtractVectors(ball.pos, floorBumper.pos);
+    var d = dir.length();
+    if (d == 0.0 || d > ball.radius + floorBumper.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    var corr = (ball.radius + floorBumper.radius - d) / 2.0;
+    var v = ball.vel.dot(dir);
+
+    ball.pos.add(dir, corr);
+    ball.vel.add(dir, v * -2.0 * physProps.floorBumperRest);
+
+    ++bumperHits;
+}
+//  PUCK TO BALL HITS  -------------------------------------------------------------------- 
+function handlePuckHits(ball, puck) 
+{
+    ++puckChks;
+    var dir = new Vector2();
+    dir.subtractVectors(ball.pos, puck.pos);
+    var d = dir.length();
+    if (d == 0.0 || d > ball.radius + puck.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    var corr = (ball.radius + puck.radius - d) / 2.0;
+    var v = ball.vel.dot(dir);
+
+    ball.pos.add(dir, corr);
+    ball.vel.add(dir, v * -2.0 * physProps.puckRest);
+
+    ++puckHits;
+}
+//  PUCK TO ROVER HITS  -------------------------------------------------------------------- 
+function handlePuckRoverHits(rover, puck) {
+    ++puckChks;
+    var dir = new Vector2();
+    dir.subtractVectors(rover.pos, puck.pos);
+    var d = dir.length();
+    if (d == 0.0 || d > rover.radius + puck.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    var corr = (rover.radius + puck.radius - d) / 2.0;
+    var v = rover.vel.dot(dir);
+
+    rover.pos.add(dir, corr);
+    rover.vel.add(dir, v * -2.0 * physProps.roverRest);
+
+    ++puckHits;
+}
+//  HANDLE SHOWER  -------------------------------------------------------------------- 
+function goShower(ball) {
+    ball.pos.y = simHeight + ball.radius + 30 * Math.random() * ball.radius;
+    ball.pos.x = dumpShift + ((Math.random() * simWidth * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simWidth * dumpSqueeze);
+    ball.vel.x = dumpBlowSlider.value / 40;
+    ball.vel.y = 0;
+    if (-1 + Math.random() + pearlSlider.value / 100 > 0) {
+        if (lightnessSlider.value > 50) {
+            ball.color = `hsl(0, 0%, 50%)`;
+            ball.hiColor = `hsl(0, 0%, 100%)`;
+        }
+        if (lightnessSlider.value < 50) {
+            ball.color = `hsl(0, 0%, 10%)`;
+            ball.hiColor = `hsl(0, 0%, 10%)`;
+            }
+        } else {
+            ball.color = `hsla(${huePos}, ${hueSaturation}%, 20%, 80%)`;
+            ball.hiColor = `hsla(${huePos}, ${hueSaturation}%, ${ballLightness}%, 80%)`;
+    }
+}
+//  HANDLE UPFLOW  ------------------------------------------------------------------------
+function goShowerUp(ball) {
+    ball.pos.y = -1 * (simHeight + ball.radius + (30 * Math.random() * ball.radius));
+    ball.pos.x = dumpShift + ((Math.random() * simWidth * dumpSqueeze) + ((1.0 / (2 * dumpSqueeze)) - 0.5) * simWidth * dumpSqueeze);
+    ball.vel.x = dumpBlowSlider.value / 40;
+    ball.vel.y = 0;
+    if (-1 + Math.random() + pearlSlider.value / 100 > 0) {
+        ball.color = `hsl(0, 0%, 50%)`;
+        ball.hiColor = `hsl(0, 0%, 100%)`;  
+    } else {
+        ball.color = `hsl(${huePos}, ${hueSaturation}%, 20%)`;
+        ball.hiColor = `hsl(${huePos}, ${hueSaturation}%, ${ballLightness}%)`;
+    }
+}
+//  HANDLE MR. MISTER  --------------------------------------------------------------------
+function goFountain(ball) {
+    var hP = Mistermister[0];
+    ball.pos.x = hP.pos.x - (0.5 * simWidth * dumpSqueeze2/10) + (Math.random() * simWidth * dumpSqueeze2/10);
+    ball.pos.y = hP.pos.y - 0.45 * hP.radius - (0.5 * simWidth * dumpSqueeze2/10) + (Math.random() * simWidth * dumpSqueeze2/10);
+    ball.vel.x = velX;
+    ball.vel.y = velY;
+    if (-1 + Math.random() + pearlSlider.value / 100 > 0) {
+        ball.color = `hsl(0, 0%, 50%)`;
+        ball.hiColor = `hsl(0, 0%, 100%)`;  
+        } else {
+            ball.color = `hsl(${huePos}, ${hueSaturation}%, 20%)`;
+            ball.hiColor = `hsl(${huePos}, ${hueSaturation}%, ${ballLightness}%)`;
+        }
+}
+//  HANDLE DUELING FOUNTAINS  -------------------------------------------------------------
+function goDuelingFountains(ball) {
+    var hP = Mistermister[0];
+    if (spawnLeft == true) {
+        ball.pos.x = hP.pos.x - (0.5 * simWidth * dumpSqueeze2/10) + (Math.random() * simWidth * dumpSqueeze2/10);
+        ball.pos.y = hP.pos.y - 0.45 * hP.radius - (0.5 * simWidth * dumpSqueeze2/10) + (Math.random() * simWidth * dumpSqueeze2/10);
+        ball.vel.x = velX;
+        ball.vel.y = velY;
+        ball.color = `hsl(${huePos}, ${hueSaturation}%, 20%)`;
+        ball.hiColor = `hsl(${huePos}, ${hueSaturation}%, ${ballLightness}%)`;           
+        spawnLeft = false
+    } else {
+        ball.pos.x = simWidth - (hP.pos.x - (0.5 * simWidth * dumpSqueeze2/10) + (Math.random() * simWidth * dumpSqueeze2/10));
+        ball.pos.y = hP.pos.y - 0.45 * hP.radius - (0.5 * simWidth * dumpSqueeze2/10) + (Math.random() * simWidth * dumpSqueeze2/10);
+        ball.vel.x = -velX;
+        ball.vel.y = velY;
+        ball.color = `hsl(${huePos + 120}, ${hueSaturation}%, 20%)`;
+        ball.hiColor = `hsl(${huePos + 120}, ${hueSaturation}%, ${ballLightness}%)`;           
+        spawnLeft = true
+    }
+}
+//  HUNGRY PUCK HITS  --------------------------------------------------------------------
+function handleHungryPuckHits(ball, hungryPuck) 
+{
+    ++puckChks;
+    var dir = new Vector2();
+    dir.subtractVectors(ball.pos, hungryPuck.pos);
+    var d = dir.length();
+    if (d == 0.0 || d > ball.radius + hungryPuck.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    // FOUNTAIN AND SWEEPER SETUP FOR HUNGRY PUCK--------------------------------------------------
+    sprinklerSpeed = sprinklerSpeedSlider.value / 5000;
+    if (fountainModeSlider.value > 0 || fountainModeSlider.value < 0) {
+        sweepAngle = 2*Math.PI;
+        alpha += sprinklerSpeed * -fountainModeSlider.value * physProps.dt;
+        if (alpha > 2*Math.PI || alpha < -2*Math.PI) {
+            alpha = 0
+        }
+    } else {
+        sweepAngle = fountainSpreadSlider.value / 100 * Math.PI;
+        alpha += sprinklerSpeed * sweepDir * physProps.dt;
+        if (alpha > (sweepAngle * 1.01) || alpha < (-sweepAngle * 1.01)) { // small chance of stalling
+            alpha = 0
+        }
+        if (alpha > sweepAngle || alpha < -sweepAngle) {
+            sweepDir *= -1;
+        }
+    }
+    // HANDLE SHOWER AND FOUNTAIN FOR HUNGRY PUCK -------------------------------------------------------------  
+    if (colorRateSlider.value > 0) {
+        huePos += physProps.dt * colorRateSlider.value / 1000;
+        if (huePos > 360) {huePos = 0}
+    } else { 
+        huePos = huePickSlider.value / 1;
+    }
+    if (huePos > 360) {
+        huePos = 0}
+    if (-1 + Math.random() + colorChanceSlider.value / 100 < 0) {
+        hueSaturation = 0
+    }
+    if (-1 + Math.random() + colorMixSlider.value / 20 < 0) {
+        huePos += 120
+    }
+    if (oneShotButton.checked == false) {
+        if (shower.checked == true) {
+        ++wallChks;
+        goShower(ball); 
+        ++ballDrops;
+        }
+        if (showerUp.checked == true) {
+            ++wallChks; 
+            goShowerUp(ball);
+            ++ballDrops;   
+        }
+        dir = -respawnDirSlider.value / 100;
+        velX = yeetSlider.value / 100 * Math.cos(dir + alpha);
+        velY = yeetSlider.value / 100 * Math.sin(dir + alpha);
+        if (fountain.checked == true) {
+            ++wallChks;
+            goFountain(ball);
+            ++ballDrops;
+        }
+        if (duelingFountains.checked == true) {
+            ++wallChks;
+            goDuelingFountains(ball);
+            ++ballDrops;
+        }
+    }
+}
+
+//  PAC-MAN HITS  --------------------------------------------------------------------
+function handlePacmanHits(ball, pacman) 
+{
+    ++puckChks;
+    var dir = new Vector2();
+    dir.subtractVectors(ball.pos, pacman.pos);
+    var d = dir.length();
+    if (d == 0.0 || d > -2 * ball.radius + pacman.radius)
+        return;
+
+    dir.scale(1.0 / d);
+    // FOUNTAIN AND SWEEPER SETUP FOR PAC-MAN --------------------------------------------------
+    sprinklerSpeed = sprinklerSpeedSlider.value / 5000;
+    if (fountainModeSlider.value > 0 || fountainModeSlider.value < 0) {
+        sweepAngle = 2*Math.PI;
+        alpha += sprinklerSpeed * -fountainModeSlider.value * physProps.dt;
+        if (alpha > 2*Math.PI || alpha < -2*Math.PI) {
+            alpha = 0
+        }
+    } else {
+        sweepAngle = fountainSpreadSlider.value / 100 * Math.PI;
+        alpha += sprinklerSpeed * sweepDir * physProps.dt;
+        if (alpha > (sweepAngle * 1.01) || alpha < (-sweepAngle * 1.01)) { // small chance of stalling
+            alpha = 0
+        }
+        if (alpha > sweepAngle || alpha < -sweepAngle) {
+            sweepDir *= -1;
+        }
+    }
+    // HANDLE SHOWER AND FOUNTAIN FOR PAC=MAN -------------------------------------------------------------  
+    if (colorRateSlider.value > 0) {
+        huePos += physProps.dt * colorRateSlider.value / 1000;
+        if (huePos > 360) {huePos = 0}
+    } else { 
+        huePos = huePickSlider.value / 1;
+    }
+    if (huePos > 360) {
+        huePos = 0}
+    if (-1 + Math.random() + colorChanceSlider.value / 100 < 0) {
+        hueSaturation = 0
+    }
+    if (-1 + Math.random() + colorMixSlider.value / 20 < 0) {
+        huePos += 120
+    }
+    if (oneShotButton.checked == false) {
+        if (shower.checked == true) {
+        ++wallChks;
+        goShower(ball); 
+        ++ballDrops;
+        }
+        if (showerUp.checked == true) {
+            ++wallChks; 
+            goShowerUp(ball);
+            ++ballDrops;   
+        }
+        dir = -respawnDirSlider.value / 100;
+        velX = yeetSlider.value / 100 * Math.cos(dir + alpha);
+        velY = yeetSlider.value / 100 * Math.sin(dir + alpha);
+        if (fountain.checked == true) {
+            ++wallChks;
+            goFountain(ball);
+            ++ballDrops;
+        }
+        if (duelingFountains.checked == true) {
+            ++wallChks;
+            goDuelingFountains(ball);
+            ++ballDrops;
+        }
+    }
+}
+
+//  HANDLE BOUNDARIES = FLOOR, WALLS, CEILING -------------------------------------------------------
+function handleOutOfBounds(ball, worldSize) 
+{
+    dumpSqueeze = dumpSlider.value / 100;
+    dumpSqueeze2 = dumpSlider2.value / 100;
+    dumpShift = dumpMoveSlider.value / 100 * simWidth;
+    sprinklerSpeed = sprinklerSpeedSlider.value / 5000;
+    // FOUNTAIN AND SWEEPER SETUP ----------------------------------------------------
+    if (fountainModeSlider.value > 0 || fountainModeSlider.value < 0) {
+        sweepAngle = 2*Math.PI;
+        alpha += sprinklerSpeed * -fountainModeSlider.value * physProps.dt;
+        if (alpha > 2*Math.PI || alpha < -2*Math.PI) {
+            alpha = 0
+        }
+    } else {
+        sweepAngle = fountainSpreadSlider.value / 100 * Math.PI;
+        alpha += sprinklerSpeed * sweepDir * physProps.dt;
+        if (alpha > (sweepAngle * 1.01) || alpha < (-sweepAngle * 1.01)) { // small chance of stalling
+            alpha = 0
+        }
+        if (alpha > sweepAngle || alpha < -sweepAngle) {
+            sweepDir *= -1;
+        }
+    }
+    // HANDLE WALL BOUNCES ------------------------------------------------------------  
+    if (ceilingButton.checked == true) {
+        if (ball.pos.y > worldSize.y - ball.radius) {
+            ball.pos.y = worldSize.y - ball.radius;
+            ball.vel.y = -ball.vel.y * physProps.ceilingRest;
+            ++wallChks;
+            ++wallHits
+        }
+    }
+    if (floorButton.checked == true) {
+        if (ball.pos.y < ball.radius) {
+            ball.pos.y = ball.radius;
+            ball.vel.y = -ball.vel.y * physProps.floorRest;
+            ++wallChks;
+            ++wallHits
+            }
+    }
+    if (leftWallButton.checked == true) {
+        if (ball.pos.x < ball.radius) {
+            ball.pos.x = ball.radius;
+            ball.vel.x = -ball.vel.x * physProps.wallRest;
+            ++wallChks;
+            ++wallHits
+        }
+    }
+    if (rightWallButton.checked == true) {
+        if (ball.pos.x > worldSize.x - ball.radius) {
+            ball.pos.x = worldSize.x - ball.radius;
+            ball.vel.x = -ball.vel.x * physProps.wallRest;
+            ++wallChks;
+            ++wallHits 
+        }  
+    }
+    // HANDLE SHOWER AND FOUNTAIN -------------------------------------------------------------  
+    hueSaturation = (20  + Math.random() * 80) * saturationSlider.value / 100;
+    ballLightness = lightnessSlider.value / 1;
+    dumpShift = dumpMoveSlider.value / 100 * simWidth;
+    if (colorRateSlider.value > 0) {
+        huePos += physProps.dt * colorRateSlider.value / 1000;
+        if (huePos > 360) {huePos = 0}
+    } else { 
+        huePos = huePickSlider.value / 1;
+    }
+    if (huePos > 360) {
+        huePos = 0;
+    }
+    if (-1 + Math.random() + colorChanceSlider.value / 100 < 0) {
+        hueSaturation = 0;
+    }
+    if (-1 + Math.random() + colorMixSlider.value / 20 < 0) {
+        huePos += 120;
+    }
+    if (oneShotButton.checked == false) {
+        if (shower.checked == true) {
+        ++wallChks; 
+            if (ball.pos.y < -2.0 * ball.radius || ball.pos.x < -1.5 * simWidth || ball.pos.x > 1.5 * simWidth) {
+                goShower(ball);
+            }
+        }
+        if (showerUp.checked == true) {
+            ++wallChks; 
+            if (ball.pos.y > 2.0 * ball.radius + simHeight || ball.pos.x < -1.5 * simWidth || ball.pos.x > 1.5 * simWidth) {
+                goShowerUp(ball);
+            }
+        }
+    }
+    dir = -respawnDirSlider.value / 100;
+    velX = yeetSlider.value / 100 * Math.cos(dir + alpha);
+    velY = yeetSlider.value / 100 * Math.sin(dir + alpha);
+    if (fountain.checked == true) {
+        ++wallChks;
+        if (ball.pos.y < -simHeight || ball.pos.x < -0.5 * simWidth || ball.pos.x > 1.5 * simWidth) {
+            goFountain(ball);
+            ++ballDrops;
+        }
+    }
+    if (duelingFountains.checked == true) {
+        ++wallChks;
+        if (ball.pos.y < -simHeight || ball.pos.x < -0.5 * simWidth || ball.pos.x > 1.5 * simWidth) {
+            goDuelingFountains(ball);
+            ++ballDrops;
+        }
+    }
+    // HANDLE RAMP BOUNCE ----------------------------------------------------------------  
+    if (rampButton.checked == true ) {
+        ramp = Ramp[0];
+        if (ramp.rampSlope > 0) {
+            ++wallChks;
+            if (ball.pos.x > 0 && ball.pos.x < simWidth && ball.pos.y < ((ball.pos.x / simWidth) * ramp.rampSlope * simWidth + ball.radius)) {
+                ball.pos.y = (ball.pos.x / simWidth) * ramp.rampSlope * simWidth + ball.radius;
+                ball.vel.x = ball.vel.x + ball.vel.y * ramp.rampSine * physProps.rampRest;
+                ball.vel.y = -ball.vel.y * ramp.rampCosine * physProps.rampRest;
+                ++wallHits
+            } else {
+            ++wallChks;
+                if (ball.pos.x > 0 && ball.pos.x < simWidth && ball.pos.y < (ramp.rampHeight + ball.radius + ((ball.pos.x / simWidth) * ramp.rampSlope * simWidth))) {
+                    ball.pos.y = (ramp.rampHeight + ball.radius + ((ball.pos.x / simWidth) * ramp.rampSlope * simWidth));
+                    ball.vel.x = ball.vel.x - ball.vel.y * ramp.rampSine * physProps.rampRest;
+                    ball.vel.y = -ball.vel.y * ramp.rampCosine * physProps.rampRest;
+                    ++wallHits
+                }
+            }
+        }
+    }
+}
+
+// HANDLE ROVER BOUNDS ------------------------------------------------------------  
+function handleRoverOutOfBounds (rover, worldSize) 
+{
+    ++wallChks;
+    rover = Rover[0];
+    if (rampButton.checked == false) {
+        if (rover.pos.y > worldSize.y - rover.radius) {
+            rover.pos.y = worldSize.y - rover.radius;
+            rover.vel.y = -rover.vel.y * physProps.roverRest;
+            ++wallHits
+        }
+        if (rover.pos.y < rover.radius) {
+            rover.pos.y = rover.radius;
+            rover.vel.y = -rover.vel.y * physProps.roverRest;
+            ++wallHits
+        }
+        if (rover.pos.x < rover.radius) {
+            rover.pos.x = rover.radius;
+            rover.vel.x = -rover.vel.x * physProps.roverRest;
+            ++wallHits
+        }
+        if (rover.pos.x > worldSize.x - rover.radius) {
+            rover.pos.x = worldSize.x - rover.radius;
+            rover.vel.x = -rover.vel.x * physProps.roverRest;
+            ++wallHits 
+        }
+    }
+    if (rampButton.checked == true && rampSlope > 0) {
+        ++wallChks;
+        if (rover.pos.x > 0 && rover.pos.x < simWidth && rover.pos.y < ((rover.pos.x / simWidth) * rampSlope * simWidth + rover.radius)) {
+            rover.pos.y = (rover.pos.x / simWidth) * rampSlope * simWidth + rover.radius;
+            rover.vel.x = rover.vel.x + rover.vel.y * rampSine * physProps.roverRest;
+            rover.vel.y = -rover.vel.y * rampCoine * physProps.roverRest;
+            ++wallHits
+        }
+        if (rover.pos.y > worldSize.y - rover.radius) {
+            rover.pos.y = worldSize.y - rover.radius;
+            rover.vel.y = -rover.vel.y * physProps.roverRest;
+            ++wallHits
+        }
+        if (rover.pos.x < rover.radius) {
+            rover.pos.x = rover.radius;
+            rover.vel.x = -rover.vel.x * physProps.roverRest;
+            ++wallHits
+        }
+        if (rover.pos.x > worldSize.x - rover.radius) {
+            rover.pos.x = worldSize.x - rover.radius;
+            rover.vel.x = -rover.vel.x * physProps.roverRest;
+            ++wallHits 
+        }
+    }
+    if (rampButton.checked == true && rampSlope < 0) {
+        ++wallChks;
+        if (rover.pos.x > 0 && rover.pos.x < simWidth && rover.pos.y < (physProps.rampHeight + rover.radius + ((rover.pos.x / simWidth) * rampSlope * simWidth))) {
+            rover.pos.y = (physProps.rampHeight + rover.radius + ((rover.pos.x / simWidth) * rampSlope * simWidth));
+            rover.vel.x = rover.vel.x - rover.vel.y * rampSine * physProps.roverRest;
+            rover.vel.y = -rover.vel.y * rampCoine * physProps.roverRest;
+            ++wallHits
+        }
+        if (rover.pos.y > worldSize.y - rover.radius) {
+            rover.pos.y = worldSize.y - rover.radius;
+            rover.vel.y = -rover.vel.y * physProps.roverRest;
+            ++wallHits
+        }
+        if (rover.pos.x < rover.radius) {
+            rover.pos.x = rover.radius;
+            rover.vel.x = -rover.vel.x * physProps.roverRest;
+            ++wallHits
+        }
+        if (rover.pos.x > worldSize.x - rover.radius) {
+            rover.pos.x = worldSize.x - rover.radius;
+            rover.vel.x = -rover.vel.x * physProps.roverRest;
+            ++wallHits 
+        }
+    }
+}
+
+// HANDLE MR. MISTER BOUNDS ------------------------------------------------------------  
+function handleMrMrBounds(hungryPuck, worldSize) 
+{
+    ++wallChks;
+    mrMr = Mistermister[0];
+    if (rampButton.checked == false) {
+        if (mrMr.pos.y > worldSize.y - mrMr.radius) {
+            mrMr.pos.y = worldSize.y - mrMr.radius;
+            mrMr.vel.y = -mrMr.vel.y;
+            ++wallHits
+        }
+        if (mrMr.pos.y < mrMr.radius) {
+            mrMr.pos.y = mrMr.radius;
+            mrMr.vel.y = -mrMr.vel.y;
+            ++wallHits
+        }
+        if (mrMr.pos.x < mrMr.radius) {
+            mrMr.pos.x = mrMr.radius;
+            mrMr.vel.x = -mrMr.vel.x;
+            ++wallHits
+        }
+        if (mrMr.pos.x > worldSize.x - mrMr.radius) {
+            mrMr.pos.x = worldSize.x - mrMr.radius;
+            mrMr.vel.x = -mrMr.vel.x;
+            ++wallHits 
+        }
+    }
+    if (rampButton.checked == true && rampSlope > 0) {
+        ++wallChks;
+        if (mrMr.pos.x > 0 && mrMr.pos.x < simWidth && mrMr.pos.y < ((mrMr.pos.x / simWidth) * rampSlope * simWidth + mrMr.radius)) {
+            mrMr.pos.y = (mrMr.pos.x / simWidth) * rampSlope * simWidth + mrMr.radius;
+            mrMr.vel.x = mrMr.vel.x + mrMr.vel.y * rampSine * 1;
+            mrMr.vel.y = -mrMr.vel.y * rampCoine;
+            ++wallHits
+        }
+        if (mrMr.pos.y > worldSize.y - mrMr.radius) {
+            mrMr.pos.y = worldSize.y - mrMr.radius;
+            mrMr.vel.y = -mrMr.vel.y;
+            ++wallHits
+        }
+        if (mrMr.pos.x < mrMr.radius) {
+            mrMr.pos.x = mrMr.radius;
+            mrMr.vel.x = -mrMr.vel.x;
+            ++wallHits
+        }
+        if (mrMr.pos.x > worldSize.x - mrMr.radius) {
+            mrMr.pos.x = worldSize.x - mrMr.radius;
+            mrMr.vel.x = -mrMr.vel.x;
+            ++wallHits 
+        }
+    }
+    if (rampButton.checked == true && rampSlope < 0) {
+        ++wallChks;
+        if (mrMr.pos.x > 0 && mrMr.pos.x < simWidth && mrMr.pos.y < (physProps.rampHeight + mrMr.radius + ((mrMr.pos.x / simWidth) * rampSlope * simWidth))) {
+            mrMr.pos.y = (physProps.rampHeight + mrMr.radius + ((mrMr.pos.x / simWidth) * rampSlope * simWidth));
+            mrMr.vel.x = mrMr.vel.x - mrMr.vel.y * rampSine * 1;
+            mrMr.vel.y = -mrMr.vel.y * rampCoine * 1;
+            ++wallHits
+        }
+        if (mrMr.pos.y > worldSize.y - mrMr.radius) {
+            mrMr.pos.y = worldSize.y - mrMr.radius;
+            mrMr.vel.y = -mrMr.vel.y * 1;
+            ++wallHits
+        }
+        if (mrMr.pos.x < mrMr.radius) {
+            mrMr.pos.x = mrMr.radius;
+            mrMr.vel.x = -mrMr.vel.x * 1;
+            ++wallHits
+        }
+        if (mrMr.pos.x > worldSize.x - mrMr.radius) {
+            mrMr.pos.x = worldSize.x - mrMr.radius;
+            mrMr.vel.x = -mrMr.vel.x * 1;
+            ++wallHits 
+        }
+    }
+}
+
+//  SIMULATION --------------------------------------------------------------------------
+function simulate() 
+{
+    if (physProps.paused)
+        return;	
+
+    // ANIMATE SCENE OBJECTS  ---------------------------------
+
+    //  CLOCK  ------------------------------------------------
+    if (clockButton.checked == true || pacMan.checked == true) {
+        currentDate = new Date();
+        mSecs = currentDate.getMilliseconds();
+        var clock = Clock[0];
+        clock.simulate();
+    }
+    //  STRUT  ------------------------------------------------
+    if (showStrutButton.checked == true) {
+        var strut = Strut[0];
+        strut.simulate();
+    }
+    //  ROVER  -----------------------------------------------
+    if (roverButton.checked == true) {
+        var rover = Rover[0];
+        rover.simulate();
+    }
+    //  MR. & MRS. MISTER  ----------------------------------
+    if (fountain.checked == true || misterMode.value == 'pendulum') {
+        var pendulum = Pendulum[0];
+        pendulum.simulate();
+    }
+    if (duelingFountains.checked == true || misterMode.value == 'pendulum') {
+        var pendulum = Pendulum[0];
+        pendulum.simulate();
+    }
+    if (fountain.checked == true || duelingFountains.checked == true) {
+        var mrMr = Mistermister[0];
+        mrMr.simulate();
+    }
+    //  FAN 1  --------------------------------------------
+    if (fan1Button.checked == true) {
+        skipHubResize = false;
+        for (s=0; s < Fan1.length; s++) {
+            var fan = Fan1[s];
+            if (s == Fan1.length - 1) {skipHubResize = true}
+            fan.simulate(skipHubResize, s);
+        }
+    }
+    //  FAN 2  -------------------------------------------
+    if (fan2Button.checked == true) {
+        skipHubResize = false;
+        for (s=0; s < Fan2.length; s++) {
+            var fan2 = Fan2[s];
+            if (s == Fan2.length - 1) {skipHubResize = true}
+            fan2.simulate(skipHubResize, s);
+        }
+    }
+    //  PAC-MAN & GHOST ---------------------------------
+    if (pacMan.checked == true) {
+        var pacman = Pacman[0];
+        pacman.simulate();
+
+        var ghost = Ghost[0];
+        ghost.simulate();
+    }
+    //  WIND -------------------------------------------
+    if (windButton.checked == true) {
+        physProps.gravity.x += (windChangeRateSlider.value / 100) * (0.5 * (-0.5 + Math.random()));
+        if (physProps.gravity.x > windSpeedSlider.value / 10) {physProps.gravity.x = 0}
+        if (physProps.gravity.x < -windSpeedSlider.value / 10) {physProps.gravity.x = 0}
+    }
+    //  SHIMMY  ---------------------------------------
+    if (shimmyButton.checked == true) {
+        physProps.gravity.x += (windChangeRateSlider.value / 100) * windLeft;
+        if (physProps.gravity.x < -windSpeedSlider.value / 10) {
+            windLeft *= -1
+        }
+        if (physProps.gravity.x > windSpeedSlider.value / 10) {
+            windLeft *= -1
+        }
+    }
+    //  TARGET  ---------------------------------------
+    //(if something) {
+    target = Target[0];
+    target.simulate();
+    //}
+    //  PADDLE  ---------------------------------------
+    if (pong.checked == true) {
+        paddle = Paddle[0];
+        paddle.simulate();
+    }
+    //  RAMP  -----------------------------------------
+    if (rampButton.checked == true) {
+        ramp = Ramp[0];
+        ramp.simulate();
+    }
+    //  BALLS
+    var sortedBalls = Balls.sort((a, b) => a.left - b.left);     
+    for (i = 0; i < Balls.length; i++) {
+        var ball1 = sortedBalls[i];
+        ball1.simulate();    
+        
+    // COLLISSION DETECTION START -----------------------------
+        
+        // FAN1 TO ROVER HITS
+        //if (fan1Button.checked == true && roverButton.checked == true) {
+        //    for (s=0; s < Fan1.length; s++) {
+        //        var fan = Fan1[s];
+        //        handleFanRoverHits(rover, fan)
+        //    }
+        //}
+
+        // FAN2 TO ROVER HITS
+        //if (fan2Button.checked == true && roverButton.checked == true) {
+        //    for (s=0; s < Fan2.length; s++) {
+        //        var fan = Fan2[s];
+        //        handleFanRoverHits(rover, fan)
+        //    }
+        //}
+
+        for (j = i + 1; j < Balls.length; j++) {
+            var ball2 = sortedBalls[j];   
+            
+            if (ball2.left > ball1.right) {
+                break;
+            }     
+            if (Math.abs(ball1.pos.y - ball2.pos.y) <= ball1.radius + ball2.radius) {
+                handleBallHits(ball1, ball2);
+            }
+        }
+        if (showBumperEntry.checked == true) { 
+            lowestBumper = Bumpers[0];
+            highestBumper = Bumpers[Bumpers.length - 1];
+            arrayBottom = lowestBumper.pos.y - lowestBumper.radius;
+            arrayTop = highestBumper.pos.y + highestBumper.radius;
+
+            if (ball1.bottom <= arrayTop && ball1.top >= arrayBottom) {
+                var sortedBumpers = Bumpers.sort((a, b) => a.left - b.left);
+                for (k = 0; k < Bumpers.length; k++) {
+                    var bumper = sortedBumpers[k];
+                    if (bumper.left > ball1.right) {
+                        break;
+                    }
+                    if (Math.abs(ball1.pos.y - bumper.pos.y) <= ball1.radius + bumper.radius) {
+                        handleBumperHits(ball1, bumper)
+                    }
+                }
+            } 
+        }
+        if (showFloorBumperEntry.checked == true) { 
+            var floorBumper = Floorbumper[0];
+            if (ball1.bottom <= floorBumper.top) {
+                handleFloorBumperHits(ball1, floorBumper)
+            }
+        }
+        if (pong.checked == true) {
+            var paddle = Paddle[0];
+            if (ball1.bottom <= paddle.pos.y + paddle.radius) {
+                if (ball1.pos.x < paddle.right && ball1.pos.x > paddle.left) {
+                    ball1.vel.y = -ball1.vel.y;
+                } 
+            }
+        }
+        if (showHungryPuckButton.checked == true) {
+            var hungryPuck = Hungrypuck[0];
+            if (hungryPuck.right > ball1.left) {
+                if (Math.abs(ball1.pos.y - hungryPuck.pos.y) <= ball1.radius + hungryPuck.radius) {
+                    handleHungryPuckHits(ball1, hungryPuck)
+                }
+            }
+            var hungryPuck = Hungrypuck[1];
+            if (hungryPuck.right > ball1.left) {
+                if (Math.abs(ball1.pos.y - hungryPuck.pos.y) <= ball1.radius + hungryPuck.radius) {
+                    handleHungryPuckHits(ball1, hungryPuck)
+                }
+            }
+        } 
+        if (pacMan.checked == true) {
+            var pacman = Pacman[0];
+            if (pacman.right > ball1.left) {
+                if (Math.abs(ball1.pos.y - pacman.pos.y) <= -2 * ball1.radius + pacman.radius) {
+                    handlePacmanHits(ball1, pacman)
+                }
+            }
+        } 
+        if (showPuckButton.checked == true) {
+            for (p=0; p < Puck.length; p++) {
+                var puck = Puck[p];
+                if (puck.right > ball1.left) {
+                    if (Math.abs(ball1.pos.y - puck.pos.y) <= ball1.radius + puck.radius) {
+                        handlePuckHits(ball1, puck)
+                    }
+                }
+            }     
+        } 
+        if (showPuckButton.checked == true && roverButton.checked == true) {
+            var rover = Rover[0];
+            for (p=0; p < Puck.length; p++) {
+                var puck = Puck[p];
+                if (puck.right > rover.left) {
+                    if (Math.abs(ball1.pos.y - puck.pos.y) <= rover.radius + puck.radius) {
+                        handlePuckRoverHits(rover, puck)
+                    }
+                }
+            }     
+        }
+        if (misterMode.value == "billiard" && showPuckButton.checked == true) {
+            var mrMr = Mistermister[0];
+            for (p=0; p < Puck.length; p++) {
+                var puck = Puck[p];
+                if (puck.right > mrMr.left) {
+                    if (Math.abs(ball1.pos.y - mrMr.pos.y) <= mrMr.radius + puck.radius) {
+                        handlePuckRoverHits(mrMr, puck)
+                    }
+                }
+            }     
+        }
+        if (roverButton.checked == true) {
+            var rover = Rover[0];
+            if (ball1.right > rover.left && ball1.left < rover.right) {
+                if (Math.abs(ball1.pos.y - rover.pos.y) <= ball1.radius + rover.radius) {
+                    handleRoverHits(ball1, rover)
+                }
+            }
+        }
+        if (pacMan.checked == true) {
+            var ghost = Ghost[0];
+            if (ball1.right > ghost.left && ball1.left < ghost.right) {
+                if (Math.abs(ball1.pos.y - ghost.pos.y) <= ball1.radius + ghost.radius) {
+                    handleGhostHits(ball1, ghost)
+                }
+            }
+        }
+        if (fan1Button.checked == true) {
+            for (s=0; s < Fan1.length; s++) {
+                var fan = Fan1[s];
+                if (ball1.right > fan.left && ball1.left < fan.right) {
+                    if (Math.abs(ball1.pos.y - fan.pos.y) <= ball1.radius + fan.radius) {
+                        handleFanHits(ball1, fan)
+                    }
+                }  
+            }
+        }
+        if (fan2Button.checked == true) {
+            for (s=0; s < Fan2.length; s++) {
+                var fan = Fan2[s];
+                if (ball1.right > fan.left && ball1.left < fan.right) {
+                    if (Math.abs(ball1.pos.y - fan.pos.y) <= ball1.radius + fan.radius) {
+                        handleFanHits(ball1, fan)
+                    }
+                }  
+            }
+        }
+        if (showStrutButton.checked == true) {
+            strut = Strut[0];
+            //if (ball1.right > strut.left && ball1.left < strut.right) {
+            //    if (Math.abs(ball1.pos.y - strut.pos.y) <= ball1.radius + 5 * strut.radius) {
+                    handleStrutHubHits(ball1, strut);
+            //    }
+            // }
+        }
+        if (roverButton.checked == true) {
+            handleRoverOutOfBounds(rover, physProps.worldSize);
+        }
+        if (misterMode.value == "billiard") {
+            var hungryPuck = Mistermister[0];
+            handleMrMrBounds(hungryPuck, physProps.worldSize);
+        }
+        handleOutOfBounds(ball1, physProps.worldSize);
+        //handleStrutHits(ball1, strut);
+    }
+}
+
+//  MAIN SEQUENCE ----------------------------------------------------------------------------
+setupScene();
+
+function update() {
+    simulate();
+    drawEverything();
+    requestAnimationFrame(update);
+}
+
+update();
