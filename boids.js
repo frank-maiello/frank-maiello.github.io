@@ -1,5 +1,5 @@
 /*
-B0IDS 1.37 :: autonomous flocking behavior ::
+B0IDS 1.38 :: autonomous flocking behavior ::
 copyright 2025 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -38,6 +38,10 @@ let mainMenuOpacity = 0;
 let mainMenuXOffset = -1.0; // Horizontal animation offset (0 = fully shown, negative = hidden to the left)
 let mainMenuAnimSpeed = 5.0; // Animation speed for sliding
 let mainMenuFadeSpeed = 3.0; // Fade speed (0 to 1 per second)
+let arrowBounceTimer = 0;
+let doArrow = true;
+let arrowStartTime = 0;
+let justStarted = true;
 
 // Store submenu visibility states (saved when main menu is closed)
 let savedSimMenuVisible = true;
@@ -1642,9 +1646,100 @@ class SpatialHashGrid {
     }
 }
 
+//  CREATE SPATIAL GRID  ---------------------------------
 function makeSpatialGrid() {
     // Optimal cell size: visualRange/2 ensures 3x3 cell queries with good boid distribution
     SpatialGrid = new SpatialHashGrid(boidProps.visualRange / 2);
+}
+
+// DEGREES TO RADIANS  ---------------------------------
+function rads(theta) {
+    return theta * Math.PI / 180;
+}
+
+//  DRAW ARROW FUNCTION  ---------------------------------
+function drawArrow(posX, posY, angle, radius, arrowOpacity) {
+// 0 degreees is up, angles rotate counterclockwise
+/*var arrow = {
+    radius: radius,
+    // 1 bottom right
+    //a1cos: Math.cos(rads(281.86) + angle), //0.2055
+    //a1sin: Math.sin(rads(281.86) + angle), //-0.9786
+    a1cos: 0.2055,
+    a1sin: -0.9786,
+    r1: 0.5109,
+    // 2 right inside corner
+    //a2cos: Math.cos(rads(43.6) + angle), //0.7233
+    //a2sin: Math.sin(rads(43.6) + angle), //0.6905
+    a2cos: 0.7233,
+    a2sin: 0.6905,
+    r2: 0.1450,
+    // 3 right tip
+    //a3cos: Math.cos(rads(16.86) + angle), //0.9563
+    //a3sin: Math.sin(rads(16.86) + angle), //0.2924
+    a3cos: 0.9563,
+    a3sin: 0.2924,
+    r3: 0.3448,
+    // 4 top
+    //a4cos: Math.cos(rads(90) + angle), //0
+    //a4sin: Math.sin(rads(90) + angle), //1
+    a4cos: 0.0,
+    a4sin: 1.0,
+    r4: 0.5,
+    // 5 left tip
+    //a5cos: Math.cos(rads(163.14) + angle), //-0.9563
+    //a5sin: Math.sin(rads(163.14) + angle), //0.2924
+    a5cos: -0.9563,
+    a5sin: 0.2924,
+    r5: 0.3448,
+    // 6 left inside corner
+    //a6cos: Math.cos(rads(136.4) + angle), //-0.7233
+    //a6sin: Math.sin(rads(136.4) + angle), //-0.6905
+    a6cos: -0.7233,
+    a6sin: -0.6905,
+    r6: 0.1450,
+    // 7 bottom left
+    //a7cos: Math.cos(rads(258.14) + angle), //-0.2055
+    //a7sin: Math.sin(rads(258.14) + angle), //-0.9786
+    a7cos: -0.2055,
+    a7sin: -0.9786,
+    r7: 0.5109,
+    // 8 bottom center
+    //a8cos: Math.cos(rads(270) + angle), //-1.0
+    //a8sin: Math.sin(rads(270) + angle), //0.0
+    a8cos: -1.0,
+    a8sin: 0.0,
+    r8: 0.5
+    };*/
+
+    c.save();
+    c.translate(posX * cScale, posY * cScale);
+    c.rotate(rads(-angle + 90)); // Rotate to point in the correct direction
+
+    c.beginPath();
+    c.moveTo((radius * 0.5109 * 0.2055) * cScale,
+        (-radius * 0.5109 * -0.9786) * cScale);
+    c.lineTo((radius * 0.1450 * 0.7233) * cScale,
+        (-radius * 0.1450 * 0.6905) * cScale);
+    c.lineTo((radius * 0.3448 * 0.9563) * cScale,
+        (-radius * 0.3448 * 0.2924) * cScale);
+    c.lineTo((radius * 0.5 * 0.0) * cScale,
+        (-radius * 0.5 * 1.0) * cScale);
+    c.lineTo((radius * 0.3448 * -0.9563) * cScale,
+        (-radius * 0.3448 * 0.2924) * cScale);
+    c.lineTo((radius * 0.1450 * -0.7233) * cScale,
+        (radius * 0.1450 * -0.6905) * cScale);
+    c.lineTo((radius * 0.5109 * -0.2055) * cScale,
+        (-radius * 0.5109 * -0.9786) * cScale);
+    c.closePath();
+
+    c.fillStyle = `hsla(210, 50%, 50%, ${arrowOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(0, 0%, 90%, ${arrowOpacity})`;
+    c.lineWidth = 2.0;
+    c.stroke();
+
+    c.restore();
 }
 
 //  SPRAY PARTICLE CLASS ---------------------------------------------------------------------
@@ -2836,8 +2931,8 @@ class CLOUD {
 //  MOVING AIRPLANE CLASS ---------------------------------------------------------------------
 class AIRPLANE {
     constructor(y, speed, size, respawnDelay, passNumber) {
-        // On first four passes, try to spawn above the topmost cloud
-        if (passNumber <= 4) {
+        // On first five passes, try to spawn above the topmost cloud
+        if (passNumber <= 5) {
             this.y = this.pickAltitudeAboveClouds();
         } else {
             // Randomize vertical position avoiding cloud elevations
@@ -2857,7 +2952,7 @@ class AIRPLANE {
         
         // Determine if plane should be upside-down (only if in top 30% and NOT in first four passes)
         const topThreshold = simHeight * 0.7; // 30% from top
-        if (passNumber > 4 && this.y > topThreshold) {
+        if (passNumber > 5 && this.y > topThreshold) {
             this.isUpsideDown = Math.random() < 0.5; // 50% chance
             if (this.isUpsideDown) {
                 this.angle = Math.PI; // Start upside-down
@@ -2878,6 +2973,9 @@ class AIRPLANE {
         } else if (passNumber === 4) {
             this.direction = 1;
             this.x = -size; // Start from left
+        } else if (passNumber === 5) {
+            this.direction = -1;
+            this.x = simWidth + size; // Start from right
         } else {
             this.direction = 1;
             this.x = -size; // Start from left
@@ -2913,6 +3011,7 @@ class AIRPLANE {
         this.secondPassBannerText = "Double-click to add clouds";
         this.thirdPassBannerText = "Right-click to remove";
         this.fourthPassBannerText = "Spacebar to PARTY!";
+        this.fifthPassBannerText = "Ellipsis to open the menu";
         
         // Set banner text based on pass number
         if (this.passNumber === 1) {
@@ -2923,6 +3022,8 @@ class AIRPLANE {
             this.bannerText = this.thirdPassBannerText;
         } else if (this.passNumber === 4) {
             this.bannerText = this.fourthPassBannerText;
+        } else if (this.passNumber === 5) {
+            this.bannerText = this.fifthPassBannerText;
         } else {
             this.bannerText = ""; // No banner after fourth pass
         }
@@ -2999,8 +3100,8 @@ class AIRPLANE {
                 // Increment pass number
                 this.passNumber++;
                 
-                // For first four passes: set specific directions for each pass
-                if (this.passNumber <= 4) {
+                // For first five passes: set specific directions for each pass
+                if (this.passNumber <= 5) {
                     if (this.passNumber === 1) {
                         this.direction = -1;
                         this.x = simWidth + this.size; // Start from right
@@ -3013,11 +3114,14 @@ class AIRPLANE {
                     } else if (this.passNumber === 4) {
                         this.direction = 1;
                         this.x = -this.size; // Start from left
+                    } else if (this.passNumber === 5) {
+                        this.direction = -1;
+                        this.x = simWidth + this.size; // Start from right
                     }
                     this.y = this.pickAltitudeAboveClouds();
                     this.isUpsideDown = false;
                 } else {
-                    // After four passes: alternate directions and allow upside-down
+                    // After five passes: alternate directions and allow upside-down
                     this.direction *= -1;
                     if (this.direction === 1) {
                         this.x = -this.size; // Start from left
@@ -3052,8 +3156,10 @@ class AIRPLANE {
                     this.bannerText = this.thirdPassBannerText;
                 } else if (this.passNumber === 4) {
                     this.bannerText = this.fourthPassBannerText;
+                } else if (this.passNumber === 5) {
+                    this.bannerText = this.fifthPassBannerText;
                 } else {
-                    this.bannerText = ""; // No banner after fourth pass
+                    this.bannerText = ""; // No banner after fifth pass
                 }
                 
                 // Reset loop parameters
@@ -3078,10 +3184,10 @@ class AIRPLANE {
             if (this.loopPhase === 0 && loopTrigger && !this.isUpsideDown) {
                 // Decide whether to do a loop (50% chance) - only if not upside-down
                 // and only if plane is within bottom 25% of screen
-                // No loops during first four passes
+                // No loops during first five passes
                 const isInBottomQuarter = this.baseY <= simHeight * 0.35;
                 
-                if (!this.loopDecided && isInBottomQuarter && this.passNumber > 4) {
+                if (!this.loopDecided && isInBottomQuarter && this.passNumber > 5) {
                     this.willDoLoop = Math.random() < 0.5;
                     this.loopDecided = true;
                 }
@@ -3154,16 +3260,16 @@ class AIRPLANE {
                 this.x - this.size > simWidth * 2 : 
                 this.x + this.size < -simWidth;
             if (passedEdge) {
-                // Start waiting timer (no delay for first four passes)
+                // Start waiting timer (no delay for first five passes)
                 this.isWaiting = true;
-                this.waitTimer = this.passNumber < 4 ? 0 : this.respawnDelay;
+                this.waitTimer = this.passNumber < 5 ? 0 : this.respawnDelay;
             }
         }
         // Spin the propeller (faster when going faster)
         this.propellerAngle += dt * 20 * (this.speed / this.baseSpeed);
         
-        // Animate banner wave for first four passes
-        if (this.passNumber <= 4) {
+        // Animate banner wave for first five passes
+        if (this.passNumber <= 5) {
             this.bannerWavePhase += dt * 3;
         }
         
@@ -3396,8 +3502,8 @@ class AIRPLANE {
             const centerX = this.x * cScale;
             const centerY = canvas.height - this.y * cScale;
             
-            // Draw banner on first four passes
-            if (this.passNumber <= 4) {
+            // Draw banner on first five passes
+            if (this.passNumber <= 5) {
                 this.drawBanner(drawSize);
             }
             
@@ -4101,6 +4207,7 @@ function drawMainMenu() {
     c.restore();
 }
 
+
 function drawSimMenu() {
     // Draw ellipsis button (in world coordinates)
     const ellipsisWorldX = 0.05;
@@ -4116,6 +4223,30 @@ function drawSimMenu() {
         c.beginPath();
         c.arc(ellipsisX + i * dotSpacing, ellipsisY, dotRadius, 0, 2 * Math.PI);
         c.fill();
+    }
+
+    // Draw arrow pointing to ellipsis on fifth pass
+    if (Airplane[0].passNumber == 5 && doArrow && !mainMenuVisible) {
+        if (justStarted) {
+            arrowStartTime = Date.now();
+            justStarted = false;
+        }
+        // Animate arrow bounce
+        arrowBounceTimer += 0.05;
+        if (arrowBounceTimer >= 2 * Math.PI) {
+            arrowBounceTimer = 0;
+        }
+        const bounceOffset = Math.abs(Math.sin(arrowBounceTimer)) * 0.1;
+        let arrowOpacity;
+        if (Date.now() - arrowStartTime > 5000) {
+            arrowOpacity = 1 - ((Date.now() - arrowStartTime - 5000) / 5000);
+        } else {
+            arrowOpacity = 1.0;
+        }
+        drawArrow(0.2 + bounceOffset, simHeight - ellipsisWorldY, 180, 0.13, arrowOpacity);
+        if (Date.now() - arrowStartTime > 10000) {
+            doArrow = false;
+        }
     }
     
     // Only draw menu if it has some opacity
@@ -4911,7 +5042,7 @@ function drawColorMenu() {
     c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
     c.textAlign = 'center';
     c.textBaseline = 'top';
-    c.fillText('Spray ∅', 0, spraySldrBottomY + 0.27 * knobRadius);
+    c.fillText('Spray Size', 0, spraySldrBottomY + 0.27 * knobRadius);
     
     c.restore();
     
@@ -6299,6 +6430,8 @@ function drawEverything() {
     // Clear canvas
     c.clearRect(0, 0, width, height);
 
+    //drawArrow(0.05 * simWidth, 0.05 * simWidth, 110, 0.2);
+
     // Draw hot air balloon 
     if (showHotAirBalloon) {
         for (let hotAirBalloon of HotAirBalloon) {
@@ -6533,12 +6666,16 @@ function updateFPS() {
     lastFrameTime = currentTime;
     
     // Prevent invalid frame times (can happen on page refresh or tab switching)
-    if (frameTime > 100 || frameTime <= 0) {
-        return; // Skip this frame
+    // Clamp extremely long frames instead of skipping them so stuttering is detected
+    if (frameTime <= 0) {
+        return; // Skip invalid times
     }
     
+    // Clamp to max 200ms to avoid tab-switching spikes, but still count stutters up to 200ms
+    const clampedFrameTime = Math.min(frameTime, 200);
+    
     // Keep last 60 frame times (1 second at 60fps) - longer window for better stability check
-    fpsFrameTimes.push(frameTime);
+    fpsFrameTimes.push(clampedFrameTime);
     if (fpsFrameTimes.length > 60) {
         fpsFrameTimes.shift();
     }
@@ -6882,6 +7019,7 @@ let animationFrameId = null;
 let isRunning = false;
 
 setupScene();
+
 function update() {
     if (isRunning) {
         updateFPS();
