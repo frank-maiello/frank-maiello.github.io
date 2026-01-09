@@ -1,5 +1,5 @@
 /*
-B0IDS 1.38 :: autonomous flocking behavior ::
+B0IDS 1.39 :: autonomous flocking behavior ::
 copyright 2025 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -84,7 +84,7 @@ let menuDragStartY = 0;
 let menuStartX = 0;
 let menuStartY = 0;
 
-// Boid type selection (0=arrows, 1=circles, 2=airfoils)
+// Boid type selection (0=arrows, 1=circles, 2=airfoils, 3=birds, 4=none)
 let selectedBoidType = 0;
 let tailColorMode = 0; // 0 = black, 1 = white, 2 = selected hue, 3 = hue2
 
@@ -693,7 +693,7 @@ canvas.addEventListener('mousedown', function(e) {
         }
         
         // Three radio buttons vertically stacked
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < 5; i++) {
             const buttonX = menuOriginX + radioCol * knobSpacing - 0.5 * knobRadius;
             const buttonY = menuOriginY + (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius) + menuTopMargin;
             const rdx = clickCanvasX - buttonX;
@@ -709,6 +709,8 @@ canvas.addEventListener('mousedown', function(e) {
                 } else if (i === 2) {
                     doAirfoilBoids();
                 } else if (i === 3) {
+                    doFlappyBoids();
+                } else if (i === 4) {
                     doNoneBoids();
                 }
                 return true;
@@ -1366,6 +1368,7 @@ canvas.addEventListener('mousemove', function(e) {
                         newBoid.arrow = selectedBoidType === 0;
                         newBoid.circle = selectedBoidType === 1;
                         newBoid.airfoil = selectedBoidType === 2;
+                        newBoid.flappy = selectedBoidType === 3;
                         
                         // Insert before the last 2 special boids
                         Boids.splice(Boids.length - 2, 0, newBoid);
@@ -3691,6 +3694,7 @@ class BOID {
         this.arrow = true;
         this.circle = false;
         this.airfoil = false;
+        this.flappy = false;
         this.flashing = false;
         this.flashTimer = 0; // Timer for flash duration
         this.flashDuration = 0.1; // How long the flash lasts (100ms)
@@ -3706,6 +3710,8 @@ class BOID {
         this.lastHue = -1;
         this.lastSaturation = -1;
         this.lastLightness = -1;
+        this.flapper = 0;
+        this.flapOut = true;
     }
     get left() {
         return this.pos.x - this.radius;
@@ -3715,9 +3721,21 @@ class BOID {
     }
     simulate() {
         // Enforce speed limit
-        if (this.vel.length() > boidProps.speedLimit) {
+        const boidSpeed = this.vel.length();
+        if (boidSpeed > boidProps.speedLimit) {
             this.vel.normalize();
             this.vel.scale(boidProps.speedLimit);
+        }
+        if (this.flappy && this.flapOut) {
+            this.flapper += 0.3 * boidSpeed; 
+            if (this.flapper >= 2) {
+                this.flapOut = false;
+            }
+        } else if (this.flappy && !this.flapOut) {
+            this.flapper -= 0.6 * boidSpeed; 
+            if (this.flapper <= 0) {
+                this.flapOut = true;
+            }
         }
         // Update position based on velocity
         this.pos.x += this.vel.x * deltaT;
@@ -3783,7 +3801,6 @@ class BOID {
             c.moveTo(cX({x: this.tail[0][0]}), cY({y: this.tail[0][1]}));
             for (var point of this.tail) {
                 c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
-                
             }
             
             // Apply tail color based on tailColorMode
@@ -3803,7 +3820,8 @@ class BOID {
 
             //c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
             // line width scales with boid size and inversely with speed, and with tail width slider
-            c.lineWidth = (0.3 + (1 - this.speedAdjust)) * radScale * 0.5 * boidProps.tailWidth;
+            //c.lineWidth = (0.3 + (1 - this.speedAdjust)) * radScale * 0.5 * boidProps.tailWidth;
+            c.lineWidth = radScale * 0.2 * boidProps.tailWidth;
             // Override for special boids
             if (this.whiteBoid) {
                 c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
@@ -3824,6 +3842,65 @@ class BOID {
             c.stroke();
         }
 
+        // Draw flappy boid --------------------------------------------
+        if (this.flappy) {
+            const angle = Math.atan2(this.vel.y, this.vel.x);
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+            c.rotate(-angle); 
+
+            /* ASCII drawing of flappy boid shape, tail at left, head at right -----------
+            
+            o        /\
+                    /  \ 
+            /------/    \--\
+            \------\    /--/
+                    \  /   
+                     \/    
+
+            */
+
+            const boidSize = 2.0 * radScale;
+            const bodyYCenter = 0.5 * this.radius; // Can adjust body vertical position if needed
+            const headLength = boidSize * 0.2;
+            const headWidth = boidSize * 0.1;
+            const bodyLength = boidSize * 0.3;
+            const bodyWidth = boidSize * 0.2;
+            const tailLength = boidSize * 0.6;
+            const tailWidth = boidSize * 0.1;
+            const wingSpan = this.flapper * boidSize;
+            
+            // start at tail
+            c.beginPath();
+            c.moveTo(0, bodyYCenter - 0.5 * tailWidth);
+            c.lineTo(tailLength, bodyYCenter - 0.5 * bodyWidth);
+            c.lineTo(tailLength + 0.5 * bodyLength, bodyYCenter - 0.5 * bodyWidth - 0.5 * wingSpan);
+            c.lineTo(tailLength + bodyLength, bodyYCenter - 0.5 * headWidth);
+            c.lineTo(tailLength + bodyLength + headLength, bodyYCenter);
+            c.lineTo(tailLength + bodyLength, bodyYCenter + 0.5 * headWidth);
+            c.lineTo(tailLength + 0.5 * bodyLength, bodyYCenter + 0.5 * bodyWidth + 0.5 * wingSpan);
+            c.lineTo(tailLength, bodyYCenter + 0.5 * bodyWidth);
+            c.closePath();
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.fillStyle = this.cachedFillStyle;
+                c.strokeStyle = this.cachedStrokeStyle;
+            } else if (this.whiteBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+                c.strokeStyle = 'hsl(0, 0%, 100%)';
+            } else if (this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 10%)';
+                c.strokeStyle = 'hsl(0, 0%, 0%)';
+            } else if (this.flashing) {
+                const flashLight = Math.round(this.lightness * 1.5);
+                c.fillStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+                c.strokeStyle = `hsl(${Math.round(this.hue - 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+            }
+            c.fill();
+            c.lineWidth = 1.0;
+            c.stroke();
+            c.restore();
+        }
+               
         // Draw arrow boid --------------------------------------------
         if (this.arrow && !this.circle && !this.airfoil) {
             const angle = Math.atan2(this.vel.y, this.vel.x);
@@ -3957,6 +4034,7 @@ function doArrowBoids() {
         boid.arrow = true;
         boid.circle = false;
         boid.airfoil = false;
+        boid.flappy = false;
     }
 }   
 
@@ -3965,6 +4043,7 @@ function doCircleBoids() {
         boid.arrow = false;
         boid.circle = true;
         boid.airfoil = false;
+        boid.flappy = false;
     }
 }   
 
@@ -3973,14 +4052,25 @@ function doAirfoilBoids() {
         boid.arrow = false;
         boid.circle = false;
         boid.airfoil = true;
+        boid.flappy = false;
     }
 }  
+
+function doFlappyBoids() {
+    for (let boid of Boids) {
+        boid.arrow = false;
+        boid.circle = false;
+        boid.airfoil = false;
+        boid.flappy = true;
+    }
+}
 
 function doNoneBoids() {
     for (let boid of Boids) {
         boid.arrow = false;
         boid.circle = false;
         boid.airfoil = false;
+        boid.flappy = false;
     }
 }  
 
@@ -4514,9 +4604,9 @@ function drawSimMenu() {
     // Draw radio buttons for boid type selection (vertically stacked)
     const radioButtonRadius = knobRadius * 0.25;
     const radioCol = 2;
-    const radioLabels = ['Arrows', 'Circles', 'Teardrops', 'None'];
+    const radioLabels = ['Arrows', 'Circles', 'Teardrops', 'Birds','None'];
     
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
         const buttonX = radioCol * knobSpacing - 0.5 * knobRadius;
         const buttonY = (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius) + menuTopMargin;
         
@@ -5330,6 +5420,7 @@ function resetParameters() {
                 newBoid.arrow = selectedBoidType === 0;
                 newBoid.circle = selectedBoidType === 1;
                 newBoid.airfoil = selectedBoidType === 2;
+                newBoid.flappy = selectedBoidType === 3;
                 
                 // Insert before the last 2 special boids
                 Boids.splice(Boids.length - 2, 0, newBoid);
@@ -6638,7 +6729,7 @@ let fpsFrameTimes = [];
 let currentFPS = 60;
 let lastFrameTime = performance.now();
 let fpsCheckTimer = 0;
-let fpsCheckInterval = 0.5; // Check FPS every 0.25 seconds
+let fpsCheckInterval = 0.25; // Check FPS every 0.25 seconds
 let minStableFPS = 58; // Target FPS threshold
 let fpsStableTimer = 0;
 let fpsStableThreshold = 1.0; // FPS must be stable for 0.5 seconds before increasing
@@ -6654,7 +6745,7 @@ let startupWarmupTimer = 0; // Timer for startup warm-up period
 let startupWarmupPeriod = 3.0; // Wait 3 seconds after startup before monitoring FPS
 let isWarmedUp = false; // Track if warm-up period is complete
 let runtimeTimer = 0; // Track total runtime
-let runtimeLockPeriod = 30.0; // Lock boid count after 60 seconds
+let runtimeLockPeriod = 30.0; // Lock boid count after 30 seconds
 let boidCountLocked = false; // Track if boid count is locked
 let fadeOutDuration = 5.0; // Fade out over 5 seconds
 let fadeOutTimer = 0; // Track fade out progress
@@ -6666,16 +6757,12 @@ function updateFPS() {
     lastFrameTime = currentTime;
     
     // Prevent invalid frame times (can happen on page refresh or tab switching)
-    // Clamp extremely long frames instead of skipping them so stuttering is detected
-    if (frameTime <= 0) {
-        return; // Skip invalid times
+    if (frameTime > 100 || frameTime <= 0) {
+        return; // Skip this frame
     }
     
-    // Clamp to max 200ms to avoid tab-switching spikes, but still count stutters up to 200ms
-    const clampedFrameTime = Math.min(frameTime, 200);
-    
     // Keep last 60 frame times (1 second at 60fps) - longer window for better stability check
-    fpsFrameTimes.push(clampedFrameTime);
+    fpsFrameTimes.push(frameTime);
     if (fpsFrameTimes.length > 60) {
         fpsFrameTimes.shift();
     }
@@ -6865,6 +6952,7 @@ function checkAndAdjustBoids() {
                     newBoid.arrow = selectedBoidType === 0;
                     newBoid.circle = selectedBoidType === 1;
                     newBoid.airfoil = selectedBoidType === 2;
+                    newBoid.flappy = selectedBoidType === 3;
                     
                     // Insert before the last 2 special boids
                     Boids.splice(Boids.length - 2, 0, newBoid);
