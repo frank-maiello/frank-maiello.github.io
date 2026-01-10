@@ -300,6 +300,7 @@ canvas.addEventListener('mousedown', function(e) {
         
         if (mdx * mdx + mdy * mdy < magnetRadius * magnetRadius) {
             isDraggingMagnet = true;
+            attachMouseMove();
             return;
         }
     }
@@ -366,6 +367,7 @@ canvas.addEventListener('mousedown', function(e) {
         
         if (wheelDist <= colorWheelRadius) {
             isDraggingColorWheel = true;
+            attachMouseMove();
             // Calculate hue and saturation
             selectedHue = (Math.atan2(wheelDy, wheelDx) * 180 / Math.PI + 360) % 360;
             selectedSaturation = Math.min(100, (wheelDist / colorWheelRadius) * 100);
@@ -379,6 +381,7 @@ canvas.addEventListener('mousedown', function(e) {
         if (clickCanvasX >= sliderX && clickCanvasX <= sliderX + sliderWidth &&
             clickCanvasY >= sliderY && clickCanvasY <= sliderY + sliderHeight) {
             isDraggingLightness = true;
+            attachMouseMove();
             // Calculate lightness
             const relativeY = clickCanvasY - sliderY;
             selectedLightness = Math.max(0, Math.min(100, 100 - (relativeY / sliderHeight) * 100));
@@ -534,6 +537,7 @@ canvas.addEventListener('mousedown', function(e) {
             spraypaintRadius = 0.05 + clickRatio * (0.5 - 0.05);
             spraypaintRadius = Math.max(0.05, Math.min(0.5, spraypaintRadius)); // Clamp
             isDraggingSpraySlider = true;
+            attachMouseMove();
             return true;
         }
         
@@ -550,6 +554,7 @@ canvas.addEventListener('mousedown', function(e) {
             const hsKnobDy = clickCanvasY - hueSensitivityKnobY;
             if (hsKnobDx * hsKnobDx + hsKnobDy * hsKnobDy < knobRadius * knobRadius) {
                 isDraggingHueSensitivity = true;
+                attachMouseMove();
                 dragStartMouseX = mouseX;
                 dragStartMouseY = mouseY;
                 hueSensitivityDragStart = boidProps.hueSensitivity;
@@ -563,6 +568,7 @@ canvas.addEventListener('mousedown', function(e) {
             const htKnobDy = clickCanvasY - hueTickerKnobY;
             if (htKnobDx * htKnobDx + htKnobDy * htKnobDy < knobRadius * knobRadius) {
                 isDraggingHueTicker = true;
+                attachMouseMove();
                 dragStartMouseX = mouseX;
                 dragStartMouseY = mouseY;
                 hueTickerDragStart = boidProps.hueTicker;
@@ -574,6 +580,7 @@ canvas.addEventListener('mousedown', function(e) {
         if (clickCanvasX >= colorMenuOriginX - colorPadding && clickCanvasX <= colorMenuOriginX + colorMenuWidth + colorPadding &&
             clickCanvasY >= colorMenuOriginY - colorPadding && clickCanvasY <= colorMenuOriginY + colorMenuHeight + colorPadding) {
             isDraggingColorMenu = true;
+            attachMouseMove();
             colorMenuDragStartX = mouseX;
             colorMenuDragStartY = mouseY;
             colorMenuStartX = colorMenuX;
@@ -628,6 +635,7 @@ canvas.addEventListener('mousedown', function(e) {
             const kdy = clickCanvasY - knobCanvasY;
             if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
                 draggedKnob = knob;
+                attachMouseMove();
                 dragStartMouseX = mouseX;
                 dragStartMouseY = mouseY;
                 
@@ -825,6 +833,7 @@ canvas.addEventListener('mousedown', function(e) {
                 }
                 // Otherwise, start dragging the knob
                 draggedSkyKnob = knob;
+                attachMouseMove();
                 dragStartMouseX = mouseX;
                 dragStartMouseY = mouseY;
                 
