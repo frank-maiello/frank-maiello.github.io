@@ -1,5 +1,5 @@
 /*
-B0IDS 1.40 :: autonomous flocking behavior ::
+B0IDS 1.41 :: autonomous flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -353,6 +353,7 @@ canvas.addEventListener('mousedown', function(e) {
         if (ccdx * ccdx + ccdy * ccdy < closeIconRadius * closeIconRadius) {
             colorMenuVisible = false;
             spraypaintActive = false; // Turn off spray tool when menu closes
+            updateMouseListeners();
             return true;
         }
         
@@ -405,6 +406,7 @@ canvas.addEventListener('mousedown', function(e) {
                 menuVisible = menuVisibleBeforePaint;
                 skyMenuVisible = skyMenuVisibleBeforePaint;
             }
+            updateMouseListeners();
             return true;
         }
         
@@ -453,23 +455,6 @@ canvas.addEventListener('mousedown', function(e) {
                 boido.manualSaturation = true;
                 boido.manualLightness = true;
             }
-
-            /*for (let i = 0; i < halfBoids; i++) {
-                Boids[i].hue = 180;
-                Boids[i].saturation = 0;
-                Boids[i].lightness = 100;
-                Boids[i].manualHue = true;
-                Boids[i].manualSaturation = true;
-                Boids[i].manualLightness = true;
-            }
-            for (let i = halfBoids; i < Boids.length; i++) {
-                Boids[i].hue = 0;
-                Boids[i].saturation = 0;
-                Boids[i].lightness = 0;
-                Boids[i].manualHue = true;
-                Boids[i].manualSaturation = true;
-                Boids[i].manualLightness = true;
-            }*/
             paintedColorDots = []; // Reset painted color indicators
             return true;
         }
@@ -734,6 +719,7 @@ canvas.addEventListener('mousedown', function(e) {
         if (clickX >= menuOriginX - padding && clickX <= menuOriginX + menuWidth + padding &&
             clickY >= menuOriginY - padding && clickY <= menuOriginY + menuHeight + padding) {
             isDraggingMenu = true;
+            attachMouseMove();
             menuDragStartX = mouseX;
             menuDragStartY = mouseY;
             menuStartX = menuX;
@@ -930,6 +916,7 @@ canvas.addEventListener('mousedown', function(e) {
                 colorMenuVisible = false;
                 skyMenuVisible = false;
             }
+            updateMouseListeners();
             return true;
         }
         
@@ -958,6 +945,7 @@ canvas.addEventListener('mousedown', function(e) {
         if (clickCanvasX >= menuOriginX - padding && clickCanvasX <= menuOriginX + menuWidth + padding &&
             clickCanvasY >= menuOriginY - padding && clickCanvasY <= menuOriginY + menuHeight + padding) {
             isDraggingSkyMenu = true;
+            attachMouseMove();
             skyMenuDragStartX = mouseX;
             skyMenuDragStartY = mouseY;
             skyMenuStartX = skyMenuX;
@@ -971,11 +959,13 @@ canvas.addEventListener('mousedown', function(e) {
     // Handle spraypaint tool
     if (spraypaintActive && e.button === 0) {
         isSpraying = true;
+        attachMouseMove();
     }
     
     // Handle sky hand tool
     if (skyHandActive && e.button === 0 && window.skyRenderer) {
         isDraggingSky = true;
+        attachMouseMove();
         skyDragStartX = mouseX;
         skyDragStartY = mouseY;
         skyCameraPitchStart = window.skyRenderer.effectController.cameraPitch;
@@ -1023,6 +1013,9 @@ canvas.addEventListener('mousedown', function(e) {
         } else {
             // Single click: drag cloud if clicked on one
             draggedCloud = clickedCloud;
+            if (draggedCloud) {
+                attachMouseMove();
+            }
             lastClickTime = currentTime;
             lastClickedCloud = clickedCloud;
         }
@@ -1047,6 +1040,7 @@ canvas.addEventListener('mouseup', function(e) {
         // Lock camera if it was a click (minimal movement)
         if (dragDistance < 0.02) { // Threshold in world coordinates
             skyHandActive = false;
+            updateMouseListeners();
             // Restore menu states
             menuVisible = menuVisibleBeforeCamera;
             colorMenuVisible = colorMenuVisibleBeforeCamera;
@@ -1073,13 +1067,23 @@ canvas.addEventListener('mouseup', function(e) {
     isDraggingSpraySlider = false;
     isDraggingMagnet = false;
     isSpraying = false;
+    
+    // Detach heavy mousemove listener when drag ends
+    detachMouseMove();
+    
+    // Keep or remove lightweight listener based on active tools
+    if (!spraypaintActive && !skyHandActive) {
+        detachLightweightMouseMove();
+    }
 });
 
 canvas.addEventListener('contextmenu', function(e) {
     e.preventDefault();
 });
 
-canvas.addEventListener('mousemove', function(e) {
+// Mousemove handler - only attached when needed for performance
+let mousemoveActive = false;
+function handleMouseMove(e) {
     const rect = canvas.getBoundingClientRect();
     mouseX = (e.clientX - rect.left) / cScale;
     mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
@@ -1355,6 +1359,7 @@ canvas.addEventListener('mousemove', function(e) {
                     
                     toRemove.sort((a, b) => b - a);
                     for (let idx of toRemove) {
+                        SpatialGrid.remove(regularBoids[idx]);
                         regularBoids.splice(idx, 1);
                     }
                     
@@ -1382,6 +1387,7 @@ canvas.addEventListener('mousemove', function(e) {
                         
                         // Insert before the last 2 special boids
                         Boids.splice(Boids.length - 2, 0, newBoid);
+                        SpatialGrid.insert(newBoid);
                     }
                 }
                 break;
@@ -1473,7 +1479,55 @@ canvas.addEventListener('mousemove', function(e) {
         draggedCloud.x = mouseX;
         draggedCloud.y = mouseY;
     }
-});
+}
+
+// Lightweight handler for mouse position tracking (only for cursors and idle spray)
+let lightweightMousemoveActive = false;
+function lightweightMouseMove(e) {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = (e.clientX - rect.left) / cScale;
+    mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
+}
+
+// Helper functions to attach/detach mousemove listeners
+function attachMouseMove() {
+    if (!mousemoveActive) {
+        canvas.addEventListener('mousemove', handleMouseMove);
+        mousemoveActive = true;
+    }
+}
+
+function detachMouseMove() {
+    if (mousemoveActive) {
+        canvas.removeEventListener('mousemove', handleMouseMove);
+        mousemoveActive = false;
+    }
+}
+
+function attachLightweightMouseMove() {
+    if (!lightweightMousemoveActive) {
+        canvas.addEventListener('mousemove', lightweightMouseMove);
+        lightweightMousemoveActive = true;
+    }
+}
+
+function detachLightweightMouseMove() {
+    if (lightweightMousemoveActive) {
+        canvas.removeEventListener('mousemove', lightweightMouseMove);
+        lightweightMousemoveActive = false;
+    }
+}
+
+// Update lightweight listener when tools are toggled
+function updateMouseListeners() {
+    // Lightweight listener needed for cursors when tools are active
+    if (spraypaintActive || skyHandActive) {
+        attachLightweightMouseMove();
+    } else if (!mousemoveActive) {
+        // Only detach if heavy handler isn't active
+        detachLightweightMouseMove();
+    }
+}
 
 // Spacebar event listeners for balloon spawning
 document.addEventListener('keydown', function(e) {
@@ -1626,13 +1680,61 @@ class SpatialHashGrid {
         this.grid.clear();
     }
     
-    // Add boid to grid
+    // Add boid to grid (initial insertion)
     insert(boid) {
         const key = this.getKey(boid.pos.x, boid.pos.y);
         if (!this.grid.has(key)) {
             this.grid.set(key, []);
         }
         this.grid.get(key).push(boid);
+        boid.gridKey = key; // Store current grid key on boid
+    }
+    
+    // Update boid position in grid (incremental update)
+    updateBoid(boid) {
+        const newKey = this.getKey(boid.pos.x, boid.pos.y);
+        
+        // Only update if boid moved to a different cell
+        if (boid.gridKey !== newKey) {
+            // Remove from old cell
+            if (boid.gridKey && this.grid.has(boid.gridKey)) {
+                const oldCell = this.grid.get(boid.gridKey);
+                const index = oldCell.indexOf(boid);
+                if (index !== -1) {
+                    // Use swap-and-pop for O(1) removal
+                    oldCell[index] = oldCell[oldCell.length - 1];
+                    oldCell.pop();
+                    
+                    // Clean up empty cells to prevent memory bloat
+                    if (oldCell.length === 0) {
+                        this.grid.delete(boid.gridKey);
+                    }
+                }
+            }
+            
+            // Add to new cell
+            if (!this.grid.has(newKey)) {
+                this.grid.set(newKey, []);
+            }
+            this.grid.get(newKey).push(boid);
+            boid.gridKey = newKey;
+        }
+    }
+    
+    // Remove boid from grid
+    remove(boid) {
+        if (boid.gridKey && this.grid.has(boid.gridKey)) {
+            const cell = this.grid.get(boid.gridKey);
+            const index = cell.indexOf(boid);
+            if (index !== -1) {
+                cell[index] = cell[cell.length - 1];
+                cell.pop();
+                if (cell.length === 0) {
+                    this.grid.delete(boid.gridKey);
+                }
+            }
+            boid.gridKey = null;
+        }
     }
     
     // Get nearby boids within a radius
@@ -3900,6 +4002,7 @@ class BOID {
             c.moveTo(-arrowLength, arrowWidth / 2);
             c.lineTo(arrowLength, 0);
             c.stroke();*/
+
             c.restore();
         }
 
@@ -5436,6 +5539,7 @@ function resetParameters() {
                 
                 // Insert before the last 2 special boids
                 Boids.splice(Boids.length - 2, 0, newBoid);
+                SpatialGrid.insert(newBoid);
             }
         }
     }
@@ -6463,12 +6567,9 @@ function simulateEverything() {
         handleMagnet(boid);
         handleBounds(boid);
         boid.simulate();
-    }
-
-    // Rebuild spatial grid after all boid positions are updated
-    SpatialGrid.clear();
-    for (let boid of Boids) {
-        SpatialGrid.insert(boid);
+        
+        // Update spatial grid position incrementally
+        SpatialGrid.updateBoid(boid);
     }
 
     // Update balloon ---------
@@ -6834,8 +6935,9 @@ function cullBoids(removeCount) {
     // Sort indices in descending order to remove from end first (prevents index shifting issues)
     toRemove.sort((a, b) => b - a);
     
-    // Remove the boids
+    // Remove the boids from spatial grid and array
     for (let idx of toRemove) {
+        SpatialGrid.remove(regularBoids[idx]);
         regularBoids.splice(idx, 1);
     }
     
@@ -6958,6 +7060,7 @@ function warmupSequence() {
                     
                     // Insert before the last 2 special boids
                     Boids.splice(Boids.length - 2, 0, newBoid);
+                    SpatialGrid.insert(newBoid);
                 }
                 
                 // Check if we've reached the target
