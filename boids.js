@@ -1,5 +1,5 @@
 /*
-B0IDS 1.39 :: autonomous flocking behavior ::
+B0IDS 1.40 :: autonomous flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -19,6 +19,16 @@ simMinWidth = 2.0;
 cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
 simWidth = canvas.width / cScale;
 simHeight = canvas.height / cScale;
+
+// Load images
+doPlane = true;
+kittyPlaneImage = new Image();
+kittyPlaneImage.src = 'kitty_plane.png';
+kittyPlaneReverseImage = new Image();
+kittyPlaneReverseImage.src = 'kitty_plane_reverse.png';
+
+kittyLampImage = new Image();
+kittyLampImage.src = 'kitty_lamp.png';
 
 // Mouse tracking
 let mouseX = simWidth / 2;
@@ -927,7 +937,7 @@ canvas.addEventListener('mousedown', function(e) {
         const menuHeightForClick = knobSpacing * 2.25; // Match the drawing code
         const creditFontSize = 0.032 * cScale;
         c.font = `${creditFontSize}px sans-serif`;
-        const prefixText = '';
+        const prefixText = 'Sun and sky shader by '; 
         const prefixWidth = c.measureText(prefixText).width;
         const linkText = 'ThreeJS.org';
         const linkWidth = c.measureText(linkText).width;
@@ -3728,7 +3738,7 @@ class BOID {
         }
         if (this.flappy && this.flapOut) {
             this.flapper += 0.3 * boidSpeed; 
-            if (this.flapper >= 2) {
+            if (this.flapper >= 1.8) {
                 this.flapOut = false;
             }
         } else if (this.flappy && !this.flapOut) {
@@ -3842,65 +3852,6 @@ class BOID {
             c.stroke();
         }
 
-        // Draw flappy boid --------------------------------------------
-        if (this.flappy) {
-            const angle = Math.atan2(this.vel.y, this.vel.x);
-            c.save();
-            c.translate(cX(this.pos), cY(this.pos));
-            c.rotate(-angle); 
-
-            /* ASCII drawing of flappy boid shape, tail at left, head at right -----------
-            
-            o        /\
-                    /  \ 
-            /------/    \--\
-            \------\    /--/
-                    \  /   
-                     \/    
-
-            */
-
-            const boidSize = 2.0 * radScale;
-            const bodyYCenter = 0.5 * this.radius; // Can adjust body vertical position if needed
-            const headLength = boidSize * 0.2;
-            const headWidth = boidSize * 0.1;
-            const bodyLength = boidSize * 0.3;
-            const bodyWidth = boidSize * 0.2;
-            const tailLength = boidSize * 0.6;
-            const tailWidth = boidSize * 0.1;
-            const wingSpan = this.flapper * boidSize;
-            
-            // start at tail
-            c.beginPath();
-            c.moveTo(0, bodyYCenter - 0.5 * tailWidth);
-            c.lineTo(tailLength, bodyYCenter - 0.5 * bodyWidth);
-            c.lineTo(tailLength + 0.5 * bodyLength, bodyYCenter - 0.5 * bodyWidth - 0.5 * wingSpan);
-            c.lineTo(tailLength + bodyLength, bodyYCenter - 0.5 * headWidth);
-            c.lineTo(tailLength + bodyLength + headLength, bodyYCenter);
-            c.lineTo(tailLength + bodyLength, bodyYCenter + 0.5 * headWidth);
-            c.lineTo(tailLength + 0.5 * bodyLength, bodyYCenter + 0.5 * bodyWidth + 0.5 * wingSpan);
-            c.lineTo(tailLength, bodyYCenter + 0.5 * bodyWidth);
-            c.closePath();
-            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                c.fillStyle = this.cachedFillStyle;
-                c.strokeStyle = this.cachedStrokeStyle;
-            } else if (this.whiteBoid) {
-                c.fillStyle = 'hsl(0, 0%, 90%)';
-                c.strokeStyle = 'hsl(0, 0%, 100%)';
-            } else if (this.blackBoid) {
-                c.fillStyle = 'hsl(0, 0%, 10%)';
-                c.strokeStyle = 'hsl(0, 0%, 0%)';
-            } else if (this.flashing) {
-                const flashLight = Math.round(this.lightness * 1.5);
-                c.fillStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
-                c.strokeStyle = `hsl(${Math.round(this.hue - 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
-            }
-            c.fill();
-            c.lineWidth = 1.0;
-            c.stroke();
-            c.restore();
-        }
-               
         // Draw arrow boid --------------------------------------------
         if (this.arrow && !this.circle && !this.airfoil) {
             const angle = Math.atan2(this.vel.y, this.vel.x);
@@ -3928,7 +3879,7 @@ class BOID {
             }
             c.fill();
 
-            // draw arrow edges/wings ----------
+            /*// draw arrow edges/wings ----------
             c.beginPath();
             c.moveTo(arrowLength, 0);
             c.lineTo(-arrowLength, -arrowWidth / 2);
@@ -3948,7 +3899,67 @@ class BOID {
             c.beginPath();
             c.moveTo(-arrowLength, arrowWidth / 2);
             c.lineTo(arrowLength, 0);
-            c.stroke();
+            c.stroke();*/
+            c.restore();
+        }
+
+        // Draw flappy boid --------------------------------------------
+        if (this.flappy) {
+            const angle = Math.atan2(this.vel.y, this.vel.x);
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+            c.rotate(-angle); 
+
+            /* boid shape reference:
+
+            o        /\
+                    /  \ 
+            /------/    \--\
+            \------\    /--/
+                    \  /   
+                     \/    
+
+            */
+
+            const bodyYCenter = 0.5 * this.radius;
+            const boidSize = 2.0 * radScale;
+            const headLength = boidSize * 0.2;
+            const headWidth = boidSize * 0.2;
+            const bodyLength = boidSize * 0.3;
+            const bodyWidth = boidSize * 0.2;
+            const tailLength = boidSize * 0.4;
+            const tailWidth = boidSize * 0.1;
+            const wingSpan = boidSize * this.flapper;
+            
+            // start at tail
+            c.beginPath();
+            c.moveTo(0, bodyYCenter - 0.5 * tailWidth); // tail top
+            c.lineTo(tailLength, bodyYCenter - 0.5 * bodyWidth); // rear of left wing
+            c.lineTo(tailLength - 0.1 * bodyLength, bodyYCenter - 0.5 * bodyWidth - 0.5 * wingSpan); // left wing tip
+            c.lineTo(tailLength + bodyLength, bodyYCenter - 0.5 * headWidth);  // front of left wing / rear of head
+            c.lineTo(tailLength + bodyLength + headLength, bodyYCenter); // tip of head
+            c.lineTo(tailLength + bodyLength, bodyYCenter + 0.5 * headWidth);  // front of wing / rear of head
+            c.lineTo(tailLength - 0.1 * bodyLength, bodyYCenter + 0.5 * bodyWidth + 0.5 * wingSpan); // right wing tip
+            c.lineTo(tailLength, bodyYCenter + 0.5 * bodyWidth); // rear of right wing
+            c.lineTo(0, bodyYCenter + 0.5 * tailWidth); // tail bottom
+            c.closePath();
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.fillStyle = this.cachedFillStyle;
+                //c.strokeStyle = this.cachedStrokeStyle;
+            } else if (this.whiteBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+                //c.strokeStyle = 'hsl(0, 0%, 100%)';
+            } else if (this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 10%)';
+                //c.strokeStyle = 'hsl(0, 0%, 0%)';
+            } else if (this.flashing) {
+                const flashLight = this.lightness * 1.5;
+                c.fillStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+                //c.strokeStyle = `hsl(${Math.round(this.hue - 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+            }
+            c.fill();
+            //c.lineWidth = 1.0;
+            //c.stroke();
             c.restore();
         }
             
@@ -4676,6 +4687,7 @@ function drawSimMenu() {
     }
     
     // Draw FPS counter in bottom right of menu -------------------------------
+    updateFPS();
     c.textAlign = 'right';
     c.textBaseline = 'bottom';
     const fpsText = `${currentFPS.toFixed(0)}`;
@@ -6484,7 +6496,7 @@ function simulateEverything() {
     }
 
     // Check balloon-airplane collisions
-    if (doKitty && Airplane.length > 0 && Balloons.length > 0) {
+    if (doPlane && Airplane.length > 0 && Balloons.length > 0) {
         plane = Airplane[0];
         for (let balloon of Balloons) {
             if (!balloon.popping) {
@@ -6504,7 +6516,7 @@ function simulateEverything() {
     }
 
     // Update airplane
-    if (doKitty == true) {
+    if (doPlane == true) {
         for (let plane of Airplane) {
             plane.update(deltaT);
         }
@@ -6560,7 +6572,7 @@ function drawEverything() {
     }
     
     // Draw airplane
-    if (doKitty == true && showPlane) {
+    if (doPlane == true && showPlane) {
         // Draw airplane
         for (let plane of Airplane) {
             plane.draw();
@@ -6831,7 +6843,7 @@ function cullBoids(removeCount) {
     Boids = [...regularBoids, ...specialBoids];
 }
 
-function checkAndAdjustBoids() {
+function warmupSequence() {
     // Track runtime and lock after specified period
     runtimeTimer += deltaT;
     if (runtimeTimer >= runtimeLockPeriod && !boidCountLocked) {
@@ -6839,16 +6851,6 @@ function checkAndAdjustBoids() {
         isRampingUp = false;
         fadeOutTimer = 0; // Start fade out
         finalBoidCount = Boids.length; // Store the final boid count
-    }
-    
-    // Update fade out timer if locked
-    if (boidCountLocked && fadeOutTimer < fadeOutDuration) {
-        fadeOutTimer += deltaT;
-    }
-    
-    // If locked, don't adjust boids anymore
-    if (boidCountLocked) {
-        return;
     }
     
     // Handle startup warm-up period
@@ -6989,9 +6991,12 @@ function drawStats() {
         if (fadeOutTimer >= fadeOutDuration) {
             return; // Completely faded out, don't draw
         }
+        if (fadeOutTimer < fadeOutDuration) {
+            fadeOutTimer += deltaT;
+        }
         opacity = 1.0 - (fadeOutTimer / fadeOutDuration);
     }
-    
+
     // Draw FPS and boid count at bottom right
     c.save();
     
@@ -7046,16 +7051,6 @@ function drawStats() {
 function setupScene() {
     deltaT = 1/60;
     lastFrameTime = performance.now();
-    
-    // Load plane images
-    doKitty = true;
-    kittyPlaneImage = new Image();
-    kittyPlaneImage.src = 'kitty_plane.png';
-    kittyPlaneReverseImage = new Image();
-    kittyPlaneReverseImage.src = 'kitty_plane_reverse.png';
-    // Load kitty lamp image
-    kittyLampImage = new Image();
-    kittyLampImage.src = 'kitty_lamp.png';
 
     // make Boids ----------
     makeBoids();
@@ -7102,34 +7097,12 @@ function setupScene() {
 }
 
 //  RUN  ------------------------------------------------
-// Ensure only one animation loop is running
-let animationFrameId = null;
-let isRunning = false;
-
-setupScene();
-
 function update() {
-    if (isRunning) {
-        updateFPS();
-        checkAndAdjustBoids();
-        simulateEverything();
-        drawEverything();
-    }
-    animationFrameId = requestAnimationFrame(update);
+    if (!boidCountLocked) warmupSequence();
+    simulateEverything();
+    drawEverything();
+    requestAnimationFrame(update);
 }
 
-// Start the animation loop
-isRunning = true;
+setupScene();
 update();
-
-// Cleanup on page unload to prevent resource accumulation
-window.addEventListener('beforeunload', function() {
-    isRunning = false;
-    if (animationFrameId !== null) {
-        cancelAnimationFrame(animationFrameId);
-    }
-    // Stop sky renderer if it exists
-    if (window.skyRenderer && window.skyRenderer.stop) {
-        window.skyRenderer.stop();
-    }
-});
