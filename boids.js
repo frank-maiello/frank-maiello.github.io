@@ -5638,7 +5638,7 @@ function makeBoids() {
     boidRadius = 0.02;
 
     boidProps = {
-        numBoids: 2200,
+        numBoids: 5000,
         marginX: Math.min(0.3 * simWidth, 0.3 * simHeight),
         marginY: Math.min(0.3 * simWidth, 0.3 * simHeight),
         minDistance: 5.0 * boidRadius, // Rule #1 - The distance to stay away from other Boids
@@ -6953,7 +6953,7 @@ let currentFPS = 60;
 let lastFrameTime = 0;
 let fpsCheckTimer = 0;
 let fpsCheckInterval = 0.25; // Check FPS every 0.25 seconds
-let minStableFPS = 58.9; // Target FPS threshold
+let minStableFPS = 59.0; // Target FPS threshold (with buffer below 60)
 let fpsStableTimer = 0;
 let fpsStableThreshold = 0.5; // FPS must be stable for 0.5 seconds before increasing
 let isRampingUp = true; // Track if we're still ramping up
@@ -7124,7 +7124,15 @@ function warmupSequence() {
                     revertVerificationTimer = 0;
                 }
             } else {
-                // Still unstable during verification - reset timer to keep waiting
+                // Still unstable during verification - need to remove more boids
+                if (Boids.length > 100) {
+                    const removeCount = Math.min(50, Boids.length - 100);
+                    if (removeCount > 0) {
+                        cullBoids(removeCount);
+                        lastSafeBoidCount = Boids.length;
+                    }
+                }
+                // Reset verification timer to keep checking
                 revertVerificationTimer = 0;
             }
         }
@@ -7200,11 +7208,7 @@ function warmupSequence() {
             if (stabilityTimerAfterMax >= 3.0 && Boids.length > 200) {
                 // Remove 200 boids as safety margin
                 //const removeCount = Math.min(200, Boids.length - 100);
-                if (Boids.length > 1200) {
-                    var removeCount = 200;
-                } else {
-                    var removeCount = 100;
-                }
+                const removeCount = 200;
                 if (removeCount > 0) {
                     cullBoids(removeCount);
                 }
