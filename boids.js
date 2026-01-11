@@ -5638,9 +5638,9 @@ function makeBoids() {
     boidRadius = 0.02;
 
     boidProps = {
-        numBoids: 2200,
-        marginX: boidRadius,
-        marginY: boidRadius,
+        numBoids: 5000,
+        marginX: Math.min(0.1 * simWidth, 0.1 * simHeight),
+        marginY: Math.min(0.1 * simWidth, 0.1 * simHeight),
         minDistance: 5.0 * boidRadius, // Rule #1 - The distance to stay away from other Boids
         avoidFactor: 50.0, // Rule #1 -Adjust velocity by this %
         matchingFactor: 10.0, // Rule #2 - Adjust velocity by this %
@@ -6933,7 +6933,7 @@ let fpsCheckTimer = 0;
 let fpsCheckInterval = 0.25; // Check FPS every 0.25 seconds
 let minStableFPS = 58.9; // Target FPS threshold
 let fpsStableTimer = 0;
-let fpsStableThreshold = 1.0; // FPS must be stable for 0.5 seconds before increasing
+let fpsStableThreshold = 0.5; // FPS must be stable for 0.5 seconds before increasing
 let isRampingUp = true; // Track if we're still ramping up
 let maxBoidsReached = false; // Track if we've hit the limit
 let safetyMarginApplied = false; // Track if we've applied the 200 boid safety reduction
