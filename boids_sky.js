@@ -1,5 +1,5 @@
 // Sky Rendering Integration Module for Boids
-
+// v1.2
 (function() {
     'use strict';
     
@@ -68,6 +68,17 @@
         
         // Setup resize handler
         window.addEventListener('resize', () => this.onResize());
+        
+        // Initialize reusable buffers and geometry
+        this.initGeometry();
+        
+        // Cache uniform and attribute locations
+        this.cacheLocations();
+        
+        // Preallocate reusable matrices
+        this.projectionMatrix = new Float32Array(16);
+        this.viewMatrix = new Float32Array(16);
+        this.modelMatrix = new Float32Array(16);
     };
     
     SkyRenderer.prototype.createShaderProgram = function() {
@@ -216,6 +227,114 @@
         return program;
     };
     
+    SkyRenderer.prototype.cacheLocations = function() {
+        const gl = this.gl;
+        const program = this.program;
+        
+        // Cache sky shader locations
+        this.locations = {
+            turbidity: gl.getUniformLocation(program, 'turbidity'),
+            rayleigh: gl.getUniformLocation(program, 'rayleigh'),
+            mieCoefficient: gl.getUniformLocation(program, 'mieCoefficient'),
+            mieDirectionalG: gl.getUniformLocation(program, 'mieDirectionalG'),
+            exposure: gl.getUniformLocation(program, 'exposure'),
+            sunPosition: gl.getUniformLocation(program, 'sunPosition'),
+            up: gl.getUniformLocation(program, 'up'),
+            cameraPosition: gl.getUniformLocation(program, 'cameraPosition'),
+            projectionMatrix: gl.getUniformLocation(program, 'projectionMatrix'),
+            viewMatrix: gl.getUniformLocation(program, 'viewMatrix'),
+            modelMatrix: gl.getUniformLocation(program, 'modelMatrix'),
+            position: gl.getAttribLocation(program, 'position')
+        };
+        
+        // Cache grid shader locations
+        this.gridLocations = {
+            projectionMatrix: gl.getUniformLocation(this.gridProgram, 'projectionMatrix'),
+            viewMatrix: gl.getUniformLocation(this.gridProgram, 'viewMatrix'),
+            modelMatrix: gl.getUniformLocation(this.gridProgram, 'modelMatrix'),
+            gridColor: gl.getUniformLocation(this.gridProgram, 'gridColor'),
+            position: gl.getAttribLocation(this.gridProgram, 'position')
+        };
+    };
+    
+    SkyRenderer.prototype.initGeometry = function() {
+        const gl = this.gl;
+        
+        // Create sky cube geometry (reused every frame)
+        this.skyVertices = new Float32Array([
+            -1,-1,-1, 1,-1,-1, 1,1,-1, -1,1,-1,
+            -1,-1,1, 1,-1,1, 1,1,1, -1,1,1
+        ]);
+        this.skyIndices = new Uint16Array([
+            0,1,2, 0,2,3, 1,5,6, 1,6,2,
+            5,4,7, 5,7,6, 4,0,3, 4,3,7,
+            3,2,6, 3,6,7, 4,5,1, 4,1,0
+        ]);
+        
+        this.skyVertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.skyVertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, this.skyVertices, gl.STATIC_DRAW);
+        
+        this.skyIndexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.skyIndexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.skyIndices, gl.STATIC_DRAW);
+        
+        // Pre-generate grid geometry
+        this.initGridGeometry();
+    };
+    
+    SkyRenderer.prototype.initGridGeometry = function() {
+        const gl = this.gl;
+        const gridRadius = 450000;
+        const latLines = 18;
+        const lonLines = 36;
+        const vertices = [];
+        
+        // Latitude circles
+        for (let lat = 1; lat < latLines; lat++) {
+            const theta = (lat * Math.PI) / latLines;
+            const sinTheta = Math.sin(theta);
+            const cosTheta = Math.cos(theta);
+            const segments = 60;
+            
+            for (let i = 0; i <= segments; i++) {
+                const phi = (i * 2 * Math.PI) / segments;
+                vertices.push(
+                    gridRadius * sinTheta * Math.cos(phi),
+                    gridRadius * cosTheta,
+                    gridRadius * sinTheta * Math.sin(phi)
+                );
+            }
+        }
+        
+        // Longitude circles
+        for (let lon = 0; lon < lonLines; lon++) {
+            const phi = (lon * 2 * Math.PI) / lonLines;
+            const cosPhi = Math.cos(phi);
+            const sinPhi = Math.sin(phi);
+            const segments = 60;
+            
+            for (let i = 0; i <= segments; i++) {
+                const theta = (i * Math.PI) / segments;
+                const sinTheta = Math.sin(theta);
+                const cosTheta = Math.cos(theta);
+                vertices.push(
+                    gridRadius * sinTheta * cosPhi,
+                    gridRadius * cosTheta,
+                    gridRadius * sinTheta * sinPhi
+                );
+            }
+        }
+        
+        this.gridVertices = new Float32Array(vertices);
+        this.gridBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.gridBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, this.gridVertices, gl.STATIC_DRAW);
+        
+        this.gridLatLines = latLines;
+        this.gridLonLines = lonLines;
+    };
+    
     SkyRenderer.prototype.createGridShaderProgram = function() {
         const gl = this.gl;
         
@@ -298,52 +417,36 @@
         this.sun.y = Math.cos(phi);
         this.sun.z = Math.sin(phi) * Math.cos(theta);
         
-        // Set uniforms
-        const program = this.program;
-        gl.uniform1f(gl.getUniformLocation(program, 'turbidity'), this.effectController.turbidity);
-        gl.uniform1f(gl.getUniformLocation(program, 'rayleigh'), this.effectController.rayleigh);
-        gl.uniform1f(gl.getUniformLocation(program, 'mieCoefficient'), this.effectController.mieCoefficient);
-        gl.uniform1f(gl.getUniformLocation(program, 'mieDirectionalG'), this.effectController.mieDirectionalG);
-        gl.uniform1f(gl.getUniformLocation(program, 'exposure'), this.effectController.exposure);
-        gl.uniform3f(gl.getUniformLocation(program, 'sunPosition'), this.sun.x, this.sun.y, this.sun.z);
-        gl.uniform3f(gl.getUniformLocation(program, 'up'), 0, 1, 0);
-        gl.uniform3f(gl.getUniformLocation(program, 'cameraPosition'), 
+        // Set uniforms using cached locations
+        const loc = this.locations;
+        gl.uniform1f(loc.turbidity, this.effectController.turbidity);
+        gl.uniform1f(loc.rayleigh, this.effectController.rayleigh);
+        gl.uniform1f(loc.mieCoefficient, this.effectController.mieCoefficient);
+        gl.uniform1f(loc.mieDirectionalG, this.effectController.mieDirectionalG);
+        gl.uniform1f(loc.exposure, this.effectController.exposure);
+        gl.uniform3f(loc.sunPosition, this.sun.x, this.sun.y, this.sun.z);
+        gl.uniform3f(loc.up, 0, 1, 0);
+        gl.uniform3f(loc.cameraPosition, 
             this.camera.position.x, this.camera.position.y, this.camera.position.z);
         
-        // Create matrices
-        const projectionMatrix = this.createPerspectiveMatrix();
-        const viewMatrix = this.createViewMatrix();
-        const modelMatrix = this.createModelMatrix(450000);
+        // Update reusable matrices
+        this.updatePerspectiveMatrix();
+        this.updateViewMatrix();
+        this.updateModelMatrix(450000);
         
-        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'projectionMatrix'), false, projectionMatrix);
-        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'viewMatrix'), false, viewMatrix);
-        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'modelMatrix'), false, modelMatrix);
+        gl.uniformMatrix4fv(loc.projectionMatrix, false, this.projectionMatrix);
+        gl.uniformMatrix4fv(loc.viewMatrix, false, this.viewMatrix);
+        gl.uniformMatrix4fv(loc.modelMatrix, false, this.modelMatrix);
         
-        // Create cube geometry
-        const vertices = new Float32Array([
-            -1,-1,-1, 1,-1,-1, 1,1,-1, -1,1,-1,
-            -1,-1,1, 1,-1,1, 1,1,1, -1,1,1
-        ]);
-        const indices = new Uint16Array([
-            0,1,2, 0,2,3, 1,5,6, 1,6,2,
-            5,4,7, 5,7,6, 4,0,3, 4,3,7,
-            3,2,6, 3,6,7, 4,5,1, 4,1,0
-        ]);
+        // Use pre-created buffers (no recreation per frame)
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.skyVertexBuffer);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.skyIndexBuffer);
         
-        const vertexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-        
-        const indexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
-        
-        const posLoc = gl.getAttribLocation(program, 'position');
-        gl.enableVertexAttribArray(posLoc);
-        gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(loc.position);
+        gl.vertexAttribPointer(loc.position, 3, gl.FLOAT, false, 0, 0);
         
         gl.depthFunc(gl.LEQUAL);
-        gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+        gl.drawElements(gl.TRIANGLES, this.skyIndices.length, gl.UNSIGNED_SHORT, 0);
         gl.depthFunc(gl.LESS);
         
         // Draw spherical grid if enabled
@@ -352,20 +455,19 @@
         }
     };
     
-    SkyRenderer.prototype.createPerspectiveMatrix = function() {
+    SkyRenderer.prototype.updatePerspectiveMatrix = function() {
         // Update camera FOV from effectController
         this.camera.fov = this.effectController.fov;
         const f = 1.0 / Math.tan(this.camera.fov * Math.PI / 360);
         const nf = 1 / (this.camera.near - this.camera.far);
-        return new Float32Array([
-            f / this.camera.aspect, 0, 0, 0,
-            0, f, 0, 0,
-            0, 0, (this.camera.far + this.camera.near) * nf, -1,
-            0, 0, (2 * this.camera.far * this.camera.near) * nf, 0
-        ]);
+        const m = this.projectionMatrix;
+        m[0] = f / this.camera.aspect; m[1] = 0; m[2] = 0; m[3] = 0;
+        m[4] = 0; m[5] = f; m[6] = 0; m[7] = 0;
+        m[8] = 0; m[9] = 0; m[10] = (this.camera.far + this.camera.near) * nf; m[11] = -1;
+        m[12] = 0; m[13] = 0; m[14] = (2 * this.camera.far * this.camera.near) * nf; m[15] = 0;
     };
     
-    SkyRenderer.prototype.createViewMatrix = function() {
+    SkyRenderer.prototype.updateViewMatrix = function() {
         // Create view matrix with camera rotation
         const pitch = this.effectController.cameraPitch;
         const yaw = this.effectController.cameraYaw;
@@ -375,110 +477,75 @@
         const cosYaw = Math.cos(yaw);
         const sinYaw = Math.sin(yaw);
         
-        // Rotation around X (pitch) then Y (yaw)
-        return new Float32Array([
-            cosYaw, sinYaw * sinPitch, -sinYaw * cosPitch, 0,
-            0, cosPitch, sinPitch, 0,
-            sinYaw, -cosYaw * sinPitch, cosYaw * cosPitch, 0,
-            0, 0, 0, 1
-        ]);
+        const m = this.viewMatrix;
+        m[0] = cosYaw; m[1] = sinYaw * sinPitch; m[2] = -sinYaw * cosPitch; m[3] = 0;
+        m[4] = 0; m[5] = cosPitch; m[6] = sinPitch; m[7] = 0;
+        m[8] = sinYaw; m[9] = -cosYaw * sinPitch; m[10] = cosYaw * cosPitch; m[11] = 0;
+        m[12] = 0; m[13] = 0; m[14] = 0; m[15] = 1;
+    };
+    
+    SkyRenderer.prototype.updateModelMatrix = function(scale) {
+        const m = this.modelMatrix;
+        m[0] = scale; m[1] = 0; m[2] = 0; m[3] = 0;
+        m[4] = 0; m[5] = scale; m[6] = 0; m[7] = 0;
+        m[8] = 0; m[9] = 0; m[10] = scale; m[11] = 0;
+        m[12] = 0; m[13] = 0; m[14] = 0; m[15] = 1;
+    };
+    
+    // Backward compatibility wrappers for external code
+    SkyRenderer.prototype.createPerspectiveMatrix = function() {
+        this.updatePerspectiveMatrix();
+        return this.projectionMatrix;
+    };
+    
+    SkyRenderer.prototype.createViewMatrix = function() {
+        this.updateViewMatrix();
+        return this.viewMatrix;
     };
     
     SkyRenderer.prototype.createModelMatrix = function(scale) {
-        return new Float32Array([
-            scale, 0, 0, 0,
-            0, scale, 0, 0,
-            0, 0, scale, 0,
-            0, 0, 0, 1
-        ]);
+        this.updateModelMatrix(scale);
+        return this.modelMatrix;
     };
     
     SkyRenderer.prototype.drawGrid = function() {
         const gl = this.gl;
-        const gridRadius = 450000; // Large radius for the grid sphere
-        const latLines = 18; // Number of latitude lines
-        const lonLines = 36; // Number of longitude lines
-        
-        // Generate grid vertices
-        const vertices = [];
-        
-        // Latitude circles (horizontal)
-        for (let lat = 1; lat < latLines; lat++) {
-            const theta = (lat * Math.PI) / latLines;
-            const sinTheta = Math.sin(theta);
-            const cosTheta = Math.cos(theta);
-            const segments = 60;
-            
-            for (let i = 0; i <= segments; i++) {
-                const phi = (i * 2 * Math.PI) / segments;
-                const x = gridRadius * sinTheta * Math.cos(phi);
-                const y = gridRadius * cosTheta;
-                const z = gridRadius * sinTheta * Math.sin(phi);
-                vertices.push(x, y, z);
-            }
-        }
-        
-        // Longitude circles (vertical)
-        for (let lon = 0; lon < lonLines; lon++) {
-            const phi = (lon * 2 * Math.PI) / lonLines;
-            const cosPhi = Math.cos(phi);
-            const sinPhi = Math.sin(phi);
-            const segments = 60;
-            
-            for (let i = 0; i <= segments; i++) {
-                const theta = (i * Math.PI) / segments;
-                const sinTheta = Math.sin(theta);
-                const cosTheta = Math.cos(theta);
-                const x = gridRadius * sinTheta * cosPhi;
-                const y = gridRadius * cosTheta;
-                const z = gridRadius * sinTheta * sinPhi;
-                vertices.push(x, y, z);
-            }
-        }
-        
-        // Create and bind buffer
-        if (!this.gridBuffer) {
-            this.gridBuffer = gl.createBuffer();
-        }
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.gridBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
         
         // Use the grid shader program
         gl.useProgram(this.gridProgram);
-        const program = this.gridProgram;
         
-        const projectionMatrix = this.createPerspectiveMatrix();
-        const viewMatrix = this.createViewMatrix();
-        const modelMatrix = this.createModelMatrix(1.0);
+        this.updatePerspectiveMatrix();
+        this.updateViewMatrix();
+        this.updateModelMatrix(1.0);
         
-        // Set uniforms for the grid shader
-        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'projectionMatrix'), false, projectionMatrix);
-        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'viewMatrix'), false, viewMatrix);
-        gl.uniformMatrix4fv(gl.getUniformLocation(program, 'modelMatrix'), false, modelMatrix);
-        gl.uniform3f(gl.getUniformLocation(program, 'gridColor'), 1.0, 1.0, 1.0); // White grid
+        // Set uniforms for the grid shader using cached locations
+        const gridLoc = this.gridLocations;
+        gl.uniformMatrix4fv(gridLoc.projectionMatrix, false, this.projectionMatrix);
+        gl.uniformMatrix4fv(gridLoc.viewMatrix, false, this.viewMatrix);
+        gl.uniformMatrix4fv(gridLoc.modelMatrix, false, this.modelMatrix);
+        gl.uniform3f(gridLoc.gridColor, 1.0, 1.0, 1.0);
         
-        // Set grid vertex attribute
-        const posLoc = gl.getAttribLocation(program, 'position');
+        // Set grid vertex attribute using cached location
         gl.bindBuffer(gl.ARRAY_BUFFER, this.gridBuffer);
-        gl.enableVertexAttribArray(posLoc);
-        gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(gridLoc.position);
+        gl.vertexAttribPointer(gridLoc.position, 3, gl.FLOAT, false, 0, 0);
         
         // Enable blending for transparency
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         
         // Draw grid lines
-        const latSegments = 61; // segments + 1
-        const lonSegments = 61; // segments + 1
+        const latSegments = 61;
+        const lonSegments = 61;
         
         // Draw latitude lines
-        for (let lat = 0; lat < latLines - 1; lat++) {
+        for (let lat = 0; lat < this.gridLatLines - 1; lat++) {
             gl.drawArrays(gl.LINE_STRIP, lat * latSegments, latSegments);
         }
         
         // Draw longitude lines
-        const lonStart = (latLines - 1) * latSegments;
-        for (let lon = 0; lon < lonLines; lon++) {
+        const lonStart = (this.gridLatLines - 1) * latSegments;
+        for (let lon = 0; lon < this.gridLonLines; lon++) {
             gl.drawArrays(gl.LINE_STRIP, lonStart + lon * lonSegments, lonSegments);
         }
         
@@ -487,8 +554,8 @@
     };
     
     SkyRenderer.prototype.animate = function() {
+        // Just render once - called from boids main loop
         this.render();
-        requestAnimationFrame(() => this.animate());
     };
     
     SkyRenderer.prototype.onResize = function() {
@@ -507,7 +574,7 @@
     
     const skyRenderer = new SkyRenderer(skyCanvas);
     skyRenderer.init();
-    skyRenderer.animate();
+    // Don't start separate animation loop - boids will call render()
     
     // Expose skyRenderer globally so it can be controlled from the boids menu
     window.skyRenderer = skyRenderer;

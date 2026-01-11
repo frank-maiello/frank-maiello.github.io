@@ -1,5 +1,5 @@
 /*
-B0IDS 1.41 :: autonomous flocking behavior ::
+B0IDS 1.42 :: autonomous flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -96,7 +96,7 @@ let menuStartY = 0;
 
 // Boid type selection (0=arrows, 1=circles, 2=airfoils, 3=birds, 4=none)
 let selectedBoidType = 0;
-let tailColorMode = 0; // 0 = black, 1 = white, 2 = selected hue, 3 = hue2
+let tailColorMode = 1; // 0 = none, 1 = black, 2 = white, 3 = selected hue, 4 = hue2
 
 // Color menu visibility state
 let colorMenuVisible = false;
@@ -129,6 +129,7 @@ let selectedLightness = 50;
 let isSpraying = false;
 let sprayParticles = []; // Array to hold spray effect particles
 let segregationMode = 0; // 0 = normal, 1 = segregate (all rules only apply to same hue), 2 = segregate2 (rule 1 all, rules 2&3 same hue)
+let colorByDirection = false; // When true, boid hue is based on heading direction
 
 // Sky hand mode state
 let skyHandActive = false;
@@ -334,7 +335,7 @@ canvas.addEventListener('mousedown', function(e) {
         const spacing = knobRadius * 0.5;
         const buttonRowHeight = spacing * 2;
         const knobRowHeight = knobRadius * 3;
-        const colorMenuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 1.5;
+        const colorMenuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 2;
         // Shorter menu when spray tool is active (omit knobs and radio buttons)
         const colorMenuHeight = spraypaintActive ? spacing * 10 : spacing * 20;
         const colorPadding = 0.8 * knobRadius;
@@ -492,6 +493,40 @@ canvas.addEventListener('mousedown', function(e) {
             }
             // Reset painted color indicators and add the current selected color
             paintedColorDots = [{hue: selectedHue, saturation: selectedSaturation}];
+            colorByDirection = false; // Disable color by direction mode
+            return true;
+        }
+        
+        // Fifth button - Color by direction
+        const directionDx = clickCanvasX - (buttonStartX + buttonSpacing * 4);
+        const directionDy = clickCanvasY - buttonY;
+        if (directionDx * directionDx + directionDy * directionDy < buttonRadius * buttonRadius) {
+            colorByDirection = !colorByDirection; // Toggle mode
+            if (colorByDirection) {
+                // Clear manual color flags so direction-based coloring takes effect
+                for (let i = 0; i < Boids.length; i++) {
+                    Boids[i].manualHue = false;
+                    Boids[i].manualSaturation = false;
+                    Boids[i].manualLightness = false;
+                }
+            }
+            paintedColorDots = []; // Reset painted color indicators
+            return true;
+        }
+        
+        // Sixth button - Velocity-sensitive color cycling
+        const velocityDx = clickCanvasX - (buttonStartX + buttonSpacing * 5);
+        const velocityDy = clickCanvasY - buttonY;
+        if (velocityDx * velocityDx + velocityDy * velocityDy < buttonRadius * buttonRadius) {
+            // Restore velocity-sensitive color cycling mode
+            colorByDirection = false;
+            for (let i = 0; i < Boids.length; i++) {
+                Boids[i].manualHue = false;
+                Boids[i].manualSaturation = false;
+                Boids[i].manualLightness = false;
+                Boids[i].hueCounter = 0; // Reset hue counter
+            }
+            paintedColorDots = []; // Reset painted color indicators
             return true;
         }
         
@@ -654,8 +689,8 @@ canvas.addEventListener('mousedown', function(e) {
         const tailKnobRow = 2;
         const tailButtonsCenterX = 0.5; // Center between columns 0 and 1
         
-        for (let i = 0; i < 4; i++) {
-            const buttonX = menuOriginX + tailButtonsCenterX * knobSpacing + (i - 1.5) * knobRadius * 1.0;
+        for (let i = 0; i < 5; i++) {
+            const buttonX = menuOriginX + tailButtonsCenterX * knobSpacing + (i - 2) * knobRadius * 1.0;
             const buttonY = menuOriginY + tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin;
             const rdx = clickCanvasX - buttonX;
             const rdy = clickCanvasY - buttonY;
@@ -1779,7 +1814,11 @@ function makeSpatialGrid() {
 // DEGREES TO RADIANS  ---------------------------------
 function rads(theta) {
     return theta * Math.PI / 180;
-}
+};
+
+function getDegrees(theta) {
+    return (theta * 180) / Math.PI;
+};
 
 //  DRAW ARROW FUNCTION  ---------------------------------
 function drawArrow(posX, posY, angle, radius, arrowOpacity) {
@@ -3861,12 +3900,12 @@ class BOID {
         // Update position based on velocity
         this.pos.x += this.vel.x * deltaT;
         this.pos.y += this.vel.y * deltaT;
-        // Maintain tail (avoid array operations to reduce garbage collection)
-        if (boidProps.doTails == true && boidProps.tailLength > 0) {
+        // Maintain tail (use shift instead of splice for better performance)
+        if (boidProps.doTails == true && boidProps.tailLength > 0 && tailColorMode !== 0) {
             this.tail.push([this.pos.x, this.pos.y]);
-            // Remove old elements from front to keep most recent at end
-            if (this.tail.length > boidProps.tailLength) {
-                this.tail.splice(0, this.tail.length - boidProps.tailLength);
+            // Remove old elements from front - shift() is faster than splice(0, n)
+            while (this.tail.length > boidProps.tailLength) {
+                this.tail.shift();
             }
         }
     }
@@ -3880,27 +3919,30 @@ class BOID {
         const arrowWidth = Math.min((1/this.speedAdjust) * 0.8 * radScale, 1.5 * radScale);
         const arrowDent = Math.min((1/this.speedAdjust) * 1.0 * radScale, 0.7 * radScale);
 
-        // Update hue counter for cycling after making boids ----------
-        if (boidCountLocked) {
-            //this.hueCounter += 0.01;
-            this.hueCounter += boidProps.hueTicker;
-            if (this.hueCounter >= 360) {
-                this.hueCounter = 0;
-            }
+        // Update hue counter for continuous color cycling ----------
+        this.hueCounter += boidProps.hueTicker;
+        if (this.hueCounter >= 360) {
+            this.hueCounter = 0;
         }
 
         // code hsl based on speed and height ----------
         // Only auto-calculate hue if not manually controlled
         if (!this.manualHue) {
-            this.hue = 360 - this.speedAdjust * boidProps.hueSensitivity + this.hueCounter;
+            if (colorByDirection) {
+                // Color based on heading direction
+                const headingAngle = Math.atan2(this.vel.y, this.vel.x);
+                this.hue = getDegrees(-headingAngle);
+            } else {
+                this.hue = 360 - this.speedAdjust * boidProps.hueSensitivity + this.hueCounter;
+            }
         } 
         // Only auto-calculate saturation if not manually controlled
         if (!this.manualSaturation) {
-            this.saturation = 85;
+            this.saturation = colorByDirection ? 85 : 85;
         }
         // Only auto-calculate lightness if not manually controlled
         if (!this.manualLightness) {
-            this.lightness = 35 + (1 - (this.pos.y / simHeight)) * 35;
+            this.lightness = colorByDirection ? 50 : 35 + (1 - (this.pos.y / simHeight)) * 35;
         }
         
         // Cache color strings if they've changed (reduces garbage collection)
@@ -3917,7 +3959,7 @@ class BOID {
         } 
 
         // Draw tail ----------
-        if (boidProps.doTails == true && boidProps.tailLength > 0 && this.tail.length > 0) {
+        if (boidProps.doTails == true && boidProps.tailLength > 0 && this.tail.length > 0 && tailColorMode !== 0) {
             c.beginPath();
             c.moveTo(cX({x: this.tail[0][0]}), cY({y: this.tail[0][1]}));
             for (var point of this.tail) {
@@ -3925,16 +3967,16 @@ class BOID {
             }
             
             // Apply tail color based on tailColorMode
-            if (tailColorMode === 0) {
+            if (tailColorMode === 1) {
                 // Black tail
                 c.strokeStyle = 'hsla(0, 0%, 10%, 0.3)';
-            } else if (tailColorMode === 1) {
+            } else if (tailColorMode === 2) {
                 // White tail
                 c.strokeStyle = 'hsla(0, 0%, 95%, 0.5)';
-            } else if (tailColorMode === 2) {
+            } else if (tailColorMode === 3) {
                 // Selected hue tail (use cached)
                 c.strokeStyle = this.cachedTailStyle;
-            } else if (tailColorMode === 3) {
+            } else if (tailColorMode === 4) {
                 // Alternate hue tail
                 c.strokeStyle = `hsla(${Math.round(this.hue - 70)}, ${Math.round(this.saturation)}%, ${Math.round(this.lightness)}%, 0.5)`;
             }
@@ -3966,6 +4008,7 @@ class BOID {
         // Draw arrow boid --------------------------------------------
         if (this.arrow && !this.circle && !this.airfoil) {
             const angle = Math.atan2(this.vel.y, this.vel.x);
+
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
             c.rotate(-angle); // for arrows
@@ -3979,16 +4022,24 @@ class BOID {
             c.closePath();
             if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
                 c.fillStyle = this.cachedFillStyle;
+                c.strokeStyle = this.cachedStrokeStyle;
             } else if (this.whiteBoid) {
                 c.fillStyle = 'hsl(0, 0%, 90%)';
+                c.strokeStyle = 'hsl(0, 0%, 100%)';
             } else if (this.blackBoid && !this.flashing) {
                 c.fillStyle = 'hsl(0, 0%, 10%)';
+                c.strokeStyle = 'hsl(0, 0%, 0%)';
             } else if (this.flashing && !this.blackBoid) {
                 c.fillStyle = `hsl(${Math.round(this.hue + 70)}, ${Math.round(this.saturation)}%, ${Math.round(this.lightness * 1.5)}%)`;
+                c.strokeStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${Math.round(this.lightness * 1.5)}%)`;
             } else if (this.flashing && this.blackBoid) {
                 c.fillStyle = 'hsl(0, 0%, 90%)';
+                c.strokeStyle = 'hsl(0, 0%, 100%)';
             }
             c.fill();
+            c.strokeStyle = 'hsl(0, 0%, 20%)';
+            c.lineWidth = 1.0;
+            c.stroke();
 
             /*// draw arrow edges/wings ----------
             c.beginPath();
@@ -4013,6 +4064,36 @@ class BOID {
             c.stroke();*/
 
             c.restore();
+        }
+
+        // Draw circle boid --------------------------------------------
+        if (!this.arrow && this.circle && !this.airfoil) {
+            //c.save();
+            //c.translate(cX(this.pos), cY(this.pos));
+            c.beginPath();
+            //c.arc(0, 0, radScale, 0, 2 * Math.PI);
+            c.arc(cX(this.pos), cY(this.pos), 0.6 * radScale, 0, 2 * Math.PI);
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.fillStyle = this.cachedFillStyle;
+                c.strokeStyle = this.cachedStrokeStyle;
+            } else if (this.whiteBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+                c.strokeStyle = 'hsl(0, 0%, 100%)';
+            } else if (this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 10%)';
+                c.strokeStyle = 'hsl(0, 0%, 0%)';
+            } else if (this.flashing && !this.blackBoid) {
+                const flashLight = Math.round(this.lightness * 1.5);
+                c.fillStyle = `hsl(${Math.round(this.hue + 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+                c.strokeStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+            } else if (this.flashing && this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+                c.strokeStyle = 'hsl(0, 0%, 100%)';
+            }
+            c.fill();
+            //c.lineWidth = 4.0;
+            //c.stroke();
+            //c.restore();
         }
 
         // Draw flappy boid --------------------------------------------
@@ -4070,8 +4151,9 @@ class BOID {
                 //c.strokeStyle = `hsl(${Math.round(this.hue - 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
             }
             c.fill();
-            //c.lineWidth = 1.0;
-            //c.stroke();
+            c.strokeStyle = 'hsl(0, 0%, 20%)';
+            c.lineWidth = 1.0;
+            c.stroke();
             c.restore();
         }
             
@@ -4114,39 +4196,9 @@ class BOID {
                 c.strokeStyle = `hsl(${Math.round(this.hue - 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
             }
             c.fill();
-            c.lineWidth = 1.0;
-            c.stroke();
+            //c.lineWidth = 1.0;
+            //c.stroke();
             c.restore();
-        }
-
-        // Draw circle boid --------------------------------------------
-        if (!this.arrow && this.circle && !this.airfoil) {
-            //c.save();
-            //c.translate(cX(this.pos), cY(this.pos));
-            c.beginPath();
-            //c.arc(0, 0, radScale, 0, 2 * Math.PI);
-            c.arc(cX(this.pos), cY(this.pos), 0.6 * radScale, 0, 2 * Math.PI);
-            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                c.fillStyle = this.cachedFillStyle;
-                c.strokeStyle = this.cachedStrokeStyle;
-            } else if (this.whiteBoid) {
-                c.fillStyle = 'hsl(0, 0%, 90%)';
-                c.strokeStyle = 'hsl(0, 0%, 100%)';
-            } else if (this.blackBoid) {
-                c.fillStyle = 'hsl(0, 0%, 10%)';
-                c.strokeStyle = 'hsl(0, 0%, 0%)';
-            } else if (this.flashing && !this.blackBoid) {
-                const flashLight = Math.round(this.lightness * 1.5);
-                c.fillStyle = `hsl(${Math.round(this.hue + 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
-                c.strokeStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
-            } else if (this.flashing && this.blackBoid) {
-                c.fillStyle = 'hsl(0, 0%, 90%)';
-                c.strokeStyle = 'hsl(0, 0%, 100%)';
-            }
-            c.fill();
-            c.lineWidth = 1.0;
-            c.stroke();
-            //c.restore();
         }
     }
 }
@@ -4690,10 +4742,10 @@ function drawSimMenu() {
     const tailColorRadioRadius = knobRadius * 0.25;
     const tailKnobRow = 2;
     const tailButtonsCenterX = 0.5; // Center between columns 0 and 1
-    const tailRadioLabels = ['Black', 'White', 'Hue', 'Hue2'];
+    const tailRadioLabels = ['None', 'Black', 'White', 'Hue', 'Hue2'];
     
-    for (let i = 0; i < 4; i++) {
-        const buttonX = tailButtonsCenterX * knobSpacing + (i - 1.5) * knobRadius * 1.0;
+    for (let i = 0; i < 5; i++) {
+        const buttonX = tailButtonsCenterX * knobSpacing + (i - 2) * knobRadius * 1.0;
         const buttonY = tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin;
         
         // Draw outer circle
@@ -4897,7 +4949,7 @@ function drawColorMenu() {
     const buttonRowHeight = spacing * 2;
     const knobRowHeight = knobRadius * 3;
     const segRadioRowHeight = knobRadius * 3.0 + spacing * 2; // Space for radio buttons, labels, and bottom margin
-    const menuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 1.5;
+    const menuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 2;
     // Shorter menu when spray tool is active (omit knobs and radio buttons)
     const menuHeight = spraypaintActive ? spacing * 10 : spacing * 20;
     const padding = 0.8 * knobRadius;
@@ -4929,7 +4981,6 @@ function drawColorMenu() {
     c.font = `bold ${0.05 * cScale}px verdana`;
     c.textAlign = 'center';
     c.fillText('PAINT', menuWidth / 2, -padding + 0.04 * cScale);
-    
     
     // Draw close icon in upper left corner
     const closeIconRadius = knobRadius * 0.25;
@@ -5260,11 +5311,11 @@ function drawColorMenu() {
     
     c.restore();
     
-    // Draw three color preset buttons below the color wheel ---------
+    // Draw color preset buttons below the color wheel ---------
     const buttonRadius = knobRadius * 0.35;
     const buttonY = colorWheelRadius * 2 + spacing * 1.5;
     const buttonSpacing = knobRadius * 1.2;
-    // Position fourth button centered below lightness slider
+    // Position so that fourth button centered below lightness slider
     const lightnessSliderCenterX = lightnessSliderX + sliderWidth / 2;
     const buttonStartX = lightnessSliderCenterX - buttonSpacing * 3;
     
@@ -5303,7 +5354,35 @@ function drawColorMenu() {
     c.fillStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity})`;
     c.fill();
     c.stroke();
+
+    // Color by direction button
+    c.beginPath();
+    c.arc(buttonStartX + buttonSpacing * 4, buttonY, buttonRadius, 0, 2 * Math.PI);
+    // use saved color wheel image as button fill
+    c.drawImage(
+        colorWheelCanvas, 
+        0, 0, 
+        colorWheelCanvas.width, colorWheelCanvas.height,
+        buttonStartX + buttonSpacing * 4 - buttonRadius, buttonY - buttonRadius,
+        buttonRadius * 2, buttonRadius * 2);
+    c.stroke();
     
+    // Velocity-sensitive color cycling button
+    c.beginPath();
+    c.arc(buttonStartX + buttonSpacing * 5, buttonY, buttonRadius, 0, 2 * Math.PI);
+    // Create vertical gradient from blue (slow) to red (fast)
+    const velocityGradient = c.createLinearGradient(
+        buttonStartX + buttonSpacing * 5,
+        buttonY - buttonRadius,
+        buttonStartX + buttonSpacing * 5,
+        buttonY + buttonRadius);
+    velocityGradient.addColorStop(0, `hsla(0, 85%, 50%, ${colorMenuOpacity})`); // Red at top (fast)
+    velocityGradient.addColorStop(0.5, `hsla(180, 85%, 50%, ${colorMenuOpacity})`); // Cyan in middle
+    velocityGradient.addColorStop(1, `hsla(240, 85%, 50%, ${colorMenuOpacity})`); // Blue at bottom (slow)
+    c.fillStyle = velocityGradient;
+    c.fill();
+    c.stroke();
+
     // Only draw knobs and segregation buttons when spray tool is not active
     if (!spraypaintActive) {
         // Calculate knob positions first (needed for segregation button placement)
@@ -5560,8 +5639,8 @@ function makeBoids() {
 
     boidProps = {
         numBoids: 2200,
-        marginX: simWidth * 0.2,
-        marginY: simHeight * 0.2,
+        marginX: boidRadius,
+        marginY: boidRadius,
         minDistance: 5.0 * boidRadius, // Rule #1 - The distance to stay away from other Boids
         avoidFactor: 50.0, // Rule #1 -Adjust velocity by this %
         matchingFactor: 10.0, // Rule #2 - Adjust velocity by this %
@@ -7209,12 +7288,33 @@ function setupScene() {
 }
 
 //  RUN  ------------------------------------------------
-function update() {
+let animationLoopRunning = false;
+let lastUpdateTime = 0;
+
+function update(timestamp) {
+    // Calculate actual deltaT from timestamp (more accurate than fixed 1/60)
+    if (lastUpdateTime === 0) {
+        lastUpdateTime = timestamp;
+    }
+    const frameDelta = timestamp - lastUpdateTime;
+    lastUpdateTime = timestamp;
+    
+    // Cap deltaT to prevent spiral of death if tab was backgrounded
+    deltaT = Math.min(frameDelta / 1000, 1/30); // Max 33ms (30fps minimum)
+    
+    // Render sky first (background layer)
+    if (window.skyRenderer) {
+        window.skyRenderer.render();
+    }
+    
     if (!boidCountLocked) warmupSequence();
     simulateEverything();
     drawEverything();
     requestAnimationFrame(update);
 }
 
-setupScene();
-update();
+if (!animationLoopRunning) {
+    animationLoopRunning = true;
+    setupScene();
+    requestAnimationFrame(update);
+}
