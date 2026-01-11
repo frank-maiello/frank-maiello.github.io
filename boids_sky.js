@@ -565,6 +565,11 @@
         this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     };
     
+    // Prevent duplicate initialization
+    if (window.skyRenderer) {
+        return;
+    }
+    
     // Initialize sky renderer after class is defined
     const skyCanvas = document.getElementById('skyCanvas');
     if (!skyCanvas) {

@@ -4649,7 +4649,7 @@ function drawSimMenu() {
         // Normalize the value based on its range
         let normalizedValue;
         if (knob === 0) {
-            // numBoids: use actual count instead of target
+            // numBoids - use actual count instead of target
             normalizedValue = (Boids.length - ranges[knob].min) / (ranges[knob].max - ranges[knob].min);
         } else if (knob === 1) {
             // boidRadius needs to be scaled by 100
@@ -5638,9 +5638,9 @@ function makeBoids() {
     boidRadius = 0.02;
 
     boidProps = {
-        numBoids: 5000,
-        marginX: Math.min(0.1 * simWidth, 0.1 * simHeight),
-        marginY: Math.min(0.1 * simWidth, 0.1 * simHeight),
+        numBoids: 2200,
+        marginX: Math.min(0.3 * simWidth, 0.3 * simHeight),
+        marginY: Math.min(0.3 * simWidth, 0.3 * simHeight),
         minDistance: 5.0 * boidRadius, // Rule #1 - The distance to stay away from other Boids
         avoidFactor: 50.0, // Rule #1 -Adjust velocity by this %
         matchingFactor: 10.0, // Rule #2 - Adjust velocity by this %
@@ -5689,7 +5689,7 @@ function makeBoids() {
     }
 }
 
-// HANDLE BOID BOUNDS -------------
+// HANDLE BOID BOUNDS - RECTANGULAR -------------
 function handleBounds(boid) {
     if (boid.pos.x <= boidProps.marginX) {
         boid.vel.x += boidProps.turnFactor * deltaT;
@@ -5704,6 +5704,28 @@ function handleBounds(boid) {
         boid.vel.y -= boidProps.turnFactor * deltaT;
     }
 }
+
+/*
+// HANDLE BOID BOUNDS - ELLIPTICAL -------------
+function handleBounds(boid) {
+    // Elliptical boundary check (fast calculation)
+    const centerX = simWidth / 2;
+    const centerY = simHeight / 2;
+    const radiusX = (simWidth / 2) - boidProps.marginX;
+    const radiusY = (simHeight / 2) - boidProps.marginY;
+    
+    // Normalized distance from center (0 at center, 1 at edge of ellipse)
+    const dx = (boid.pos.x - centerX) / radiusX;
+    const dy = (boid.pos.y - centerY) / radiusY;
+    const distSq = dx * dx + dy * dy;
+    
+    // If outside ellipse boundary, apply turn force toward center
+    if (distSq > 1.0) {
+        const turnStrength = boidProps.turnFactor * deltaT * (distSq - 1.0);
+        boid.vel.x -= dx * turnStrength;
+        boid.vel.y -= dy * turnStrength;
+    }
+}*/
 
 // MAGNET CLASS -------------
 class MAGNET {
@@ -6928,7 +6950,7 @@ function drawEverything() {
 //  FPS MONITORING WITH RAMP-UP  ------------------------------------------------
 let fpsFrameTimes = [];
 let currentFPS = 60;
-let lastFrameTime = performance.now();
+let lastFrameTime = 0;
 let fpsCheckTimer = 0;
 let fpsCheckInterval = 0.25; // Check FPS every 0.25 seconds
 let minStableFPS = 58.9; // Target FPS threshold
@@ -6955,6 +6977,13 @@ let finalBoidCount = 0; // Store the final boid count after startup completes
 function updateFPS() {
     const currentTime = performance.now();
     const frameTime = currentTime - lastFrameTime;
+    
+    // Initialize lastFrameTime on first call
+    if (lastFrameTime === 0) {
+        lastFrameTime = currentTime;
+        return;
+    }
+    
     lastFrameTime = currentTime;
     
     // Prevent invalid frame times (can happen on page refresh or tab switching)
@@ -6968,10 +6997,12 @@ function updateFPS() {
         fpsFrameTimes.shift();
     }
     
-    // Calculate average FPS
-    if (fpsFrameTimes.length > 0) {
+    // Calculate average FPS (need at least a few samples)
+    if (fpsFrameTimes.length >= 3) {
         const avgFrameTime = fpsFrameTimes.reduce((a, b) => a + b) / fpsFrameTimes.length;
         currentFPS = 1000 / avgFrameTime;
+        // Cap at 60fps for display purposes (simulation runs at 60fps)
+        currentFPS = Math.min(currentFPS, 60);
     }
 }
 
@@ -7100,13 +7131,18 @@ function warmupSequence() {
         
         // Check if FPS is unstable or too low
         if (currentFPS < minStableFPS || unstableFrames > fpsFrameTimes.length * 0.25) {
-            // Only revert if not currently in verification period
-            if (!justReverted && Boids.length > lastSafeBoidCount && lastSafeBoidCount >= 100) {
-                const removeCount = Boids.length - lastSafeBoidCount;
+            // Always respond to FPS drops, regardless of ramping state
+            if (!justReverted && Boids.length > 100) {
+                // If we have a known safe count, revert to it; otherwise remove 100
+                const targetCount = (lastSafeBoidCount >= 100 && lastSafeBoidCount < Boids.length) 
+                    ? lastSafeBoidCount 
+                    : Math.max(100, Boids.length - 100);
+                const removeCount = Boids.length - targetCount;
                 
                 // Remove boids, prioritizing those outside canvas
                 if (removeCount > 0) {
                     cullBoids(removeCount);
+                    lastSafeBoidCount = Boids.length; // Update safe count
                 }
                 isRampingUp = false; // Stop ramping up
                 maxBoidsReached = true; // We've found the limit
@@ -7245,7 +7281,6 @@ function drawStats() {
 //  SETUP SCENE  ------------
 function setupScene() {
     deltaT = 1/60;
-    lastFrameTime = performance.now();
 
     // make Boids ----------
     makeBoids();
@@ -7292,8 +7327,8 @@ function setupScene() {
 }
 
 //  RUN  ------------------------------------------------
-let animationLoopRunning = false;
 let lastUpdateTime = 0;
+let animationFrameId = null;
 
 function update(timestamp) {
     // Calculate actual deltaT from timestamp (more accurate than fixed 1/60)
@@ -7319,11 +7354,17 @@ function update(timestamp) {
     if (!boidCountLocked) warmupSequence();
     simulateEverything();
     drawEverything();
-    requestAnimationFrame(update);
+    animationFrameId = requestAnimationFrame(update);
 }
 
-if (!animationLoopRunning) {
-    animationLoopRunning = true;
+// Cancel any existing animation frame and start fresh
+if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+}
+if (window.boidAnimationRunning) {
+    console.warn('Boids animation already running, skipping duplicate initialization');
+} else {
+    window.boidAnimationRunning = true;
     setupScene();
-    requestAnimationFrame(update);
+    animationFrameId = requestAnimationFrame(update);
 }
