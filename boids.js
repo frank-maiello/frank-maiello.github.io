@@ -6931,7 +6931,7 @@ let currentFPS = 60;
 let lastFrameTime = performance.now();
 let fpsCheckTimer = 0;
 let fpsCheckInterval = 0.25; // Check FPS every 0.25 seconds
-let minStableFPS = 58; // Target FPS threshold
+let minStableFPS = 58.9; // Target FPS threshold
 let fpsStableTimer = 0;
 let fpsStableThreshold = 1.0; // FPS must be stable for 0.5 seconds before increasing
 let isRampingUp = true; // Track if we're still ramping up
@@ -7164,7 +7164,11 @@ function warmupSequence() {
             if (stabilityTimerAfterMax >= 3.0 && Boids.length > 200) {
                 // Remove 200 boids as safety margin
                 //const removeCount = Math.min(200, Boids.length - 100);
-                const removeCount = 100;
+                if (Boids.length > 1200) {
+                    var removeCount = 200;
+                } else {
+                    var removeCount = 100;
+                }
                 if (removeCount > 0) {
                     cullBoids(removeCount);
                 }
@@ -7301,6 +7305,11 @@ function update(timestamp) {
     
     // Cap deltaT to prevent spiral of death if tab was backgrounded
     deltaT = Math.min(frameDelta / 1000, 1/30); // Max 33ms (30fps minimum)
+    
+    // Update FPS tracking during warmup only (menu updates it after)
+    if (!boidCountLocked) {
+        updateFPS();
+    }
     
     // Render sky first (background layer)
     if (window.skyRenderer) {
