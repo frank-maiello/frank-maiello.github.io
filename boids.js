@@ -221,7 +221,7 @@ function createColorWheel() {
 createColorWheel();
 
 // Mouse down event handler ------------------------------
-canvas.addEventListener('mousedown', function(e) {
+mousedownHandler = function(e) {
     const rect = canvas.getBoundingClientRect();
     mouseX = (e.clientX - rect.left) / cScale;
     mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
@@ -676,7 +676,7 @@ canvas.addEventListener('mousedown', function(e) {
                 
                 // Store the starting value
                 const menuItems = [
-                    boidProps.numBoids, boidRadius * 100, boidProps.visualRange, boidProps.speedLimit,
+                    Boids.length, boidRadius * 100, boidProps.visualRange, boidProps.speedLimit,
                     null, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
                     boidProps.turnFactor, boidProps.tailLength, boidProps.tailWidth];
                 dragStartValue = menuItems[knob];
@@ -1070,9 +1070,9 @@ canvas.addEventListener('mousedown', function(e) {
         }
         e.preventDefault();
     }
-});
+};
 
-canvas.addEventListener('mouseup', function(e) {
+mouseupHandler = function(e) {
     // If camera control was active and we were dragging, check if it was a click to lock
     if (isDraggingSky && skyHandActive) {
         // Calculate movement distance
@@ -1119,14 +1119,16 @@ canvas.addEventListener('mouseup', function(e) {
     if (!spraypaintActive && !skyHandActive) {
         detachLightweightMouseMove();
     }
-});
+};
 
-canvas.addEventListener('contextmenu', function(e) {
+contextmenuHandler = function(e) {
     e.preventDefault();
-});
+};
 
 // Mousemove handler - only attached when needed for performance
 let mousemoveActive = false;
+let listenersAttached = false; // Track if main event listeners have been attached
+
 function handleMouseMove(e) {
     const rect = canvas.getBoundingClientRect();
     mouseX = (e.clientX - rect.left) / cScale;
@@ -1574,20 +1576,20 @@ function updateMouseListeners() {
 }
 
 // Spacebar event listeners for balloon spawning
-document.addEventListener('keydown', function(e) {
+keydownHandler = function(e) {
     if (e.code === 'Space' && !spacebarHeld) {
         spacebarHeld = true;
         spacebarBalloonTimer = 0; // Reset timer to spawn immediately
         e.preventDefault(); // Prevent page scrolling
     }
-});
+};
 
-document.addEventListener('keyup', function(e) {
+keyupHandler = function(e) {
     if (e.code === 'Space') {
         spacebarHeld = false;
         e.preventDefault();
     }
-});
+};
 
 //  HANDLE WINDOW RESIZING  ------------------
 function resizeCanvas() {
@@ -1649,7 +1651,34 @@ function resizeCanvas() {
         }
     }
 }
-window.addEventListener("resize", resizeCanvas);
+
+// Attach event listeners only once
+function attachEventListeners() {
+    if (listenersAttached) return;
+    
+    canvas.addEventListener('mousedown', mousedownHandler);
+    canvas.addEventListener('mouseup', mouseupHandler);
+    canvas.addEventListener('contextmenu', contextmenuHandler);
+    document.addEventListener('keydown', keydownHandler);
+    document.addEventListener('keyup', keyupHandler);
+    window.addEventListener('resize', resizeCanvas);
+    
+    listenersAttached = true;
+}
+
+// Remove event listeners for cleanup
+function removeEventListeners() {
+    if (!listenersAttached) return;
+    
+    canvas.removeEventListener('mousedown', mousedownHandler);
+    canvas.removeEventListener('mouseup', mouseupHandler);
+    canvas.removeEventListener('contextmenu', contextmenuHandler);
+    document.removeEventListener('keydown', keydownHandler);
+    document.removeEventListener('keyup', keyupHandler);
+    window.removeEventListener('resize', resizeCanvas);
+    
+    listenersAttached = false;
+}
 
 //  VECTOR CLASS ---------------------------------
 class Vector2 {
@@ -4066,34 +4095,74 @@ class BOID {
             c.restore();
         }
 
+        /*// Draw circle boid --------------------------------------------
+        if (!this.arrow && this.circle && !this.airfoil) {
+            c.beginPath();
+            c.arc(cX(this.pos), cY(this.pos), 2 * radScale, 0, 2 * Math.PI);
+            var glowBallShading = c.createRadialGradient(
+                cX(this.pos), cY(this.pos), 0,
+                cX(this.pos), cY(this.pos), 2 * radScale
+            );
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                glowBallShading.addColorStop(0, `hsla(${this.hue}, 90%, 90%, 1.0)`);
+                glowBallShading.addColorStop(0.05, `hsla(${this.hue}, 90%, 90%, 1.0)`);
+                glowBallShading.addColorStop(0.05, `hsla(${this.hue}, 90%, 50%, 0.7)`);
+                glowBallShading.addColorStop(0.9, `hsla(${this.hue}, 60%, 30%, 0.0)`);
+                c.fillStyle = glowBallShading;
+            } else if (this.whiteBoid) {
+                glowBallShading.addColorStop(0, `hsla(0, 0%, 90%, 1.0)`);
+                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 90%, 1.0)`);
+                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 90%, 0.7)`);
+                glowBallShading.addColorStop(0.9, `hsla(0, 0%, 60%, 0.0)`);
+                c.fillStyle = glowBallShading;
+            } else if (this.blackBoid) {
+                glowBallShading.addColorStop(0, `hsla(0, 0%, 30%, 1.0)`);
+                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 30%, 1.0)`);
+                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 10%, 0.7)`);
+                glowBallShading.addColorStop(0.9, `hsla(0, 0%, 00%, 0.0)`);
+                c.fillStyle = glowBallShading;
+            } else if (this.flashing && !this.blackBoid) {
+                const flashLight = this.lightness * 1.5;
+                glowBallShading.addColorStop(0, `hsla(${this.hue}, 90%, ${flashLight}%, 1.0)`);
+                glowBallShading.addColorStop(0.05, `hsla(${this.hue}, 90%, ${flashLight}%, 1.0)`);
+                glowBallShading.addColorStop(0.05, `hsla(${this.hue}, 90%, ${flashLight}%, 0.7)`);
+                glowBallShading.addColorStop(0.9, `hsla(${this.hue}, 60%, ${flashLight}%, 0.0)`);
+                c.fillStyle = glowBallShading;
+            } else if (this.flashing && this.blackBoid) {
+                glowBallShading.addColorStop(0, `hsla(0, 0%, 30%, 1.0)`);
+                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 30%, 1.0)`);
+                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 10%, 0.7)`);
+                glowBallShading.addColorStop(0.9, `hsla(0, 0%, 00%, 0.0)`);
+                c.fillStyle = glowBallShading;
+            }
+            c.fill();
+        }*/
+
         // Draw circle boid --------------------------------------------
         if (!this.arrow && this.circle && !this.airfoil) {
-            //c.save();
-            //c.translate(cX(this.pos), cY(this.pos));
             c.beginPath();
             //c.arc(0, 0, radScale, 0, 2 * Math.PI);
             c.arc(cX(this.pos), cY(this.pos), 0.6 * radScale, 0, 2 * Math.PI);
             if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
                 c.fillStyle = this.cachedFillStyle;
-                c.strokeStyle = this.cachedStrokeStyle;
+                //c.strokeStyle = this.cachedStrokeStyle;
             } else if (this.whiteBoid) {
                 c.fillStyle = 'hsl(0, 0%, 90%)';
-                c.strokeStyle = 'hsl(0, 0%, 100%)';
+                //c.strokeStyle = 'hsl(0, 0%, 100%)';
             } else if (this.blackBoid) {
                 c.fillStyle = 'hsl(0, 0%, 10%)';
-                c.strokeStyle = 'hsl(0, 0%, 0%)';
+                //c.strokeStyle = 'hsl(0, 0%, 0%)';
             } else if (this.flashing && !this.blackBoid) {
                 const flashLight = Math.round(this.lightness * 1.5);
                 c.fillStyle = `hsl(${Math.round(this.hue + 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
-                c.strokeStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+                //c.strokeStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
             } else if (this.flashing && this.blackBoid) {
                 c.fillStyle = 'hsl(0, 0%, 90%)';
-                c.strokeStyle = 'hsl(0, 0%, 100%)';
+                //c.strokeStyle = 'hsl(0, 0%, 100%)';
             }
             c.fill();
             //c.lineWidth = 4.0;
             //c.stroke();
-            //c.restore();
         }
 
         // Draw flappy boid --------------------------------------------
@@ -5638,7 +5707,7 @@ function makeBoids() {
     boidRadius = 0.02;
 
     boidProps = {
-        numBoids: 5000,
+        numBoids: 2000,
         marginX: Math.min(0.3 * simWidth, 0.3 * simHeight),
         marginY: Math.min(0.3 * simWidth, 0.3 * simHeight),
         minDistance: 5.0 * boidRadius, // Rule #1 - The distance to stay away from other Boids
@@ -6969,6 +7038,26 @@ let startupWarmupPeriod = 3.0; // Wait 3 seconds after startup before monitoring
 let isWarmedUp = false; // Track if warm-up period is complete
 let runtimeTimer = 0; // Track total runtime
 let runtimeLockPeriod = 30.0; // Lock boid count after 30 seconds
+
+// Reset warmup state for clean restart
+function resetWarmupState() {
+    fpsFrameTimes = [];
+    currentFPS = 60;
+    lastFrameTime = 0;
+    fpsCheckTimer = 0;
+    fpsStableTimer = 0;
+    isRampingUp = true;
+    maxBoidsReached = false;
+    safetyMarginApplied = false;
+    stabilityTimerAfterMax = 0;
+    lastSafeBoidCount = 100;
+    justReverted = false;
+    revertVerificationTimer = 0;
+    startupWarmupTimer = 0;
+    isWarmedUp = false;
+    runtimeTimer = 0;
+    lastUpdateTime = 0;
+}
 let boidCountLocked = false; // Track if boid count is locked
 let fadeOutDuration = 5.0; // Fade out over 5 seconds
 let fadeOutTimer = 0; // Track fade out progress
@@ -7208,7 +7297,7 @@ function warmupSequence() {
             if (stabilityTimerAfterMax >= 3.0 && Boids.length > 200) {
                 // Remove 200 boids as safety margin
                 //const removeCount = Math.min(200, Boids.length - 100);
-                const removeCount = 200;
+                const removeCount = 0;
                 if (removeCount > 0) {
                     cullBoids(removeCount);
                 }
@@ -7335,6 +7424,12 @@ let lastUpdateTime = 0;
 let animationFrameId = null;
 
 function update(timestamp) {
+    // Safety check: stop if another instance started
+    if (!window.boidAnimationRunning) {
+        console.log('Animation loop stopped');
+        return;
+    }
+    
     // Calculate actual deltaT from timestamp (more accurate than fixed 1/60)
     if (lastUpdateTime === 0) {
         lastUpdateTime = timestamp;
@@ -7361,14 +7456,22 @@ function update(timestamp) {
     animationFrameId = requestAnimationFrame(update);
 }
 
-// Cancel any existing animation frame and start fresh
-if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId);
-}
+// Clean up any existing listeners and animation frame before starting
 if (window.boidAnimationRunning) {
-    console.warn('Boids animation already running, skipping duplicate initialization');
-} else {
-    window.boidAnimationRunning = true;
-    setupScene();
-    animationFrameId = requestAnimationFrame(update);
+    console.warn('Boids animation already running, cleaning up and restarting');
+    window.boidAnimationRunning = false; // Stop the old loop first
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+    removeEventListeners();
+    detachMouseMove();
+    detachLightweightMouseMove();
+    resetWarmupState();
 }
+
+// Mark as running and start fresh
+window.boidAnimationRunning = true;
+attachEventListeners();
+setupScene();
+animationFrameId = requestAnimationFrame(update);
