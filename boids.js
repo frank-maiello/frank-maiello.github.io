@@ -1,5 +1,5 @@
 /*
-B0IDS 1.42 :: autonomous flocking behavior ::
+B0IDS 1.43 :: autonomous flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -633,7 +633,7 @@ mousedownHandler = function(e) {
         const knobSpacing = knobRadius * 3;
         const menuTopMargin = 0.2 * knobRadius; // Must match the margin in drawSimMenu
         const menuWidth = knobSpacing * 3;
-        const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
+        const menuHeight = knobSpacing * 2 + knobRadius * 3.5;
         const padding = 1.7 * knobRadius;
         const menuUpperLeftX = menuX * cScale;
         const menuUpperLeftY = (canvas.height - menuY * cScale);
@@ -730,8 +730,8 @@ mousedownHandler = function(e) {
             return true;
         }
         
-        // Three radio buttons vertically stacked
-        for (let i = 0; i < 5; i++) {
+        // Radio buttons vertically stacked
+        for (let i = 0; i < 7; i++) {
             const buttonX = menuOriginX + radioCol * knobSpacing - 0.5 * knobRadius;
             const buttonY = menuOriginY + (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius) + menuTopMargin;
             const rdx = clickCanvasX - buttonX;
@@ -745,10 +745,14 @@ mousedownHandler = function(e) {
                 } else if (i === 1) {
                     doCircleBoids();
                 } else if (i === 2) {
-                    doAirfoilBoids();
+                    doGlowBoids();
                 } else if (i === 3) {
-                    doFlappyBoids();
+                    doSquareBoids();
                 } else if (i === 4) {
+                    doAirfoilBoids();
+                } else if (i === 5) {
+                    doFlappyBoids();
+                } else if (i === 6) {
                     doNoneBoids();
                 }
                 return true;
@@ -1421,15 +1425,20 @@ function handleMouseMove(e) {
                         const pos = new Vector2(
                             0.5 * simWidth + Math.cos(ang) * spawnRadius,
                             0.5 * simHeight + Math.sin(ang) * spawnRadius);
-                        const vel = new Vector2(0, 0);
+                        // Give initial velocity toward center (prevents slow clustering)
+                        const velAngle = Math.random() * 2 * Math.PI;
+                        const velMag = 0.3 + Math.random() * 0.4; // Random speed 0.3-0.7
+                        const vel = new Vector2(Math.cos(velAngle) * velMag, Math.sin(velAngle) * velMag);
                         const hue = 0;
                         const newBoid = new BOID(pos, vel, hue, false, false);
                         
                         // Set boid type based on selectedBoidType
                         newBoid.arrow = selectedBoidType === 0;
                         newBoid.circle = selectedBoidType === 1;
-                        newBoid.airfoil = selectedBoidType === 2;
-                        newBoid.flappy = selectedBoidType === 3;
+                        newBoid.glowBoid = selectedBoidType === 2;
+                        newBoid.square = selectedBoidType === 3;
+                        newBoid.airfoil = selectedBoidType === 4;
+                        newBoid.flappy = selectedBoidType === 5;
                         
                         // Insert before the last 2 special boids
                         Boids.splice(Boids.length - 2, 0, newBoid);
@@ -3884,6 +3893,8 @@ class BOID {
         this.circle = false;
         this.airfoil = false;
         this.flappy = false;
+        this.square = false;
+        this.glowBoid = false;
         this.flashing = false;
         this.flashTimer = 0; // Timer for flash duration
         this.flashDuration = 0.1; // How long the flash lasts (100ms)
@@ -4095,18 +4106,18 @@ class BOID {
             c.restore();
         }
 
-        /*// Draw circle boid --------------------------------------------
-        if (!this.arrow && this.circle && !this.airfoil) {
+        // Draw glowing boid --------------------------------------------
+        if (this.glowBoid) {
             c.beginPath();
-            c.arc(cX(this.pos), cY(this.pos), 2 * radScale, 0, 2 * Math.PI);
+            c.arc(cX(this.pos), cY(this.pos), 2 * radScale, 0, 3 * Math.PI);
             var glowBallShading = c.createRadialGradient(
                 cX(this.pos), cY(this.pos), 0,
-                cX(this.pos), cY(this.pos), 2 * radScale
+                cX(this.pos), cY(this.pos), 3 * radScale
             );
             if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
                 glowBallShading.addColorStop(0, `hsla(${this.hue}, 90%, 90%, 1.0)`);
                 glowBallShading.addColorStop(0.05, `hsla(${this.hue}, 90%, 90%, 1.0)`);
-                glowBallShading.addColorStop(0.05, `hsla(${this.hue}, 90%, 50%, 0.7)`);
+                glowBallShading.addColorStop(0.05, `hsla(${this.hue}, 90%, 50%, 0.4)`);
                 glowBallShading.addColorStop(0.9, `hsla(${this.hue}, 60%, 30%, 0.0)`);
                 c.fillStyle = glowBallShading;
             } else if (this.whiteBoid) {
@@ -4136,7 +4147,7 @@ class BOID {
                 c.fillStyle = glowBallShading;
             }
             c.fill();
-        }*/
+        }
 
         // Draw circle boid --------------------------------------------
         if (!this.arrow && this.circle && !this.airfoil) {
@@ -4163,6 +4174,36 @@ class BOID {
             c.fill();
             //c.lineWidth = 4.0;
             //c.stroke();
+        }
+
+        // Draw square boid --------------------------------------------
+        if (this.square) {
+            const angle = Math.atan2(this.vel.y, this.vel.x);
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.fillStyle = this.cachedFillStyle;
+                //c.strokeStyle = this.cachedStrokeStyle;
+            } else if (this.whiteBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+                //c.strokeStyle = 'hsl(0, 0%, 100%)';
+            } else if (this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 10%)';
+                //c.strokeStyle = 'hsl(0, 0%, 0%)';
+            } else if (this.flashing && !this.blackBoid) {
+                const flashLight = Math.round(this.lightness * 1.5);
+                c.fillStyle = `hsl(${Math.round(this.hue + 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+                //c.strokeStyle = `hsl(${Math.round(this.hue)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+            } else if (this.flashing && this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+                //c.strokeStyle = 'hsl(0, 0%, 100%)';
+            }
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+            c.rotate(-angle); 
+            c.fillRect(0.5 * radScale, -0.5 * radScale, radScale, radScale);
+            c.strokeStyle = 'hsl(0, 0%, 20%)';
+            c.lineWidth = 1.0;
+            c.strokeRect(0.5 * radScale, -0.5 * radScale, radScale, radScale);
+            c.restore();
         }
 
         // Draw flappy boid --------------------------------------------
@@ -4279,6 +4320,8 @@ function doArrowBoids() {
         boid.circle = false;
         boid.airfoil = false;
         boid.flappy = false;
+        boid.square = false;
+        boid.glowBoid = false;
     }
 }   
 
@@ -4288,8 +4331,32 @@ function doCircleBoids() {
         boid.circle = true;
         boid.airfoil = false;
         boid.flappy = false;
+        boid.square = false;
+        boid.glowBoid = false;
     }
-}   
+} 
+
+function doGlowBoids() {
+    for (let boid of Boids) {
+        boid.arrow = false;
+        boid.circle = false;
+        boid.airfoil = false;
+        boid.flappy = false;
+        boid.square = false;
+        boid.glowBoid = true;
+    }
+} 
+
+function doSquareBoids() {
+    for (let boid of Boids) {
+        boid.arrow = false;
+        boid.circle = false;
+        boid.airfoil = false;
+        boid.flappy = false;
+        boid.square = true;
+        boid.glowBoid = false;
+    }
+} 
 
 function doAirfoilBoids() {
     for (let boid of Boids) {
@@ -4297,6 +4364,8 @@ function doAirfoilBoids() {
         boid.circle = false;
         boid.airfoil = true;
         boid.flappy = false;
+        boid.square = false;
+        boid.glowBoid = false;
     }
 }  
 
@@ -4306,6 +4375,8 @@ function doFlappyBoids() {
         boid.circle = false;
         boid.airfoil = false;
         boid.flappy = true;
+        boid.square = false;
+        boid.glowBoid = false;
     }
 }
 
@@ -4315,6 +4386,8 @@ function doNoneBoids() {
         boid.circle = false;
         boid.airfoil = false;
         boid.flappy = false;
+        boid.square = false;
+        boid.glowBoid = false;
     }
 }  
 
@@ -4642,7 +4715,7 @@ function drawSimMenu() {
 
     // Draw overall menu background with rounded corners
     const menuWidth = knobSpacing * 3;
-    const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
+    const menuHeight = knobSpacing * 2 + knobRadius * 3.5;
     const padding = 1.7 * knobRadius;
     const cornerRadius = 0.05 * cScale;
     c.beginPath();
@@ -4848,9 +4921,9 @@ function drawSimMenu() {
     // Draw radio buttons for boid type selection (vertically stacked)
     const radioButtonRadius = knobRadius * 0.25;
     const radioCol = 2;
-    const radioLabels = ['Arrows', 'Circles', 'Teardrops', 'Birds','None'];
+    const radioLabels = ['Arrows', 'Circles', 'Glowing Orbs', 'Squares', 'Teardrops', 'Birds', 'None'];
     
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
         const buttonX = radioCol * knobSpacing - 0.5 * knobRadius;
         const buttonY = (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius) + menuTopMargin;
         
@@ -4874,7 +4947,7 @@ function drawSimMenu() {
         // Draw label to the right of button - shadow for contrast
         c.textAlign = 'left';
         c.textBaseline = 'middle';
-        c.font = ` ${0.3 * knobRadius}px verdana`;
+        c.font = `${0.28 * knobRadius}px verdana`;
         c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
         c.strokeText(radioLabels[i], 0.04 * knobRadius + buttonX + radioButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + buttonY);
 
@@ -5685,14 +5758,19 @@ function resetParameters() {
                 const pos = new Vector2(
                     0.5 * simWidth + Math.cos(ang) * spawnRadius,
                     0.5 * simHeight + Math.sin(ang) * spawnRadius);
-                const vel = new Vector2(0, 0);
+                // Give initial velocity toward center (prevents slow clustering)
+                const velAngle = Math.random() * 2 * Math.PI;
+                const velMag = 0.3 + Math.random() * 0.4; // Random speed 0.3-0.7
+                const vel = new Vector2(Math.cos(velAngle) * velMag, Math.sin(velAngle) * velMag);
                 const hue = 0;
                 
                 const newBoid = new BOID(pos, vel, hue, false, false);
                 newBoid.arrow = selectedBoidType === 0;
                 newBoid.circle = selectedBoidType === 1;
-                newBoid.airfoil = selectedBoidType === 2;
-                newBoid.flappy = selectedBoidType === 3;
+                newBoid.glowBoid = selectedBoidType === 2;
+                newBoid.square = selectedBoidType === 3;
+                newBoid.airfoil = selectedBoidType === 4;
+                newBoid.flappy = selectedBoidType === 5;
                 
                 // Insert before the last 2 special boids
                 Boids.splice(Boids.length - 2, 0, newBoid);
@@ -5744,7 +5822,10 @@ function makeBoids() {
         pos = new Vector2(
             0.5 * simWidth + Math.cos(ang) * spawnRadius,
             0.5 * simHeight + Math.sin(ang) * spawnRadius);
-        vel = new Vector2(0, 0);
+        // Give initial velocity toward center (prevents slow clustering)
+        const velAngle = Math.random() * 2 * Math.PI;
+        const velMag = 0.3 + Math.random() * 0.4; // Random speed 0.3-0.7
+        vel = new Vector2(Math.cos(velAngle) * velMag, Math.sin(velAngle) * velMag);
         hue = 0;
         if (i == 0) {
             // White boid
@@ -6812,9 +6893,9 @@ function simulateEverything() {
 function drawEverything() {
     // Clear canvas
     c.clearRect(0, 0, width, height);
-
-    //drawArrow(0.05 * simWidth, 0.05 * simWidth, 110, 0.2);
-
+    //c.fillStyle = 'hsla(0, 0%, 0%, 0.1)';
+    //c.fillRect(0, 0, width, height);
+    
     // Draw hot air balloon 
     if (showHotAirBalloon) {
         for (let hotAirBalloon of HotAirBalloon) {
@@ -6822,21 +6903,19 @@ function drawEverything() {
         }
     }
     
-    // Draw background clouds first
+    // Draw clouds --------
     if (showClouds) {
+        // Draw background clouds
         for (let cloud of BackgroundClouds) {
             cloud.draw();
         }
-    }
-    
-    // Draw foreground clouds
-    if (showClouds) {
+        // Draw foreground clouds
         for (let cloud of Clouds) {
             cloud.draw();
         }
     }
 
-    // Draw boids
+    // Draw boids --------
     for (var b = 0; b < Boids.length; b++) {
         boid = Boids[b];
         boid.draw();
@@ -6851,7 +6930,7 @@ function drawEverything() {
         }
     }
     
-    // Draw airplane
+    // Draw airplane --------
     if (doPlane == true && showPlane) {
         // Draw airplane
         for (let plane of Airplane) {
@@ -7022,7 +7101,7 @@ let currentFPS = 60;
 let lastFrameTime = 0;
 let fpsCheckTimer = 0;
 let fpsCheckInterval = 0.25; // Check FPS every 0.25 seconds
-let minStableFPS = 59.0; // Target FPS threshold (with buffer below 60)
+let minStableFPS = 58.0; // Target FPS threshold (with buffer below 60)
 let fpsStableTimer = 0;
 let fpsStableThreshold = 0.5; // FPS must be stable for 0.5 seconds before increasing
 let isRampingUp = true; // Track if we're still ramping up
@@ -7269,15 +7348,20 @@ function warmupSequence() {
                     const pos = new Vector2(
                         0.5 * simWidth + Math.cos(ang) * spawnRadius,
                         0.5 * simHeight + Math.sin(ang) * spawnRadius);
-                    const vel = new Vector2(0, 0);
+                    // Give initial velocity toward center (prevents slow clustering)
+                    const velAngle = Math.random() * 2 * Math.PI;
+                    const velMag = 0.3 + Math.random() * 0.4; // Random speed 0.3-0.7
+                    const vel = new Vector2(Math.cos(velAngle) * velMag, Math.sin(velAngle) * velMag);
                     const hue = 0;
                     
                     // Create new boid and set type based on selectedBoidType
                     const newBoid = new BOID(pos, vel, hue, false, false);
                     newBoid.arrow = selectedBoidType === 0;
                     newBoid.circle = selectedBoidType === 1;
-                    newBoid.airfoil = selectedBoidType === 2;
-                    newBoid.flappy = selectedBoidType === 3;
+                    newBoid.glowBoid = selectedBoidType === 2;
+                    newBoid.square = selectedBoidType === 3;
+                    newBoid.airfoil = selectedBoidType === 4;
+                    newBoid.flappy = selectedBoidType === 5;
                     
                     // Insert before the last 2 special boids
                     Boids.splice(Boids.length - 2, 0, newBoid);
@@ -7469,6 +7553,9 @@ if (window.boidAnimationRunning) {
     detachLightweightMouseMove();
     resetWarmupState();
 }
+
+// Reset timing to prevent huge deltaT on first frame
+lastUpdateTime = 0;
 
 // Mark as running and start fresh
 window.boidAnimationRunning = true;
