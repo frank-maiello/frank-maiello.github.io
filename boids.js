@@ -1,5 +1,5 @@
 /*
-B0IDS 1.43 :: autonomous flocking behavior ::
+B0IDS 1.44 :: autonomous flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -1042,6 +1042,7 @@ mousedownHandler = function(e) {
     if (clickedBalloon && !clickedBalloon.popping) {
         clickedBalloon.popping = true;
         clickedBalloon.popStartTime = performance.now();
+        spookBoids(clickedBalloon.pos, 5 * clickedBalloon.radius);
     }
     
     if (e.button === 0) { // Left click
@@ -2887,6 +2888,14 @@ function spawnBalloon() {
     const pos = new Vector2(.1 * simWidth + Math.random() * 0.8 *simWidth, -0.3);
     const vel = new Vector2((Math.random() - 0.5) * 0.3, Math.random() * 0.3);
     Balloons.push(new BALLOON(pos, vel));
+    
+    // Increase cheerfulness of rainy foreground clouds when balloons spawn
+    for (let cloud of ForegroundCloud) {
+        if (cloud.isRaining && cloud.cheerfulness < 100) {
+            cloud.cheerfulness = Math.min(100, cloud.cheerfulness + 2);
+            cloud.renderToCanvas(); // Re-render cloud with new appearance
+        }
+    }
 }   
 
 //  CLOUD CLASS ---------------------------------------------------------------------
@@ -2897,6 +2906,7 @@ class CLOUD {
         this.isBackground = isBackground;
         this.isForeground = isForeground;
         this.isRaining = isRaining;
+        this.cheerfulness = 0; // 0-100, increases as balloons are spawned
         // Foreground clouds are largest, background smallest, normal in between
         this.radius = isForeground ? 0.20 : (isBackground ? 0.07 : 0.15);
         this.speed = isForeground ? 0.08 : (isBackground ? 0.02 : 0.04); // Foreground fastest, background slowest
@@ -3007,7 +3017,10 @@ class CLOUD {
             ctx.strokeStyle = 'hsl(200, 85%, 85%)';
             ctx.lineWidth = 16;
         } else if (this.isForeground && this.isRaining) {
-            ctx.strokeStyle = 'hsl(200, 30%, 20%)';
+            // Brighten as cheerfulness increases (20% to 85% lightness)
+            const lightness = 20 + (this.cheerfulness / 100) * 65;
+            const saturation = 30 + (this.cheerfulness / 100) * 55; // 30% to 85%
+            ctx.strokeStyle = `hsl(200, ${saturation}%, ${lightness}%)`;
             ctx.lineWidth = 16;
         } else if (this.isBackground) {
             ctx.strokeStyle = 'hsl(200, 30%, 50%)';
@@ -3029,7 +3042,9 @@ class CLOUD {
         } else if (this.isForeground && !this.isRaining) {
             ctx.fillStyle = 'hsl(0, 0%, 100%)';
         } else if (this.isForeground && this.isRaining) {
-            ctx.fillStyle = 'hsl(0, 0%, 50%)';
+            // Brighten as cheerfulness increases (50% to 100% lightness)
+            const lightness = 50 + (this.cheerfulness / 100) * 50;
+            ctx.fillStyle = `hsl(0, 0%, ${lightness}%)`;
         } else {
             ctx.fillStyle = 'hsl(0, 0%, 95%)';
         }
@@ -3039,7 +3054,7 @@ class CLOUD {
             ctx.fill();
         }
 
-        // Draw pouty face on foreground rainy clouds
+        // Draw face on foreground rainy clouds (pouty -> happy as cheerfulness increases)
         if (this.isForeground && this.isRaining) {
             const faceY = cy + r * 0.1;
             const eyeOffsetX = r * 0.2;
@@ -3058,12 +3073,26 @@ class CLOUD {
             ctx.ellipse(cx + eyeOffsetX, faceY - eyeOffsetY, eyeRadiusX, eyeRadiusY, 0, 0, 2 * Math.PI);
             ctx.fill();
             
-            // Pouty mouth
+            // Mouth changes from pouty frown to happy smile based on cheerfulness
             const mouthWidth = r * 0.25;
             const mouthHeight = r * 0.05;
+            const cheerRatio = this.cheerfulness / 100; // 0 = pouty, 1 = happy
+            
             ctx.beginPath();
-            ctx.moveTo(cx - mouthWidth / 2, faceY + r * 0.14);
-            ctx.quadraticCurveTo(cx, faceY + r * 0.1 - mouthHeight, cx + mouthWidth / 2, faceY + r * 0.1);
+            if (cheerRatio < 0.5) {
+                // Pouty mouth (curves down) - preserve original shape at 0% cheerfulness
+                const poutyAmount = (1 - cheerRatio * 2); // 1 at 0%, 0 at 50%
+                const mouthY = faceY + r * 0.1 + (poutyAmount * r * 0.04); // r * 0.14 at 0%, r * 0.1 at 50%
+                ctx.moveTo(cx - mouthWidth / 2, mouthY);
+                ctx.quadraticCurveTo(cx, faceY + r * 0.1 - mouthHeight * poutyAmount, cx + mouthWidth / 2, faceY + r * 0.1);
+            } else {
+                // Happy smile (curves up)
+                const smileAmount = (cheerRatio - 0.5) * 2; // 0 at 50%, 1 at 100%
+                const curvature = smileAmount * mouthHeight * 1.5;
+                ctx.moveTo(cx - mouthWidth / 2, faceY + r * 0.1);
+                ctx.quadraticCurveTo(cx, faceY + r * 0.1 + curvature, cx + mouthWidth / 2, faceY + r * 0.1);
+            }
+            
             ctx.strokeStyle = 'hsl(0, 0%, 10%)';
             ctx.lineWidth = 4;
             ctx.stroke();
@@ -3080,7 +3109,10 @@ class CLOUD {
             ctx.strokeStyle = 'hsl(200, 85%, 85%)';
             ctx.lineWidth = 7;
         } else if (this.isForeground && this.isRaining) {
-            ctx.strokeStyle = 'hsla(200, 30%, 20%, 1)';
+            // Brighten as cheerfulness increases (20% to 85% lightness)
+            const lightness = 20 + (this.cheerfulness / 100) * 65;
+            const saturation = 30 + (this.cheerfulness / 100) * 55;
+            ctx.strokeStyle = `hsla(200, ${saturation}%, ${lightness}%, 1)`;
             ctx.lineWidth = 7;
         } else {
             ctx.strokeStyle = 'hsla(200, 80%, 80%, 1)';
@@ -3872,6 +3904,22 @@ function makeAirplane() {
     Airplane.push(new AIRPLANE(y, speed, size, respawnDelay, passNumber));
 } 
 
+// Spook nearby boids -------
+function spookBoids(pos, spookRadius) {
+    const spookForce = 50;
+    for (let boid of Boids) {
+        const toBoid = boid.pos.clone().subtract(pos);
+        const distance = toBoid.length();
+        if (distance < spookRadius && distance > 0) {
+            // Calculate repelling force inversely proportional to distance
+            const forceMagnitude = (spookRadius - distance) / spookRadius * spookForce;
+            toBoid.normalize().scale(forceMagnitude);
+            boid.vel.add(toBoid);
+        }
+    }
+}
+
+
 //  BOID CLASS ---------------------------------------------------------------------
 class BOID {
     constructor(pos, vel, hue, whiteBoid, blackBoid) {
@@ -4109,42 +4157,186 @@ class BOID {
         // Draw glowing boid --------------------------------------------
         if (this.glowBoid) {
             c.beginPath();
-            c.arc(cX(this.pos), cY(this.pos), 2 * radScale, 0, 3 * Math.PI);
+            c.arc(cX(this.pos), cY(this.pos), radScale, 0, 2 * Math.PI);
             var glowBallShading = c.createRadialGradient(
                 cX(this.pos), cY(this.pos), 0,
-                cX(this.pos), cY(this.pos), 3 * radScale
+                cX(this.pos), cY(this.pos), radScale
             );
             if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
-                glowBallShading.addColorStop(0, `hsla(${this.hue}, 90%, 90%, 1.0)`);
-                glowBallShading.addColorStop(0.05, `hsla(${this.hue}, 90%, 90%, 1.0)`);
-                glowBallShading.addColorStop(0.05, `hsla(${this.hue}, 90%, 50%, 0.4)`);
-                glowBallShading.addColorStop(0.9, `hsla(${this.hue}, 60%, 30%, 0.0)`);
-                c.fillStyle = glowBallShading;
+                // Soap bubble with prismatic effect and transparent center
+                
+                // Base bubble with transparent center and prismatic rim
+                let bubbleGradient = c.createRadialGradient(
+                    cX(this.pos), cY(this.pos), 0, 
+                    cX(this.pos), cY(this.pos), radScale
+                );
+                
+                // Very transparent center - bubbles are thin and don't reflect much light here
+                bubbleGradient.addColorStop(0.0, `hsla(${this.hue}, 20%, 80%, 0.05)`);
+                bubbleGradient.addColorStop(0.3, `hsla(${this.hue}, 30%, 70%, 0.08)`);
+                
+                // Prismatic color bands (thin film interference)
+                bubbleGradient.addColorStop(0.65, `hsla(${this.hue - 60}, 70%, 60%, 0.25)`);
+                bubbleGradient.addColorStop(0.78, `hsla(${this.hue}, 80%, 65%, 0.35)`);
+                bubbleGradient.addColorStop(0.88, `hsla(${this.hue + 60}, 85%, 70%, 0.4)`);
+                bubbleGradient.addColorStop(0.95, `hsla(${this.hue + 120}, 85%, 70%, 0.45)`);
+                
+                // Subtle edge with slight fade
+                bubbleGradient.addColorStop(0.98, `hsla(${this.hue + 80}, 80%, 75%, 0.35)`);
+                bubbleGradient.addColorStop(1.0, `hsla(${this.hue}, 60%, 50%, 0.15)`);
+                
+                c.fillStyle = bubbleGradient;
+                c.fill();
+
+                // Specular highlight (light source reflection)
+                const highlightX = (this.pos.x - (0.25 * this.radius)) * cScale;
+                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius)) * cScale;
+                const highlightGradient = c.createRadialGradient(
+                    highlightX, highlightY, 0, 
+                    highlightX, highlightY, 0.5 * radScale
+                );
+                
+                // Bright white highlight with prismatic edge
+                highlightGradient.addColorStop(0.0, `hsla(0, 0%, 100%, 0.6)`);
+                highlightGradient.addColorStop(0.3, `hsla(${this.hue + 180}, 60%, 85%, 0.4)`);
+                highlightGradient.addColorStop(0.6, `hsla(${this.hue}, 70%, 75%, 0.2)`);
+                highlightGradient.addColorStop(1.0, `hsla(0, 0%, 100%, 0.0)`);
+                
+                c.fillStyle = highlightGradient;
+                c.fill();
             } else if (this.whiteBoid) {
-                glowBallShading.addColorStop(0, `hsla(0, 0%, 90%, 1.0)`);
-                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 90%, 1.0)`);
-                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 90%, 0.7)`);
-                glowBallShading.addColorStop(0.9, `hsla(0, 0%, 60%, 0.0)`);
-                c.fillStyle = glowBallShading;
-            } else if (this.blackBoid) {
-                glowBallShading.addColorStop(0, `hsla(0, 0%, 30%, 1.0)`);
-                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 30%, 1.0)`);
-                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 10%, 0.7)`);
-                glowBallShading.addColorStop(0.9, `hsla(0, 0%, 00%, 0.0)`);
-                c.fillStyle = glowBallShading;
+                // White soap bubble with subtle iridescence
+                let bubbleGradient = c.createRadialGradient(
+                    cX(this.pos), cY(this.pos), 0, 
+                    cX(this.pos), cY(this.pos), radScale
+                );
+                
+                bubbleGradient.addColorStop(0.0, `hsla(0, 0%, 98%, 0.05)`);
+                bubbleGradient.addColorStop(0.3, `hsla(0, 0%, 95%, 0.08)`);
+                bubbleGradient.addColorStop(0.65, `hsla(200, 30%, 85%, 0.25)`);
+                bubbleGradient.addColorStop(0.78, `hsla(240, 25%, 90%, 0.35)`);
+                bubbleGradient.addColorStop(0.88, `hsla(280, 30%, 88%, 0.5)`);
+                bubbleGradient.addColorStop(0.95, `hsla(320, 25%, 85%, 0.45)`);
+                bubbleGradient.addColorStop(0.98, `hsla(0, 15%, 92%, 0.35)`);
+                bubbleGradient.addColorStop(1.0, `hsla(0, 0%, 85%, 0.15)`);
+                
+                c.fillStyle = bubbleGradient;
+                c.fill();
+
+                const highlightX = (this.pos.x - (0.25 * this.radius)) * cScale;
+                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius)) * cScale;
+                const highlightGradient = c.createRadialGradient(
+                    highlightX, highlightY, 0, 
+                    highlightX, highlightY, 0.5 * radScale
+                );
+                
+                highlightGradient.addColorStop(0.0, `hsla(0, 0%, 100%, 0.7)`);
+                highlightGradient.addColorStop(0.3, `hsla(200, 40%, 95%, 0.5)`);
+                highlightGradient.addColorStop(0.6, `hsla(240, 30%, 90%, 0.2)`);
+                highlightGradient.addColorStop(1.0, `hsla(0, 0%, 100%, 0.0)`);
+                
+                c.fillStyle = highlightGradient;
+                c.fill();
+            } else if (this.blackBoid && !this.flashing) {
+                // Dark bubble with subtle color
+                let bubbleGradient = c.createRadialGradient(
+                    cX(this.pos), cY(this.pos), 0, 
+                    cX(this.pos), cY(this.pos), radScale
+                );
+                
+                bubbleGradient.addColorStop(0.0, `hsla(0, 0%, 8%, 0.05)`);
+                bubbleGradient.addColorStop(0.3, `hsla(0, 0%, 10%, 0.08)`);
+                bubbleGradient.addColorStop(0.65, `hsla(240, 40%, 20%, 0.25)`);
+                bubbleGradient.addColorStop(0.78, `hsla(260, 35%, 25%, 0.35)`);
+                bubbleGradient.addColorStop(0.88, `hsla(280, 40%, 22%, 0.5)`);
+                bubbleGradient.addColorStop(0.95, `hsla(300, 35%, 18%, 0.45)`);
+                bubbleGradient.addColorStop(0.98, `hsla(0, 20%, 15%, 0.35)`);
+                bubbleGradient.addColorStop(1.0, `hsla(0, 0%, 5%, 0.15)`);
+                
+                c.fillStyle = bubbleGradient;
+                c.fill();
+
+                const highlightX = (this.pos.x - (0.25 * this.radius)) * cScale;
+                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius)) * cScale;
+                const highlightGradient = c.createRadialGradient(
+                    highlightX, highlightY, 0, 
+                    highlightX, highlightY, 0.5 * radScale
+                );
+                
+                highlightGradient.addColorStop(0.0, `hsla(0, 0%, 40%, 0.5)`);
+                highlightGradient.addColorStop(0.3, `hsla(260, 30%, 35%, 0.3)`);
+                highlightGradient.addColorStop(0.6, `hsla(240, 25%, 25%, 0.15)`);
+                highlightGradient.addColorStop(1.0, `hsla(0, 0%, 0%, 0.0)`);
+                
+                c.fillStyle = highlightGradient;
+                c.fill();
             } else if (this.flashing && !this.blackBoid) {
-                const flashLight = this.lightness * 1.5;
-                glowBallShading.addColorStop(0, `hsla(${this.hue}, 90%, ${flashLight}%, 1.0)`);
-                glowBallShading.addColorStop(0.05, `hsla(${this.hue}, 90%, ${flashLight}%, 1.0)`);
-                glowBallShading.addColorStop(0.05, `hsla(${this.hue}, 90%, ${flashLight}%, 0.7)`);
-                glowBallShading.addColorStop(0.9, `hsla(${this.hue}, 60%, ${flashLight}%, 0.0)`);
-                c.fillStyle = glowBallShading;
+                // Flashing colored bubble - brighter and more saturated
+                let bubbleGradient = c.createRadialGradient(
+                    cX(this.pos), cY(this.pos), 0, 
+                    cX(this.pos), cY(this.pos), radScale
+                );
+                
+                const flashLight = Math.min(95, this.lightness * 1.5);
+                bubbleGradient.addColorStop(0.0, `hsla(${this.hue}, 30%, ${flashLight}%, 0.1)`);
+                bubbleGradient.addColorStop(0.3, `hsla(${this.hue}, 40%, ${flashLight - 10}%, 0.15)`);
+                bubbleGradient.addColorStop(0.65, `hsla(${this.hue - 60}, 80%, ${flashLight - 15}%, 0.4)`);
+                bubbleGradient.addColorStop(0.78, `hsla(${this.hue}, 90%, ${flashLight - 10}%, 0.5)`);
+                bubbleGradient.addColorStop(0.88, `hsla(${this.hue + 60}, 95%, ${flashLight - 5}%, 0.65)`);
+                bubbleGradient.addColorStop(0.95, `hsla(${this.hue + 120}, 90%, ${flashLight}%, 0.6)`);
+                bubbleGradient.addColorStop(0.98, `hsla(${this.hue + 80}, 85%, ${flashLight}%, 0.5)`);
+                bubbleGradient.addColorStop(1.0, `hsla(${this.hue}, 70%, ${flashLight - 20}%, 0.25)`);
+                
+                c.fillStyle = bubbleGradient;
+                c.fill();
+
+                const highlightX = (this.pos.x - (0.25 * this.radius)) * cScale;
+                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius)) * cScale;
+                const highlightGradient = c.createRadialGradient(
+                    highlightX, highlightY, 0, 
+                    highlightX, highlightY, 0.5 * radScale
+                );
+                
+                highlightGradient.addColorStop(0.0, `hsla(0, 0%, 100%, 0.8)`);
+                highlightGradient.addColorStop(0.3, `hsla(${this.hue + 180}, 70%, 90%, 0.6)`);
+                highlightGradient.addColorStop(0.6, `hsla(${this.hue}, 80%, 85%, 0.3)`);
+                highlightGradient.addColorStop(1.0, `hsla(0, 0%, 100%, 0.0)`);
+                
+                c.fillStyle = highlightGradient;
+                c.fill();
             } else if (this.flashing && this.blackBoid) {
-                glowBallShading.addColorStop(0, `hsla(0, 0%, 30%, 1.0)`);
-                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 30%, 1.0)`);
-                glowBallShading.addColorStop(0.05, `hsla(0, 0%, 10%, 0.7)`);
-                glowBallShading.addColorStop(0.9, `hsla(0, 0%, 00%, 0.0)`);
-                c.fillStyle = glowBallShading;
+                // Flashing black bubble - same as non-flashing black
+                let bubbleGradient = c.createRadialGradient(
+                    cX(this.pos), cY(this.pos), 0, 
+                    cX(this.pos), cY(this.pos), radScale
+                );
+                
+                bubbleGradient.addColorStop(0.0, `hsla(0, 0%, 8%, 0.05)`);
+                bubbleGradient.addColorStop(0.3, `hsla(0, 0%, 10%, 0.08)`);
+                bubbleGradient.addColorStop(0.65, `hsla(240, 40%, 20%, 0.25)`);
+                bubbleGradient.addColorStop(0.78, `hsla(260, 35%, 25%, 0.35)`);
+                bubbleGradient.addColorStop(0.88, `hsla(280, 40%, 22%, 0.5)`);
+                bubbleGradient.addColorStop(0.95, `hsla(300, 35%, 18%, 0.45)`);
+                bubbleGradient.addColorStop(0.98, `hsla(0, 20%, 15%, 0.35)`);
+                bubbleGradient.addColorStop(1.0, `hsla(0, 0%, 5%, 0.15)`);
+                
+                c.fillStyle = bubbleGradient;
+                c.fill();
+
+                const highlightX = (this.pos.x - (0.25 * this.radius)) * cScale;
+                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius)) * cScale;
+                const highlightGradient = c.createRadialGradient(
+                    highlightX, highlightY, 0, 
+                    highlightX, highlightY, 0.5 * radScale
+                );
+                
+                highlightGradient.addColorStop(0.0, `hsla(0, 0%, 40%, 0.5)`);
+                highlightGradient.addColorStop(0.3, `hsla(260, 30%, 35%, 0.3)`);
+                highlightGradient.addColorStop(0.6, `hsla(240, 25%, 25%, 0.15)`);
+                highlightGradient.addColorStop(1.0, `hsla(0, 0%, 0%, 0.0)`);
+                
+                c.fillStyle = highlightGradient;
+                c.fill();
             }
             c.fill();
         }
@@ -4921,7 +5113,7 @@ function drawSimMenu() {
     // Draw radio buttons for boid type selection (vertically stacked)
     const radioButtonRadius = knobRadius * 0.25;
     const radioCol = 2;
-    const radioLabels = ['Arrows', 'Circles', 'Glowing Orbs', 'Squares', 'Teardrops', 'Birds', 'None'];
+    const radioLabels = ['Arrows', 'Circles', 'Bubbles', 'Squares', 'Teardrops', 'Birds', 'None'];
     
     for (let i = 0; i < 7; i++) {
         const buttonX = radioCol * knobSpacing - 0.5 * knobRadius;
@@ -6871,6 +7063,7 @@ function simulateEverything() {
                     // Collision detected - pop the balloon
                     balloon.popping = true;
                     balloon.popStartTime = performance.now();
+                    spookBoids(balloon.pos, 5 * balloon.radius);
                 }
             }
         }
@@ -6955,7 +7148,11 @@ function drawEverything() {
         for (let cloud of ForegroundCloud) {
             cloud.draw();
             if (cloud.isRaining) {
-                makeItRain(cloud);
+                // Rain rate reduces as cheerfulness increases (0% cheerful = always rain, 100% cheerful = never rain)
+                const rainChance = 1.0 - (cloud.cheerfulness / 100);
+                if (Math.random() < rainChance) {
+                    makeItRain(cloud);
+                }
             }
         }
     }
