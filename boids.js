@@ -57,6 +57,7 @@ let justStarted = true;
 let savedSimMenuVisible = true;
 let savedPaintMenuVisible = true;
 let savedSkyMenuVisible = true;
+let savedDrawMenuVisible = true;
 
 // Menu visibility state
 let menuVisible = false;
@@ -67,10 +68,15 @@ let menuFadeSpeed = 3.0; // Fade speed (0 to 1 per second)
 let skyMenuVisible = false;
 let skyMenuOpacity = 0;
 
+// Draw menu visibility
+let drawMenuVisible = false;
+let drawMenuOpacity = 0;
+
 // Menu z-order (higher number = on top)
 let menuZOrder = 2;
 let colorMenuZOrder = 1;
 let skyMenuZOrder = 0;
+let drawMenuZOrder = 3;
 
 // Menu position
 let menuX = 0.1; // World coordinates
@@ -80,9 +86,14 @@ let menuY = simHeight - 0.4; // World coordinates
 let skyMenuX = 0.6; // World coordinates
 let skyMenuY = simHeight - 0.3; // World coordinates
 
+// Draw menu position
+let drawMenuX = 1.2; // World coordinates
+let drawMenuY = simHeight - 0.7; // World coordinates
+
 // Menu knob dragging state
 let draggedKnob = null; // Index of the knob being dragged
 let draggedSkyKnob = null; // Index of the sky knob being dragged
+let draggedDrawKnob = null; // Index of knob being dragged in draw menu
 let dragStartMouseX = 0;
 let dragStartMouseY = 0;
 let dragStartValue = 0;
@@ -119,6 +130,13 @@ let skyMenuDragStartX = 0;
 let skyMenuDragStartY = 0;
 let skyMenuStartX = 0;
 let skyMenuStartY = 0;
+
+// Draw menu dragging state
+let isDraggingDrawMenu = false;
+let drawMenuDragStartX = 0;
+let drawMenuDragStartY = 0;
+let drawMenuStartX = 0;
+let drawMenuStartY = 0;
 
 // Spraypaint tool state
 let spraypaintActive = false;
@@ -179,6 +197,20 @@ let hueTickerDragStart = 0;
 // Set magnet state
 let magnetActive = false;
 let isDraggingMagnet = false;
+let magnetForce = 5.0;
+let magnetEffectRadius = 0.5;
+let poleGlowTicker = 0;
+
+// Trace Path state
+let tracePathActive = false;
+let isDrawingPath = false;
+let pathExists = false;
+let pathPoints = [];
+let pathLength = 0; // Total length of the path in world units
+let pathCumulativeDistances = []; // Cumulative distance at each point for arc-length parameterization
+let magnetPathProgress = 0;
+let magnetPathSpeed = 0.3; // World units per second
+let savedMenuStatesForPath = {};
 
 // Create offscreen canvas for color wheel
 function createColorWheel() {
@@ -238,14 +270,17 @@ mousedownHandler = function(e) {
             savedSimMenuVisible = menuVisible;
             savedPaintMenuVisible = colorMenuVisible;
             savedSkyMenuVisible = skyMenuVisible;
+            savedDrawMenuVisible = drawMenuVisible;
             menuVisible = false;
             colorMenuVisible = false;
             skyMenuVisible = false;
+            drawMenuVisible = false;
         } else {
             // Opening main menu - restore saved submenu visibility states
             menuVisible = savedSimMenuVisible;
             colorMenuVisible = savedPaintMenuVisible;
             skyMenuVisible = savedSkyMenuVisible;
+            drawMenuVisible = savedDrawMenuVisible;
         }
         mainMenuVisible = !mainMenuVisible;
         return;
@@ -259,7 +294,7 @@ mousedownHandler = function(e) {
         const itemWidth = 0.24 * cScale;
         const padding = 0.02 * cScale;
         const menuHeight = itemHeight + (padding * 2);
-        const menuWidth = (itemWidth * 3) + (padding * 4);
+        const menuWidth = (itemWidth * 4) + (padding * 5);
         const menuBaseX = ellipsisX + 0.08 * cScale;
         const menuX = menuBaseX + mainMenuXOffset * cScale;
         const menuY = ellipsisY - 0.01 * cScale;
@@ -275,14 +310,32 @@ mousedownHandler = function(e) {
             const relativeX = clickCanvasX - menuX - padding;
             const itemIndex = Math.floor(relativeX / (itemWidth + padding));
             
-            if (itemIndex >= 0 && itemIndex < 3) {
+            if (itemIndex >= 0 && itemIndex < 4) {
                 // Toggle the corresponding menu
                 if (itemIndex === 0) {
                     menuVisible = !menuVisible;
+                    if (menuVisible) {
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder);
+                        menuZOrder = maxZ + 1;
+                    }
                 } else if (itemIndex === 1) {
-                    colorMenuVisible = !colorMenuVisible;
-                } else if (itemIndex === 2) {
                     skyMenuVisible = !skyMenuVisible;
+                    if (skyMenuVisible) {
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder);
+                        skyMenuZOrder = maxZ + 1;
+                    }
+                } else if (itemIndex === 2) {
+                    colorMenuVisible = !colorMenuVisible;
+                    if (colorMenuVisible) {
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder);
+                        colorMenuZOrder = maxZ + 1;
+                    }
+                } else if (itemIndex === 3) {
+                    drawMenuVisible = !drawMenuVisible;
+                    if (drawMenuVisible) {
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder);
+                        drawMenuZOrder = maxZ + 1;
+                    }
                 }
             }
             return;
@@ -308,6 +361,7 @@ mousedownHandler = function(e) {
     
     // Check menus in reverse z-order (highest priority first)
     const menuChecks = [
+        {check: checkDrawMenuClick, z: drawMenuZOrder, name: 'draw'},
         {check: checkSkyMenuClick, z: skyMenuZOrder, name: 'sky'},
         {check: checkColorMenuClick, z: colorMenuZOrder, name: 'color'},
         {check: checkSimMenuClick, z: menuZOrder, name: 'sim'}
@@ -317,10 +371,11 @@ mousedownHandler = function(e) {
     for (let menuCheck of menuChecks) {
         if (menuCheck.check()) {
             // Bring this menu to front
-            const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder);
+            const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder);
             if (menuCheck.name === 'sim') menuZOrder = maxZ + 1;
             else if (menuCheck.name === 'color') colorMenuZOrder = maxZ + 1;
             else if (menuCheck.name === 'sky') skyMenuZOrder = maxZ + 1;
+            else if (menuCheck.name === 'draw') drawMenuZOrder = maxZ + 1;
             return; // Stop checking other menus
         }
     }
@@ -718,18 +773,6 @@ mousedownHandler = function(e) {
             return true;
         }
         
-        // Check magnet toggle button
-        const magnetButtonRadius = knobRadius * 0.4;
-        const magnetButtonX = menuOriginX + menuWidth + padding - 1.4 * knobRadius;
-        const magnetButtonY = menuOriginY + menuHeight + padding - 1.2 * knobRadius;
-        const mdx = clickCanvasX - magnetButtonX;
-        const mdy = clickCanvasY - magnetButtonY;
-        
-        if (mdx * mdx + mdy * mdy < magnetButtonRadius * magnetButtonRadius) {
-            magnetActive = !magnetActive;
-            return true;
-        }
-        
         // Radio buttons vertically stacked
         for (let i = 0; i < 7; i++) {
             const buttonX = menuOriginX + radioCol * knobSpacing - 0.5 * knobRadius;
@@ -775,6 +818,159 @@ mousedownHandler = function(e) {
         }
         
         return false; // Click was not on sim menu
+    }
+    
+    // Helper function for draw menu clicks
+    function checkDrawMenuClick() {
+        if (!drawMenuVisible || drawMenuOpacity <= 0.5) return false;
+        
+        const knobRadius = 0.1 * cScale;
+        const knobSpacing = knobRadius * 3;
+        const menuWidth = knobSpacing * 2;
+        const menuHeight = knobSpacing * 1.5;
+        const padding = 1.7 * knobRadius;
+        const menuUpperLeftX = drawMenuX * cScale;
+        const menuUpperLeftY = canvas.height - drawMenuY * cScale;
+        
+        // Menu is translated by (knobSpacing, 0.5 * knobSpacing)
+        const menuOriginX = menuUpperLeftX + knobSpacing;
+        const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+        
+        const clickCanvasX = mouseX * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        
+        // Check close icon (in translated coordinates)
+        const closeIconRadius = knobRadius * 0.25;
+        const closeIconX = menuOriginX - padding + closeIconRadius + 0.2 * knobRadius;
+        const closeIconY = menuOriginY - padding + closeIconRadius + 0.2 * knobRadius;
+        const cdx = clickCanvasX - closeIconX;
+        const cdy = clickCanvasY - closeIconY;
+        
+        if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+            drawMenuVisible = false;
+            return true;
+        }
+        
+        // Grid layout for buttons
+        const menuTopMargin = 0.2 * knobRadius;
+        const cols = 3;
+        const cellWidth = knobSpacing;
+        const cellHeight = knobSpacing;
+        const gridStartY = menuTopMargin;
+        
+        // Check magnet toggle button (row 0, col 0)
+        // Magnet visual size: 0.06 * cScale radius, extends vertically from -1.5 to +0.1 * iconRadius
+        const magnetIconRadius = 0.06 * cScale;
+        const magnetClickRadius = magnetIconRadius * 1.6; // Match visual extent
+        const magnetCol = 0;
+        const magnetRow = 0;
+        const magnetButtonX = menuOriginX + magnetCol * cellWidth;
+        const magnetButtonY = menuOriginY + gridStartY + magnetRow * cellHeight;
+        const mdx = clickCanvasX - magnetButtonX;
+        const mdy = clickCanvasY - magnetButtonY;
+        
+        if (mdx * mdx + mdy * mdy < magnetClickRadius * magnetClickRadius) {
+            magnetActive = !magnetActive;
+            return true;
+        }
+        
+        // Check Pull Strength knob (row 0, col 1)
+        const pullKnobCol = 1;
+        const pullKnobRow = 0;
+        const pullKnobX = menuOriginX + pullKnobCol * cellWidth;
+        const pullKnobY = menuOriginY + gridStartY + pullKnobRow * cellHeight;
+        const pkdx = clickCanvasX - pullKnobX;
+        const pkdy = clickCanvasY - pullKnobY;
+        
+        if (pkdx * pkdx + pkdy * pkdy < knobRadius * knobRadius) {
+            draggedDrawKnob = 0; // Index 0 = Pull Strength
+            attachMouseMove();
+            dragStartMouseX = mouseX;
+            dragStartMouseY = mouseY;
+            dragStartValue = magnetForce;
+            return true;
+        }
+        
+        // Check Effect Radius knob (row 0, col 2)
+        const radiusKnobCol = 2;
+        const radiusKnobRow = 0;
+        const radiusKnobX = menuOriginX + radiusKnobCol * cellWidth;
+        const radiusKnobY = menuOriginY + gridStartY + radiusKnobRow * cellHeight;
+        const rkdx = clickCanvasX - radiusKnobX;
+        const rkdy = clickCanvasY - radiusKnobY;
+        
+        if (rkdx * rkdx + rkdy * rkdy < knobRadius * knobRadius) {
+            draggedDrawKnob = 1; // Index 1 = Effect Radius
+            attachMouseMove();
+            dragStartMouseX = mouseX;
+            dragStartMouseY = mouseY;
+            dragStartValue = magnetEffectRadius;
+            return true;
+        }
+        
+        // Check Trace Path button (row 1, col 0)
+        const traceCol = 0;
+        const traceRow = 1;
+        const traceIconSize = knobRadius * 0.8;
+        const traceButtonX = menuOriginX + traceCol * cellWidth;
+        const traceButtonY = menuOriginY + gridStartY + traceRow * cellHeight;
+        const traceClickRadius = traceIconSize * 1.2;
+        const tdx = clickCanvasX - traceButtonX;
+        const tdy = clickCanvasY - traceButtonY;
+        
+        if (tdx * tdx + tdy * tdy < traceClickRadius * traceClickRadius) {
+            // Activate trace path mode (menus will fade away)
+            tracePathActive = true;
+            isDrawingPath = false; // Don't start drawing yet
+            pathPoints = [];
+            
+            // Save current menu states and hide them
+            savedMenuStatesForPath = {
+                mainMenu: mainMenuVisible,
+                drawMenu: drawMenuVisible,
+                colorMenu: colorMenuVisible,
+                skyMenu: skyMenuVisible,
+                simMenu: menuVisible
+            };
+            mainMenuVisible = false;
+            drawMenuVisible = false;
+            colorMenuVisible = false;
+            skyMenuVisible = false;
+            menuVisible = false;
+            
+            return true;
+        }
+        
+        // Check Path Speed knob (row 1, col 1)
+        const speedKnobCol = 1;
+        const speedKnobRow = 1;
+        const speedKnobX = menuOriginX + speedKnobCol * cellWidth;
+        const speedKnobY = menuOriginY + gridStartY + speedKnobRow * cellHeight;
+        const skdx = clickCanvasX - speedKnobX;
+        const skdy = clickCanvasY - speedKnobY;
+        
+        if (skdx * skdx + skdy * skdy < knobRadius * knobRadius) {
+            draggedDrawKnob = 2; // Index 2 = Path Speed
+            attachMouseMove();
+            dragStartMouseX = mouseX;
+            dragStartMouseY = mouseY;
+            dragStartValue = magnetPathSpeed;
+            return true;
+        }
+        
+        // Check if draw menu background was clicked (for dragging entire menu)
+        if (clickCanvasX >= menuOriginX - padding && clickCanvasX <= menuOriginX + menuWidth + padding &&
+            clickCanvasY >= menuOriginY - padding && clickCanvasY <= menuOriginY + menuHeight + padding) {
+            isDraggingDrawMenu = true;
+            attachMouseMove();
+            drawMenuDragStartX = mouseX;
+            drawMenuDragStartY = mouseY;
+            drawMenuStartX = drawMenuX;
+            drawMenuStartY = drawMenuY;
+            return true;
+        }
+        
+        return false; // Click was not on draw menu
     }
     
     // Helper function for sky menu clicks
@@ -1004,6 +1200,21 @@ mousedownHandler = function(e) {
         return false; // Click was not on sky menu
     }
     
+    // Handle path drawing
+    if (tracePathActive && !isDrawingPath && e.button === 0) {
+        // Second click - start drawing the path
+        isDrawingPath = true;
+        pathPoints.push({x: mouseX, y: mouseY});
+        attachMouseMove();
+        return;
+    }
+    
+    if (isDrawingPath && e.button === 0) {
+        pathPoints.push({x: mouseX, y: mouseY});
+        attachMouseMove();
+        return;
+    }
+    
     // Handle spraypaint tool
     if (spraypaintActive && e.button === 0) {
         isSpraying = true;
@@ -1078,6 +1289,55 @@ mousedownHandler = function(e) {
 };
 
 mouseupHandler = function(e) {
+    // Handle path drawing completion
+    if (isDrawingPath) {
+        isDrawingPath = false;
+        
+        // Smooth and close the path if we have enough points
+        if (pathPoints.length > 2) {
+            // Smooth the path using Chaikin's algorithm (2 iterations)
+            pathPoints = smoothPath(pathPoints, 2);
+            
+            // Calculate total path length and cumulative distances
+            pathLength = 0;
+            pathCumulativeDistances = [0]; // First point is at distance 0
+            for (let i = 0; i < pathPoints.length; i++) {
+                const p1 = pathPoints[i];
+                const p2 = pathPoints[(i + 1) % pathPoints.length];
+                const segmentLength = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                pathLength += segmentLength;
+                // Store cumulative distance at the end of this segment (start of next point)
+                if (i < pathPoints.length - 1) {
+                    pathCumulativeDistances.push(pathLength);
+                }
+            }
+            
+            // Path is complete, restore menu states
+            mainMenuVisible = savedMenuStatesForPath.mainMenu;
+            drawMenuVisible = savedMenuStatesForPath.drawMenu;
+            colorMenuVisible = savedMenuStatesForPath.colorMenu;
+            skyMenuVisible = savedMenuStatesForPath.skyMenu;
+            menuVisible = savedMenuStatesForPath.simMenu;
+            
+            // Enable magnet and start following the path
+            magnetActive = true;
+            magnetPathProgress = 0;
+            // Lock the path - disable trace mode but mark path as existing
+            tracePathActive = false;
+            pathExists = true;
+        } else {
+            // Not enough points, cancel
+            tracePathActive = false;
+            pathPoints = [];
+            mainMenuVisible = savedMenuStatesForPath.mainMenu;
+            drawMenuVisible = savedMenuStatesForPath.drawMenu;
+            colorMenuVisible = savedMenuStatesForPath.colorMenu;
+            skyMenuVisible = savedMenuStatesForPath.skyMenu;
+            menuVisible = savedMenuStatesForPath.simMenu;
+        }
+        return;
+    }
+    
     // If camera control was active and we were dragging, check if it was a click to lock
     if (isDraggingSky && skyHandActive) {
         // Calculate movement distance
@@ -1105,9 +1365,11 @@ mouseupHandler = function(e) {
     draggedCloud = null;
     draggedKnob = null;
     draggedSkyKnob = null;
+    draggedDrawKnob = null;
     isDraggingMenu = false;
     isDraggingColorMenu = false;
     isDraggingSkyMenu = false;
+    isDraggingDrawMenu = false;
     isDraggingSky = false;
     isDraggingColorWheel = false;
     isDraggingLightness = false;
@@ -1170,6 +1432,64 @@ function handleMouseMove(e) {
         const deltaY = mouseY - skyMenuDragStartY;
         skyMenuX = skyMenuStartX + deltaX;
         skyMenuY = skyMenuStartY + deltaY;
+        return;
+    }
+    
+    // Handle draw menu dragging
+    if (isDraggingDrawMenu) {
+        const deltaX = mouseX - drawMenuDragStartX;
+        const deltaY = mouseY - drawMenuDragStartY;
+        drawMenuX = drawMenuStartX + deltaX;
+        drawMenuY = drawMenuStartY + deltaY;
+        return;
+    }
+    
+    // Handle draw menu knob dragging
+    if (draggedDrawKnob !== null) {
+        const dragDeltaX = mouseX - dragStartMouseX;
+        const dragDeltaY = (mouseY - dragStartMouseY);
+        const dragDelta = dragDeltaX + dragDeltaY;
+        
+        const dragSensitivity = 0.5;
+        const normalizedDelta = dragDelta / dragSensitivity;
+        
+        if (draggedDrawKnob === 0) { // Pull Strength
+            const pullMin = 1;
+            const pullMax = 20;
+            const rangeSize = pullMax - pullMin;
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            newValue = Math.max(pullMin, Math.min(pullMax, newValue));
+            magnetForce = newValue;
+        } else if (draggedDrawKnob === 1) { // Effect Radius
+            const radiusMin = 0.01;
+            const radiusMax = 1.0;
+            const rangeSize = radiusMax - radiusMin;
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            newValue = Math.max(radiusMin, Math.min(radiusMax, newValue));
+            magnetEffectRadius = newValue;
+            // Update magnet effect radius
+            if (Magnet.length > 0) {
+                Magnet[0].effectRadius = magnetEffectRadius * Math.min(simWidth, simHeight);
+            }
+        } else if (draggedDrawKnob === 2) { // Path Speed
+            const speedMin = -3;
+            const speedMax = 3;
+            const rangeSize = speedMax - speedMin;
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            newValue = Math.max(speedMin, Math.min(speedMax, newValue));
+            magnetPathSpeed = newValue;
+        }
+        return;
+    }
+    
+    // Handle path drawing
+    if (isDrawingPath) {
+        // Add point if far enough from last point
+        if (pathPoints.length === 0 || 
+            Math.hypot(mouseX - pathPoints[pathPoints.length - 1].x, 
+                      mouseY - pathPoints[pathPoints.length - 1].y) > 0.02) {
+            pathPoints.push({x: mouseX, y: mouseY});
+        }
         return;
     }
     
@@ -1742,6 +2062,40 @@ function cX(pos) {
 }
 function cY(pos) {
     return canvas.height - pos.y * cScale;
+}
+
+// Smooth a closed path using Chaikin's corner cutting algorithm
+function smoothPath(points, iterations) {
+    if (points.length < 3) return points;
+    
+    let smoothed = [...points];
+    
+    for (let iter = 0; iter < iterations; iter++) {
+        const newPoints = [];
+        const len = smoothed.length;
+        
+        for (let i = 0; i < len; i++) {
+            const p1 = smoothed[i];
+            const p2 = smoothed[(i + 1) % len]; // Wrap around for closed path
+            
+            // Create two new points between each pair
+            // Q: 75% of p1 + 25% of p2
+            newPoints.push({
+                x: 0.75 * p1.x + 0.25 * p2.x,
+                y: 0.75 * p1.y + 0.25 * p2.y
+            });
+            
+            // R: 25% of p1 + 75% of p2
+            newPoints.push({
+                x: 0.25 * p1.x + 0.75 * p2.x,
+                y: 0.25 * p1.y + 0.75 * p2.y
+            });
+        }
+        
+        smoothed = newPoints;
+    }
+    
+    return smoothed;
 }
 
 //  SPATIAL HASH GRID CLASS ---------------------------------------------------------------------
@@ -4598,7 +4952,7 @@ function drawMainMenu() {
     const padding = 0.02 * cScale;
     const iconSize = 0.06 * cScale;
     const menuHeight = itemHeight + (padding * 2);
-    const menuWidth = (itemWidth * 3) + (padding * 4);
+    const menuWidth = (itemWidth * 4) + (padding * 5);
     
     // Menu position - to the right of ellipsis with animation
     // Position menu so it extends downward and is clearly visible
@@ -4632,8 +4986,9 @@ function drawMainMenu() {
     // Menu items configuration
     const menuItems = [
         { label: 'Simulation', active: menuVisible, icon: 'sim' },
+        { label: 'Sky', active: skyMenuVisible, icon: 'sky' },
         { label: 'Paint', active: colorMenuVisible, icon: 'paint' },
-        { label: 'Sky', active: skyMenuVisible, icon: 'sky' }
+        { label: 'Draw', active: drawMenuVisible, icon: 'draw' }
     ];
     
     // Draw menu items
@@ -4662,6 +5017,8 @@ function drawMainMenu() {
                 c.fillStyle = `hsla(0, 0%, 80%, 0.3)`;
             } else if (item.icon === 'sky') {
                 c.fillStyle = `hsla(30, 90%, 60%, 0.3)`;
+            } else if (item.icon === 'draw') {
+                c.fillStyle = `hsla(340, 70%, 60%, 0.3)`;
             }
         } else {
             c.fillStyle = `hsla(0, 0%, 15%, 0.6)`;
@@ -4788,6 +5145,46 @@ function drawMainMenu() {
             c.beginPath();
             // Fourth puff adds height above center-left
             c.arc(iconX - cloudRadius * 0.3, iconY - cloudRadius * 0.15, cloudRadius * 0.88, 0, 2 * Math.PI);
+            c.fill();
+            
+            c.restore();
+        
+        // Draw draw icon --------------------
+        } else if (item.icon === 'draw') {
+            // Draw pencil icon
+            const pencilLength = iconSize * 1.25;
+            const pencilWidth = iconSize * 0.35;
+            const tipHeight = iconSize * 0.36;
+            
+            c.save();
+            c.translate(iconX, iconY);
+            c.rotate(-Math.PI / 4); // Rotate 45 degrees
+            
+            // Draw wooden body
+            c.fillStyle = item.active ? `hsla(30, 60%, 55%, 1.0)` : `hsla(30, 30%, 35%, 1.0)`;
+            c.beginPath();
+            c.rect(-pencilWidth / 2, -pencilLength / 2 + tipHeight, pencilWidth, pencilLength - tipHeight);
+            c.fill();
+            
+            // Draw graphite tip
+            c.fillStyle = item.active ? `hsla(0, 0%, 50%, 1.0)` : `hsla(0, 0%, 20%, 1.0)`;
+            c.beginPath();
+            c.moveTo(0, -pencilLength / 2);
+            c.lineTo(-pencilWidth / 2, -pencilLength / 2 + tipHeight);
+            c.lineTo(pencilWidth / 2, -pencilLength / 2 + tipHeight);
+            c.closePath();
+            c.fill();
+            
+            // Draw eraser
+            c.fillStyle = item.active ? `hsla(340, 70%, 60%, 1.0)` : `hsla(340, 30%, 40%, 1.0)`;
+            c.beginPath();
+            c.rect(-pencilWidth / 2, pencilLength / 2 - iconSize * 0.18, pencilWidth, iconSize * 0.18);
+            c.fill();
+            
+            // Draw metal band
+            c.fillStyle = item.active ? `hsla(0, 0%, 70%, 1.0)` : `hsla(0, 0%, 40%, 1.0)`;
+            c.beginPath();
+            c.rect(-pencilWidth / 2, pencilLength / 2 - iconSize * 0.24, pencilWidth, iconSize * 0.06);
             c.fill();
             
             c.restore();
@@ -5221,43 +5618,6 @@ function drawSimMenu() {
     c.font = `${0.4 * knobRadius}px monospace`;
     c.fillStyle = `hsla(0, 0%, 80%, ${menuOpacity})`;
     c.fillText('fps', menuWidth + padding - 1.0 * knobRadius, menuHeight + padding - 2.3 * knobRadius);
-    
-    // Draw magnet toggle button --------------------------------------
-    const magnetButtonRadius = 0.065 * cScale;
-    const magnetButtonX = 3 * knobSpacing;
-    const magnetButtonY = menuHeight + padding - 1.2 * knobRadius;
-
-    // Draw magnet sphere
-    c.beginPath();
-    const lightness = Magnet[0].lightness;
-    c.arc(magnetButtonX, magnetButtonY, magnetButtonRadius, 0, 2 * Math.PI);
-    const sphereGradient = c.createRadialGradient(
-        magnetButtonX -0.1 * magnetButtonRadius, 
-        magnetButtonY -0.15 * magnetButtonRadius,
-        0,
-        magnetButtonX -0.1 * magnetButtonRadius, 
-        magnetButtonY -0.15 * magnetButtonRadius,
-        magnetButtonRadius);
-    sphereGradient.addColorStop(0, `hsl(200, 80%, 100%)`);
-    sphereGradient.addColorStop(1, `hsl(200, 80%, 20%)`);
-    c.fillStyle = sphereGradient;
-    c.fill();
-
-        /*// Draw glowing aura 
-        c.beginPath();
-        c.arc(0, 0, this.effectRadius * cScale, 0, 2 * Math.PI);
-        const auraGradient = c.createRadialGradient(
-            0, 
-            0, 
-            0, 
-            0, 
-            0, 
-            this.effectRadius * cScale);
-        auraGradient.addColorStop(0, `hsl(180, 80%, ${lightness * 50}%, 0.3)`);
-        auraGradient.addColorStop(1, `hsl(180, 80%, ${lightness * 20}%, 0.0)`);
-        c.fillStyle = auraGradient;
-        c.fill();*/
-
 
     c.restore();
 }
@@ -6075,7 +6435,7 @@ class MAGNET {
         this.x = 0.5 * simWidth;
         this.y = 0.5 * simHeight;
         this.radius = 0.04 * Math.min(simWidth, simHeight);
-        this.effectRadius = 0.5 * Math.min(simWidth, simHeight);
+        this.effectRadius = magnetEffectRadius * Math.min(simWidth, simHeight);
         this.pulser = 0;
         this.lightness = 1.0;
     }
@@ -6140,9 +6500,8 @@ function handleMagnet(boid) {
         if (magnetDistSq < radiusSq && magnetDistSq > 0) {
             // Only compute sqrt when we know we need it
             const magnetDist = Math.sqrt(magnetDistSq);
-            const magnetStrength = 7;
-            boid.vel.x += magnetDx * magnetStrength * deltaT;
-            boid.vel.y += magnetDy * magnetStrength * deltaT;
+            boid.vel.x += magnetDx * magnetForce * deltaT;
+            boid.vel.y += magnetDy * magnetForce * deltaT;
         }
     }
 }
@@ -6830,6 +7189,522 @@ function drawSkyMenu() {
     c.restore();
 }
 
+function drawDrawMenu() {
+    // Only draw menu if it has some opacity
+    if (drawMenuOpacity <= 0) return;
+    
+    // Placeholder menu - will contain draw tools in future
+    const menuItems = [];
+    
+    const knobRadius = 0.1 * cScale;
+    const knobSpacing = knobRadius * 3;
+    const menuUpperLeftX = drawMenuX * cScale;
+    const menuUpperLeftY = canvas.height - drawMenuY * cScale;
+    
+    c.save();
+    c.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
+    
+    // Draw overall menu background with rounded corners
+    const menuWidth = knobSpacing * 2;
+    const menuHeight = knobSpacing * 1.5;
+    const padding = 1.7 * knobRadius;
+    
+    const cornerRadius = 0.05 * cScale;
+    c.beginPath();
+    c.moveTo(-padding + cornerRadius, -padding);
+    c.lineTo(menuWidth + padding - cornerRadius, -padding);
+    c.quadraticCurveTo(menuWidth + padding, -padding, menuWidth + padding, -padding + cornerRadius);
+    c.lineTo(menuWidth + padding, menuHeight + padding - cornerRadius);
+    c.quadraticCurveTo(menuWidth + padding, menuHeight + padding, menuWidth + padding - cornerRadius, menuHeight + padding);
+    c.lineTo(-padding + cornerRadius, menuHeight + padding);
+    c.quadraticCurveTo(-padding, menuHeight + padding, -padding, menuHeight + padding - cornerRadius);
+    c.lineTo(-padding, -padding + cornerRadius);
+    c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
+    c.closePath();
+    c.strokeStyle = `hsla(340, 70%, 60%, ${drawMenuOpacity})`;
+    c.lineWidth = 0.004 * cScale;
+    const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsla(340, 60%, 25%, ${0.9 * drawMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsla(340, 60%, 10%, ${0.9 * drawMenuOpacity})`);
+    c.fillStyle = menuGradient;
+    c.fill();
+    c.stroke();
+    
+    // Draw close icon in upper left corner (round button)
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+    
+    // Red background circle
+    c.beginPath();
+    c.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(0, 70%, 40%, ${drawMenuOpacity})`;
+    c.fill();
+    
+    // Black X
+    c.strokeStyle = `hsla(0, 0%, 0%, ${drawMenuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.lineCap = 'round';
+    const xSize = closeIconRadius * 0.4;
+    c.beginPath();
+    c.moveTo(closeIconX - xSize, closeIconY - xSize);
+    c.lineTo(closeIconX + xSize, closeIconY + xSize);
+    c.moveTo(closeIconX + xSize, closeIconY - xSize);
+    c.lineTo(closeIconX - xSize, closeIconY + xSize);
+    c.stroke();
+    
+    // Draw title
+    c.fillStyle = `hsla(340, 80%, 80%, ${drawMenuOpacity})`;
+    c.font = `bold ${0.05 * cScale}px verdana`;
+    c.textAlign = 'center';
+    c.fillText('DRAW', menuWidth / 2, -padding + 0.04 * cScale);
+    
+    // Grid layout: 3 columns, 2 rows (expandable)
+    const menuTopMargin = 0.2 * knobRadius;
+    const cols = 3;
+    const cellWidth = knobSpacing;
+    const cellHeight = knobSpacing;
+    const gridStartY = menuTopMargin;
+    
+    // Draw magnet toggle button (row 0, col 0 - upper left)
+    const magnetButtonRadius = 0.06 * cScale;
+    const iconRadius = magnetButtonRadius;
+    const magnetCol = 0;
+    const magnetRow = 0;
+    const magnetButtonX = magnetCol * cellWidth;
+    const magnetButtonY = gridStartY;
+    
+    // Draw magnet icon, adapted from the code below:
+    
+    
+    // only draw glow when magnet is active
+    if (magnetActive) {
+        poleGlowTicker += 0.05;
+        if (poleGlowTicker > 2 * Math.PI) {
+            poleGlowTicker = 0;
+        }  
+
+        const poleGlowAlpha = 0.6 * Math.abs(Math.sin(poleGlowTicker)) * drawMenuOpacity;
+        const glowRadius = 0.4 * iconRadius + poleGlowAlpha * 0.8 * iconRadius + (magnetForce / 5) * 0.4 * iconRadius;
+        var poleGlow = c.createRadialGradient(
+            magnetButtonX - iconRadius, 
+            magnetButtonY - 1.2 * iconRadius, 
+            0, 
+            magnetButtonX - iconRadius, 
+            magnetButtonY - 1.2 * iconRadius, 
+            glowRadius);
+        poleGlow.addColorStop(0, `hsla(270, 0%, 70%, ${poleGlowAlpha})`);
+        poleGlow.addColorStop(1, `hsla(270, 0%, 50%, 0.0)`);
+        c.fillStyle = poleGlow;
+        c.beginPath();
+        c.arc(magnetButtonX - iconRadius, magnetButtonY - 1.2 * iconRadius, glowRadius, 0, 2 * Math.PI);
+        c.fill();
+
+        poleGlow = c.createRadialGradient(
+            magnetButtonX + iconRadius, 
+            magnetButtonY - 1.2 * iconRadius, 
+            0, 
+            magnetButtonX + iconRadius, 
+            magnetButtonY - 1.2 * iconRadius, 
+            glowRadius);
+        poleGlow.addColorStop(0, `hsla(270, 0%, 70%, ${poleGlowAlpha})`);
+        poleGlow.addColorStop(1, `hsla(270, 0%, 50%, 0.0)`);
+        c.fillStyle = poleGlow;
+        c.beginPath();
+        c.arc(magnetButtonX + iconRadius, magnetButtonY - 1.2 * iconRadius, glowRadius, 0, 2 * Math.PI);
+        c.fill();
+    };
+
+    // black base for poles and arc
+    c.lineWidth = 25;
+    // Left pole
+    c.beginPath();
+    c.moveTo(magnetButtonX - iconRadius, magnetButtonY - 0.9 * iconRadius);
+    c.lineTo(magnetButtonX - iconRadius, magnetButtonY);
+    c.strokeStyle = `hsla(0, 0%, 90%, ${drawMenuOpacity})`;
+    c.lineCap = 'butt';
+    c.stroke();
+    // left pole tip
+    c.beginPath();
+    c.moveTo(magnetButtonX - iconRadius, magnetButtonY - 1.5 * iconRadius);
+    c.lineTo(magnetButtonX - iconRadius, magnetButtonY - 0.9 * iconRadius);
+    //c.stroke();
+    // Right pole
+    c.beginPath();
+    c.moveTo(magnetButtonX + iconRadius, magnetButtonY - 0.9 * iconRadius);
+    c.lineTo(magnetButtonX + iconRadius, magnetButtonY);
+    c.stroke();
+    // right pole tip
+    c.beginPath();
+    c.moveTo(magnetButtonX + iconRadius, magnetButtonY - 1.5 * iconRadius);
+    c.lineTo(magnetButtonX + iconRadius, magnetButtonY - 0.9 * iconRadius);
+    //c.stroke();
+    // Arc connecting poles
+    c.beginPath();
+    c.arc(magnetButtonX, magnetButtonY, iconRadius, Math.PI, 0, true);
+    c.stroke();
+
+    // colored overlay for poles and arc
+    c.lineWidth = 22;
+    const grau = `hsla(0, 0%, 50%, ${drawMenuOpacity})`;
+    const lichtgrau = `hsla(0, 0%, 80%, ${drawMenuOpacity})`;
+    const rott = `hsla(0, 85%, 40%, ${drawMenuOpacity})`;
+    // Left pole
+    c.beginPath();
+    c.moveTo(magnetButtonX - iconRadius, magnetButtonY - 0.85 * iconRadius);
+    c.lineTo(magnetButtonX - iconRadius, magnetButtonY + 0.1 * iconRadius);
+    c.strokeStyle = rott;
+    c.stroke();
+    // left pole tip
+    c.beginPath();
+    c.moveTo(magnetButtonX - iconRadius, magnetButtonY - 1.5 * iconRadius);
+    c.lineTo(magnetButtonX - iconRadius, magnetButtonY - 0.9 * iconRadius);
+    c.strokeStyle = lichtgrau;
+    c.stroke();
+    
+    // Right pole
+    c.beginPath();
+    c.moveTo(magnetButtonX + iconRadius, magnetButtonY - 0.85 * iconRadius);
+    c.lineTo(magnetButtonX + iconRadius, magnetButtonY + 0.1 * iconRadius);
+    c.strokeStyle = rott;
+    c.stroke();
+    // right pole tip
+    c.beginPath();
+    c.moveTo(magnetButtonX + iconRadius, magnetButtonY - 1.5 * iconRadius);
+    c.lineTo(magnetButtonX + iconRadius, magnetButtonY - 0.9 * iconRadius);
+    c.strokeStyle = lichtgrau;
+    c.stroke();
+    // Arc connecting poles
+    c.beginPath();
+    c.arc(magnetButtonX, magnetButtonY, iconRadius, Math.PI, 0, true);
+    c.strokeStyle = rott;
+    c.stroke();
+
+    // + - force level indicators
+    c.fillStyle = `hsla(0, 0%, 0%, ${drawMenuOpacity})`;
+    c.textBaseline = 'middle';
+    c.textAlign = "center";
+    c.font = `13px verdana`;
+    // minus sign on left side
+    c.fillText("-", magnetButtonX - iconRadius - 0.01 * iconRadius, magnetButtonY - 1.18 * iconRadius);
+    // plus sign on right side
+    c.fillText("+", magnetButtonX + iconRadius + 0.01 * iconRadius, magnetButtonY - 1.18 * iconRadius);
+
+    // draw force level indicator dot gauge along the bottom U of the magnget
+    const gaugeRadius = 3;
+    const gaugeSteps = 10;
+    // draw gauge dots in an arc centered on the U-bend
+    for (let i = 0; i < gaugeSteps; i++) {
+        const t = i / (gaugeSteps - 1);
+        const angle = Math.PI - t * Math.PI;
+        const dotX = magnetButtonX + (iconRadius - 0.02 * iconRadius) * Math.cos(angle);
+        const dotY = magnetButtonY + (iconRadius - 0.02 * iconRadius) * Math.sin(angle);
+        c.beginPath();
+        c.arc(dotX, dotY, gaugeRadius, 0, 2 * Math.PI);
+        if (i < 0.5 * magnetForce) {
+            if (magnetForce < 1) {
+                c.fillStyle = `hsla(0, 0%, ${magnetForce * 100}%, ${drawMenuOpacity})`;
+            } else {
+                c.fillStyle = `hsla(0, 0%, 100%, ${drawMenuOpacity})`;
+            }
+        } else {
+            c.fillStyle = `hsla(0, 100%, 50%, ${drawMenuOpacity})`;
+        }
+        c.fill();
+    }
+    
+    // Draw label
+    c.fillStyle = `hsla(340, 70%, 90%, ${drawMenuOpacity})`;
+    c.font = `${0.028 * cScale}px verdana`;
+    c.textAlign = 'center';
+    c.fillText('Magnet on/off', magnetButtonX, magnetButtonY + magnetButtonRadius + 0.07 * cScale);
+    
+    // Draw Pull Strength knob (row 0, col 1)
+    const pullKnobCol = 1;
+    const pullKnobRow = 0;
+    const pullKnobX = pullKnobCol * cellWidth;
+    const pullKnobY = gridStartY + pullKnobRow * cellHeight;
+    const fullMeterSweep = 1.6 * Math.PI;
+    const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+    
+    // Knob background
+    c.beginPath();
+    c.arc(pullKnobX, pullKnobY, 1.05 * knobRadius, 0, 2 * Math.PI, false);
+    c.fillStyle = `hsla(340, 40%, 15%, ${0.9 * drawMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(340, 40%, 50%, ${drawMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    
+    // Calculate normalized value
+    const pullMin = 1;
+    const pullMax = 20;
+    const pullNormalizedValue = (magnetForce - pullMin) / (pullMax - pullMin);
+    
+    // Draw meter arc
+    const pullGradient = c.createLinearGradient(
+        pullKnobX + Math.cos(meterStart) * knobRadius,
+        pullKnobY + Math.sin(meterStart) * knobRadius,
+        pullKnobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+        pullKnobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+    );
+    pullGradient.addColorStop(0, `hsla(340, 40%, 50%, ${drawMenuOpacity})`);
+    pullGradient.addColorStop(0.5, `hsla(340, 40%, 60%, ${drawMenuOpacity})`);
+    c.strokeStyle = pullGradient;
+    c.beginPath();
+    c.arc(pullKnobX, pullKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * pullNormalizedValue);
+    c.lineWidth = 0.02 * cScale;
+    c.stroke();
+    
+    // Draw needle
+    const pullPointerAngle = meterStart + fullMeterSweep * pullNormalizedValue;
+    const pullPointerLength = knobRadius * 0.6;
+    const pullPointerEndX = pullKnobX + Math.cos(pullPointerAngle) * pullPointerLength;
+    const pullPointerEndY = pullKnobY + Math.sin(pullPointerAngle) * pullPointerLength;
+    c.beginPath();
+    c.moveTo(pullKnobX, pullKnobY);
+    c.lineTo(pullPointerEndX, pullPointerEndY);
+    c.strokeStyle = `hsla(340, 80%, 80%, ${drawMenuOpacity})`;
+    c.lineWidth = 0.008 * cScale;
+    c.stroke();
+    
+    // Draw knob label (with shadow)
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.lineWidth = 0.03 * knobRadius;
+    c.lineJoin = 'round';
+    c.font = `${0.29 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(340, 80%, 0%, ${0.6 * drawMenuOpacity})`;
+    c.strokeText('Pull Strength', 0.04 * knobRadius + pullKnobX, 0.04 * knobRadius + (pullKnobY + 1.35 * knobRadius));
+    c.fillStyle = `hsla(340, 80%, 95%, ${drawMenuOpacity})`;
+    c.fillText('Pull Strength', pullKnobX, pullKnobY + 1.35 * knobRadius);
+    
+    // Draw knob value (inside knob)
+    c.font = `${0.25 * knobRadius}px verdana`;
+    c.fillStyle = `hsla(40, 80%, 70%, ${drawMenuOpacity})`;
+    c.fillText(magnetForce.toFixed(1), pullKnobX, pullKnobY + 0.6 * knobRadius);
+    
+    // Draw Effect Radius knob (row 0, col 2)
+    const radiusKnobCol = 2;
+    const radiusKnobRow = 0;
+    const radiusKnobX = radiusKnobCol * cellWidth;
+    const radiusKnobY = gridStartY + radiusKnobRow * cellHeight;
+    
+    // Knob background
+    c.beginPath();
+    c.arc(radiusKnobX, radiusKnobY, 1.05 * knobRadius, 0, 2 * Math.PI, false);
+    c.fillStyle = `hsla(340, 40%, 15%, ${0.9 * drawMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(340, 40%, 50%, ${drawMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    
+    // Calculate normalized value
+    const radiusMin = 0.01;
+    const radiusMax = 1.0;
+    const radiusNormalizedValue = (magnetEffectRadius - radiusMin) / (radiusMax - radiusMin);
+    
+    // Draw meter arc
+    const radiusGradient = c.createLinearGradient(
+        radiusKnobX + Math.cos(meterStart) * knobRadius,
+        radiusKnobY + Math.sin(meterStart) * knobRadius,
+        radiusKnobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+        radiusKnobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+    );
+    radiusGradient.addColorStop(0, `hsla(340, 40%, 50%, ${drawMenuOpacity})`);
+    radiusGradient.addColorStop(0.5, `hsla(340, 40%, 60%, ${drawMenuOpacity})`);
+    c.strokeStyle = radiusGradient;
+    c.beginPath();
+    c.arc(radiusKnobX, radiusKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * radiusNormalizedValue);
+    c.lineWidth = 0.02 * cScale;
+    c.stroke();
+    
+    // Draw needle
+    const radiusPointerAngle = meterStart + fullMeterSweep * radiusNormalizedValue;
+    const radiusPointerLength = knobRadius * 0.6;
+    const radiusPointerEndX = radiusKnobX + Math.cos(radiusPointerAngle) * radiusPointerLength;
+    const radiusPointerEndY = radiusKnobY + Math.sin(radiusPointerAngle) * radiusPointerLength;
+    c.beginPath();
+    c.moveTo(radiusKnobX, radiusKnobY);
+    c.lineTo(radiusPointerEndX, radiusPointerEndY);
+    c.strokeStyle = `hsla(340, 80%, 80%, ${drawMenuOpacity})`;
+    c.lineWidth = 0.008 * cScale;
+    c.stroke();
+    
+    // Draw knob label (with shadow)
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.lineWidth = 0.03 * knobRadius;
+    c.lineJoin = 'round';
+    c.font = `${0.29 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(340, 80%, 0%, ${0.6 * drawMenuOpacity})`;
+    c.strokeText('Effect Radius', 0.04 * knobRadius + radiusKnobX, 0.04 * knobRadius + (radiusKnobY + 1.35 * knobRadius));
+    c.fillStyle = `hsla(340, 80%, 95%, ${drawMenuOpacity})`;
+    c.fillText('Effect Radius', radiusKnobX, radiusKnobY + 1.35 * knobRadius);
+    
+    // Draw knob value (inside knob)
+    c.font = `${0.25 * knobRadius}px verdana`;
+    c.fillStyle = `hsla(40, 80%, 70%, ${drawMenuOpacity})`;
+    c.fillText(magnetEffectRadius.toFixed(2), radiusKnobX, radiusKnobY + 0.6 * knobRadius);
+    
+    // Draw Trace Path icon (row 1, col 0)
+    const traceCol = 0;
+    const traceRow = 1;
+    const traceX = traceCol * cellWidth;
+    const traceY = gridStartY + traceRow * cellHeight;
+    const traceIconSize = 1.2 * knobRadius;
+    
+    // Draw pencil icon (same proportions as main menu)
+    const pencilLength = traceIconSize * 1.5;
+    const pencilWidth = traceIconSize * 0.45;
+    const tipHeight = traceIconSize * 0.45;
+    
+    c.save();
+    c.translate(traceX, traceY);
+    c.rotate(-Math.PI / 4); // Rotate 45 degrees
+    
+    // Draw wooden body
+    c.fillStyle = `hsla(30, 60%, 55%, ${drawMenuOpacity})`;
+    c.beginPath();
+    c.rect(-pencilWidth / 2, -pencilLength / 2 + tipHeight, pencilWidth, pencilLength - tipHeight);
+    c.fill();
+    
+    // Draw graphite tip
+    c.fillStyle = `hsla(0, 0%, 50%, ${drawMenuOpacity})`;
+    c.beginPath();
+    c.moveTo(0, -pencilLength / 2);
+    c.lineTo(-pencilWidth / 2, -pencilLength / 2 + tipHeight);
+    c.lineTo(pencilWidth / 2, -pencilLength / 2 + tipHeight);
+    c.closePath();
+    c.fill();
+    
+    // Draw eraser
+    c.fillStyle = `hsla(340, 70%, 60%, ${drawMenuOpacity})`;
+    c.beginPath();
+    c.rect(-pencilWidth / 2, pencilLength / 2 - traceIconSize * 0.08, pencilWidth, traceIconSize * 0.2);
+    c.fill();
+    
+    // Draw metal band
+    c.fillStyle = `hsla(0, 0%, 70%, ${drawMenuOpacity})`;
+    c.beginPath();
+    c.rect(-pencilWidth / 2, pencilLength / 2 - traceIconSize * 0.24, pencilWidth, traceIconSize * 0.1);
+    c.fill();
+    
+    c.restore();
+    
+    // Draw label
+    c.textAlign = 'center';
+    c.fillStyle = `hsla(340, 70%, 90%, ${drawMenuOpacity})`;
+    c.font = `${0.029 * cScale}px verdana`;
+    c.strokeStyle = `hsla(340, 80%, 0%, ${0.6 * drawMenuOpacity})`;
+    c.strokeText('Trace Path', 0.04 * knobRadius + traceX, 0.04 * knobRadius + (traceY + 1.35 * knobRadius));
+    c.fillStyle = `hsla(340, 80%, 95%, ${drawMenuOpacity})`;
+    c.fillText('Trace Path', traceX, traceY + 1.35 * knobRadius);
+
+    // Draw Path Speed knob (row 1, col 1)
+    const speedKnobCol = 1;
+    const speedKnobRow = 1;
+    const speedKnobX = speedKnobCol * cellWidth;
+    const speedKnobY = gridStartY + speedKnobRow * cellHeight;
+    
+    // Knob background
+    c.beginPath();
+    c.arc(speedKnobX, speedKnobY, 1.05 * knobRadius, 0, 2 * Math.PI, false);
+    c.fillStyle = `hsla(340, 40%, 15%, ${0.9 * drawMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(340, 40%, 50%, ${drawMenuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.stroke();
+    
+    // Calculate normalized value
+    const speedMin = -3;
+    const speedMax = 3;
+    
+    // Draw meter arc from 12 o'clock (top)
+    const topAngle = -Math.PI / 2; // 12 o'clock position
+    const halfSweep = 0.8 * Math.PI; // Half of fullMeterSweep (1.6 * Math.PI / 2)
+    
+    if (magnetPathSpeed >= 0) {
+        // Positive speed: arc extends clockwise from 12 o'clock
+        const speedNormalizedValue = magnetPathSpeed / speedMax;
+        const arcSweep = speedNormalizedValue * halfSweep;
+        
+        const speedGradient = c.createLinearGradient(
+            speedKnobX + Math.cos(topAngle) * knobRadius,
+            speedKnobY + Math.sin(topAngle) * knobRadius,
+            speedKnobX + Math.cos(topAngle + arcSweep) * knobRadius,
+            speedKnobY + Math.sin(topAngle + arcSweep) * knobRadius
+        );
+        speedGradient.addColorStop(0, `hsla(340, 40%, 50%, ${drawMenuOpacity})`);
+        speedGradient.addColorStop(1, `hsla(340, 40%, 60%, ${drawMenuOpacity})`);
+        c.strokeStyle = speedGradient;
+        c.beginPath();
+        c.arc(speedKnobX, speedKnobY, knobRadius * 0.85, topAngle, topAngle + arcSweep);
+        c.lineWidth = 0.02 * cScale;
+        c.stroke();
+        
+        // Draw needle
+        const speedPointerAngle = topAngle + arcSweep;
+        const speedPointerLength = knobRadius * 0.6;
+        const speedPointerEndX = speedKnobX + Math.cos(speedPointerAngle) * speedPointerLength;
+        const speedPointerEndY = speedKnobY + Math.sin(speedPointerAngle) * speedPointerLength;
+        c.beginPath();
+        c.moveTo(speedKnobX, speedKnobY);
+        c.lineTo(speedPointerEndX, speedPointerEndY);
+        c.strokeStyle = `hsla(340, 80%, 80%, ${drawMenuOpacity})`;
+        c.lineWidth = 0.008 * cScale;
+        c.stroke();
+    } else {
+        // Negative speed: arc extends counterclockwise from 12 o'clock
+        const speedNormalizedValue = -magnetPathSpeed / speedMax;
+        const arcSweep = speedNormalizedValue * halfSweep;
+        
+        const speedGradient = c.createLinearGradient(
+            speedKnobX + Math.cos(topAngle) * knobRadius,
+            speedKnobY + Math.sin(topAngle) * knobRadius,
+            speedKnobX + Math.cos(topAngle - arcSweep) * knobRadius,
+            speedKnobY + Math.sin(topAngle - arcSweep) * knobRadius
+        );
+        speedGradient.addColorStop(0, `hsla(340, 40%, 50%, ${drawMenuOpacity})`);
+        speedGradient.addColorStop(1, `hsla(340, 40%, 60%, ${drawMenuOpacity})`);
+        c.strokeStyle = speedGradient;
+        c.beginPath();
+        c.arc(speedKnobX, speedKnobY, knobRadius * 0.85, topAngle - arcSweep, topAngle);
+        c.lineWidth = 0.02 * cScale;
+        c.stroke();
+        
+        // Draw needle
+        const speedPointerAngle = topAngle - arcSweep;
+        const speedPointerLength = knobRadius * 0.6;
+        const speedPointerEndX = speedKnobX + Math.cos(speedPointerAngle) * speedPointerLength;
+        const speedPointerEndY = speedKnobY + Math.sin(speedPointerAngle) * speedPointerLength;
+        c.beginPath();
+        c.moveTo(speedKnobX, speedKnobY);
+        c.lineTo(speedPointerEndX, speedPointerEndY);
+        c.strokeStyle = `hsla(340, 80%, 80%, ${drawMenuOpacity})`;
+        c.lineWidth = 0.008 * cScale;
+        c.stroke();
+    }
+    
+    // Draw knob label (with shadow)
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.lineWidth = 0.03 * knobRadius;
+    c.lineJoin = 'round';
+    c.font = `${0.29 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(340, 80%, 0%, ${0.6 * drawMenuOpacity})`;
+    c.strokeText('Path Speed', 0.04 * knobRadius + speedKnobX, 0.04 * knobRadius + (speedKnobY + 1.35 * knobRadius));
+    c.fillStyle = `hsla(340, 80%, 95%, ${drawMenuOpacity})`;
+    c.fillText('Path Speed', speedKnobX, speedKnobY + 1.35 * knobRadius);
+    
+    // Draw knob value (inside knob)
+    c.font = `${0.25 * knobRadius}px verdana`;
+    c.fillStyle = `hsla(40, 80%, 70%, ${drawMenuOpacity})`;
+    c.fillText(magnetPathSpeed.toFixed(1), speedKnobX, speedKnobY + 0.6 * knobRadius);
+    
+    c.restore();
+}
+
 function drawKittyLamp(lampX, lampY, menuOpacity) {
     // Draw kitty lamp last (on top of everything)
     if (kittyLampImage && kittyLampImage.complete) {
@@ -6897,6 +7772,13 @@ function simulateEverything() {
         skyMenuOpacity = Math.min(1, skyMenuOpacity + menuFadeSpeed * deltaT);
     } else if (!skyMenuVisible && skyMenuOpacity > 0) {
         skyMenuOpacity = Math.max(0, skyMenuOpacity - menuFadeSpeed * deltaT);
+    }
+    
+    // Update draw menu opacity for fade in/out
+    if (drawMenuVisible && drawMenuOpacity < 1) {
+        drawMenuOpacity = Math.min(1, drawMenuOpacity + menuFadeSpeed * deltaT);
+    } else if (!drawMenuVisible && drawMenuOpacity > 0) {
+        drawMenuOpacity = Math.max(0, drawMenuOpacity - menuFadeSpeed * deltaT);
     }
     
     // Update auto elevation if enabled
@@ -7080,6 +7962,44 @@ function simulateEverything() {
     for (let rainDrop of Rain) {
         rainDrop.simulate();
     }
+    
+    // Update magnet position along traced path
+    if (pathExists && pathPoints.length > 2 && magnetActive && Magnet.length > 0 && pathLength > 0) {
+        // Move along the path at constant speed (world units per second)
+        magnetPathProgress += -magnetPathSpeed * deltaT / pathLength;
+        
+        // Loop back to start (handle both positive and negative speeds)
+        if (magnetPathProgress >= 1) {
+            magnetPathProgress -= 1;
+        } else if (magnetPathProgress < 0) {
+            magnetPathProgress += 1;
+        }
+        
+        // Convert progress (0-1) to actual distance along path
+        const targetDistance = magnetPathProgress * pathLength;
+        
+        // Find which segment the magnet is on using binary search on cumulative distances
+        let segmentIndex = 0;
+        for (let i = 0; i < pathCumulativeDistances.length - 1; i++) {
+            if (targetDistance >= pathCumulativeDistances[i] && targetDistance < pathCumulativeDistances[i + 1]) {
+                segmentIndex = i;
+                break;
+            }
+        }
+        
+        // Calculate interpolation factor within this segment
+        const segmentStart = pathCumulativeDistances[segmentIndex];
+        const segmentEnd = pathCumulativeDistances[segmentIndex + 1] || pathLength;
+        const segmentLength = segmentEnd - segmentStart;
+        const t = segmentLength > 0 ? (targetDistance - segmentStart) / segmentLength : 0;
+        
+        // Interpolate position within the segment
+        const p1 = pathPoints[segmentIndex];
+        const p2 = pathPoints[(segmentIndex + 1) % pathPoints.length];
+        
+        Magnet[0].x = p1.x + (p2.x - p1.x) * t;
+        Magnet[0].y = p1.y + (p2.y - p1.y) * t;
+    }
 }
 
 //  DRAW EVERYTHING  ------------
@@ -7168,12 +8088,43 @@ function drawEverything() {
             magnet.draw();
         }
     }
+    
+    // Draw traced path --------
+    if ((tracePathActive || pathExists) && pathPoints.length > 0) {
+        c.save();
+        c.lineWidth = 2;
+        c.lineCap = 'round';
+        c.lineJoin = 'round';
+        
+        if (isDrawingPath) {
+            // Drawing in progress - bright line
+            c.strokeStyle = 'hsla(340, 70%, 60%, 0.8)';
+            c.lineWidth = 3;
+        } else {
+            // Completed path - faint line
+            c.strokeStyle = 'hsla(340, 70%, 60%, 0.3)';
+            c.lineWidth = 2;
+        }
+        
+        c.beginPath();
+        c.moveTo(pathPoints[0].x * cScale, canvas.height - pathPoints[0].y * cScale);
+        for (let i = 1; i < pathPoints.length; i++) {
+            c.lineTo(pathPoints[i].x * cScale, canvas.height - pathPoints[i].y * cScale);
+        }
+        // Close the path
+        if (!isDrawingPath) {
+            c.closePath();
+        }
+        c.stroke();
+        c.restore();
+    }
 
     // Draw menus in z-order (lowest to highest so highest is on top) --------
     const menus = [
         {draw: drawSkyMenu, z: skyMenuZOrder},
         {draw: drawColorMenu, z: colorMenuZOrder},
-        {draw: drawSimMenu, z: menuZOrder}
+        {draw: drawSimMenu, z: menuZOrder},
+        {draw: drawDrawMenu, z: drawMenuZOrder}
     ];
     menus.sort((a, b) => a.z - b.z);
     for (let menu of menus) {
