@@ -1,5 +1,5 @@
 /*
-B0IDS 1.44 :: autonomous flocking behavior ::
+B0IDS 1.45 :: autonomous flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -924,6 +924,9 @@ mousedownHandler = function(e) {
             isDrawingPath = false; // Don't start drawing yet
             pathPoints = [];
             
+            // Update mouse listeners for cursor tracking
+            updateMouseListeners();
+            
             // Save current menu states and hide them
             savedMenuStatesForPath = {
                 mainMenu: mainMenuVisible,
@@ -1206,6 +1209,7 @@ mousedownHandler = function(e) {
         isDrawingPath = true;
         pathPoints.push({x: mouseX, y: mouseY});
         attachMouseMove();
+        updateMouseListeners();
         return;
     }
     
@@ -1325,10 +1329,12 @@ mouseupHandler = function(e) {
             // Lock the path - disable trace mode but mark path as existing
             tracePathActive = false;
             pathExists = true;
+            updateMouseListeners();
         } else {
             // Not enough points, cancel
             tracePathActive = false;
             pathPoints = [];
+            updateMouseListeners();
             mainMenuVisible = savedMenuStatesForPath.mainMenu;
             drawMenuVisible = savedMenuStatesForPath.drawMenu;
             colorMenuVisible = savedMenuStatesForPath.colorMenu;
@@ -1897,7 +1903,7 @@ function detachLightweightMouseMove() {
 // Update lightweight listener when tools are toggled
 function updateMouseListeners() {
     // Lightweight listener needed for cursors when tools are active
-    if (spraypaintActive || skyHandActive) {
+    if (spraypaintActive || skyHandActive || tracePathActive || isDrawingPath) {
         attachLightweightMouseMove();
     } else if (!mousemoveActive) {
         // Only detach if heavy handler isn't active
@@ -6463,6 +6469,41 @@ class MAGNET {
         c.fillStyle = sphereGradient;
         c.fill();
 
+        // Draw horseshoe magnet icon on the sphere as one continuous path
+        const iconSize = this.radius * cScale * 0.6;
+        c.strokeStyle = 'hsla(0, 70%, 50%, 0.7)'; // Red for magnet body
+        c.lineWidth = iconSize * 0.4;
+        c.lineCap = 'butt';
+        c.lineJoin = 'round';
+        
+        c.beginPath();
+        // Start at top of left arm
+        c.moveTo(-iconSize * 0.35, -iconSize * 0.4);
+        // Left arm curving outward
+        c.quadraticCurveTo(-iconSize * 0.45, 0, -iconSize * 0.35, iconSize * 0.2);
+        // Bottom connecting arc
+        c.arc(0, iconSize * 0.2, iconSize * 0.35, Math.PI, 0, true);
+        // Right arm curving outward
+        c.quadraticCurveTo(iconSize * 0.45, 0, iconSize * 0.35, -iconSize * 0.4);
+        c.stroke();
+        
+        // White tips with square ends
+        c.strokeStyle = 'hsla(0, 0%, 100%, 0.9)';
+        c.lineWidth = iconSize * 0.4;
+        c.lineCap = 'butt';
+        
+        // Left tip
+        c.beginPath();
+        c.moveTo(-iconSize * 0.35, -iconSize * 0.4);
+        c.lineTo(-iconSize * 0.35, -iconSize * 0.25);
+        c.stroke();
+        
+        // Right tip
+        c.beginPath();
+        c.moveTo(iconSize * 0.35, -iconSize * 0.4);
+        c.lineTo(iconSize * 0.35, -iconSize * 0.25);
+        c.stroke();
+
         // Draw glowing aura 
         c.beginPath();
         c.arc(0, 0, this.effectRadius * cScale, 0, 2 * Math.PI);
@@ -6473,8 +6514,10 @@ class MAGNET {
             0, 
             0, 
             this.effectRadius * cScale);
-        auraGradient.addColorStop(0, `hsl(180, 80%, ${this.lightness * 50}%, 0.3)`);
-        auraGradient.addColorStop(1, `hsl(180, 80%, ${this.lightness * 20}%, 0.0)`);
+        auraGradient.addColorStop(0, `hsl(180, 80%, ${this.lightness * 50}%, 0.0)`);
+        auraGradient.addColorStop(this.radius / this.effectRadius, `hsl(180, 80%, ${this.lightness * 50}%, 0.0)`);
+        auraGradient.addColorStop(this.radius / this.effectRadius, `hsl(180, 80%, ${this.lightness * 50}%, 0.2)`);
+        auraGradient.addColorStop(1, `hsl(180, 80%, ${this.lightness * 30}%, 0.0)`);
         c.fillStyle = auraGradient;
         c.fill();
 
@@ -7578,6 +7621,15 @@ function drawDrawMenu() {
     c.closePath();
     c.fill();
     
+    // Draw tiny black tip at the very end
+    c.fillStyle = `hsla(0, 0%, 0%, ${drawMenuOpacity})`;
+    c.beginPath();
+    c.moveTo(0, -pencilLength / 2);
+    c.lineTo(-pencilWidth / 6, -pencilLength / 2 + tipHeight * 0.3);
+    c.lineTo(pencilWidth / 6, -pencilLength / 2 + tipHeight * 0.3);
+    c.closePath();
+    c.fill();
+    
     // Draw eraser
     c.fillStyle = `hsla(340, 70%, 60%, ${drawMenuOpacity})`;
     c.beginPath();
@@ -7997,8 +8049,11 @@ function simulateEverything() {
         const p1 = pathPoints[segmentIndex];
         const p2 = pathPoints[(segmentIndex + 1) % pathPoints.length];
         
-        Magnet[0].x = p1.x + (p2.x - p1.x) * t;
-        Magnet[0].y = p1.y + (p2.y - p1.y) * t;
+        // Check if points are valid before accessing their properties
+        if (p1 && p2) {
+            Magnet[0].x = p1.x + (p2.x - p1.x) * t;
+            Magnet[0].y = p1.y + (p2.y - p1.y) * t;
+        }
     }
 }
 
@@ -8008,6 +8063,36 @@ function drawEverything() {
     c.clearRect(0, 0, width, height);
     //c.fillStyle = 'hsla(0, 0%, 0%, 0.1)';
     //c.fillRect(0, 0, width, height);
+
+    // Draw traced path --------
+    if ((tracePathActive || pathExists) && pathPoints.length > 0) {
+        c.save();
+        c.lineWidth = 2;
+        c.lineCap = 'round';
+        c.lineJoin = 'round';
+        
+        if (isDrawingPath) {
+            // Drawing in progress - bright line
+            c.strokeStyle = 'hsla(340, 70%, 60%, 0.8)';
+            c.lineWidth = 3;
+        } else {
+            // Completed path - faint line
+            c.strokeStyle = 'hsla(340, 70%, 60%, 0.3)';
+            c.lineWidth = 8;
+        }
+        
+        c.beginPath();
+        c.moveTo(pathPoints[0].x * cScale, canvas.height - pathPoints[0].y * cScale);
+        for (let i = 1; i < pathPoints.length; i++) {
+            c.lineTo(pathPoints[i].x * cScale, canvas.height - pathPoints[i].y * cScale);
+        }
+        // Close the path
+        if (!isDrawingPath) {
+            c.closePath();
+        }
+        c.stroke();
+        c.restore();
+    }
     
     // Draw hot air balloon 
     if (showHotAirBalloon) {
@@ -8088,36 +8173,6 @@ function drawEverything() {
             magnet.draw();
         }
     }
-    
-    // Draw traced path --------
-    if ((tracePathActive || pathExists) && pathPoints.length > 0) {
-        c.save();
-        c.lineWidth = 2;
-        c.lineCap = 'round';
-        c.lineJoin = 'round';
-        
-        if (isDrawingPath) {
-            // Drawing in progress - bright line
-            c.strokeStyle = 'hsla(340, 70%, 60%, 0.8)';
-            c.lineWidth = 3;
-        } else {
-            // Completed path - faint line
-            c.strokeStyle = 'hsla(340, 70%, 60%, 0.3)';
-            c.lineWidth = 2;
-        }
-        
-        c.beginPath();
-        c.moveTo(pathPoints[0].x * cScale, canvas.height - pathPoints[0].y * cScale);
-        for (let i = 1; i < pathPoints.length; i++) {
-            c.lineTo(pathPoints[i].x * cScale, canvas.height - pathPoints[i].y * cScale);
-        }
-        // Close the path
-        if (!isDrawingPath) {
-            c.closePath();
-        }
-        c.stroke();
-        c.restore();
-    }
 
     // Draw menus in z-order (lowest to highest so highest is on top) --------
     const menus = [
@@ -8134,8 +8189,60 @@ function drawEverything() {
     // Draw main menu on top of everything
     drawMainMenu();
     
+    // Draw pencil cursor for drawing tool
+    if (tracePathActive || isDrawingPath) {
+        canvas.style.cursor = 'none';
+        
+        // Ensure lightweight listener is active for cursor tracking
+        attachLightweightMouseMove();
+        
+        const cursorX = mouseX * cScale;
+        const cursorY = canvas.height - mouseY * cScale;
+        const pencilSize = 0.08 * cScale;
+        
+        c.save();
+        c.translate(cursorX, cursorY);
+        c.rotate(3 * Math.PI / 4); // Rotate 135 degrees (original 45 + 90 clockwise)
+        c.translate(0, -pencilSize * 0.2); // Offset so tip is at cursor position
+        
+        // Pencil body (wooden part)
+        c.fillStyle = 'hsla(30, 70%, 50%, 0.9)';
+        c.strokeStyle = 'hsla(0, 0%, 0%, 0.9)';
+        c.lineWidth = 0.002 * cScale;
+        c.beginPath();
+        c.rect(-pencilSize * 0.15, -pencilSize * 0.6, pencilSize * 0.3, pencilSize * 0.55);
+        c.fill();
+        c.stroke();
+        
+        // Pencil tip (graphite)
+        c.fillStyle = 'hsla(0, 0%, 20%, 0.9)';
+        c.beginPath();
+        c.moveTo(0, pencilSize * 0.2);
+        c.lineTo(-pencilSize * 0.15, -pencilSize * 0.05);
+        c.lineTo(pencilSize * 0.15, -pencilSize * 0.05);
+        c.closePath();
+        c.fill();
+        c.stroke();
+        
+        // Eraser
+        c.fillStyle = 'hsla(340, 70%, 60%, 0.9)';
+        c.beginPath();
+        c.rect(-pencilSize * 0.15, -pencilSize * 0.75, pencilSize * 0.3, pencilSize * 0.15);
+        c.fill();
+        c.stroke();
+        
+        // Metal band
+        c.fillStyle = 'hsla(40, 20%, 60%, 0.9)';
+        c.beginPath();
+        c.rect(-pencilSize * 0.15, -pencilSize * 0.6, pencilSize * 0.3, pencilSize * 0.08);
+        c.fill();
+        c.stroke();
+        
+        c.restore();
+    }
+    
     // Draw spraypaint cursor
-    if (spraypaintActive) {
+    else if (spraypaintActive) {
         canvas.style.cursor = 'default';
         const cursorX = mouseX * cScale;
         const cursorY = canvas.height - mouseY * cScale;
@@ -8150,7 +8257,7 @@ function drawEverything() {
     }
     
     // Draw camera cursor when skyHandActive
-    if (skyHandActive && !spraypaintActive) {
+    else if (skyHandActive) {
         canvas.style.cursor = 'none';
         const cursorX = mouseX * cScale;
         const cursorY = canvas.height - mouseY * cScale;
@@ -8236,7 +8343,7 @@ function drawEverything() {
             c.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
             c.fill();
         }
-    } else if (!spraypaintActive) {
+    } else {
         canvas.style.cursor = 'default';
     }
 
