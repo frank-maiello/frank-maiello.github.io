@@ -1,5 +1,5 @@
 /*
-B0IDS 1.45 :: autonomous flocking behavior ::
+B0IDS 1.46 :: autonomous flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -149,6 +149,9 @@ let sprayParticles = []; // Array to hold spray effect particles
 let segregationMode = 0; // 0 = normal, 1 = segregate (all rules only apply to same hue), 2 = segregate2 (rule 1 all, rules 2&3 same hue)
 let colorByDirection = false; // When true, boid hue is based on heading direction
 
+// Dye tool state
+let dyeActive = false;
+
 // Sky hand mode state
 let skyHandActive = false;
 let isDraggingSky = false;
@@ -165,6 +168,8 @@ let skyMenuVisibleBeforeCamera = false;
 // Store menu states before paint tool activation
 let menuVisibleBeforePaint = false;
 let skyMenuVisibleBeforePaint = false;
+let drawMenuVisibleBeforePaint = false;
+let colorMenuVisibleBeforePaint = false;
 
 // Sky object visibility toggles
 let showClouds = true;
@@ -257,6 +262,50 @@ mousedownHandler = function(e) {
     const rect = canvas.getBoundingClientRect();
     mouseX = (e.clientX - rect.left) / cScale;
     mouseY = (canvas.height - (e.clientY - rect.top)) / cScale;
+    
+    // Check for dye tool click - paint closest boid within radius
+    if (dyeActive) {
+        let closestBoid = null;
+        let closestDist = spraypaintRadius;
+        
+        // Find closest boid to cursor within radius
+        for (let i = 0; i < Boids.length; i++) {
+            const boid = Boids[i];
+            const dx = boid.pos.x - mouseX;
+            const dy = boid.pos.y - mouseY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < closestDist) {
+                closestDist = dist;
+                closestBoid = boid;
+            }
+        }
+        
+        // Paint the closest boid if found
+        if (closestBoid) {
+            closestBoid.hue = selectedHue;
+            closestBoid.saturation = selectedSaturation;
+            closestBoid.lightness = selectedLightness;
+            closestBoid.manualHue = true;
+            closestBoid.manualSaturation = true;
+            closestBoid.manualLightness = true;
+            closestBoid.dyedBoid = true; // Mark as dyed for color transfer
+            
+            // Deactivate dye tool after painting (menus stay hidden)
+            dyeActive = false;
+            updateMouseListeners();
+        }
+        return;
+    }
+    
+    // Check if wand was clicked
+    if (isMouseNearWand(mouseX, mouseY, wandPosX * simWidth, wandPosY * simHeight, wandAngle, wandSize)) {
+        isDraggingWand = true;
+        wandDragOffsetX = mouseX - wandPosX * simWidth;
+        wandDragOffsetY = mouseY - wandPosY * simHeight;
+        attachMouseMove();
+        return;
+    }
     
     // Check if ellipsis was clicked (in world coordinates)
     const ellipsisWorldX = 0.05;
@@ -410,6 +459,7 @@ mousedownHandler = function(e) {
         if (ccdx * ccdx + ccdy * ccdy < closeIconRadius * closeIconRadius) {
             colorMenuVisible = false;
             spraypaintActive = false; // Turn off spray tool when menu closes
+            dyeActive = false; // Turn off dye tool when menu closes
             updateMouseListeners();
             return true;
         }
@@ -474,13 +524,14 @@ mousedownHandler = function(e) {
         const buttonY = colorMenuOriginY + colorWheelRadius * 2 + spacing * 1.5;
         const buttonSpacing = knobRadius * 1.2;
         // Position fourth button centered below lightness slider
-        const lightnessSliderCenterX = sliderX + sliderWidth / 2;
+        const lightnessSliderCenterX = colorMenuOriginX + colorWheelRadius * 2 + spacing + sliderWidth / 2;
         const buttonStartX = lightnessSliderCenterX - buttonSpacing * 3;
         
         // Black button
         const blackDx = clickCanvasX - buttonStartX;
         const blackDy = clickCanvasY - buttonY;
         if (blackDx * blackDx + blackDy * blackDy < buttonRadius * buttonRadius) {
+            colorByDirection = false;
             for (let i = 0; i < Boids.length; i++) {
                 Boids[i].hue = 0;
                 Boids[i].saturation = 0;
@@ -488,6 +539,7 @@ mousedownHandler = function(e) {
                 Boids[i].manualHue = true;
                 Boids[i].manualSaturation = true;
                 Boids[i].manualLightness = true;
+                Boids[i].dyedBoid = false;
             }
             paintedColorDots = []; // Reset painted color indicators
             return true;
@@ -497,8 +549,8 @@ mousedownHandler = function(e) {
         // Bipartite: first half black, second half white
         const grayDx = clickCanvasX - (buttonStartX + buttonSpacing);
         const grayDy = clickCanvasY - buttonY;
-        const halfBoids = Math.floor(0.5 * Boids.length);
         if (grayDx * grayDx + grayDy * grayDy < buttonRadius * buttonRadius) {
+            colorByDirection = false;
             for (let i = 0; i < Boids.length; i++) {
                 var boido = Boids[i];
                 if (boido.pos.x < 0.5 * simWidth) {
@@ -513,6 +565,7 @@ mousedownHandler = function(e) {
                 boido.manualHue = true;
                 boido.manualSaturation = true;
                 boido.manualLightness = true;
+                boido.dyedBoid = false;
             }
             paintedColorDots = []; // Reset painted color indicators
             return true;
@@ -529,12 +582,13 @@ mousedownHandler = function(e) {
                 Boids[i].manualHue = true;
                 Boids[i].manualSaturation = true;
                 Boids[i].manualLightness = true;
+                Boids[i].dyedBoid = false;
             }
             paintedColorDots = []; // Reset painted color indicators
             return true;
         }
         
-        // Selected color button
+        // Selected color button - Paint all
         const selectedDx = clickCanvasX - (buttonStartX + buttonSpacing * 3);
         const selectedDy = clickCanvasY - buttonY;
         if (selectedDx * selectedDx + selectedDy * selectedDy < buttonRadius * buttonRadius) {
@@ -545,10 +599,42 @@ mousedownHandler = function(e) {
                 Boids[i].manualHue = true;
                 Boids[i].manualSaturation = true;
                 Boids[i].manualLightness = true;
+                Boids[i].dyedBoid = false;
             }
             // Reset painted color indicators and add the current selected color
             paintedColorDots = [{hue: selectedHue, saturation: selectedSaturation}];
             colorByDirection = false; // Disable color by direction mode
+            return true;
+        }
+        
+        // Dye button - Paint one boid at a time
+        const dyeDx = clickCanvasX - (buttonStartX + buttonSpacing * 4.75);
+        const dyeDy = clickCanvasY - (buttonY + buttonSpacing * 1.5);
+        if (dyeDx * dyeDx + dyeDy * dyeDy < (buttonRadius * 1.5) * (buttonRadius * 1.5)) {
+            dyeActive = !dyeActive;
+            if (dyeActive) {
+                skyHandActive = false;
+                spraypaintActive = false;
+                // Store current menu states
+                menuVisibleBeforePaint = menuVisible;
+                skyMenuVisibleBeforePaint = skyMenuVisible;
+                drawMenuVisibleBeforePaint = drawMenuVisible;
+                colorMenuVisibleBeforePaint = colorMenuVisible;
+                // Hide all menus
+                menuVisible = false;
+                skyMenuVisible = false;
+                drawMenuVisible = false;
+                colorMenuVisible = false;
+            } else {
+                // Restore menu states when dye tool is deactivated
+                menuVisible = menuVisibleBeforePaint;
+                skyMenuVisible = skyMenuVisibleBeforePaint;
+                drawMenuVisible = drawMenuVisibleBeforePaint;
+                colorMenuVisible = colorMenuVisibleBeforePaint;
+            }
+            updateMouseListeners();
+            // Ensure cursor position is updated immediately for smooth transition
+            attachLightweightMouseMove();
             return true;
         }
         
@@ -563,6 +649,7 @@ mousedownHandler = function(e) {
                     Boids[i].manualHue = false;
                     Boids[i].manualSaturation = false;
                     Boids[i].manualLightness = false;
+                    Boids[i].dyedBoid = false;
                 }
             }
             paintedColorDots = []; // Reset painted color indicators
@@ -580,6 +667,7 @@ mousedownHandler = function(e) {
                 Boids[i].manualSaturation = false;
                 Boids[i].manualLightness = false;
                 Boids[i].hueCounter = 0; // Reset hue counter
+                Boids[i].dyedBoid = false;
             }
             paintedColorDots = []; // Reset painted color indicators
             return true;
@@ -958,6 +1046,21 @@ mousedownHandler = function(e) {
             dragStartMouseX = mouseX;
             dragStartMouseY = mouseY;
             dragStartValue = magnetPathSpeed;
+            return true;
+        }
+        
+        // Check Wand button (row 1, col 2)
+        const wandCol = 2;
+        const wandRow = 1;
+        const wandIconSize = knobRadius * 1.2;
+        const wandButtonX = menuOriginX + wandCol * cellWidth;
+        const wandButtonY = menuOriginY + gridStartY + wandRow * cellHeight;
+        const wandClickRadius = wandIconSize * 0.8;
+        const wdx = clickCanvasX - wandButtonX;
+        const wdy = clickCanvasY - wandButtonY;
+        
+        if (wdx * wdx + wdy * wdy < wandClickRadius * wandClickRadius) {
+            wandActive = !wandActive;
             return true;
         }
         
@@ -1383,13 +1486,14 @@ mouseupHandler = function(e) {
     isDraggingHueTicker = false;
     isDraggingSpraySlider = false;
     isDraggingMagnet = false;
+    isDraggingWand = false;
     isSpraying = false;
     
     // Detach heavy mousemove listener when drag ends
     detachMouseMove();
     
     // Keep or remove lightweight listener based on active tools
-    if (!spraypaintActive && !skyHandActive) {
+    if (!spraypaintActive && !dyeActive && !skyHandActive) {
         detachLightweightMouseMove();
     }
 };
@@ -1857,6 +1961,40 @@ function handleMouseMove(e) {
         return;
     }
     
+    if (isDraggingWand) {
+        wandPosX = (mouseX - wandDragOffsetX) / simWidth;
+        wandPosY = (mouseY - wandDragOffsetY) / simHeight;
+        
+        // Check if wand moved significantly and spawn boids from tip
+        const dx = wandPosX - wandPrevX;
+        const dy = wandPosY - wandPrevY;
+        const distMoved = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distMoved > 0.001) {
+            // Calculate tip position in world coordinates
+            const wandLength = 0.15 * wandSize;
+            const tipOffsetDist = -0.1 * wandLength;
+            const tipX = (wandPosX * simWidth) + Math.cos(wandAngle) * tipOffsetDist;
+            const tipY = (wandPosY * simHeight) + Math.sin(wandAngle) * tipOffsetDist;
+            
+            // Spawn a boid from the tip with random outward velocity
+            const velAngle = Math.random() * 2 * Math.PI;
+            const velMag = 1.0 + Math.random() * 1.0;
+            const vel = new Vector2(Math.cos(velAngle) * velMag, Math.sin(velAngle) * velMag);
+            const pos = new Vector2(tipX, tipY);
+            const hue = Math.random() * 360;
+            
+            const newBoid = new BOID(pos, vel, hue, false, false);
+            newBoid.arrow = true;
+            Boids.push(newBoid);
+            
+            wandPrevX = wandPosX;
+            wandPrevY = wandPosY;
+        }
+        
+        return;
+    }
+    
     if (draggedCloud) {
         draggedCloud.x = mouseX;
         draggedCloud.y = mouseY;
@@ -1903,7 +2041,7 @@ function detachLightweightMouseMove() {
 // Update lightweight listener when tools are toggled
 function updateMouseListeners() {
     // Lightweight listener needed for cursors when tools are active
-    if (spraypaintActive || skyHandActive || tracePathActive || isDrawingPath) {
+    if (spraypaintActive || dyeActive || skyHandActive || tracePathActive || isDrawingPath) {
         attachLightweightMouseMove();
     } else if (!mousemoveActive) {
         // Only detach if heavy handler isn't active
@@ -5554,8 +5692,10 @@ function drawSimMenu() {
     
     // Draw reset button --------------------------------------
     const resetButtonRadius = knobRadius * 0.5;
-    const resetButtonX = 3 * knobSpacing;
-    const resetButtonY = 2.1 * knobSpacing + menuTopMargin;
+    //const resetButtonX = 3 * knobSpacing;
+    //const resetButtonY = 2.1 * knobSpacing + menuTopMargin;
+    const resetButtonX = 0;
+    const resetButtonY = 3.25 * knobSpacing + menuTopMargin;
     
     // Draw reset button
     c.fillStyle = `hsla(60, 80%, 50%, ${menuOpacity})`;
@@ -5564,29 +5704,15 @@ function drawSimMenu() {
     c.closePath();
     c.fill();
 
-    // Draw "RESET" text in arc above button
-    const resetText = "RESET";
-    const arcRadius = resetButtonRadius * 1.8;
-    const totalArcAngle = Math.PI * 0.6; // 60 degrees total arc
-    const startAngle = -Math.PI / 2 - totalArcAngle / 2; // Center the arc above
-    
-    c.font = `bold ${0.4 * knobRadius}px verdana`;
+    // Draw "RESET" text below button
+    c.font = `${0.3 * knobRadius}px verdana`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    for (let i = 0; i < resetText.length; i++) {
-        const angle = startAngle + (i / (resetText.length - 1)) * totalArcAngle;
-        const x = resetButtonX + Math.cos(angle) * arcRadius;
-        const y = resetButtonY + (0.1 * knobRadius) + Math.sin(angle) * arcRadius;
-        c.save();
-        c.translate(x, y);
-        c.rotate(angle + Math.PI / 2); // Rotate to follow arc
-        c.fillStyle = `hsla(0, 80%, 0%, ${0.7 *menuOpacity})`;
-        c.fillText(resetText[i], 0.08 * knobRadius, 0.06 * knobRadius);
-        c.fillStyle = `hsla(210, 80%, 80%, ${menuOpacity})`;
-        c.fillText(resetText[i], 0, 0);
-        c.restore();
-    }
-    
+    c.fillStyle = `hsla(0, 0%, 0%, ${0.7 *menuOpacity})`;
+    c.fillText("Reset", resetButtonX, resetButtonY + 1.4 * resetButtonRadius);
+    c.fillStyle = `hsla(60, 80%, 90%, ${menuOpacity})`;
+    c.fillText("Reset", resetButtonX, resetButtonY + 1.4 * resetButtonRadius);
+  
     // Draw FPS counter in bottom right of menu -------------------------------
     updateFPS();
     c.textAlign = 'right';
@@ -5608,8 +5734,8 @@ function drawSimMenu() {
     // draw dark heavy background line for FPS text
     const fpsTextWidth = c.measureText(fpsText).width;
     c.beginPath();
-    c.moveTo(menuWidth + padding - 2.5 * knobRadius, menuHeight + padding - 2.55 * knobRadius);
-    c.lineTo(menuWidth + padding - 0.9 *knobRadius, menuHeight + padding - 2.55 * knobRadius);
+    c.moveTo(menuWidth + padding - 2.5 * knobRadius, menuHeight + padding - 0.65 * knobRadius);
+    c.lineTo(menuWidth + padding - 0.9 *knobRadius, menuHeight + padding - 0.65 * knobRadius);
     c.lineWidth = 0.5 * knobRadius;
     c.strokeStyle = `hsla(0, 0%, 0%, ${0.7 * menuOpacity})`;
     c.lineCap = 'round';
@@ -5618,12 +5744,12 @@ function drawSimMenu() {
     // Draw FPS value
     c.font = `${0.4 * knobRadius}px monospace`;
     c.fillStyle = `hsla(${fpsHue}, 90%, 60%, ${menuOpacity})`;
-    c.fillText(fpsText, menuWidth + padding - 1.9 * knobRadius, menuHeight + padding - 2.3 * knobRadius);
+    c.fillText(fpsText, menuWidth + padding - 1.9 * knobRadius, menuHeight + padding - 0.42 * knobRadius);
     
     // Draw 'FPS' label
     c.font = `${0.4 * knobRadius}px monospace`;
     c.fillStyle = `hsla(0, 0%, 80%, ${menuOpacity})`;
-    c.fillText('fps', menuWidth + padding - 1.0 * knobRadius, menuHeight + padding - 2.3 * knobRadius);
+    c.fillText('fps', menuWidth + padding - 1.0 * knobRadius, menuHeight + padding - 0.42 * knobRadius);
 
     c.restore();
 }
@@ -6047,13 +6173,103 @@ function drawColorMenu() {
     c.fillStyle = `hsla(0, 0%, 100%, ${colorMenuOpacity})`;
     c.fill();
     c.stroke();
+
+    // Draw line from paint all button to dye one button
+    c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
+    c.setLineDash([0.02 * cScale, 0.02 * cScale]);
+    c.lineWidth = 0.008 * cScale;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(buttonStartX + buttonSpacing * 3, buttonY);
+    const lineRadScale = 0.035 * cScale;
+    const lineB = 1.5;
+    const dropEndY = buttonY + buttonSpacing * 1.0 + lineB * lineRadScale;
+    c.lineTo(buttonStartX + buttonSpacing * 4.5, dropEndY);
+    c.stroke();
+    c.setLineDash([0,0]);
     
-    // Selected color button
+    // Selected color button - paint all
     c.beginPath();
     c.arc(buttonStartX + buttonSpacing * 3, buttonY, buttonRadius, 0, 2 * Math.PI);
     c.fillStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity})`;
     c.fill();
     c.stroke();
+
+    // Selected color button - dye one (raindrop icon)
+    const dropX = buttonStartX + buttonSpacing * 4.75;
+    const dropY = buttonY + buttonSpacing * 1.0;
+    
+    c.save();
+    c.translate(dropX, dropY);
+    const radScale = 0.035 * cScale;
+
+    // Draw airfoil  -----------
+    const numPoints = 24; 
+    const a = 0.3;
+    const b = 1.5;
+    const pivotOffsetX = 0;
+    const pivotOffsetY = -b * radScale;  // Centroid of bulb head
+    c.beginPath();  
+    for (let i = 0; i <= numPoints; i++) {
+        const t = Math.PI / 2 + (i / numPoints) * (2 * Math.PI);
+        const x = (2 * a * Math.cos(t) - a * Math.sin(2 * t)) * radScale;
+        const y = b * Math.sin(t) * radScale;
+        if (i === 0) {
+            c.moveTo(x - pivotOffsetX, -y - pivotOffsetY);
+        } else {
+            c.lineTo(x - pivotOffsetX, -y - pivotOffsetY);
+        }
+    }  
+    c.closePath();
+    
+    // Create 3D gradient with highlight and shadow
+    const gradient = c.createRadialGradient(
+        -a * radScale * 0.8,
+        b * radScale * 0.8,
+        0,
+        0,
+        0,
+        b * radScale * 2.5);
+    
+    // Bright highlight (top-left)
+    gradient.addColorStop(0, `hsla(${selectedHue}, ${Math.max(0, selectedSaturation - 30)}%, ${Math.min(100, selectedLightness + 45)}%, ${colorMenuOpacity})`);
+    // Mid-tone (user color)
+    gradient.addColorStop(0.3, `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity * 0.95})`);
+    // Darker mid
+    gradient.addColorStop(0.6, `hsla(${selectedHue}, ${Math.min(100, selectedSaturation + 10)}%, ${Math.max(10, selectedLightness - 20)}%, ${colorMenuOpacity * 0.85})`);
+    // Deep shadow
+    gradient.addColorStop(1, `hsla(${selectedHue}, ${Math.min(100, selectedSaturation + 20)}%, ${Math.max(5, selectedLightness - 40)}%, ${colorMenuOpacity * 0.7})`);
+    
+    c.fillStyle = gradient;
+    c.fill();
+    
+    // Subtle rim light on stroke
+    c.strokeStyle = `hsla(${selectedHue}, ${Math.max(0, selectedSaturation - 20)}%, ${Math.min(100, selectedLightness + 10)}%, ${colorMenuOpacity * 0.8})`;
+    c.lineWidth = 1.5;
+    c.stroke();
+
+    c.restore();
+
+    c.font = `${0.28 * knobRadius}px verdana`;
+    c.textAlign = 'center';
+    c.textBaseline = 'top';
+    
+    // Paint label with shadow
+    c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
+    c.strokeText('Paint', 0.02 * knobRadius + buttonStartX + buttonSpacing * 3, 0.02 * knobRadius + buttonY + buttonRadius * 1.5);
+    c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+    c.fillText('Paint', buttonStartX + buttonSpacing * 3, buttonY + buttonRadius * 1.5);
+    
+    // Dye label with shadow
+    const textRadScale = 0.035 * cScale;
+    const textB = 1.5;
+    const dropletCenterY = buttonY + buttonSpacing * 1.0;
+    const dyeTextY = dropletCenterY + 2 * textB * textRadScale + buttonRadius * 0.3;
+    c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
+    c.strokeText('Dye', 0.02 * knobRadius + buttonStartX + buttonSpacing * 4.75, 0.02 * knobRadius + dyeTextY);
+    c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+    c.fillText('Dye', buttonStartX + buttonSpacing * 4.75, dyeTextY);
+    
 
     // Color by direction button
     c.beginPath();
@@ -6065,6 +6281,7 @@ function drawColorMenu() {
         colorWheelCanvas.width, colorWheelCanvas.height,
         buttonStartX + buttonSpacing * 4 - buttonRadius, buttonY - buttonRadius,
         buttonRadius * 2, buttonRadius * 2);
+    c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
     c.stroke();
     
     // Velocity-sensitive color cycling button
@@ -6081,6 +6298,7 @@ function drawColorMenu() {
     velocityGradient.addColorStop(1, `hsla(240, 85%, 50%, ${colorMenuOpacity})`); // Blue at bottom (slow)
     c.fillStyle = velocityGradient;
     c.fill();
+    c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
     c.stroke();
 
     // Only draw knobs and segregation buttons when spray tool is not active
@@ -6397,6 +6615,167 @@ function makeBoids() {
     }
 }
 
+// WAND VARIABLES -----------------
+let wandPosX = 0.5;
+let wandPosY = 0.5;
+let wandAngle = 0.4 * Math.PI;
+let wandSize = 1;
+let wandActive = false;
+let isDraggingWand = false;
+let wandDragOffsetX = 0;
+let wandDragOffsetY = 0;
+let wandPrevX = 0.5;
+let wandPrevY = 0.5;
+let wandSpawnTimer = 0;
+
+// APPLY WAND ---------------------
+function applyWand(wandX, wandY, wandAngle, wandSize) {
+    drawWand(wandX, wandY, wandAngle, wandSize)
+    // spawn boids at wand tip
+}
+
+// DRAW WAND ---------------------
+function drawWand(wandX, wandY, wandAngle, wandSize) {
+    const wandLength = 0.3 * wandSize;
+    const wandWidth = 0.008 * wandSize;
+    
+    c.save();
+    c.translate(wandX * cScale, canvas.height - wandY * cScale);
+    
+    // rotate 30 degrees ccw from vertical
+    c.rotate(wandAngle);
+
+    // draw black wand shaft background
+    c.fillStyle = 'hsl(0, 0%, 0%)';
+    c.fillRect(0, -2 * wandWidth * cScale / 2, wandLength * cScale, 2 * wandWidth * cScale);
+    
+    // DRAW BLACK END BACKGROUND
+    c.beginPath();
+    c.arc(wandLength * cScale, 0, wandWidth * 2.0 * cScale, 0, Math.PI * 2);
+    c.fill();
+
+    // draw red wand shaft
+    c.fillStyle = 'red';
+    c.fillRect(0, -wandWidth * cScale / 2, wandLength * cScale, wandWidth * cScale);
+    
+    // DRAW red END
+    c.beginPath();
+    c.arc(wandLength * cScale, 0, wandWidth * 1.5 * cScale, 0, Math.PI * 2);
+    c.fillStyle = 'red';
+    c.fill();
+    
+    // Move to star tip position (beyond the base/handle)
+    c.translate(wandLength * cScale * -0.1, 0);
+            
+    // Draw each black outline for star points
+    c.lineWidth = 0.02 * cScale;
+    for (let i = 0; i < 5; i++) {
+        const angle = (i * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * wandAngle);
+        const x = Math.cos(angle) * wandLength * 0.2 * cScale;
+        const y = Math.sin(angle) * wandLength * 0.2 * cScale;
+        const innerAngle = (angle + Math.PI / 5);
+        const innerX = Math.cos(innerAngle) * wandLength * 0.1 * cScale;
+        const innerY = Math.sin(innerAngle) * wandLength * 0.1 * cScale;
+        
+        // Next outer point
+        const nextAngle = ((i + 1) * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * wandAngle);
+        const nextX = Math.cos(nextAngle) * wandLength * 0.2 * cScale;
+        const nextY = Math.sin(nextAngle) * wandLength * 0.2 * cScale;
+        
+        // Draw one point as a separate path
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(innerX, innerY);
+        c.lineTo(nextX, nextY);
+        c.strokeStyle = `hsla(0, 0%, 0%, 0.3)`;
+        c.stroke();
+    }
+
+    // Draw each star point with different colors
+    c.lineWidth = 0.007 * cScale;
+    for (let i = 0; i < 5; i++) {
+        const angle = (i * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * wandAngle);
+        const x = Math.cos(angle) * wandLength * 0.2 * cScale;
+        const y = Math.sin(angle) * wandLength * 0.2 * cScale;
+        const innerAngle = (angle + Math.PI / 5);
+        const innerX = Math.cos(innerAngle) * wandLength * 0.1 * cScale;
+        const innerY = Math.sin(innerAngle) * wandLength * 0.1 * cScale;
+        
+        // Next outer point
+        const nextAngle = ((i + 1) * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * wandAngle);
+        const nextX = Math.cos(nextAngle) * wandLength * 0.2 * cScale;
+        const nextY = Math.sin(nextAngle) * wandLength * 0.2 * cScale;
+        
+        // Draw one point as a separate path
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(innerX, innerY);
+        c.lineTo(nextX, nextY);
+        c.strokeStyle = `hsl(${45 * (i / 5) + 25}, 100%, 50%)`;
+        
+        c.stroke();
+    }
+
+    // Draw each star point with different colors
+    c.lineWidth = 0.007 * cScale;
+    for (let i = 0; i < 5; i++) {
+        const angle = (i * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * wandAngle);
+        const x = Math.cos(angle) * wandLength * 0.1 * cScale;
+        const y = Math.sin(angle) * wandLength * 0.1 * cScale;
+        const innerAngle = (angle + Math.PI / 5);
+        const innerX = Math.cos(innerAngle) * wandLength * 0.1 * cScale;
+        const innerY = Math.sin(innerAngle) * wandLength * 0.1 * cScale;
+        
+        // Next outer point
+        const nextAngle = ((i + 1) * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * wandAngle);
+        const nextX = Math.cos(nextAngle) * wandLength * 0.2 * cScale;
+        const nextY = Math.sin(nextAngle) * wandLength * 0.2 * cScale;
+        
+        // Draw one point as a separate path
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(innerX, innerY);
+        c.lineTo(nextX, nextY);
+        c.strokeStyle = `hsl(${45 * (i / 5) + 25}, 100%, 50%)`;
+        
+        c.stroke();
+    }
+    
+    c.restore();
+}
+
+// CHECK IF MOUSE IS NEAR WAND -----------
+function isMouseNearWand(mx, my, wandX, wandY, wandAngle, wandSize) {
+    const wandLength = 0.3 * wandSize;
+    const wandWidth = 0.008 * wandSize;
+    const grabWidth = wandLength * 0.5; // Perpendicular grab distance from center axis
+    
+    // Transform mouse position to wand's local coordinate system
+    const dx = mx - wandX;
+    const dy = my - wandY;
+    
+    // Rotate by positive angle because canvas Y is flipped relative to simulation Y
+    const localX = dx * Math.cos(wandAngle) - dy * Math.sin(wandAngle);
+    const localY = dx * Math.sin(wandAngle) + dy * Math.cos(wandAngle);
+    
+    // The wand geometry in local coordinates:
+    // - Star at -0.1 * wandLength, star radius ~0.2 * wandLength, so extends to -0.3 * wandLength
+    // - Shaft from 0 to wandLength
+    // - Red circle at wandLength with radius 1.5 * wandWidth, so extends to wandLength + 1.5 * wandWidth
+    const wandStart = -0.3 * wandLength;
+    const wandEnd = wandLength + 1.5 * wandWidth;
+    
+    // Check if point is along the wand length
+    if (localX < wandStart || localX > wandEnd) {
+        return false;
+    }
+    
+    // Check perpendicular distance from the wand axis
+    const perpDist = Math.abs(localY);
+    return perpDist <= grabWidth;
+}
+
+
 // HANDLE BOID BOUNDS - RECTANGULAR -------------
 function handleBounds(boid) {
     if (boid.pos.x <= boidProps.marginX) {
@@ -6682,6 +7061,27 @@ function handleBoidRules(boid) {
             if (distSq < visualRangeSq && distSq > 0) {
                 // Check if segregation mode is active and hues match (within tolerance)
                 const hueMatch = segregationMode === 0 || Math.abs(boid.hue - otherBoid.hue) < 10;
+                
+                // Color transfer: only the originally dyed boid can transfer color
+                if (boid.dyedBoid && !otherBoid.dyedBoid) {
+                    // Transfer color from originally dyed boid to any other boid
+                    otherBoid.hue = boid.hue;
+                    otherBoid.saturation = boid.saturation;
+                    otherBoid.lightness = boid.lightness;
+                    otherBoid.manualHue = true;
+                    otherBoid.manualSaturation = true;
+                    otherBoid.manualLightness = true;
+                    // Don't set dyedBoid = true, so this boid won't transfer color to others
+                } else if (otherBoid.dyedBoid && !boid.dyedBoid) {
+                    // Transfer color from originally dyed other boid to this boid
+                    boid.hue = otherBoid.hue;
+                    boid.saturation = otherBoid.saturation;
+                    boid.lightness = otherBoid.lightness;
+                    boid.manualHue = true;
+                    boid.manualSaturation = true;
+                    boid.manualLightness = true;
+                    // Don't set dyedBoid = true, so this boid won't transfer color to others
+                }
                 
                 // RULE #2 - ALIGNMENT: accumulate velocities (only if hue matches in segregate modes)
                 if (hueMatch) {
@@ -7754,6 +8154,98 @@ function drawDrawMenu() {
     c.fillStyle = `hsla(40, 80%, 70%, ${drawMenuOpacity})`;
     c.fillText(magnetPathSpeed.toFixed(1), speedKnobX, speedKnobY + 0.6 * knobRadius);
     
+    // Draw Wand icon (row 1, col 2)
+    const wandCol = 2;
+    const wandRow = 1;
+    var wandIconX = wandCol * cellWidth - 0.35 * knobRadius;
+    var wandIconY = gridStartY + wandRow * cellHeight - 0.3 * knobRadius;
+    const wandIconSize = 1.8 * knobRadius;
+    
+    c.save();
+    c.translate(wandIconX, wandIconY);
+    
+    // Draw a smaller version of the wand
+    const iconWandLength = wandIconSize * 0.8;
+    const iconWandWidth = wandIconSize * 0.05;
+    const iconWandAngle = 0.25 * Math.PI; 
+    
+    c.rotate(iconWandAngle);
+    
+    // Draw black wand shaft background
+    c.fillStyle = `hsla(0, 0%, 0%, ${drawMenuOpacity})`;
+    c.fillRect(0, -2 * iconWandWidth / 2, iconWandLength, 2 * iconWandWidth);
+    
+    // Draw black end background
+    c.beginPath();
+    c.arc(iconWandLength, 0, iconWandWidth * 2.0, 0, Math.PI * 2);
+    c.fill();
+    
+    // Draw red wand shaft
+    c.fillStyle = `hsla(0, 70%, 50%, ${drawMenuOpacity})`;
+    c.fillRect(0, -iconWandWidth / 2, iconWandLength, iconWandWidth);
+    
+    // Draw red end
+    c.beginPath();
+    c.arc(iconWandLength, 0, iconWandWidth * 1.5, 0, Math.PI * 2);
+    c.fill();
+    
+    // Move to star position
+    c.translate(iconWandLength * -0.1, 0);
+    
+    // Draw star (simplified)
+    c.lineWidth = iconWandWidth * 0.5;
+    for (let i = 0; i < 5; i++) {
+        const angle = (i * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * iconWandAngle);
+        const x = Math.cos(angle) * iconWandLength * 0.2;
+        const y = Math.sin(angle) * iconWandLength * 0.2;
+        const innerAngle = (angle + Math.PI / 5);
+        const innerX = Math.cos(innerAngle) * iconWandLength * 0.1;
+        const innerY = Math.sin(innerAngle) * iconWandLength * 0.1;
+        
+        const nextAngle = ((i + 1) * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * iconWandAngle);
+        const nextX = Math.cos(nextAngle) * iconWandLength * 0.2;
+        const nextY = Math.sin(nextAngle) * iconWandLength * 0.2;
+        
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(innerX, innerY);
+        c.lineTo(nextX, nextY);
+        c.strokeStyle = `hsl(${45 * (i / 5) + 25}, 100%, 50%, ${drawMenuOpacity})`;
+        c.stroke();
+    }
+    
+    // Draw sparkles when wand is active - tiny white pixels moving outward
+    if (wandActive) {
+        const time = Date.now() / 1000;
+        const numSparkles = 12;
+        
+        c.fillStyle = `hsla(0, 0%, 100%, ${drawMenuOpacity})`;
+        
+        for (let i = 0; i < numSparkles; i++) {
+            const sparkleAngle = (i * 13.7 + i * i * 0.3) + time * 0.5;
+            const sparkleProgress = ((time * 2 + i * 0.5) % 2) / 2; // 0 to 1 cycle
+            const sparkleRadius = sparkleProgress * iconWandLength * 0.6;
+            const sparkleX = Math.cos(sparkleAngle) * sparkleRadius;
+            const sparkleY = Math.sin(sparkleAngle) * sparkleRadius;
+            const sparkleAlpha = (1 - sparkleProgress) * drawMenuOpacity;
+            
+            c.fillStyle = `hsla(0, 0%, 100%, ${sparkleAlpha})`;
+            c.fillRect(sparkleX - iconWandWidth * 0.3, sparkleY - iconWandWidth * 0.3, iconWandWidth * 0.6, iconWandWidth * 0.6);
+        }
+    }
+    
+    c.restore();
+    wandIconX = wandCol * cellWidth;
+    wandIconY = gridStartY + wandRow * cellHeight;
+    // Draw label
+    c.textAlign = 'center';
+    c.fillStyle = `hsla(340, 70%, 90%, ${drawMenuOpacity})`;
+    c.font = `${0.029 * cScale}px verdana`;
+    c.strokeStyle = `hsla(340, 80%, 0%, ${0.6 * drawMenuOpacity})`;
+    c.strokeText('Make Boids', 0.04 * knobRadius + wandIconX, 0.04 * knobRadius + (wandIconY + 1.35 * knobRadius));
+    c.fillStyle = `hsla(340, 80%, 95%, ${drawMenuOpacity})`;
+    c.fillText('Make Boids', wandIconX, wandIconY + 1.35 * knobRadius);
+    
     c.restore();
 }
 
@@ -7957,6 +8449,43 @@ function simulateEverything() {
         // Update spatial grid position incrementally
         SpatialGrid.updateBoid(boid);
     }
+    
+    // Check if all boids have been dyed - if so, remove dyedBoid flag from original
+    let dyedBoidExists = false;
+    let allBoidsColored = true;
+    let dyeColor = null;
+    
+    for (let i = 0; i < Boids.length; i++) {
+        if (Boids[i].dyedBoid) {
+            dyedBoidExists = true;
+            dyeColor = {
+                hue: Boids[i].hue,
+                saturation: Boids[i].saturation,
+                lightness: Boids[i].lightness
+            };
+            break;
+        }
+    }
+    
+    if (dyedBoidExists && dyeColor) {
+        // Check if all boids have the same color as the dyed boid
+        for (let i = 0; i < Boids.length; i++) {
+            const boid = Boids[i];
+            if (Math.abs(boid.hue - dyeColor.hue) > 1 || 
+                Math.abs(boid.saturation - dyeColor.saturation) > 1 || 
+                Math.abs(boid.lightness - dyeColor.lightness) > 1) {
+                allBoidsColored = false;
+                break;
+            }
+        }
+        
+        // If all boids have been colored, remove dyedBoid flag
+        if (allBoidsColored) {
+            for (let i = 0; i < Boids.length; i++) {
+                Boids[i].dyedBoid = false;
+            }
+        }
+    }
 
     // Update balloon ---------
     // Handle spacebar rapid spawning
@@ -8116,7 +8645,35 @@ function drawEverything() {
     // Draw boids --------
     for (var b = 0; b < Boids.length; b++) {
         boid = Boids[b];
+        
+        // Draw dark circle under dyed boid for visibility
+        if (boid.dyedBoid) {
+            c.beginPath();
+            c.arc(cX(boid.pos), cY(boid.pos), boidProps.visualRange * cScale, 0, 2 * Math.PI);
+            c.fillStyle = 'hsla(0, 0%, 0%, 0.3)';
+            c.fill();
+            
+            // Also draw a colored ring around it
+            c.beginPath();
+            c.arc(cX(boid.pos), cY(boid.pos), boidProps.visualRange * cScale * 0.95, 0, 2 * Math.PI);
+            c.strokeStyle = `hsla(${boid.hue}, ${boid.saturation}%, ${boid.lightness}%, 0.6)`;
+            c.lineWidth = 2;
+            c.stroke();
+        }
+        
         boid.draw();
+        
+        // Draw spray particles emanating from dyed boid
+        if (boid.dyedBoid) {
+            // Spawn particles more frequently for better visibility
+            if (Math.random() < 0.5) { // 50% chance per frame
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = 0.01 + Math.random() * 0.02;
+                const px = boid.pos.x + Math.cos(angle) * distance;
+                const py = boid.pos.y + Math.sin(angle) * distance;
+                sprayParticles.push(new SprayParticle(px, py, boid.hue, boid.saturation, boid.lightness));
+            }
+        }
         
         // Draw visual range circle for white and black boids when menu is active
         if (menuVisible && (boid.whiteBoid || boid.blackBoid)) {
@@ -8161,7 +8718,12 @@ function drawEverything() {
             }
         }
     }
-    
+
+    // Draw wand --------
+    if (wandActive) {
+        applyWand(wandPosX * simWidth, wandPosY * simHeight, wandAngle, wandSize);
+    }
+
     // Draw spray particles --------
     for (let particle of sprayParticles) {
         particle.draw();
@@ -8254,6 +8816,70 @@ function drawEverything() {
         c.strokeStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, 0.5)`;
         c.lineWidth = 2;
         c.stroke();
+    }
+    
+    // Draw dye cursor
+    else if (dyeActive) {
+        canvas.style.cursor = 'none';
+        const cursorX = mouseX * cScale;
+        const cursorY = canvas.height - mouseY * cScale;
+        const time = Date.now() / 1000;
+        
+        // Animated pulsing circle
+        const pulse = Math.sin(time * 4) * 0.15 + 1;
+        const dyeRadius = spraypaintRadius * pulse;
+        
+        // Draw dye radius indicator with animation
+        c.beginPath();
+        c.arc(cursorX, cursorY, dyeRadius * cScale, 0, 2 * Math.PI);
+        c.strokeStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${0.4 + Math.sin(time * 4) * 0.2})`;
+        c.lineWidth = 3;
+        c.stroke();
+        
+        // Draw raindrop at center
+        c.save();
+        const dropScale = 0.025 * cScale;
+        const dropB = 1.5;
+        c.translate(cursorX, cursorY - dropB * dropScale);
+        
+        const numPoints = 14; 
+        const a = 0.3;
+        const pivotOffsetX = 0;
+        const pivotOffsetY = -dropB * dropScale;
+        c.beginPath();  
+        for (let i = 0; i <= numPoints; i++) {
+            const t = Math.PI / 2 + (i / numPoints) * (2 * Math.PI);
+            const x = (2 * a * Math.cos(t) - a * Math.sin(2 * t)) * dropScale;
+            const y = dropB * Math.sin(t) * dropScale;
+            if (i === 0) {
+                c.moveTo(x - pivotOffsetX, -y - pivotOffsetY);
+            } else {
+                c.lineTo(x - pivotOffsetX, -y - pivotOffsetY);
+            }
+        }  
+        c.closePath();
+        
+        // Create 3D gradient
+        const gradient = c.createRadialGradient(
+            -a * dropScale * 0.8,
+            dropB * dropScale * 0.8,
+            0,
+            0,
+            0,
+            dropB * dropScale * 2.5);
+        gradient.addColorStop(0, `hsla(${selectedHue}, ${Math.max(0, selectedSaturation - 30)}%, ${Math.min(100, selectedLightness + 45)}%, 1)`);
+        gradient.addColorStop(0.3, `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, 0.95)`);
+        gradient.addColorStop(0.6, `hsla(${selectedHue}, ${Math.min(100, selectedSaturation + 10)}%, ${Math.max(10, selectedLightness - 20)}%, 0.85)`);
+        gradient.addColorStop(1, `hsla(${selectedHue}, ${Math.min(100, selectedSaturation + 20)}%, ${Math.max(5, selectedLightness - 40)}%, 0.7)`);
+        
+        c.fillStyle = gradient;
+        c.fill();
+        
+        c.strokeStyle = `hsla(${selectedHue}, ${Math.max(0, selectedSaturation - 20)}%, ${Math.min(100, selectedLightness + 10)}%, 0.8)`;
+        c.lineWidth = 1.5;
+        c.stroke();
+        
+        c.restore();
     }
     
     // Draw camera cursor when skyHandActive
