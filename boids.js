@@ -1,5 +1,5 @@
 /*
-B0IDS 1.47 :: emergent flocking behavior ::
+B0IDS 1.48 :: emergent flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -224,6 +224,12 @@ let pathCumulativeDistances = []; // Cumulative distance at each point for arc-l
 let magnetPathProgress = 0;
 let magnetPathSpeed = 0.3; // World units per second
 let savedMenuStatesForPath = {};
+
+// Cloud rainbow states
+let cloudRainbowActive = false;
+let rainbowArcProgress = 0;
+let Hearts = [];
+let rainbowHeartSpawnRate = 0.3; // Probability of spawning hearts each frame (0 to 1)
 
 // Create offscreen canvas for color wheel
 function createColorWheel() {
@@ -2585,14 +2591,92 @@ class SprayParticle {
     }
 }
 
+class HEART {
+    constructor(pos, vel) {
+        this.pos = pos.clone();
+        this.vel = vel.clone();
+        this.radius = 0.01;
+        this.hue = 320;
+        this.alpha = 0;
+        this.birthday = Date.now();
+        this.lifespan = 250 + Math.random() * 400; // 250-650ms 
+    }
+    simulate() {
+        // Move based on velocity
+        this.pos.x += this.vel.x * deltaT;
+        this.pos.y += this.vel.y * deltaT;
+        
+        // Slow down over time
+        this.vel.x *= 0.98;
+        this.vel.y *= 0.98;
+        
+        // Get age ratio (0 at birth, 1 at end of lifespan)
+        const age = Date.now() - this.birthday;
+        const ageRatio = age / this.lifespan;
+        
+        // Fade in during first 20% of life, fade out during last 20%
+        if (ageRatio < 0.05) {
+            this.alpha = ageRatio / 0.05;
+        } else if (ageRatio > 0.8) {
+            this.alpha = (1 - ageRatio) / 0.2;
+        } else {
+            this.alpha = 1;
+        }
+        
+        /*// Grow radius during first 30% of life
+        const maxRadius = 0.03;
+        if (ageRatio < 0.3) {
+            this.radius = 0.02 + (maxRadius - 0.02) * (ageRatio / 0.5);
+        }*/
+
+        this.radius += 0.0007; // Slight growth over time
+        
+        // Remove if lifespan exceeded and fully faded
+        if (age > this.lifespan && this.alpha <= 0) {
+            const index = Hearts.indexOf(this);
+            if (index > -1) {
+                Hearts.splice(index, 1);
+            }
+        }
+    }
+    draw() {
+        drawHeart(this.pos.x, simHeight - this.pos.y, this.radius);
+        c.fillStyle = `hsla(${this.hue}, 100%, 60%, ${this.alpha})`;
+        c.fill();
+    }
+}
+
+// DRAW HEART FUNCTION  ---------------------------------
+function drawHeart(posX, posY, radius) {
+    c.beginPath();
+    c.moveTo(posX * cScale, (posY - 0.5 * radius) * cScale);
+    for (var f = 0; f < Math.PI - 0.8; f += 0.1) {
+            var drawX = posX + 0.08 * radius * 16 * Math.pow(Math.sin(f), 3);
+            var drawY = posY - 0.08 * radius * (13 * Math.cos(f) - 5 * Math.cos(2 * f) - 2 * Math.cos(3 * f) - Math.cos(4 * f));   
+            c.lineTo(drawX * cScale, drawY * cScale);
+        }
+        var f = Math.PI - 0.8;
+        var drawX = posX + 0.08 * radius * 16 * Math.pow(Math.sin(f), 3);
+        var drawY = posY - 0.08 * radius * (13 * Math.cos(f) - 5 * Math.cos(2 * f) - 2 * Math.cos(3 * f) - Math.cos(4 * f));   
+        c.lineTo(drawX * cScale, drawY * cScale);
+        c.lineTo(drawX * cScale, drawY * cScale);
+    c.lineTo(posX * cScale, (posY + 1.15 * radius) * cScale);   
+    for (var f = Math.PI + 0.8; f < 2 * Math.PI; f += 0.1) {
+        var drawX = posX + 0.08 * radius * 16 * Math.pow(Math.sin(f), 3);
+        var drawY = posY - 0.08 * radius * (13 * Math.cos(f) - 5 * Math.cos(2 * f) - 2 * Math.cos(3 * f) - Math.cos(4 * f));   
+        c.lineTo(drawX * cScale, drawY * cScale);
+        }
+    c.closePath();
+}
+
 // RAINDROP CLASS  -----------------------------------------------------
 class RAINDROP {
     constructor (pos, vel) {
         this.pos = pos.clone();
         this.vel = vel.clone();
         this.hue = 200;
-        this.saturation = 80;
-        this.lightness = 60;
+        this.saturation = 60;
+        this.lightness = 50;
     }
     simulate() {
         this.vel.y -= 1 * deltaT;  // gravity effect
@@ -2636,15 +2720,15 @@ class RAINDROP {
             -a * radScale * 0.5,
             b * radScale * 1.5,
             b * radScale  * 3.0);
-        gradient.addColorStop(0, 'hsla(180, 100%, 90%, 0.9)');
-        gradient.addColorStop(0.05, 'hsla(180, 100%, 40%, 0.7)');
-        gradient.addColorStop(1, 'hsla(180, 50%, 20%, 0.4)');
+        gradient.addColorStop(0, 'hsla(180, 100%, 70%, 0.5)');
+        gradient.addColorStop(0.05, 'hsla(180, 100%, 40%, 0.4)');
+        gradient.addColorStop(1, 'hsla(180, 50%, 20%, 0.1)');
         c.fillStyle = gradient;
         
         c.fill();
-        c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness * 0.7}%)`;
+        c.strokeStyle = `hsl(${this.hue}, ${this.saturation}%, ${this.lightness}%)`;
         c.lineWidth = 1.0;
-        c.stroke();
+        //c.stroke();
 
         c.restore();
     }
@@ -2654,7 +2738,7 @@ class RAINDROP {
 Rain = [];
 function makeItRain(cloud) {
     const pos = new Vector2(
-        cloud.x + (Math.random() - 0.5) * 1.9 * cloud.radius,
+        cloud.x + (Math.random() - 0.5) * 2.2 * cloud.radius,
         cloud.y - (Math.random() - 0.5) * 0.2 * cloud.radius);
     const vel = new Vector2(
         -cloud.speed,
@@ -3512,13 +3596,26 @@ class CLOUD {
         this.isForeground = isForeground;
         this.isRaining = isRaining;
         this.cheerfulness = 0; // 0-100, increases as balloons are spawned
+        // Blinking state
+        this.blinkCount = 0; // Number of blinks completed
+        this.blinkTimer = 0; // Timer for blink animation
+        this.isBlinking = false; // Currently in a blink
+        this.hasTriggeredBlink = false; // Prevents re-triggering
         // Tutorial message for first user-created cloud
         this.showTutorialMessage = showTutorial;
         this.tutorialMessageTime = showTutorial ? 5.0 : 0; // 5 seconds
         this.tutorialMessageOpacity = showTutorial ? 1.0 : 0;
         // Foreground clouds are largest, background smallest, normal in between
-        this.radius = isForeground ? 0.20 : (isBackground ? 0.07 : 0.15);
-        this.speed = isForeground ? 0.08 : (isBackground ? 0.02 : 0.04); // Foreground fastest, background slowest
+        if (this.isForeground) {
+            this.radius = 0.25;
+            this.speed = 0.10;
+        } else if (this.isBackground) {
+            this.radius = 0.07;
+            this.speed = 0.02;
+        } else {
+            this.radius = 0.15;
+            this.speed = 0.04 + 2 * (-0.5 + Math.random()) * 0.008; // 20% variation
+        }
         // Create unique cloud shape using true randomness (changes on refresh)
         this.seed = Math.random();
         this.generatePuffs();
@@ -3615,7 +3712,7 @@ class CLOUD {
         const topmost = Math.min(...puffs.map(p => p.y - p.r)) - 20;
         
         ctx.beginPath();
-        ctx.rect(leftmost, topmost, rightmost - leftmost, bottomY - topmost + 2);
+        ctx.rect(leftmost, topmost, rightmost - leftmost, bottomY - topmost + 2.5);
         ctx.clip();
 
         ctx.lineJoin = 'round';
@@ -3642,7 +3739,9 @@ class CLOUD {
         for (let puff of puffs) {
             ctx.beginPath();
             ctx.arc(puff.x, puff.y, puff.r, 0, 2 * Math.PI);
+            ctx.lineCap = 'round';
             ctx.stroke();
+            ctx.lineCap = 'butt';
         }
         
         // Fill all puffs (darker for background clouds, white for others)
@@ -3663,50 +3762,33 @@ class CLOUD {
             ctx.fill();
         }
 
-        // Draw face on foreground rainy clouds (pouty -> happy as cheerfulness increases)
-        if (this.isForeground && this.isRaining) {
-            const faceY = cy + r * 0.1;
-            const eyeOffsetX = r * 0.2;
-            const eyeOffsetY = r * 0.1;
-            const eyeRadiusX = r * 0.05;
-            const eyeRadiusY = r * 0.08;
-            
-            // Left eye
-            ctx.fillStyle = 'hsl(0, 0%, 10%)';
-            ctx.beginPath();
-            ctx.ellipse(cx - eyeOffsetX, faceY - eyeOffsetY, eyeRadiusX, eyeRadiusY, 0, 0, 2 * Math.PI);
-            ctx.fill();
-            
-            // Right eye
-            ctx.beginPath();
-            ctx.ellipse(cx + eyeOffsetX, faceY - eyeOffsetY, eyeRadiusX, eyeRadiusY, 0, 0, 2 * Math.PI);
-            ctx.fill();
-            
-            // Mouth changes from pouty frown to happy smile based on cheerfulness
-            const mouthWidth = r * 0.25;
-            const mouthHeight = r * 0.05;
-            const cheerRatio = this.cheerfulness / 100; // 0 = pouty, 1 = happy
-            
-            ctx.beginPath();
-            if (cheerRatio < 0.5) {
-                // Pouty mouth (curves down) - preserve original shape at 0% cheerfulness
-                const poutyAmount = (1 - cheerRatio * 2); // 1 at 0%, 0 at 50%
-                const mouthY = faceY + r * 0.1 + (poutyAmount * r * 0.04); // r * 0.14 at 0%, r * 0.1 at 50%
-                ctx.moveTo(cx - mouthWidth / 2, mouthY);
-                ctx.quadraticCurveTo(cx, faceY + r * 0.1 - mouthHeight * poutyAmount, cx + mouthWidth / 2, faceY + r * 0.1);
-            } else {
-                // Happy smile (curves up)
-                const smileAmount = (cheerRatio - 0.5) * 2; // 0 at 50%, 1 at 100%
-                const curvature = smileAmount * mouthHeight * 1.5;
-                ctx.moveTo(cx - mouthWidth / 2, faceY + r * 0.1);
-                ctx.quadraticCurveTo(cx, faceY + r * 0.1 + curvature, cx + mouthWidth / 2, faceY + r * 0.1);
-            }
-            
-            ctx.strokeStyle = 'hsl(0, 0%, 10%)';
-            ctx.lineWidth = 4;
-            ctx.stroke();
+        ctx.restore();
+        
+        // Fill bottom edge area to cover any visible puff arcs
+        ctx.save();
+        if (this.isBackground) {
+            ctx.fillStyle = 'hsl(0, 0%, 65%)';
+        } else if (this.isForeground && !this.isRaining) {
+            ctx.fillStyle = 'hsl(0, 0%, 100%)';
+        } else if (this.isForeground && this.isRaining) {
+            const lightness = 50 + (this.cheerfulness / 100) * 50;
+            ctx.fillStyle = `hsl(0, 0%, ${lightness}%)`;
+        } else {
+            ctx.fillStyle = 'hsl(0, 0%, 95%)';
         }
         
+        // Draw filled rectangles at bottom edge to cover gaps between puffs
+        for (let i = 0; i < puffs.length - 1; i++) {
+            const leftPuff = puffs[i];
+            const rightPuff = puffs[i + 1];
+            const fillHeight = 15; // Height of fill area
+            ctx.fillRect(
+                leftPuff.x + leftPuff.r * 0.3,
+                bottomY - fillHeight,
+                rightPuff.x - leftPuff.x - (leftPuff.r * 0.3) - (rightPuff.r * 0.3),
+                fillHeight
+            );
+        }
         ctx.restore();
         
         // Draw bottom edge (darker for background clouds)
@@ -3728,21 +3810,32 @@ class CLOUD {
             ctx.lineWidth = 5;
         }
         
+        // Draw single continuous line from leftmost to rightmost point at bottom
         ctx.beginPath();
+        let leftmostX = Infinity;
+        let rightmostX = -Infinity;
+        
         for (let i = 0; i < puffs.length; i++) {
             const puff = puffs[i];
             const dy = bottomY - puff.y;
             if (dy < puff.r && dy > -puff.r) {
                 const ratio = Math.min(1, Math.max(-1, dy / puff.r));
                 const angle = Math.acos(ratio);
-                const extend = puff.r * 0.1;
+                const extend = puff.r * 0.055; // Small extension beyond edge
                 const leftX = puff.x - puff.r * Math.sin(angle) - (i === 0 ? extend : 0);
                 const rightX = puff.x + puff.r * Math.sin(angle) + (i === puffs.length - 1 ? extend : 0);
-                ctx.moveTo(leftX, bottomTraceY);
-                ctx.lineTo(rightX, bottomTraceY);
+                leftmostX = Math.min(leftmostX, leftX);
+                rightmostX = Math.max(rightmostX, rightX);
             }
         }
+        
+        if (leftmostX !== Infinity && rightmostX !== -Infinity) {
+            ctx.moveTo(leftmostX, bottomTraceY);
+            ctx.lineTo(rightmostX, bottomTraceY);
+        }
+        ctx.lineCap = 'round';
         ctx.stroke();
+        ctx.lineCap = 'butt';
         
         // Store the offset for drawing
         this.offsetX = size / 2;
@@ -3751,6 +3844,32 @@ class CLOUD {
     update(dt) {
         // Move cloud from right to left
         this.x -= this.speed * dt;
+        
+        // Trigger blink animation when reaching 100% cheerfulness and rainbow is complete
+        if (this.isForeground && this.cheerfulness === 100 && rainbowArcProgress >= 1.0 && !this.hasTriggeredBlink) {
+            this.hasTriggeredBlink = true;
+            this.blinkTimer = 0;
+            this.isBlinking = true;
+        }
+        
+        // Update blink animation
+        if (this.isBlinking) {
+            this.blinkTimer += dt;
+            const blinkDuration = 0.15; // Duration of one blink (close and open)
+            const pauseBetweenBlinks = 0.2; // Pause between blinks
+            const cycleTime = blinkDuration + pauseBetweenBlinks; // Total time for one blink cycle
+            
+            // Complete first blink and start second
+            if (this.blinkTimer > cycleTime && this.blinkCount === 0) {
+                this.blinkCount = 1;
+                this.blinkTimer = 0; // Reset timer for second blink
+            }
+            // Complete second blink
+            else if (this.blinkTimer > blinkDuration && this.blinkCount === 1) {
+                this.blinkCount = 2;
+                this.isBlinking = false;
+            }
+        }
         
         // Update tutorial message timer
         if (this.showTutorialMessage && this.tutorialMessageTime > 0) {
@@ -3765,10 +3884,158 @@ class CLOUD {
         }
     }
     draw() {
-        // Draw the pre-rendered cloud image
         const cx = this.x * cScale;
         const cy = canvas.height - this.y * cScale;
+
+        // Draw overhead rainbow on foreground clouds when they stop raining
+        if (this.isForeground && this.cheerfulness == 100) {
+            const radScale = this.radius * cScale;
+            const rainbowRadius = radScale * 0.8;
+            const rainbowWidth = radScale * 0.7;
+            //const rainbowColors = [
+            //    "red", "orange", "yellow", "green",
+            //    "blue", "indigo", "violet"
+            //];
+            // make array with colors having transparency
+            const rainbowColors = [
+                "hsla(0, 100%, 50%, 0.7)",
+                "hsla(30, 100%, 50%, 0.7)",
+                "hsla(60, 100%, 50%, 0.7)",
+                "hsla(120, 100%, 40%, 0.7)",
+                "hsla(240, 100%, 50%, 0.7)",
+                "hsla(275, 100%, 50%, 0.7)",
+                "hsla(300, 100%, 50%, 0.7)"
+            ];
+            const arcCount = rainbowColors.length;
+            c.lineWidth = rainbowWidth / arcCount;
+
+            c.lineCap = 'butt';
+            for (let i = 0; i < arcCount; i++) {
+                c.beginPath();
+                c.arc(
+                    cx, 
+                    cy - radScale * 0.4, 
+                    rainbowRadius + i * (rainbowWidth / arcCount), 
+                    0.8 * Math.PI, 
+                    0.8 * Math.PI + 1.4 * rainbowArcProgress * Math.PI, 
+                    false
+                );
+                var arcColor = rainbowColors[i];
+                c.strokeStyle = arcColor;
+                c.stroke();
+            }
+            
+            // Spawn hearts rapidly at the leading edge of the rainbow as it grows
+            if (rainbowArcProgress < 1.0 && Math.random() < rainbowHeartSpawnRate) {
+                const heartsPerFrame = 5;
+                const leadingEdgeAngle = 0.8 * Math.PI + 1.4 * rainbowArcProgress * Math.PI;
+                for (let h = 0; h < heartsPerFrame; h++) {
+                    // Spawn hearts at different radii across the rainbow band thickness
+                    const radiusWorld = (rainbowRadius + Math.random() * rainbowWidth) / cScale;
+                    const heartX = this.x + radiusWorld * Math.cos(leadingEdgeAngle);
+                    const heartY = this.y + (this.radius * 0.4) - radiusWorld * Math.sin(leadingEdgeAngle);
+                    const pos = new Vector2(heartX, heartY);
+                    const vel = new Vector2(
+                        this.speed * deltaT-0.5 + Math.random() * 1.0, 
+                        -0.5 + Math.random() * 1.0
+                    );
+                    
+                    Hearts.push(new HEART(pos, vel));
+                }
+            }
+            
+            rainbowArcProgress += deltaT * 0.25; 
+            if (rainbowArcProgress > 1.0) {
+                rainbowArcProgress = 1.0;
+            }
+        }
+
+        // Draw Hearts
+        for (let heart of Hearts) {
+            heart.draw();
+        }
+
+        // Draw the pre-rendered cloud image
         c.drawImage(this.offscreenCanvas, cx - this.offsetX, cy - this.offsetY);
+        
+        // Draw face on foreground rainy clouds (pouty -> happy as cheerfulness increases)
+        // Keep face visible during blink animation even after rain stops
+        if (this.isForeground && (this.isRaining || (this.cheerfulness === 100 && this.blinkCount < 2))) {
+            const r = this.radius * cScale;
+            const faceY = cy + r * 0.1;
+            const eyeOffsetX = r * 0.2;
+            const eyeOffsetY = r * 0.1;
+            const eyeRadiusX = r * 0.05;
+            const eyeRadiusY = r * 0.08;
+            
+            // Determine if eyes should be closed (during blink)
+            const blinkDuration = 0.15;
+            const pauseBetweenBlinks = 0.2;
+            const cycleTime = blinkDuration + pauseBetweenBlinks;
+            const isEyesClosed = this.isBlinking && this.blinkTimer < blinkDuration;
+            
+            // Make eyes larger between first and second blink
+            const isBetweenBlinks = this.isBlinking && this.blinkCount === 0 && this.blinkTimer > blinkDuration && this.blinkTimer < cycleTime;
+            const eyeScale = isBetweenBlinks ? 1.3 : 1.0;
+            
+            if (isEyesClosed) {
+                // Draw closed eyes as horizontal lines
+                c.strokeStyle = 'hsl(0, 0%, 10%)';
+                c.lineWidth = 3;
+                c.lineCap = 'round';
+                
+                // Left eye closed
+                c.beginPath();
+                c.moveTo(cx - eyeOffsetX - eyeRadiusX, faceY - eyeOffsetY);
+                c.lineTo(cx - eyeOffsetX + eyeRadiusX, faceY - eyeOffsetY);
+                c.stroke();
+                
+                // Right eye closed
+                c.beginPath();
+                c.moveTo(cx + eyeOffsetX - eyeRadiusX, faceY - eyeOffsetY);
+                c.lineTo(cx + eyeOffsetX + eyeRadiusX, faceY - eyeOffsetY);
+                c.stroke();
+                
+                c.lineCap = 'butt';
+            } else {
+                // Draw open eyes (scaled between blinks)
+                c.fillStyle = 'hsl(0, 0%, 10%)';
+                c.beginPath();
+                c.ellipse(cx - eyeOffsetX, faceY - eyeOffsetY, eyeRadiusX * eyeScale, eyeRadiusY * eyeScale, 0, 0, 2 * Math.PI);
+                c.fill();
+                
+                c.beginPath();
+                c.ellipse(cx + eyeOffsetX, faceY - eyeOffsetY, eyeRadiusX * eyeScale, eyeRadiusY * eyeScale, 0, 0, 2 * Math.PI);
+                c.fill();
+            }
+            
+            // Mouth changes smoothly from pouty frown to happy smile based on cheerfulness
+            const cheerRatio = this.cheerfulness / 100; // 0 = pouty, 1 = happy
+            const baseMouthWidth = r * 0.25;
+            const baseMouthHeight = r * 0.05;
+            
+            c.beginPath();
+            if (cheerRatio < 0.5) {
+                // Pouty mouth (curves down) - original shape
+                const poutyAmount = (1 - cheerRatio * 2); // 1 at 0%, 0 at 50%
+                const mouthWidth = baseMouthWidth; // Keep constant width during pout
+                const mouthY = faceY + r * 0.1 + (poutyAmount * r * 0.04); // r * 0.14 at 0%, r * 0.1 at 50%
+                c.moveTo(cx - mouthWidth / 2, mouthY);
+                c.quadraticCurveTo(cx, faceY + r * 0.1 - baseMouthHeight * poutyAmount, cx + mouthWidth / 2, faceY + r * 0.1);
+            } else {
+                // Smile phase (50% to 100%) - grows wider from base width
+                const smileAmount = (cheerRatio - 0.5) * 2; // 0 at 50%, 1 at 100%
+                const mouthWidth = baseMouthWidth * (1.0 + smileAmount * 0.2); // Grows from 100% to 120% of base
+                const controlY = faceY + r * 0.1 + smileAmount * baseMouthHeight * 4.0;
+                c.moveTo(cx - mouthWidth / 2, faceY + r * 0.1);
+                c.quadraticCurveTo(cx, controlY, cx + mouthWidth / 2, faceY + r * 0.1);
+            }
+            c.strokeStyle = 'hsl(0, 0%, 10%)';
+            c.lineWidth = 4;
+            c.lineCap = 'round';
+            c.stroke();
+            c.lineCap = 'butt';
+        }
         
         // Draw text only on initial foreground cloud during its first pass
         if (this.isForeground && initialForegroundCloudTextVisible) {
@@ -4524,7 +4791,7 @@ function makeForegroundClouds() {
     const raining = false;
 
     ForegroundCloud.push(new CLOUD(
-        0.5 * simWidth, simHeight * (0.25 + Math.random() * 0.6), 
+        0.8 * simWidth, simHeight * (0.25 + Math.random() * 0.6), 
         isBackground, isForeGround, raining));
 }
 
@@ -6031,7 +6298,7 @@ function drawSimMenu() {
     const resetButtonRadius = knobRadius * 0.5;
     //const resetButtonX = 3 * knobSpacing;
     //const resetButtonY = 2.1 * knobSpacing + menuTopMargin;
-    const resetButtonX = 0;
+    const resetButtonX = 1 * knobSpacing;
     const resetButtonY = 3.25 * knobSpacing + menuTopMargin;
     
     // Draw reset button
@@ -6087,6 +6354,13 @@ function drawSimMenu() {
     c.font = `${0.4 * knobRadius}px monospace`;
     c.fillStyle = `hsla(0, 0%, 80%, ${menuOpacity})`;
     c.fillText('fps', menuWidth + padding - 1.0 * knobRadius, menuHeight + padding - 0.42 * knobRadius);
+
+    // Draw version text in bottom left corner
+    c.textAlign = 'left';
+    c.textBaseline = 'bottom';
+    c.font = `${0.35 * knobRadius}px monospace`;
+    c.fillStyle = `hsla(0, 0%, 60%, ${menuOpacity})`;
+    c.fillText('v1.48', -padding + 0.5 * knobRadius, menuHeight + padding - 0.42 * knobRadius);
 
     c.restore();
 }
@@ -8880,7 +9154,12 @@ function simulateEverything() {
     for (let rainDrop of Rain) {
         rainDrop.simulate();
     }
-    
+
+    // Simulate Hearts
+    for (let heart of Hearts) {
+        heart.simulate();
+    }
+
     // Update magnet position along traced path
     if (pathExists && pathPoints.length > 2 && magnetActive && Magnet.length > 0 && pathLength > 0) {
         // Move along the path at constant speed (world units per second)
