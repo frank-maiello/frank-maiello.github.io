@@ -1,5 +1,5 @@
 /*
-B0IDS 1.48 :: emergent flocking behavior ::
+B0IDS 1.49 :: emergent flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -106,9 +106,11 @@ let menuStartX = 0;
 let menuStartY = 0;
 
 // Boid type selection (0=arrows, 1=circles, 2=airfoils, 3=birds, 4=none)
-let selectedBoidType = 0;
-let previousBoidType = 0; // Remembers last type before None was selected
-let tailColorMode = 1; // 0 = none, 1 = black, 2 = white, 3 = selected hue, 4 = hue2
+let selectedBoidType = 1; // Default to Arrows
+let previousBoidType = 1; // Remembers last type before None was selected
+let boidTypeScrollOffset = 0; // Scroll position for boid type list
+let boidTypeLabels = ['Triangles', 'Arrows', 'Birds', 'Circles', 'Ellipses', 'Squares', 'Teardrops', 'Bubbles'];
+let tailColorMode = 0; // 0 = none, 1 = black, 2 = white, 3 = selected hue, 4 = hue2
 
 // Boid rendering toggles
 let boidTraceMode = 2; // 0=none, 1=dark trace, 2=colored trace, 3=white trace
@@ -117,6 +119,7 @@ let boidFillEnabled = true; // Controls fill operations
 // Color menu visibility state
 let colorMenuVisible = false;
 let colorMenuOpacity = 0;
+let colorMenuAnimatedHeight = 0; // Animated height for smooth transitions
 
 // Color menu position
 let colorMenuX = 1.6; // World coordinates
@@ -228,6 +231,8 @@ let savedMenuStatesForPath = {};
 // Cloud rainbow states
 let cloudRainbowActive = false;
 let rainbowArcProgress = 0;
+let rainbowFullyFormedTime = 0; // Time when rainbow reached 100%
+let rainbowOpacity = 1.0; // Opacity for fade out
 let Hearts = [];
 let rainbowHeartSpawnRate = 0.3; // Probability of spawning hearts each frame (0 to 1)
 
@@ -454,8 +459,8 @@ mousedownHandler = function(e) {
         const buttonRowHeight = spacing * 2;
         const knobRowHeight = knobRadius * 3;
         const colorMenuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 2;
-        // Shorter menu when spray tool is active (omit knobs and radio buttons)
-        const colorMenuHeight = spraypaintActive ? spacing * 10 : spacing * 20;
+        // Use animated height for smooth transitions
+        const colorMenuHeight = colorMenuAnimatedHeight;
         const colorPadding = 0.8 * knobRadius;
         const colorMenuOriginX = colorMenuX * cScale;
         const colorMenuOriginY = canvas.height - colorMenuY * cScale;
@@ -848,7 +853,7 @@ mousedownHandler = function(e) {
         
         for (let i = 0; i < 5; i++) {
             const buttonX = menuOriginX + tailButtonsCenterX * knobSpacing + (i - 2) * knobRadius * 1.0;
-            const buttonY = menuOriginY + tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin;
+            const buttonY = menuOriginY + tailKnobRow * knobSpacing + knobRadius * 2.9 + menuTopMargin;
             const rdx = clickCanvasX - buttonX;
             const rdy = clickCanvasY - buttonY;
             
@@ -863,9 +868,9 @@ mousedownHandler = function(e) {
         const radioCol = 2;
         
         // Check reset button (round button at bottom of column 0)
-        const resetButtonRadius = knobRadius * 0.5;
-        const resetButtonX = menuOriginX + 0;
-        const resetButtonY = menuOriginY + 3.25 * knobSpacing + menuTopMargin;
+        const resetButtonRadius = knobRadius * 0.4;
+        const resetButtonX = menuOriginX + padding - 0.0 * knobRadius;
+        const resetButtonY = menuOriginY + menuHeight + padding - 0.65 * knobRadius;
         const rdx = clickCanvasX - resetButtonX;
         const rdy = clickCanvasY - resetButtonY;
         
@@ -882,23 +887,15 @@ mousedownHandler = function(e) {
         const traceButtonY2 = traceButtonY1 + 0.8 * knobRadius;
         const traceButtonY3 = traceButtonY2 + 0.8 * knobRadius;
         const traceButtonY4 = traceButtonY3 + 0.8 * knobRadius;
+        const fillButtonY1 = traceButtonY4 + 1.0 * knobRadius;
+        const fillButtonY2 = fillButtonY1 + 0.8 * knobRadius;
         const traceButtonX = menuOriginX + traceCol * knobSpacing - 0.5 * knobRadius;
         
         // Black button
         let tdx = clickCanvasX - traceButtonX;
         let tdy = clickCanvasY - traceButtonY1;
         if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
-            // If None is selected and trace is off, restore previous boid type
-            if (selectedBoidType === 6 && boidTraceMode === 0 && previousBoidType >= 0 && previousBoidType < 6) {
-                selectedBoidType = previousBoidType;
-                if (selectedBoidType === 0) doArrowBoids();
-                else if (selectedBoidType === 1) doCircleBoids();
-                else if (selectedBoidType === 2) doGlowBoids();
-                else if (selectedBoidType === 3) doSquareBoids();
-                else if (selectedBoidType === 4) doAirfoilBoids();
-                else if (selectedBoidType === 5) doFlappyBoids();
-            }
-            boidTraceMode = (boidTraceMode === 1) ? 0 : 1;
+            boidTraceMode = 1;
             return true;
         }
         
@@ -906,17 +903,7 @@ mousedownHandler = function(e) {
         tdx = clickCanvasX - traceButtonX;
         tdy = clickCanvasY - traceButtonY2;
         if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
-            // If None is selected and trace is off, restore previous boid type
-            if (selectedBoidType === 6 && boidTraceMode === 0 && previousBoidType >= 0 && previousBoidType < 6) {
-                selectedBoidType = previousBoidType;
-                if (selectedBoidType === 0) doArrowBoids();
-                else if (selectedBoidType === 1) doCircleBoids();
-                else if (selectedBoidType === 2) doGlowBoids();
-                else if (selectedBoidType === 3) doSquareBoids();
-                else if (selectedBoidType === 4) doAirfoilBoids();
-                else if (selectedBoidType === 5) doFlappyBoids();
-            }
-            boidTraceMode = (boidTraceMode === 3) ? 0 : 3;
+            boidTraceMode = 3;
             return true;
         }
         
@@ -924,80 +911,73 @@ mousedownHandler = function(e) {
         tdx = clickCanvasX - traceButtonX;
         tdy = clickCanvasY - traceButtonY3;
         if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
-            // If None is selected and trace is off, restore previous boid type
-            if (selectedBoidType === 6 && boidTraceMode === 0 && previousBoidType >= 0 && previousBoidType < 6) {
-                selectedBoidType = previousBoidType;
-                if (selectedBoidType === 0) doArrowBoids();
-                else if (selectedBoidType === 1) doCircleBoids();
-                else if (selectedBoidType === 2) doGlowBoids();
-                else if (selectedBoidType === 3) doSquareBoids();
-                else if (selectedBoidType === 4) doAirfoilBoids();
-                else if (selectedBoidType === 5) doFlappyBoids();
-            }
-            boidTraceMode = (boidTraceMode === 2) ? 0 : 2;
+            boidTraceMode = 2;
+            return true;
+        }
+        
+        // Trace None button
+        tdx = clickCanvasX - traceButtonX;
+        tdy = clickCanvasY - traceButtonY4;
+        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
+            boidTraceMode = 0;
             return true;
         }
         
         // Fill button
         tdx = clickCanvasX - traceButtonX;
-        tdy = clickCanvasY - traceButtonY4;
+        tdy = clickCanvasY - fillButtonY1;
         if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
-            // If None is selected and fill is off, restore previous boid type
-            if (selectedBoidType === 6 && !boidFillEnabled && previousBoidType >= 0 && previousBoidType < 6) {
-                selectedBoidType = previousBoidType;
-                if (selectedBoidType === 0) doArrowBoids();
-                else if (selectedBoidType === 1) doCircleBoids();
-                else if (selectedBoidType === 2) doGlowBoids();
-                else if (selectedBoidType === 3) doSquareBoids();
-                else if (selectedBoidType === 4) doAirfoilBoids();
-                else if (selectedBoidType === 5) doFlappyBoids();
-            }
-            boidFillEnabled = !boidFillEnabled;
+            boidFillEnabled = true;
             return true;
         }
         
-        // Radio buttons vertically stacked
-        for (let i = 0; i < 6; i++) {
-            const buttonX = menuOriginX + radioCol * knobSpacing - 0.5 * knobRadius;
-            const buttonY = menuOriginY + (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius) + menuTopMargin;
-            const rdx = clickCanvasX - buttonX;
-            const rdy = clickCanvasY - buttonY;
+        // Fill None button
+        tdx = clickCanvasX - traceButtonX;
+        tdy = clickCanvasY - fillButtonY2;
+        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
+            boidFillEnabled = false;
+            return true;
+        }
+        
+        // Check scrollable boid type list click
+        const listCol = 2;
+        const listX = menuOriginX + listCol * knobSpacing - 1.15 * knobRadius;
+        const listTitleY = menuOriginY + (2 * knobSpacing) - (2.0 * knobRadius) + menuTopMargin;
+        const listY = listTitleY + knobRadius * 0.96;
+        const listWidth = knobRadius * 2.3;
+        const listHeight = knobRadius * 5.04;
+        const itemHeight = knobRadius * 0.72;
+        
+        if (clickCanvasX >= listX && clickCanvasX <= listX + listWidth &&
+            clickCanvasY >= listY && clickCanvasY <= listY + listHeight) {
+            // Calculate which item was clicked
+            const relativeY = clickCanvasY - listY + boidTypeScrollOffset;
+            const clickedIndex = Math.floor(relativeY / itemHeight);
             
-            if (rdx * rdx + rdy * rdy < radioButtonRadius * radioButtonRadius) {
-                selectedBoidType = i;
+            if (clickedIndex >= 0 && clickedIndex < boidTypeLabels.length) {
+                selectedBoidType = clickedIndex;
                 // Call the appropriate function
-                if (i === 0) {
+                if (clickedIndex === 0) {
+                    doTriangleBoids();
+                } else if (clickedIndex === 1) {
                     doArrowBoids();
-                } else if (i === 1) {
-                    doCircleBoids();
-                } else if (i === 2) {
-                    doGlowBoids();
-                } else if (i === 3) {
-                    doSquareBoids();
-                } else if (i === 4) {
-                    doAirfoilBoids();
-                } else if (i === 5) {
+                } else if (clickedIndex === 2) {
                     doFlappyBoids();
+                } else if (clickedIndex === 3) {
+                    doCircleBoids();
+                } else if (clickedIndex === 4) {
+                    doEllipseBoids();
+                } else if (clickedIndex === 5) {
+                    doSquareBoids();
+                } else if (clickedIndex === 6) {
+                    doAirfoilBoids();
+                } else if (clickedIndex === 7) {
+                    doGlowBoids();
                 }
                 return true;
             }
         }
-        
-        // None button (below Fill button)
-        const noneButtonY = traceButtonY4 + 0.8 * knobRadius;
-        tdx = clickCanvasX - traceButtonX;
-        tdy = clickCanvasY - noneButtonY;
-        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
-            // Save current boid type before switching to None
-            if (selectedBoidType !== 6) {
-                previousBoidType = selectedBoidType;
-            }
-            selectedBoidType = 6;
-            boidTraceMode = 0;
-            boidFillEnabled = false;
-            doNoneBoids();
-            return true;
-        }
+
         
         // Check if menu background was clicked (for dragging entire menu)
         const clickX = mouseX * cScale;
@@ -1470,6 +1450,18 @@ mousedownHandler = function(e) {
         clickedBalloon.popping = true;
         clickedBalloon.popStartTime = performance.now();
         spookBoids(clickedBalloon.pos, 5 * clickedBalloon.radius);
+        
+        // Increase sadness of foreground clouds when balloons are popped
+        for (let cloud of ForegroundCloud) {
+            if (cloud.sadness < 10) {
+                cloud.sadness++;
+                // Start raining at sadness 5
+                if (cloud.sadness >= 5 && !cloud.isRaining) {
+                    cloud.isRaining = true;
+                }
+                cloud.renderToCanvas();
+            }
+        }
     }
     
     if (e.button === 0) { // Left click
@@ -1977,12 +1969,14 @@ function handleMouseMove(e) {
                         const newBoid = new BOID(pos, vel, hue, false, false);
                         
                         // Set boid type based on selectedBoidType
-                        newBoid.arrow = selectedBoidType === 0;
-                        newBoid.circle = selectedBoidType === 1;
-                        newBoid.glowBoid = selectedBoidType === 2;
-                        newBoid.square = selectedBoidType === 3;
-                        newBoid.airfoil = selectedBoidType === 4;
-                        newBoid.flappy = selectedBoidType === 5;
+                        newBoid.triangleBoid = selectedBoidType === 0;
+                        newBoid.arrow = selectedBoidType === 1;
+                        newBoid.flappy = selectedBoidType === 2;
+                        newBoid.circle = selectedBoidType === 3;
+                        newBoid.ellipseBoid = selectedBoidType === 4;
+                        newBoid.square = selectedBoidType === 5;
+                        newBoid.airfoil = selectedBoidType === 6;
+                        newBoid.glowBoid = selectedBoidType === 7;
                         
                         // Insert before the last 2 special boids
                         Boids.splice(Boids.length - 2, 0, newBoid);
@@ -2239,6 +2233,42 @@ function resizeCanvas() {
     }
 }
 
+// Mouse wheel handler for scrollable elements
+let wheelHandler = function(e) {
+    const rect = canvas.getBoundingClientRect();
+    const mouseCanvasX = (e.clientX - rect.left);
+    const mouseCanvasY = (e.clientY - rect.top);
+    
+    // Check if mouse is over boid type list in simulation menu
+    if (menuVisible && menuOpacity > 0.5) {
+        const knobRadius = 0.1 * cScale;
+        const knobSpacing = knobRadius * 3;
+        const menuTopMargin = 0.2 * knobRadius;
+        const menuUpperLeftX = menuX * cScale;
+        const menuUpperLeftY = canvas.height - menuY * cScale;
+        const menuOriginX = menuUpperLeftX + knobSpacing;
+        const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+        
+        const listCol = 2;
+        const listX = menuOriginX + listCol * knobSpacing - 1.15 * knobRadius;
+        const listTitleY = menuOriginY + (2 * knobSpacing) - (2.0 * knobRadius) + menuTopMargin;
+        const listY = listTitleY + knobRadius * 0.96;
+        const listWidth = knobRadius * 2.3;
+        const listHeight = knobRadius * 5.04;
+        const itemHeight = knobRadius * 0.72;
+        
+        if (mouseCanvasX >= listX && mouseCanvasX <= listX + listWidth &&
+            mouseCanvasY >= listY && mouseCanvasY <= listY + listHeight) {
+            e.preventDefault();
+            
+            const maxScroll = Math.max(0, (boidTypeLabels.length * itemHeight) - listHeight);
+            boidTypeScrollOffset += e.deltaY * 0.5;
+            boidTypeScrollOffset = Math.max(0, Math.min(maxScroll, boidTypeScrollOffset));
+            return;
+        }
+    }
+};
+
 // Attach event listeners only once
 function attachEventListeners() {
     if (listenersAttached) return;
@@ -2246,6 +2276,7 @@ function attachEventListeners() {
     canvas.addEventListener('mousedown', mousedownHandler);
     canvas.addEventListener('mouseup', mouseupHandler);
     canvas.addEventListener('contextmenu', contextmenuHandler);
+    canvas.addEventListener('wheel', wheelHandler, { passive: false });
     document.addEventListener('keydown', keydownHandler);
     document.addEventListener('keyup', keyupHandler);
     window.addEventListener('resize', resizeCanvas);
@@ -2260,6 +2291,7 @@ function removeEventListeners() {
     canvas.removeEventListener('mousedown', mousedownHandler);
     canvas.removeEventListener('mouseup', mouseupHandler);
     canvas.removeEventListener('contextmenu', contextmenuHandler);
+    canvas.removeEventListener('wheel', wheelHandler);
     document.removeEventListener('keydown', keydownHandler);
     document.removeEventListener('keyup', keyupHandler);
     window.removeEventListener('resize', resizeCanvas);
@@ -3578,10 +3610,23 @@ function spawnBalloon() {
     const vel = new Vector2((Math.random() - 0.5) * 0.3, Math.random() * 0.3);
     Balloons.push(new BALLOON(pos, vel));
     
-    // Increase cheerfulness of rainy foreground clouds when balloons spawn
+    // Increase cheerfulness of sad or rainy foreground clouds when balloons spawn
     for (let cloud of ForegroundCloud) {
-        if (cloud.isRaining && cloud.cheerfulness < 100) {
+        if ((cloud.sadness > 0 || cloud.isRaining) && cloud.cheerfulness < 100) {
             cloud.cheerfulness = Math.min(100, cloud.cheerfulness + 2);
+            
+            // Also reduce sadness as the cloud cheers up
+            // Every 20% cheerfulness reduces sadness by 1 (at 100% cheerfulness, sadness becomes 0)
+            const targetSadness = Math.max(0, cloud.sadness - Math.floor(cloud.cheerfulness / 20));
+            if (cloud.sadness > targetSadness) {
+                cloud.sadness = targetSadness;
+            }
+            
+            // Stop raining when fully recovered (100% cheerfulness and 0 sadness)
+            if (cloud.cheerfulness >= 100 && cloud.sadness === 0) {
+                cloud.isRaining = false;
+            }
+            
             cloud.renderToCanvas(); // Re-render cloud with new appearance
         }
     }
@@ -3596,11 +3641,15 @@ class CLOUD {
         this.isForeground = isForeground;
         this.isRaining = isRaining;
         this.cheerfulness = 0; // 0-100, increases as balloons are spawned
+        this.sadness = isRaining ? 10 : 0; // 0-10, if initially raining, start at max sadness
+        this.visualSadness = isRaining ? 10 : 0; // Smoothly animates to match sadness for visual transitions
+        this.faceOpacity = isRaining ? 1 : 0; // Fade in face when first balloon is popped
         // Blinking state
         this.blinkCount = 0; // Number of blinks completed
         this.blinkTimer = 0; // Timer for blink animation
         this.isBlinking = false; // Currently in a blink
         this.hasTriggeredBlink = false; // Prevents re-triggering
+        this.hasFadeBlink = false; // Tracks blink when rainbow starts fading
         // Tutorial message for first user-created cloud
         this.showTutorialMessage = showTutorial;
         this.tutorialMessageTime = showTutorial ? 5.0 : 0; // 5 seconds
@@ -3720,12 +3769,20 @@ class CLOUD {
         
         // Draw outline strokes (darker for background clouds, lighter for foreground)
         if (this.isForeground && !this.isRaining) {
-            ctx.strokeStyle = 'hsl(200, 85%, 85%)';
+            // Darken based on visualSadness (85% at 0 sadness, 35% at 10 sadness)
+            const sadnessLightness = 85 - (this.visualSadness / 10) * 50;
+            const sadnessSaturation = 85 - (this.visualSadness / 10) * 65; // 85% to 20%
+            ctx.strokeStyle = `hsl(200, ${sadnessSaturation}%, ${sadnessLightness}%)`;
             ctx.lineWidth = 16;
         } else if (this.isForeground && this.isRaining) {
-            // Brighten as cheerfulness increases (20% to 85% lightness)
-            const lightness = 20 + (this.cheerfulness / 100) * 65;
-            const saturation = 30 + (this.cheerfulness / 100) * 55; // 30% to 85%
+            // When raining, continue from current sadness colors and brighten with cheerfulness
+            // Use same formula as non-raining for sadness component
+            const sadnessLightness = 85 - (this.visualSadness / 10) * 50; // Same as non-raining
+            const sadnessSaturation = 85 - (this.visualSadness / 10) * 65;
+            const cheerLightness = 85;
+            const cheerSaturation = 85;
+            const lightness = sadnessLightness + (this.cheerfulness / 100) * (cheerLightness - sadnessLightness);
+            const saturation = sadnessSaturation + (this.cheerfulness / 100) * (cheerSaturation - sadnessSaturation);
             ctx.strokeStyle = `hsl(200, ${saturation}%, ${lightness}%)`;
             ctx.lineWidth = 16;
         } else if (this.isBackground) {
@@ -3748,10 +3805,14 @@ class CLOUD {
         if (this.isBackground) {
             ctx.fillStyle = 'hsl(0, 0%, 65%)';
         } else if (this.isForeground && !this.isRaining) {
-            ctx.fillStyle = 'hsl(0, 0%, 100%)';
+            // Darken based on visualSadness (100% at 0 sadness, 55% at 10 sadness)
+            const lightness = 100 - (this.visualSadness / 10) * 45;
+            ctx.fillStyle = `hsl(0, 0%, ${lightness}%)`;
         } else if (this.isForeground && this.isRaining) {
-            // Brighten as cheerfulness increases (50% to 100% lightness)
-            const lightness = 50 + (this.cheerfulness / 100) * 50;
+            // When raining, continue from current sadness colors and brighten with cheerfulness
+            const sadnessLightness = 100 - (this.visualSadness / 10) * 45; // Same as non-raining
+            const cheerLightness = 100;
+            const lightness = sadnessLightness + (this.cheerfulness / 100) * (cheerLightness - sadnessLightness);
             ctx.fillStyle = `hsl(0, 0%, ${lightness}%)`;
         } else {
             ctx.fillStyle = 'hsl(0, 0%, 95%)';
@@ -3769,9 +3830,14 @@ class CLOUD {
         if (this.isBackground) {
             ctx.fillStyle = 'hsl(0, 0%, 65%)';
         } else if (this.isForeground && !this.isRaining) {
-            ctx.fillStyle = 'hsl(0, 0%, 100%)';
+            // Darken based on visualSadness (100% at 0 sadness, 55% at 10 sadness)
+            const lightness = 100 - (this.visualSadness / 10) * 45;
+            ctx.fillStyle = `hsl(0, 0%, ${lightness}%)`;
         } else if (this.isForeground && this.isRaining) {
-            const lightness = 50 + (this.cheerfulness / 100) * 50;
+            // When raining, continue from current sadness colors and brighten with cheerfulness
+            const sadnessLightness = 100 - (this.visualSadness / 10) * 45; // Same as non-raining
+            const cheerLightness = 100;
+            const lightness = sadnessLightness + (this.cheerfulness / 100) * (cheerLightness - sadnessLightness);
             ctx.fillStyle = `hsl(0, 0%, ${lightness}%)`;
         } else {
             ctx.fillStyle = 'hsl(0, 0%, 95%)';
@@ -3797,12 +3863,19 @@ class CLOUD {
             ctx.strokeStyle = 'hsla(200, 30%, 50%, 1)';
             ctx.lineWidth = 3;
         } else if (this.isForeground && !this.isRaining) {
-            ctx.strokeStyle = 'hsl(200, 85%, 85%)';
+            // Darken based on visualSadness (85% at 0 sadness, 35% at 10 sadness)
+            const sadnessLightness = 85 - (this.visualSadness / 10) * 50;
+            const sadnessSaturation = 85 - (this.visualSadness / 10) * 65;
+            ctx.strokeStyle = `hsla(200, ${sadnessSaturation}%, ${sadnessLightness}%, 1)`;
             ctx.lineWidth = 7;
         } else if (this.isForeground && this.isRaining) {
-            // Brighten as cheerfulness increases (20% to 85% lightness)
-            const lightness = 20 + (this.cheerfulness / 100) * 65;
-            const saturation = 30 + (this.cheerfulness / 100) * 55;
+            // When raining, continue from current sadness colors and brighten with cheerfulness
+            const sadnessLightness = 85 - (this.visualSadness / 10) * 50; // Same as non-raining
+            const sadnessSaturation = 85 - (this.visualSadness / 10) * 65;
+            const cheerLightness = 85;
+            const cheerSaturation = 85;
+            const lightness = sadnessLightness + (this.cheerfulness / 100) * (cheerLightness - sadnessLightness);
+            const saturation = sadnessSaturation + (this.cheerfulness / 100) * (cheerSaturation - sadnessSaturation);
             ctx.strokeStyle = `hsla(200, ${saturation}%, ${lightness}%, 1)`;
             ctx.lineWidth = 7;
         } else {
@@ -3844,6 +3917,19 @@ class CLOUD {
     update(dt) {
         // Move cloud from right to left
         this.x -= this.speed * dt;
+        
+        // Smoothly interpolate visualSadness to match target sadness
+        if (this.visualSadness !== this.sadness) {
+            const sadnessChangeSpeed = 2.0; // Units per second
+            const diff = this.sadness - this.visualSadness;
+            if (Math.abs(diff) < sadnessChangeSpeed * dt) {
+                this.visualSadness = this.sadness;
+            } else {
+                this.visualSadness += Math.sign(diff) * sadnessChangeSpeed * dt;
+            }
+            // Re-render when visual sadness changes
+            this.renderToCanvas();
+        }
         
         // Trigger blink animation when reaching 100% cheerfulness and rainbow is complete
         if (this.isForeground && this.cheerfulness === 100 && rainbowArcProgress >= 1.0 && !this.hasTriggeredBlink) {
@@ -3889,6 +3975,13 @@ class CLOUD {
 
         // Draw overhead rainbow on foreground clouds when they stop raining
         if (this.isForeground && this.cheerfulness == 100) {
+            // Reset rainbow state when starting a new rainbow
+            if (rainbowArcProgress === 0 && rainbowFullyFormedTime > 0) {
+                rainbowFullyFormedTime = 0;
+                rainbowOpacity = 1.0;
+                this.hasFadeBlink = false; // Reset fade blink flag for next cycle
+            }
+            
             const radScale = this.radius * cScale;
             const rainbowRadius = radScale * 0.8;
             const rainbowWidth = radScale * 0.7;
@@ -3898,18 +3991,18 @@ class CLOUD {
             //];
             // make array with colors having transparency
             const rainbowColors = [
-                "hsla(0, 100%, 50%, 0.7)",
-                "hsla(30, 100%, 50%, 0.7)",
-                "hsla(60, 100%, 50%, 0.7)",
-                "hsla(120, 100%, 40%, 0.7)",
-                "hsla(240, 100%, 50%, 0.7)",
-                "hsla(275, 100%, 50%, 0.7)",
-                "hsla(300, 100%, 50%, 0.7)"
+                `hsla(0, 100%, 50%, ${0.7 * rainbowOpacity})`,
+                `hsla(30, 100%, 50%, ${0.7 * rainbowOpacity})`,
+                `hsla(60, 100%, 50%, ${0.7 * rainbowOpacity})`,
+                `hsla(120, 100%, 40%, ${0.7 * rainbowOpacity})`,
+                `hsla(240, 100%, 50%, ${0.7 * rainbowOpacity})`,
+                `hsla(275, 100%, 50%, ${0.7 * rainbowOpacity})`,
+                `hsla(300, 100%, 50%, ${0.7 * rainbowOpacity})`
             ];
             const arcCount = rainbowColors.length;
             c.lineWidth = rainbowWidth / arcCount;
 
-            c.lineCap = 'butt';
+            c.lineCap = 'round';
             for (let i = 0; i < arcCount; i++) {
                 c.beginPath();
                 c.arc(
@@ -3947,6 +4040,27 @@ class CLOUD {
             rainbowArcProgress += deltaT * 0.25; 
             if (rainbowArcProgress > 1.0) {
                 rainbowArcProgress = 1.0;
+                // Record the time when rainbow becomes fully formed
+                if (rainbowFullyFormedTime === 0) {
+                    rainbowFullyFormedTime = Date.now();
+                }
+            }
+            
+            // Fade out rainbow after 3 seconds of being fully formed
+            if (rainbowFullyFormedTime > 0) {
+                const timeElapsed = (Date.now() - rainbowFullyFormedTime) / 1000; // seconds
+                if (timeElapsed > 3) {
+                    const fadeTime = timeElapsed - 3;
+                    rainbowOpacity = Math.max(0, 1.0 - fadeTime * 0.5); // Fade over 2 seconds
+                    
+                    // Trigger double-blink when rainbow has completely faded (after 6 seconds total)
+                    if (rainbowOpacity === 0 && !this.hasFadeBlink) {
+                        this.hasFadeBlink = true;
+                        this.blinkTimer = 0;
+                        this.isBlinking = true;
+                        this.blinkCount = 0; // Reset to trigger new blinks
+                    }
+                }
             }
         }
 
@@ -3958,9 +4072,16 @@ class CLOUD {
         // Draw the pre-rendered cloud image
         c.drawImage(this.offscreenCanvas, cx - this.offsetX, cy - this.offsetY);
         
-        // Draw face on foreground rainy clouds (pouty -> happy as cheerfulness increases)
+        // Draw face on foreground clouds when sad (balloons popped) or rainy/cheerful
         // Keep face visible during blink animation even after rain stops
-        if (this.isForeground && (this.isRaining || (this.cheerfulness === 100 && this.blinkCount < 2))) {
+        const shouldShowFace = this.isForeground && (this.sadness > 0 || this.isRaining || this.cheerfulness > 0 || this.blinkCount < 2);
+        
+        if (shouldShowFace) {
+            // Fade in face when first balloon is popped or when raining
+            if ((this.sadness > 0 || this.isRaining || this.cheerfulness > 0) && this.faceOpacity < 1) {
+                this.faceOpacity = Math.min(1, this.faceOpacity + deltaT * 2);
+            }
+            
             const r = this.radius * cScale;
             const faceY = cy + r * 0.1;
             const eyeOffsetX = r * 0.2;
@@ -3978,9 +4099,11 @@ class CLOUD {
             const isBetweenBlinks = this.isBlinking && this.blinkCount === 0 && this.blinkTimer > blinkDuration && this.blinkTimer < cycleTime;
             const eyeScale = isBetweenBlinks ? 1.3 : 1.0;
             
+            const faceAlpha = this.faceOpacity;
+            
             if (isEyesClosed) {
                 // Draw closed eyes as horizontal lines
-                c.strokeStyle = 'hsl(0, 0%, 10%)';
+                c.strokeStyle = `hsla(0, 0%, 10%, ${faceAlpha})`;
                 c.lineWidth = 3;
                 c.lineCap = 'round';
                 
@@ -3999,7 +4122,7 @@ class CLOUD {
                 c.lineCap = 'butt';
             } else {
                 // Draw open eyes (scaled between blinks)
-                c.fillStyle = 'hsl(0, 0%, 10%)';
+                c.fillStyle = `hsla(0, 0%, 10%, ${faceAlpha})`;
                 c.beginPath();
                 c.ellipse(cx - eyeOffsetX, faceY - eyeOffsetY, eyeRadiusX * eyeScale, eyeRadiusY * eyeScale, 0, 0, 2 * Math.PI);
                 c.fill();
@@ -4009,28 +4132,57 @@ class CLOUD {
                 c.fill();
             }
             
-            // Mouth changes smoothly from pouty frown to happy smile based on cheerfulness
-            const cheerRatio = this.cheerfulness / 100; // 0 = pouty, 1 = happy
-            const baseMouthWidth = r * 0.25;
-            const baseMouthHeight = r * 0.05;
-            
+            // Mouth shape based on sadness level (when balloons popped) or cheerfulness (when raining/happy)
             c.beginPath();
-            if (cheerRatio < 0.5) {
-                // Pouty mouth (curves down) - original shape
-                const poutyAmount = (1 - cheerRatio * 2); // 1 at 0%, 0 at 50%
-                const mouthWidth = baseMouthWidth; // Keep constant width during pout
-                const mouthY = faceY + r * 0.1 + (poutyAmount * r * 0.04); // r * 0.14 at 0%, r * 0.1 at 50%
-                c.moveTo(cx - mouthWidth / 2, mouthY);
-                c.quadraticCurveTo(cx, faceY + r * 0.1 - baseMouthHeight * poutyAmount, cx + mouthWidth / 2, faceY + r * 0.1);
+            // Use cheerfulness-based mouth if cheerfulness > 0, otherwise use sadness-based mouth
+            if (this.visualSadness > 0 && this.cheerfulness === 0) {
+                // Sadness progression: horizontal line -> frown -> pout (smoothly animated)
+                const baseMouthWidth = r * 0.25;
+                const baseMouthHeight = r * 0.05;
+                
+                if (this.visualSadness <= 1) {
+                    // Horizontal line for first balloon (interpolate to flat)
+                    const flatAmount = this.visualSadness; // 0-1
+                    const mouthY = faceY + r * 0.1;
+                    c.moveTo(cx - baseMouthWidth / 2, mouthY);
+                    c.lineTo(cx + baseMouthWidth / 2, mouthY);
+                } else if (this.visualSadness <= 2) {
+                    // Transition from flat to frown (slight downward curve)
+                    const frownAmount = this.visualSadness - 1; // 0-1
+                    const mouthY = faceY + r * 0.1;
+                    c.moveTo(cx - baseMouthWidth / 2, mouthY);
+                    c.quadraticCurveTo(cx, mouthY - baseMouthHeight * 0.3 * frownAmount, cx + baseMouthWidth / 2, mouthY);
+                } else {
+                    // Deeper frown morphing to pout (sadness 2-10)
+                    const poutyAmount = Math.min(1.0, (this.visualSadness - 2) / 2); // 0 at sadness 2, 1.0 at sadness 4+
+                    const mouthWidth = baseMouthWidth;
+                    const mouthY = faceY + r * 0.1 + (poutyAmount * r * 0.04);
+                    c.moveTo(cx - mouthWidth / 2, mouthY);
+                    c.quadraticCurveTo(cx, faceY + r * 0.1 - baseMouthHeight * (0.5 + poutyAmount * 0.5), cx + mouthWidth / 2, faceY + r * 0.1);
+                }
             } else {
-                // Smile phase (50% to 100%) - grows wider from base width
-                const smileAmount = (cheerRatio - 0.5) * 2; // 0 at 50%, 1 at 100%
-                const mouthWidth = baseMouthWidth * (1.0 + smileAmount * 0.2); // Grows from 100% to 120% of base
-                const controlY = faceY + r * 0.1 + smileAmount * baseMouthHeight * 4.0;
-                c.moveTo(cx - mouthWidth / 2, faceY + r * 0.1);
-                c.quadraticCurveTo(cx, controlY, cx + mouthWidth / 2, faceY + r * 0.1);
+                // Original cheerfulness-based mouth (pouty -> happy for balloon spawning)
+                const cheerRatio = this.cheerfulness / 100; // 0 = pouty, 1 = happy
+                const baseMouthWidth = r * 0.25;
+                const baseMouthHeight = r * 0.05;
+                
+                if (cheerRatio < 0.5) {
+                    // Pouty mouth (curves down) - original shape
+                    const poutyAmount = (1 - cheerRatio * 2); // 1 at 0%, 0 at 50%
+                    const mouthWidth = baseMouthWidth; // Keep constant width during pout
+                    const mouthY = faceY + r * 0.1 + (poutyAmount * r * 0.04); // r * 0.14 at 0%, r * 0.1 at 50%
+                    c.moveTo(cx - mouthWidth / 2, mouthY);
+                    c.quadraticCurveTo(cx, faceY + r * 0.1 - baseMouthHeight * poutyAmount, cx + mouthWidth / 2, faceY + r * 0.1);
+                } else {
+                    // Smile phase (50% to 100%) - grows wider from base width
+                    const smileAmount = (cheerRatio - 0.5) * 2; // 0 at 50%, 1 at 100%
+                    const mouthWidth = baseMouthWidth * (1.0 + smileAmount * 0.2); // Grows from 100% to 120% of base
+                    const controlY = faceY + r * 0.1 + smileAmount * baseMouthHeight * 4.0;
+                    c.moveTo(cx - mouthWidth / 2, faceY + r * 0.1);
+                    c.quadraticCurveTo(cx, controlY, cx + mouthWidth / 2, faceY + r * 0.1);
+                }
             }
-            c.strokeStyle = 'hsl(0, 0%, 10%)';
+            c.strokeStyle = `hsla(0, 0%, 10%, ${faceAlpha})`;
             c.lineWidth = 4;
             c.lineCap = 'round';
             c.stroke();
@@ -4091,6 +4243,7 @@ class AIRPLANE {
         this.respawnDelay = respawnDelay; // Seconds to wait before respawning
         this.isWaiting = false;
         this.waitTimer = 0;
+        this.initialDelay = passNumber === 1 ? 6.0 : 0; // Wait 6 seconds before first pass starts moving
         this.propellerAngle = 0; // For spinning propeller effect
         this.angle = 0; // Current orientation angle
         this.isUpsideDown = false; // Whether plane is flying upside-down
@@ -4156,7 +4309,7 @@ class AIRPLANE {
         this.secondPassBannerText = "Double-click to add clouds";
         this.thirdPassBannerText = "Right-click to remove";
         this.fourthPassBannerText = "Spacebar to PARTY!";
-        this.fifthPassBannerText = "Ellipsis to open the menu";
+        this.fifthPassBannerText = "That thing for the menu";
         
         // Set banner text based on pass number
         if (this.passNumber === 1) {
@@ -4237,6 +4390,12 @@ class AIRPLANE {
         return simHeight * 0.2; // Low altitude as fallback
     }
     update(dt) {
+        // Handle initial delay (doesn't increment pass number)
+        if (this.initialDelay > 0) {
+            this.initialDelay -= dt;
+            return; // Don't move or update anything during initial delay
+        }
+        
         if (this.isWaiting) {
             // Count down the respawn timer
             this.waitTimer -= dt;
@@ -4791,7 +4950,7 @@ function makeForegroundClouds() {
     const raining = false;
 
     ForegroundCloud.push(new CLOUD(
-        0.8 * simWidth, simHeight * (0.25 + Math.random() * 0.6), 
+        0.85 * simWidth, 0.45 * simHeight, 
         isBackground, isForeGround, raining));
 }
 
@@ -4849,8 +5008,10 @@ class BOID {
         this.speedAdjust = 0;
         this.whiteBoid = whiteBoid;
         this.blackBoid = blackBoid;
+        this.triangleBoid = false;
         this.arrow = true;
         this.circle = false;
+        this.ellipseBoid = false;
         this.airfoil = false;
         this.flappy = false;
         this.square = false;
@@ -5005,6 +5166,59 @@ class BOID {
             c.stroke();
         }
 
+        // Draw triangle boid --------------------------------------------
+        if (this.triangleBoid && !this.arrow && !this.circle && !this.airfoil) {
+            const angle = Math.atan2(-this.vel.y, this.vel.x);
+            
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+            c.rotate(angle);
+            
+            // Draw isosceles triangle pointing right
+            const height = 1.4 * radScale;
+            const baseWidth = 1.0 * radScale;
+            
+            c.beginPath();
+            c.moveTo(height * 0.6, 0); // Tip (pointing right)
+            c.lineTo(-height * 0.4, baseWidth * 0.5); // Bottom left
+            c.lineTo(-height * 0.4, -baseWidth * 0.5); // Top left
+            c.closePath();
+            
+            // Apply colors
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.fillStyle = this.cachedFillStyle;
+            } else if (this.whiteBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+            } else if (this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 10%)';
+            } else if (this.flashing && !this.blackBoid) {
+                const flashLight = Math.round(this.lightness * 1.5);
+                c.fillStyle = `hsl(${Math.round(this.hue + 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+            } else if (this.flashing && this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+            }
+            
+            if (boidFillEnabled) {
+                c.fill();
+            }
+            
+            if (boidTraceMode > 0) {
+                if (boidTraceMode === 1) {
+                    c.strokeStyle = 'hsl(0, 0%, 0%)';
+                    c.lineWidth = 1.0;
+                } else if (boidTraceMode === 2) {
+                    c.strokeStyle = this.cachedStrokeStyle;
+                    c.lineWidth = 2.0;
+                } else if (boidTraceMode === 3) {
+                    c.strokeStyle = 'hsl(0, 0%, 90%)';
+                    c.lineWidth = 1.0;
+                }
+                c.stroke();
+            }
+            
+            c.restore();
+        }
+
         // Draw arrow boid --------------------------------------------
         if (this.arrow && !this.circle && !this.airfoil) {
             const angle = Math.atan2(this.vel.y, this.vel.x);
@@ -5041,13 +5255,15 @@ class BOID {
             }
             if (boidTraceMode > 0) {
                 if (boidTraceMode === 1) {
-                    c.strokeStyle = 'hsl(0, 0%, 10%)';
+                    c.strokeStyle = 'hsl(0, 0%, 0%)';
+                    c.lineWidth = 1.0;
                 } else if (boidTraceMode === 2) {
                     c.strokeStyle = this.cachedStrokeStyle;
+                    c.lineWidth = 2.0;
                 } else if (boidTraceMode === 3) {
                     c.strokeStyle = 'hsl(0, 0%, 90%)';
+                    c.lineWidth = 1.0;
                 }
-                c.lineWidth = 1.0;
                 c.stroke();
             }
 
@@ -5290,15 +5506,72 @@ class BOID {
             }
             if (boidTraceMode > 0) {
                 if (boidTraceMode === 1) {
-                    c.strokeStyle = 'hsl(0, 0%, 10%)';
+                    c.strokeStyle = 'hsl(0, 0%, 0%)';
+                    c.lineWidth = 1.0;
                 } else if (boidTraceMode === 2) {
                     c.strokeStyle = this.cachedStrokeStyle;
+                    c.lineWidth = 2.0;
                 } else if (boidTraceMode === 3) {
                     c.strokeStyle = 'hsl(0, 0%, 90%)';
+                    c.lineWidth = 1.0;
                 }
-                c.lineWidth = 1.0;
                 c.stroke();
             }
+        }
+
+        // Ellipse boids - directional ellipses that become more slender with speed
+        if (this.ellipseBoid && !this.arrow && !this.circle && !this.airfoil) {
+            c.save();
+            
+            // Calculate aspect ratio based on speed (faster = more slender)
+            const speed = Math.sqrt(this.vel.x * this.vel.x + this.vel.y * this.vel.y);
+            const normalizedSpeed = Math.min(speed / 2.0, 1.0); // Normalize speed
+            const aspectRatio = 1.0 + normalizedSpeed * 3.0; // Range from 1.0 (round) to 5.0 (slender)
+            
+            // Get velocity angle for rotation (negate y for canvas coordinate system)
+            const angle = Math.atan2(-this.vel.y, this.vel.x);
+            
+            // Move to boid position and rotate to velocity direction
+            c.translate(cX(this.pos), cY(this.pos));
+            c.rotate(angle);
+            
+            // Draw ellipse (keep length constant, shrink width with speed)
+            c.beginPath();
+            c.ellipse(0, 0, 0.6 * radScale, 0.6 * radScale / aspectRatio, 0, 0, 2 * Math.PI);
+            
+            // Apply colors
+            if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
+                c.fillStyle = this.cachedFillStyle;
+            } else if (this.whiteBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+            } else if (this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 10%)';
+            } else if (this.flashing && !this.blackBoid) {
+                const flashLight = Math.round(this.lightness * 1.5);
+                c.fillStyle = `hsl(${Math.round(this.hue + 70)}, ${Math.round(this.saturation)}%, ${flashLight}%)`;
+            } else if (this.flashing && this.blackBoid) {
+                c.fillStyle = 'hsl(0, 0%, 90%)';
+            }
+            
+            if (boidFillEnabled) {
+                c.fill();
+            }
+            
+            if (boidTraceMode > 0) {
+                if (boidTraceMode === 1) {
+                    c.strokeStyle = 'hsl(0, 0%, 0%)';
+                    c.lineWidth = 1.0;
+                } else if (boidTraceMode === 2) {
+                    c.strokeStyle = this.cachedStrokeStyle;
+                    c.lineWidth = 2.0;
+                } else if (boidTraceMode === 3) {
+                    c.strokeStyle = 'hsl(0, 0%, 90%)';
+                    c.lineWidth = 1.0;
+                }
+                c.stroke();
+            }
+            
+            c.restore();
         }
 
         // Draw square boid --------------------------------------------
@@ -5329,13 +5602,15 @@ class BOID {
             }
             if (boidTraceMode > 0) {
                 if (boidTraceMode === 1) {
-                    c.strokeStyle = 'hsl(0, 0%, 10%)';
+                    c.strokeStyle = 'hsl(0, 0%, 0%)';
+                    c.lineWidth = 1.0;
                 } else if (boidTraceMode === 2) {
                     c.strokeStyle = this.cachedStrokeStyle;
+                    c.lineWidth = 2.0;
                 } else if (boidTraceMode === 3) {
                     c.strokeStyle = 'hsl(0, 0%, 90%)';
+                    c.lineWidth = 1.0;
                 }
-                c.lineWidth = 1.0;
                 c.strokeRect(0.5 * radScale, -0.5 * radScale, radScale, radScale);
             }
             c.restore();
@@ -5400,15 +5675,18 @@ class BOID {
             }
             if (boidTraceMode > 0) {
                 if (boidTraceMode === 1) {
-                    c.strokeStyle = 'hsl(0, 0%, 10%)';
+                    c.strokeStyle = 'hsl(0, 0%, 0%)';
+                    c.lineWidth = 1.0;
                 } else if (boidTraceMode === 2) {
                     c.strokeStyle = this.cachedStrokeStyle;
+                    c.lineWidth = 2.0;
                 } else if (boidTraceMode === 3) {
                     c.strokeStyle = 'hsl(0, 0%, 90%)';
+                    c.lineWidth = 1.0;
                 }
-                c.lineWidth = 1.0;
                 c.stroke();
             }
+            
             c.restore();
         }
             
@@ -5452,13 +5730,15 @@ class BOID {
             }
             if (boidTraceMode > 0) {
                 if (boidTraceMode === 1) {
-                    c.strokeStyle = 'hsl(0, 0%, 10%)';
+                    c.strokeStyle = 'hsl(0, 0%, 0%)';
+                    c.lineWidth = 1.0;
                 } else if (boidTraceMode === 2) {
                     c.strokeStyle = this.cachedStrokeStyle;
+                    c.lineWidth = 2.0;
                 } else if (boidTraceMode === 3) {
                     c.strokeStyle = 'hsl(0, 0%, 90%)';
+                    c.lineWidth = 1.0;
                 }
-                c.lineWidth = 1.0;
                 c.stroke();
             }
             c.restore();
@@ -5467,8 +5747,22 @@ class BOID {
 }
 
 //  CHANGE BOID TYPES ---------------------------------------------------------------------
+function doTriangleBoids() {
+    for (let boid of Boids) {
+        boid.triangleBoid = true;
+        boid.arrow = false;
+        boid.circle = false;
+        boid.ellipseBoid = false;
+        boid.airfoil = false;
+        boid.flappy = false;
+        boid.square = false;
+        boid.glowBoid = false;
+    }
+}
+
 function doArrowBoids() {
     for (let boid of Boids) {
+        boid.triangleBoid = false;
         boid.arrow = true;
         boid.circle = false;
         boid.airfoil = false;
@@ -5480,8 +5774,10 @@ function doArrowBoids() {
 
 function doCircleBoids() {
     for (let boid of Boids) {
+        boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = true;
+        boid.ellipseBoid = false;
         boid.airfoil = false;
         boid.flappy = false;
         boid.square = false;
@@ -5489,10 +5785,25 @@ function doCircleBoids() {
     }
 } 
 
-function doGlowBoids() {
+function doEllipseBoids() {
     for (let boid of Boids) {
+        boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = false;
+        boid.ellipseBoid = true;
+        boid.airfoil = false;
+        boid.flappy = false;
+        boid.square = false;
+        boid.glowBoid = false;
+    }
+}
+
+function doGlowBoids() {
+    for (let boid of Boids) {
+        boid.triangleBoid = false;
+        boid.arrow = false;
+        boid.circle = false;
+        boid.ellipseBoid = false;
         boid.airfoil = false;
         boid.flappy = false;
         boid.square = false;
@@ -5502,8 +5813,10 @@ function doGlowBoids() {
 
 function doSquareBoids() {
     for (let boid of Boids) {
+        boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = false;
+        boid.ellipseBoid = false;
         boid.airfoil = false;
         boid.flappy = false;
         boid.square = true;
@@ -5513,8 +5826,10 @@ function doSquareBoids() {
 
 function doAirfoilBoids() {
     for (let boid of Boids) {
+        boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = false;
+        boid.ellipseBoid = false;
         boid.airfoil = true;
         boid.flappy = false;
         boid.square = false;
@@ -5524,8 +5839,10 @@ function doAirfoilBoids() {
 
 function doFlappyBoids() {
     for (let boid of Boids) {
+        boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = false;
+        boid.ellipseBoid = false;
         boid.airfoil = false;
         boid.flappy = true;
         boid.square = false;
@@ -5535,8 +5852,10 @@ function doFlappyBoids() {
 
 function doNoneBoids() {
     for (let boid of Boids) {
+        boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = false;
+        boid.ellipseBoid = false;
         boid.airfoil = false;
         boid.flappy = false;
         boid.square = false;
@@ -6082,9 +6401,34 @@ function drawSimMenu() {
     const tailButtonsCenterX = 0.5; // Center between columns 0 and 1
     const tailRadioLabels = ['None', 'Black', 'White', 'Hue', 'Hue2'];
     
+    // Draw bracket and label for tail style buttons
+    const tailBracketY = tailKnobRow * knobSpacing + knobRadius * 2.4 + menuTopMargin;
+    const tailBracketLeftX = tailButtonsCenterX * knobSpacing - 2.4 * knobRadius;
+    const tailBracketRightX = tailButtonsCenterX * knobSpacing + 2.4 * knobRadius;
+    const tailBracketHeight = 0.15 * knobRadius;
+    
+    c.beginPath();
+    c.moveTo(tailBracketLeftX, tailBracketY);
+    c.lineTo(tailBracketLeftX, tailBracketY - tailBracketHeight);
+    c.lineTo(tailBracketRightX, tailBracketY - tailBracketHeight);
+    c.lineTo(tailBracketRightX, tailBracketY);
+    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+    c.lineWidth = 0.04 * knobRadius;
+    c.stroke();
+    
+    // Draw "Tail Style" label
+    c.textAlign = 'center';
+    c.textBaseline = 'bottom';
+    c.font = `${0.28 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
+    c.lineWidth = 0.02 * knobRadius;
+    c.strokeText('Tail Style', tailButtonsCenterX * knobSpacing, tailBracketY - tailBracketHeight - 0.1 * knobRadius);
+    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
+    c.fillText('Tail Style', tailButtonsCenterX * knobSpacing, tailBracketY - tailBracketHeight - 0.1 * knobRadius);
+    
     for (let i = 0; i < 5; i++) {
         const buttonX = tailButtonsCenterX * knobSpacing + (i - 2) * knobRadius * 1.0;
-        const buttonY = tailKnobRow * knobSpacing + knobRadius * 2.2 + menuTopMargin;
+        const buttonY = tailKnobRow * knobSpacing + knobRadius * 2.9 + menuTopMargin;
         
         // Draw outer circle
         c.beginPath();
@@ -6121,13 +6465,15 @@ function drawSimMenu() {
     const traceButtonY2 = traceButtonY1 + 0.8 * knobRadius;
     const traceButtonY3 = traceButtonY2 + 0.8 * knobRadius;
     const traceButtonY4 = traceButtonY3 + 0.8 * knobRadius;
+    const fillButtonY1 = traceButtonY4 + 1.0 * knobRadius;
+    const fillButtonY2 = fillButtonY1 + 0.8 * knobRadius;
     
     const traceButtonX = traceCol * knobSpacing - 0.5 * knobRadius;
     
     // Draw bracket and label for trace buttons
     const bracketX = traceButtonX - traceButtonRadius - 0.35 * knobRadius;
     const bracketTopY = traceButtonY1 - 0.4 * knobRadius;
-    const bracketBottomY = traceButtonY3 + 0.4 * knobRadius;
+    const bracketBottomY = traceButtonY4 + 0.4 * knobRadius;
     const bracketMidY = (bracketTopY + bracketBottomY) / 2;
     const bracketWidth = 0.15 * knobRadius;
     
@@ -6216,7 +6562,7 @@ function drawSimMenu() {
     c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
     c.fillText('Color', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY3);
     
-    // Fill button
+    // Trace None button
     c.beginPath();
     c.arc(traceButtonX, traceButtonY4, traceButtonRadius, 0, 2 * Math.PI);
     c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
@@ -6224,83 +6570,173 @@ function drawSimMenu() {
     c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
     c.lineWidth = 0.05 * knobRadius;
     c.stroke();
-    if (boidFillEnabled) {
+    if (boidTraceMode === 0) {
         c.beginPath();
         c.arc(traceButtonX, traceButtonY4, traceButtonRadius * 0.5, 0, 2 * Math.PI);
         c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
         c.fill();
     }
     c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.strokeText('Fill', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY4);
+    c.strokeText('None', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY4);
     c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('Fill', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY4);
+    c.fillText('None', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY4);
     
-    // None button (below Fill)
-    const noneButtonY = traceButtonY4 + 0.8 * knobRadius;
+    // Draw bracket and label for fill buttons
+    const fillBracketX = traceButtonX - traceButtonRadius - 0.35 * knobRadius;
+    const fillBracketTopY = fillButtonY1 - 0.4 * knobRadius;
+    const fillBracketBottomY = fillButtonY2 + 0.4 * knobRadius;
+    const fillBracketMidY = (fillBracketTopY + fillBracketBottomY) / 2;
+    
     c.beginPath();
-    c.arc(traceButtonX, noneButtonY, traceButtonRadius, 0, 2 * Math.PI);
+    c.moveTo(fillBracketX + bracketWidth, fillBracketTopY);
+    c.lineTo(fillBracketX, fillBracketTopY);
+    c.lineTo(fillBracketX, fillBracketBottomY);
+    c.lineTo(fillBracketX + bracketWidth, fillBracketBottomY);
+    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+    c.lineWidth = 0.04 * knobRadius;
+    c.stroke();
+    
+    // Draw rotated "Fill" label
+    c.save();
+    c.translate(fillBracketX - 0.3 * knobRadius, fillBracketMidY);
+    c.rotate(-Math.PI / 2);
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = `${0.3 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
+    c.strokeText('Fill', 0, 0.04 * knobRadius);
+    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
+    c.fillText('Fill', 0, 0);
+    c.restore();
+    
+    // Fill button
+    c.beginPath();
+    c.arc(traceButtonX, fillButtonY1, traceButtonRadius, 0, 2 * Math.PI);
     c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
     c.fill();
     c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
     c.lineWidth = 0.05 * knobRadius;
     c.stroke();
-    if (selectedBoidType === 6) {
+    if (boidFillEnabled) {
         c.beginPath();
-        c.arc(traceButtonX, noneButtonY, traceButtonRadius * 0.5, 0, 2 * Math.PI);
+        c.arc(traceButtonX, fillButtonY1, traceButtonRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
+        c.fill();
+    }
+    c.textAlign = 'left';
+    c.textBaseline = 'middle';
+    c.font = `${0.28 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
+    c.strokeText('Fill', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + fillButtonY1);
+    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
+    c.fillText('Fill', traceButtonX + traceButtonRadius + 0.2 * knobRadius, fillButtonY1);
+    
+    // Fill None button
+    c.beginPath();
+    c.arc(traceButtonX, fillButtonY2, traceButtonRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.stroke();
+    if (!boidFillEnabled) {
+        c.beginPath();
+        c.arc(traceButtonX, fillButtonY2, traceButtonRadius * 0.5, 0, 2 * Math.PI);
         c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
         c.fill();
     }
     c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.strokeText('None', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + noneButtonY);
+    c.strokeText('None', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + fillButtonY2);
     c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('None', traceButtonX + traceButtonRadius + 0.2 * knobRadius, noneButtonY);
+    c.fillText('None', traceButtonX + traceButtonRadius + 0.2 * knobRadius, fillButtonY2);
     
-    // Draw radio buttons for boid type selection (vertically stacked)
-    const radioButtonRadius = knobRadius * 0.25;
-    const radioCol = 2;
-    const radioLabels = ['Arrows', 'Circles', 'Bubbles', 'Squares', 'Teardrops', 'Birds'];
+    // Draw scrollable boid type selection list
+    const listCol = 2;
+    const listX = listCol * knobSpacing - 1.15 * knobRadius;
+    const listTitleY = (2 * knobSpacing) - (2.0 * knobRadius) + menuTopMargin;
+    const listY = listTitleY + knobRadius * 0.96;
+    const listWidth = knobRadius * 2.3;
+    const listHeight = knobRadius * 5.04;
+    const itemHeight = knobRadius * 0.72;
+    const listCornerRadius = knobRadius * 0.22;
     
-    for (let i = 0; i < 6; i++) {
-        const buttonX = radioCol * knobSpacing - 0.5 * knobRadius;
-        const buttonY = (2 * knobSpacing) - (0.6 * knobRadius) + (i * 0.8 * knobRadius) + menuTopMargin;
+    // Draw "Boid Style" title (rotated 90 degrees CCW on left side)
+    c.save();
+    c.translate(listX - 0.4 * knobRadius, listY + listHeight / 2);
+    c.rotate(-Math.PI / 2);
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = `${0.28 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
+    c.strokeText('Boid Style', 0, 0.04 * knobRadius);
+    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
+    c.fillText('Boid Style', 0, 0);
+    c.restore();
+    
+    // Draw list background with rounded corners
+    c.fillStyle = `hsla(210, 80%, 10%, ${0.5 * menuOpacity})`;
+    c.beginPath();
+    c.roundRect(listX, listY, listWidth, listHeight, listCornerRadius);
+    c.fill();
+    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
+    c.lineWidth = 0.04 * knobRadius;
+    c.stroke();
+    
+    // Setup clipping region for scrollable content
+    c.save();
+    c.beginPath();
+    c.rect(listX, listY, listWidth, listHeight);
+    c.clip();
+    
+    // Draw list items
+    const visibleItems = Math.ceil(listHeight / itemHeight) + 1;
+    const startIndex = Math.max(0, Math.floor(boidTypeScrollOffset / itemHeight));
+    const endIndex = Math.min(boidTypeLabels.length, startIndex + visibleItems);
+    
+    for (let i = startIndex; i < endIndex; i++) {
+        const itemY = listY + (i * itemHeight) - boidTypeScrollOffset;
         
-        // Draw outer circle
-        c.beginPath();
-        c.arc(buttonX, buttonY, radioButtonRadius, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
-        c.fill();
-        c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-        c.lineWidth = 0.05 * knobRadius;
-        c.stroke();
-        
-        // Draw filled center if selected
+        // Draw selection highlight
         if (selectedBoidType === i) {
+            c.fillStyle = `hsla(320, 90%, 70%, ${0.7 * menuOpacity})`;
             c.beginPath();
-            c.arc(buttonX, buttonY, radioButtonRadius * 0.5, 0, 2 * Math.PI);
-            c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
+            const highlightPadding = itemHeight * 0.15;
+            c.roundRect(listX + 0.5 * highlightPadding, itemY + highlightPadding, listWidth - 2 * highlightPadding, itemHeight - highlightPadding * 2, (itemHeight - highlightPadding * 2) / 2);
             c.fill();
         }
-
-        // Draw label to the right of button - shadow for contrast
+        
+        // Draw item text
         c.textAlign = 'left';
         c.textBaseline = 'middle';
-        c.font = `${0.28 * knobRadius}px verdana`;
+        c.font = `${0.3 * knobRadius}px verdana`;
+        
+        // Shadow for contrast
         c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-        c.strokeText(radioLabels[i], 0.04 * knobRadius + buttonX + radioButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + buttonY);
-
-        // Draw label to the right of button
-        //c.font = `${0.25 * knobRadius}px verdana`;
+        c.strokeText(boidTypeLabels[i], listX + 0.15 * knobRadius + 0.04 * knobRadius, itemY + itemHeight / 2 + 0.04 * knobRadius);
+        
+        // Main text
         c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-        c.fillText(radioLabels[i], buttonX + radioButtonRadius + 0.2 * knobRadius, buttonY);
+        c.fillText(boidTypeLabels[i], listX + 0.15 * knobRadius, itemY + itemHeight / 2);
+    }
+    
+    c.restore();
+    
+    // Draw scrollbar if content overflows
+    const maxScroll = Math.max(0, (boidTypeLabels.length * itemHeight) - listHeight);
+    if (maxScroll > 0) {
+        const scrollbarWidth = 0.1 * knobRadius;
+        const scrollbarX = listX + listWidth - scrollbarWidth - 0.05 * knobRadius;
+        const scrollbarHeight = listHeight * (listHeight / (boidTypeLabels.length * itemHeight));
+        const scrollbarY = listY + (boidTypeScrollOffset / maxScroll) * (listHeight - scrollbarHeight);
+        
+        c.fillStyle = `hsla(210, 80%, 60%, ${0.7 * menuOpacity})`;
+        c.fillRect(scrollbarX, scrollbarY, scrollbarWidth, scrollbarHeight);
     }
     
     // Draw reset button --------------------------------------
-    const resetButtonRadius = knobRadius * 0.5;
-    //const resetButtonX = 3 * knobSpacing;
-    //const resetButtonY = 2.1 * knobSpacing + menuTopMargin;
-    const resetButtonX = 1 * knobSpacing;
-    const resetButtonY = 3.25 * knobSpacing + menuTopMargin;
-    
+    const resetButtonRadius = knobRadius * 0.4;
+    const resetButtonX = padding - 0.0 * knobRadius;
+    const resetButtonY = menuHeight + padding - 0.65 * knobRadius;
     // Draw reset button
     c.fillStyle = `hsla(60, 80%, 50%, ${menuOpacity})`;
     c.beginPath();
@@ -6313,9 +6749,9 @@ function drawSimMenu() {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.fillStyle = `hsla(0, 0%, 0%, ${0.7 *menuOpacity})`;
-    c.fillText("Reset", resetButtonX, resetButtonY + 1.4 * resetButtonRadius);
+    c.fillText("RESET", resetButtonX + 0.03 * knobRadius, resetButtonY + 0.03 * knobRadius);
     c.fillStyle = `hsla(60, 80%, 90%, ${menuOpacity})`;
-    c.fillText("Reset", resetButtonX, resetButtonY + 1.4 * resetButtonRadius);
+    c.fillText("RESET", resetButtonX, resetButtonY);
   
     // Draw FPS counter in bottom right of menu -------------------------------
     updateFPS();
@@ -6336,10 +6772,10 @@ function drawSimMenu() {
     }
     
     // draw dark heavy background line for FPS text
-    const fpsTextWidth = c.measureText(fpsText).width;
+    //const fpsTextWidth = c.measureText(fpsText).width;
     c.beginPath();
-    c.moveTo(menuWidth + padding - 2.5 * knobRadius, menuHeight + padding - 0.65 * knobRadius);
-    c.lineTo(menuWidth + padding - 0.9 *knobRadius, menuHeight + padding - 0.65 * knobRadius);
+    c.moveTo(-padding + 0.8 * knobRadius, menuHeight + padding - 0.65 * knobRadius);
+    c.lineTo(-padding + 2.4 * knobRadius, menuHeight + padding - 0.65 * knobRadius);
     c.lineWidth = 0.5 * knobRadius;
     c.strokeStyle = `hsla(0, 0%, 0%, ${0.7 * menuOpacity})`;
     c.lineCap = 'round';
@@ -6348,19 +6784,19 @@ function drawSimMenu() {
     // Draw FPS value
     c.font = `${0.4 * knobRadius}px monospace`;
     c.fillStyle = `hsla(${fpsHue}, 90%, 60%, ${menuOpacity})`;
-    c.fillText(fpsText, menuWidth + padding - 1.9 * knobRadius, menuHeight + padding - 0.42 * knobRadius);
+    c.fillText(fpsText, padding - 2.0 * knobRadius, menuHeight + padding - 0.42 * knobRadius);
     
     // Draw 'FPS' label
     c.font = `${0.4 * knobRadius}px monospace`;
     c.fillStyle = `hsla(0, 0%, 80%, ${menuOpacity})`;
-    c.fillText('fps', menuWidth + padding - 1.0 * knobRadius, menuHeight + padding - 0.42 * knobRadius);
+    c.fillText('fps', padding - 1.1 * knobRadius, menuHeight + padding - 0.42 * knobRadius);
 
     // Draw version text in bottom left corner
     c.textAlign = 'left';
     c.textBaseline = 'bottom';
-    c.font = `${0.35 * knobRadius}px monospace`;
+    c.font = `${0.24 * knobRadius}px monospace`;
     c.fillStyle = `hsla(0, 0%, 60%, ${menuOpacity})`;
-    c.fillText('v1.48', -padding + 0.5 * knobRadius, menuHeight + padding - 0.42 * knobRadius);
+    c.fillText('v1.49', padding + 7.8 * knobRadius, menuHeight + padding - 0.15 * knobRadius);
 
     c.restore();
 }
@@ -6387,8 +6823,8 @@ function drawColorMenu() {
     const knobRowHeight = knobRadius * 3;
     const segRadioRowHeight = knobRadius * 3.0 + spacing * 2; // Space for radio buttons, labels, and bottom margin
     const menuWidth = colorWheelRadius * 2 + spacing + sliderWidth + spacing + knobRadius * 2;
-    // Shorter menu when spray tool is active (omit knobs and radio buttons)
-    const menuHeight = spraypaintActive ? spacing * 10 : spacing * 20;
+    // Use animated height for smooth transitions
+    const menuHeight = colorMenuAnimatedHeight;
     const padding = 0.8 * knobRadius;
     
     const cornerRadius = 0.05 * cScale;
@@ -6404,9 +6840,14 @@ function drawColorMenu() {
     c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
     c.closePath();
     
+    // Calculate fill transparency based on menu height (more transparent when shrinking)
+    const fullHeight = spacing * 20;
+    const heightRatio = colorMenuAnimatedHeight / fullHeight; // 0.35 when shrunk, 1.0 when full
+    const fillOpacity = 0.3 + (heightRatio * 0.6); // Range from 0.3 to 0.9
+    
     const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `hsla(210, 0%, 20%, ${0.9 * colorMenuOpacity})`);
-    menuGradient.addColorStop(1, `hsla(210, 0%, 5%, ${0.9 * colorMenuOpacity})`);
+    menuGradient.addColorStop(0, `hsla(210, 0%, 20%, ${fillOpacity * colorMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsla(210, 0%, 5%, ${fillOpacity * colorMenuOpacity})`);
     c.fillStyle = menuGradient;
     c.fill();
     c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
@@ -6748,102 +7189,104 @@ function drawColorMenu() {
     
     c.restore();
     
-    // Draw color preset buttons below the color wheel ---------
-    const buttonRadius = knobRadius * 0.35;
-    const buttonY = colorWheelRadius * 2 + spacing * 1.5;
-    const buttonSpacing = knobRadius * 1.2;
-    // Position so that fourth button centered below lightness slider
-    const lightnessSliderCenterX = lightnessSliderX + sliderWidth / 2;
-    const buttonStartX = lightnessSliderCenterX - buttonSpacing * 3;
-    
-    // Black button
-    c.beginPath();
-    c.arc(buttonStartX, buttonY, buttonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
-    c.fill();
-    c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
-    c.lineWidth = 0.01 * cScale;
-    c.stroke();
-    
-    // Black and white button
-    c.beginPath();
-    c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0.5 * Math.PI, 1.5 * Math.PI);
-    c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
-    c.fill();
-    c.beginPath();
-    c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0.5 * Math.PI, 1.5 * Math.PI, true);
-    c.fillStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
-    c.fill();
-    c.beginPath();
-    c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0, 2 * Math.PI);
-    c.stroke();
-    
-    // White button
-    c.beginPath();
-    c.arc(buttonStartX + buttonSpacing * 2, buttonY, buttonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(0, 0%, 100%, ${colorMenuOpacity})`;
-    c.fill();
-    c.stroke();
+    // Only draw color preset buttons, dye button, and labels when spray tool is not active
+    if (!spraypaintActive) {
+        // Draw color preset buttons below the color wheel ---------
+        const buttonRadius = knobRadius * 0.35;
+        const buttonY = colorWheelRadius * 2 + spacing * 1.5;
+        const buttonSpacing = knobRadius * 1.2;
+        // Position so that fourth button centered below lightness slider
+        const lightnessSliderCenterX = lightnessSliderX + sliderWidth / 2;
+        const buttonStartX = lightnessSliderCenterX - buttonSpacing * 3;
+        
+        // Black button
+        c.beginPath();
+        c.arc(buttonStartX, buttonY, buttonRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.01 * cScale;
+        c.stroke();
+        
+        // Black and white button
+        c.beginPath();
+        c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0.5 * Math.PI, 1.5 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
+        c.fill();
+        c.beginPath();
+        c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0.5 * Math.PI, 1.5 * Math.PI, true);
+        c.fillStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
+        c.fill();
+        c.beginPath();
+        c.arc(buttonStartX + buttonSpacing, buttonY, buttonRadius, 0, 2 * Math.PI);
+        c.stroke();
+        
+        // White button
+        c.beginPath();
+        c.arc(buttonStartX + buttonSpacing * 2, buttonY, buttonRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 100%, ${colorMenuOpacity})`;
+        c.fill();
+        c.stroke();
 
-    // Draw line from paint all button to dye one button
-    c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
-    c.setLineDash([0.02 * cScale, 0.02 * cScale]);
-    c.lineWidth = 0.008 * cScale;
-    c.lineCap = 'round';
-    c.beginPath();
-    c.moveTo(buttonStartX + buttonSpacing * 3, buttonY);
-    const lineRadScale = 0.035 * cScale;
-    const lineB = 1.5;
-    const dropEndY = buttonY + buttonSpacing * 1.0 + lineB * lineRadScale;
-    c.lineTo(buttonStartX + buttonSpacing * 4.5, dropEndY);
-    c.stroke();
-    c.setLineDash([0,0]);
-    
-    // Selected color button - paint all
-    c.beginPath();
-    c.arc(buttonStartX + buttonSpacing * 3, buttonY, buttonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity})`;
-    c.fill();
-    c.stroke();
+        // Draw line from paint all button to dye one button
+        c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
+        c.setLineDash([0.02 * cScale, 0.02 * cScale]);
+        c.lineWidth = 0.008 * cScale;
+        c.lineCap = 'round';
+        c.beginPath();
+        c.moveTo(buttonStartX + buttonSpacing * 3, buttonY);
+        const lineRadScale = 0.035 * cScale;
+        const lineB = 1.5;
+        const dropEndY = buttonY + buttonSpacing * 1.0 + lineB * lineRadScale;
+        c.lineTo(buttonStartX + buttonSpacing * 4.5, dropEndY);
+        c.stroke();
+        c.setLineDash([0,0]);
+        
+        // Selected color button - paint all
+        c.beginPath();
+        c.arc(buttonStartX + buttonSpacing * 3, buttonY, buttonRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity})`;
+        c.fill();
+        c.stroke();
 
-    // Selected color button - dye one (raindrop icon)
-    const dropX = buttonStartX + buttonSpacing * 4.75;
-    const dropY = buttonY + buttonSpacing * 1.0;
-    
-    c.save();
-    c.translate(dropX, dropY);
-    const radScale = 0.035 * cScale;
+        // Selected color button - dye one (raindrop icon)
+        const dropX = buttonStartX + buttonSpacing * 4.75;
+        const dropY = buttonY + buttonSpacing * 1.0;
+        
+        c.save();
+        c.translate(dropX, dropY);
+        const radScale = 0.035 * cScale;
 
-    // Draw airfoil  -----------
-    const numPoints = 24; 
-    const a = 0.3;
-    const b = 1.5;
-    const pivotOffsetX = 0;
-    const pivotOffsetY = -b * radScale;  // Centroid of bulb head
-    c.beginPath();  
-    for (let i = 0; i <= numPoints; i++) {
-        const t = Math.PI / 2 + (i / numPoints) * (2 * Math.PI);
-        const x = (2 * a * Math.cos(t) - a * Math.sin(2 * t)) * radScale;
-        const y = b * Math.sin(t) * radScale;
-        if (i === 0) {
-            c.moveTo(x - pivotOffsetX, -y - pivotOffsetY);
-        } else {
-            c.lineTo(x - pivotOffsetX, -y - pivotOffsetY);
-        }
-    }  
-    c.closePath();
-    
-    // Create 3D gradient with highlight and shadow
-    const gradient = c.createRadialGradient(
-        -a * radScale * 0.8,
-        b * radScale * 0.8,
-        0,
-        0,
-        0,
-        b * radScale * 2.5);
-    
-    // Bright highlight (top-left)
-    gradient.addColorStop(0, `hsla(${selectedHue}, ${Math.max(0, selectedSaturation - 30)}%, ${Math.min(100, selectedLightness + 45)}%, ${colorMenuOpacity})`);
+        // Draw airfoil  -----------
+        const numPoints = 24; 
+        const a = 0.3;
+        const b = 1.5;
+        const pivotOffsetX = 0;
+        const pivotOffsetY = -b * radScale;  // Centroid of bulb head
+        c.beginPath();  
+        for (let i = 0; i <= numPoints; i++) {
+            const t = Math.PI / 2 + (i / numPoints) * (2 * Math.PI);
+            const x = (2 * a * Math.cos(t) - a * Math.sin(2 * t)) * radScale;
+            const y = b * Math.sin(t) * radScale;
+            if (i === 0) {
+                c.moveTo(x - pivotOffsetX, -y - pivotOffsetY);
+            } else {
+                c.lineTo(x - pivotOffsetX, -y - pivotOffsetY);
+            }
+        }  
+        c.closePath();
+        
+        // Create 3D gradient with highlight and shadow
+        const gradient = c.createRadialGradient(
+            -a * radScale * 0.8,
+            b * radScale * 0.8,
+            0,
+            0,
+            0,
+            b * radScale * 2.5);
+        
+        // Bright highlight (top-left)
+        gradient.addColorStop(0, `hsla(${selectedHue}, ${Math.max(0, selectedSaturation - 30)}%, ${Math.min(100, selectedLightness + 45)}%, ${colorMenuOpacity})`);
     // Mid-tone (user color)
     gradient.addColorStop(0.3, `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity * 0.95})`);
     // Darker mid
@@ -6886,12 +7329,15 @@ function drawColorMenu() {
     c.beginPath();
     c.arc(buttonStartX + buttonSpacing * 4, buttonY, buttonRadius, 0, 2 * Math.PI);
     // use saved color wheel image as button fill
+    c.save();
+    c.globalAlpha = colorMenuOpacity;
     c.drawImage(
         colorWheelCanvas, 
         0, 0, 
         colorWheelCanvas.width, colorWheelCanvas.height,
         buttonStartX + buttonSpacing * 4 - buttonRadius, buttonY - buttonRadius,
         buttonRadius * 2, buttonRadius * 2);
+    c.restore();
     c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
     c.stroke();
     
@@ -6911,6 +7357,7 @@ function drawColorMenu() {
     c.fill();
     c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
     c.stroke();
+    } // End of if (!spraypaintActive)
 
     // Only draw knobs and segregation buttons when spray tool is not active
     if (!spraypaintActive) {
@@ -7152,12 +7599,14 @@ function resetParameters() {
                 const hue = 0;
                 
                 const newBoid = new BOID(pos, vel, hue, false, false);
-                newBoid.arrow = selectedBoidType === 0;
-                newBoid.circle = selectedBoidType === 1;
-                newBoid.glowBoid = selectedBoidType === 2;
-                newBoid.square = selectedBoidType === 3;
-                newBoid.airfoil = selectedBoidType === 4;
-                newBoid.flappy = selectedBoidType === 5;
+                newBoid.triangleBoid = selectedBoidType === 0;
+                newBoid.arrow = selectedBoidType === 1;
+                newBoid.flappy = selectedBoidType === 2;
+                newBoid.circle = selectedBoidType === 3;
+                newBoid.ellipseBoid = selectedBoidType === 4;
+                newBoid.square = selectedBoidType === 5;
+                newBoid.airfoil = selectedBoidType === 6;
+                newBoid.glowBoid = selectedBoidType === 7;
                 
                 // Insert before the last 2 special boids
                 Boids.splice(Boids.length - 2, 0, newBoid);
@@ -8329,8 +8778,6 @@ function drawDrawMenu() {
     const magnetButtonY = gridStartY;
     
     // Draw magnet icon, adapted from the code below:
-    
-    
     // only draw glow when magnet is active
     if (magnetActive) {
         poleGlowTicker += 0.05;
@@ -8571,7 +9018,9 @@ function drawDrawMenu() {
     c.beginPath();
     c.arc(radiusKnobX, radiusKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * radiusNormalizedValue);
     c.lineWidth = 0.02 * cScale;
+    c.lineCap = 'round';
     c.stroke();
+    c.lineCap = 'butt';
     
     // Draw needle
     const radiusPointerAngle = meterStart + fullMeterSweep * radiusNormalizedValue;
@@ -8922,6 +9371,18 @@ function simulateEverything() {
         colorMenuOpacity = Math.max(0, colorMenuOpacity - menuFadeSpeed * deltaT);
     }
     
+    // Animate color menu height when spray tool is toggled
+    const knobRadius = 0.1 * cScale;
+    const spacing = knobRadius * 0.5;
+    const targetHeight = spraypaintActive ? spacing * 7 : spacing * 20;
+    const heightTransitionSpeed = 15; // Speed of height transition
+    if (Math.abs(colorMenuAnimatedHeight - targetHeight) > 0.1) {
+        const heightDelta = (targetHeight - colorMenuAnimatedHeight) * heightTransitionSpeed * deltaT;
+        colorMenuAnimatedHeight += heightDelta;
+    } else {
+        colorMenuAnimatedHeight = targetHeight;
+    }
+    
     // Update sky menu opacity for fade in/out
     if (skyMenuVisible && skyMenuOpacity < 1) {
         skyMenuOpacity = Math.min(1, skyMenuOpacity + menuFadeSpeed * deltaT);
@@ -8929,10 +9390,10 @@ function simulateEverything() {
         skyMenuOpacity = Math.max(0, skyMenuOpacity - menuFadeSpeed * deltaT);
     }
     
-    // Update draw menu opacity for fade in/out
-    if (drawMenuVisible && drawMenuOpacity < 1) {
+    // Update draw menu opacity for fade in/out (hide when spray tool is active)
+    if (drawMenuVisible && drawMenuOpacity < 1 && !spraypaintActive) {
         drawMenuOpacity = Math.min(1, drawMenuOpacity + menuFadeSpeed * deltaT);
-    } else if (!drawMenuVisible && drawMenuOpacity > 0) {
+    } else if ((!drawMenuVisible || spraypaintActive) && drawMenuOpacity > 0) {
         drawMenuOpacity = Math.max(0, drawMenuOpacity - menuFadeSpeed * deltaT);
     }
     
@@ -9138,6 +9599,14 @@ function simulateEverything() {
                     balloon.popping = true;
                     balloon.popStartTime = performance.now();
                     spookBoids(balloon.pos, 5 * balloon.radius);
+                    
+                    // Increase sadness of foreground clouds when balloons are popped
+                    for (let cloud of ForegroundCloud) {
+                        if (cloud.sadness < 10) {
+                            cloud.sadness++;
+                            cloud.renderToCanvas();
+                        }
+                    }
                 }
             }
         }
@@ -9266,17 +9735,18 @@ function drawEverything() {
         if (boid.dyedBoid) {
             c.beginPath();
             c.arc(cX(boid.pos), cY(boid.pos), boidProps.visualRange * cScale, 0, 2 * Math.PI);
-            c.fillStyle = 'hsla(0, 0%, 0%, 0.3)';
+            //c.fillStyle = 'hsla(0, 0%, 0%, 0.3)';
+            c.fillStyle = `hsla(${boid.hue}, ${boid.saturation}%, 30%, 0.3)`;
             c.fill();
             
             // Also draw a colored ring around it
-            c.beginPath();
-            c.arc(cX(boid.pos), cY(boid.pos), boidProps.visualRange * cScale * 0.95, 0, 2 * Math.PI);
+            //c.beginPath();
+            //c.arc(cX(boid.pos), cY(boid.pos), boidProps.visualRange * cScale * 0.95, 0, 2 * Math.PI);
             c.strokeStyle = `hsla(${boid.hue}, ${boid.saturation}%, ${boid.lightness}%, 0.6)`;
             c.lineWidth = 2;
             c.stroke();
         }
-        
+
         boid.draw();
         
         // Draw spray particles emanating from dyed boid
@@ -9326,8 +9796,15 @@ function drawEverything() {
         for (let cloud of ForegroundCloud) {
             cloud.draw();
             if (cloud.isRaining) {
-                // Rain rate reduces as cheerfulness increases (0% cheerful = always rain, 100% cheerful = never rain)
-                const rainChance = 1.0 - (cloud.cheerfulness / 100);
+                // Rain intensity based on sadness (5 sadness = light rain, 10 sadness = full rain)
+                // and cheerfulness (0% cheerful = full rain, 100% cheerful = no rain)
+                let rainIntensity = 1.0; // Default to full rain
+                if (cloud.sadness >= 5) {
+                    // Sadness 5-10 maps to intensity 0.5-1.0
+                    rainIntensity = 0.5 + ((cloud.sadness - 5) / 5) * 0.5;
+                }
+                // Reduce rain as cheerfulness increases
+                const rainChance = rainIntensity * (1.0 - (cloud.cheerfulness / 100));
                 if (Math.random() < rainChance) {
                     makeItRain(cloud);
                 }
@@ -9853,12 +10330,14 @@ function warmupSequence() {
                     
                     // Create new boid and set type based on selectedBoidType
                     const newBoid = new BOID(pos, vel, hue, false, false);
-                    newBoid.arrow = selectedBoidType === 0;
-                    newBoid.circle = selectedBoidType === 1;
-                    newBoid.glowBoid = selectedBoidType === 2;
-                    newBoid.square = selectedBoidType === 3;
-                    newBoid.airfoil = selectedBoidType === 4;
-                    newBoid.flappy = selectedBoidType === 5;
+                    newBoid.triangleBoid = selectedBoidType === 0;
+                    newBoid.arrow = selectedBoidType === 1;
+                    newBoid.flappy = selectedBoidType === 2;
+                    newBoid.circle = selectedBoidType === 3;
+                    newBoid.ellipseBoid = selectedBoidType === 4;
+                    newBoid.square = selectedBoidType === 5;
+                    newBoid.airfoil = selectedBoidType === 6;
+                    newBoid.glowBoid = selectedBoidType === 7;
                     
                     // Insert before the last 2 special boids
                     Boids.splice(Boids.length - 2, 0, newBoid);
