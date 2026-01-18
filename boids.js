@@ -1,5 +1,5 @@
 /*
-B0IDS 1.49 :: emergent flocking behavior ::
+B0IDS 1.50 :: emergent flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -17,6 +17,11 @@ canvas.height = height;
 
 simMinWidth = 2.0;
 cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
+
+// Master menu size control - limit maximum menu scale
+const maxMenuScale = 600; // Maximum pixel size reference for menus
+const menuScale = Math.min(cScale, maxMenuScale / simMinWidth);
+
 simWidth = canvas.width / cScale;
 simHeight = canvas.height / cScale;
 
@@ -58,6 +63,7 @@ let savedSimMenuVisible = true;
 let savedPaintMenuVisible = true;
 let savedSkyMenuVisible = true;
 let savedDrawMenuVisible = true;
+let savedStylingMenuVisible = true;
 
 // Menu visibility state
 let menuVisible = false;
@@ -77,18 +83,27 @@ let menuZOrder = 3;
 let colorMenuZOrder = 2;
 let skyMenuZOrder = 0;
 let drawMenuZOrder = 1;
+let stylingMenuZOrder = 4;
 
 // Menu position
 let menuX = 0.1; // World coordinates
-let menuY = simHeight - 0.4; // World coordinates
+let menuY = simHeight - 0.45; // World coordinates
 
 // Sky menu position
-let skyMenuX = 0.6; // World coordinates
+let skyMenuX = 0.35; // World coordinates
 let skyMenuY = simHeight - 0.3; // World coordinates
 
 // Draw menu position
-let drawMenuX = 1.5; // World coordinates
-let drawMenuY = simHeight - 0.5; // World coordinates
+let drawMenuX = 1.0; // World coordinates
+let drawMenuY = simHeight - 0.45; // World coordinates
+
+// Color menu position
+let colorMenuX = 1.0; // World coordinates
+let colorMenuY = simHeight - 0.65; // World coordinates
+
+// Styling menu position
+let stylingMenuX = 0.5; // World coordinates
+let stylingMenuY = simHeight - 0.6; // World coordinates
 
 // Menu knob dragging state
 let draggedKnob = null; // Index of the knob being dragged
@@ -105,6 +120,13 @@ let menuDragStartY = 0;
 let menuStartX = 0;
 let menuStartY = 0;
 
+// Styling menu dragging state
+let isDraggingStylingMenu = false;
+let stylingMenuDragStartX = 0;
+let stylingMenuDragStartY = 0;
+let stylingMenuDragInitialX = 0;
+let stylingMenuDragInitialY = 0;
+
 // Boid type selection (0=arrows, 1=circles, 2=airfoils, 3=birds, 4=none)
 let selectedBoidType = 1; // Default to Arrows
 let previousBoidType = 1; // Remembers last type before None was selected
@@ -116,14 +138,14 @@ let tailColorMode = 0; // 0 = none, 1 = black, 2 = white, 3 = selected hue, 4 = 
 let boidTraceMode = 2; // 0=none, 1=dark trace, 2=colored trace, 3=white trace
 let boidFillEnabled = true; // Controls fill operations
 
+// Styling menu visibility state
+let stylingMenuVisible = false;
+let stylingMenuOpacity = 0; 
+
 // Color menu visibility state
 let colorMenuVisible = false;
 let colorMenuOpacity = 0;
 let colorMenuAnimatedHeight = 0; // Animated height for smooth transitions
-
-// Color menu position
-let colorMenuX = 1.6; // World coordinates
-let colorMenuY = simHeight - 0.77; // World coordinates
 
 // Color menu dragging state
 let isDraggingColorMenu = false;
@@ -339,16 +361,19 @@ mousedownHandler = function(e) {
             savedPaintMenuVisible = colorMenuVisible;
             savedSkyMenuVisible = skyMenuVisible;
             savedDrawMenuVisible = drawMenuVisible;
+            savedStylingMenuVisible = stylingMenuVisible;
             menuVisible = false;
             colorMenuVisible = false;
             skyMenuVisible = false;
             drawMenuVisible = false;
+            stylingMenuVisible = false;
         } else {
             // Opening main menu - restore saved submenu visibility states
             menuVisible = savedSimMenuVisible;
             colorMenuVisible = savedPaintMenuVisible;
             skyMenuVisible = savedSkyMenuVisible;
             drawMenuVisible = savedDrawMenuVisible;
+            stylingMenuVisible = savedStylingMenuVisible;
         }
         mainMenuVisible = !mainMenuVisible;
         return;
@@ -358,14 +383,14 @@ mousedownHandler = function(e) {
     if (mainMenuVisible && mainMenuOpacity > 0.5) {
         const ellipsisX = ellipsisWorldX * cScale;
         const ellipsisY = canvas.height - ellipsisWorldY * cScale;
-        const itemHeight = 0.12 * cScale;
-        const itemWidth = 0.24 * cScale;
-        const padding = 0.02 * cScale;
+        const itemHeight = 0.12 * menuScale;
+        const itemWidth = 0.24 * menuScale;
+        const padding = 0.02 * menuScale;
         const menuHeight = itemHeight + (padding * 2);
-        const menuWidth = (itemWidth * 4) + (padding * 5);
-        const menuBaseX = ellipsisX + 0.08 * cScale;
-        const menuX = menuBaseX + mainMenuXOffset * cScale;
-        const menuY = ellipsisY - 0.01 * cScale;
+        const menuWidth = (itemWidth * 5) + (padding * 6);
+        const menuBaseX = ellipsisX + 0.08 * menuScale;
+        const menuX = menuBaseX + mainMenuXOffset * menuScale;
+        const menuY = ellipsisY - 0.01 * menuScale;
         
         const clickCanvasX = mouseX * cScale;
         const clickCanvasY = canvas.height - mouseY * cScale;
@@ -378,30 +403,36 @@ mousedownHandler = function(e) {
             const relativeX = clickCanvasX - menuX - padding;
             const itemIndex = Math.floor(relativeX / (itemWidth + padding));
             
-            if (itemIndex >= 0 && itemIndex < 4) {
+            if (itemIndex >= 0 && itemIndex < 5) {
                 // Toggle the corresponding menu
                 if (itemIndex === 0) {
                     menuVisible = !menuVisible;
                     if (menuVisible) {
-                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder);
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
                         menuZOrder = maxZ + 1;
                     }
                 } else if (itemIndex === 1) {
-                    skyMenuVisible = !skyMenuVisible;
-                    if (skyMenuVisible) {
-                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder);
-                        skyMenuZOrder = maxZ + 1;
+                    stylingMenuVisible = !stylingMenuVisible;
+                    if (stylingMenuVisible) {
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
+                        stylingMenuZOrder = maxZ + 1;
                     }
                 } else if (itemIndex === 2) {
-                    colorMenuVisible = !colorMenuVisible;
-                    if (colorMenuVisible) {
-                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder);
-                        colorMenuZOrder = maxZ + 1;
+                    skyMenuVisible = !skyMenuVisible;
+                    if (skyMenuVisible) {
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
+                        skyMenuZOrder = maxZ + 1;
                     }
                 } else if (itemIndex === 3) {
+                    colorMenuVisible = !colorMenuVisible;
+                    if (colorMenuVisible) {
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
+                        colorMenuZOrder = maxZ + 1;
+                    }
+                } else if (itemIndex === 4) {
                     drawMenuVisible = !drawMenuVisible;
                     if (drawMenuVisible) {
-                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder);
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
                         drawMenuZOrder = maxZ + 1;
                     }
                 }
@@ -430,6 +461,7 @@ mousedownHandler = function(e) {
     // Check menus in reverse z-order (highest priority first)
     const menuChecks = [
         {check: checkDrawMenuClick, z: drawMenuZOrder, name: 'draw'},
+        {check: checkStylingMenuClick, z: stylingMenuZOrder, name: 'styling'},
         {check: checkSkyMenuClick, z: skyMenuZOrder, name: 'sky'},
         {check: checkColorMenuClick, z: colorMenuZOrder, name: 'color'},
         {check: checkSimMenuClick, z: menuZOrder, name: 'sim'}
@@ -439,19 +471,205 @@ mousedownHandler = function(e) {
     for (let menuCheck of menuChecks) {
         if (menuCheck.check()) {
             // Bring this menu to front
-            const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder);
+            const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
             if (menuCheck.name === 'sim') menuZOrder = maxZ + 1;
             else if (menuCheck.name === 'color') colorMenuZOrder = maxZ + 1;
             else if (menuCheck.name === 'sky') skyMenuZOrder = maxZ + 1;
             else if (menuCheck.name === 'draw') drawMenuZOrder = maxZ + 1;
+            else if (menuCheck.name === 'styling') stylingMenuZOrder = maxZ + 1;
             return; // Stop checking other menus
         }
+    }
+    
+    // Helper function for styling menu clicks
+    function checkStylingMenuClick() {
+        if (!stylingMenuVisible || stylingMenuOpacity <= 0.5) return false;
+        
+        const knobRadius = 0.1 * menuScale;
+        const knobSpacing = knobRadius * 3;
+        const menuWidth = 4 * knobSpacing;
+        const menuHeight = 2.25 * knobSpacing;
+        const padding = 0.4 * knobRadius;
+        const menuTopMargin = 0.2 * knobRadius;
+        const menuUpperLeftX = stylingMenuX * cScale;
+        const menuUpperLeftY = canvas.height - stylingMenuY * cScale;
+        const menuOriginX = menuUpperLeftX + knobSpacing;
+        const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+        
+        const clickCanvasX = mouseX * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        
+        // Check close icon (upper left corner - round button)
+        const closeIconRadius = knobRadius * 0.25;
+        const closeIconX = menuOriginX - padding + closeIconRadius + 0.2 * knobRadius;
+        const closeIconY = menuOriginY - padding + closeIconRadius + 0.2 * knobRadius;
+        const cdx = clickCanvasX - closeIconX;
+        const cdy = clickCanvasY - closeIconY;
+        
+        if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+            stylingMenuVisible = false;
+            return true;
+        }
+        
+        // Check tail style radio buttons (horizontal row below knobs) - check these first to avoid knob interference
+        const tailColorRadioRadius = knobRadius * 0.25;
+        const tailButtonRow = 1;
+        const tailButtonsCenterX = 1.0;
+        
+        for (let i = 0; i < 5; i++) {
+            const buttonX = menuOriginX + tailButtonsCenterX * knobSpacing + (i - 2) * knobRadius * 1.0;
+            const buttonY = menuOriginY + tailButtonRow * knobSpacing + knobRadius * 1.75 + menuTopMargin;
+            const rdx = clickCanvasX - buttonX;
+            const rdy = clickCanvasY - buttonY;
+            
+            if (rdx * rdx + rdy * rdy < tailColorRadioRadius * tailColorRadioRadius) {
+                tailColorMode = i;
+                return true;
+            }
+        }
+        
+        // Check knobs (Tail Length at col 0, Tail Width at col 1, both in row 0)
+        for (let knob = 0; knob < 2; knob++) {
+            const col = knob % 2;
+            const row = 0;
+            const knobCanvasX = menuOriginX + (col + 0.5) * knobSpacing;
+            const knobCanvasY = menuOriginY + (row + 0.5) * knobSpacing + menuTopMargin;
+            
+            const kdx = clickCanvasX - knobCanvasX;
+            const kdy = clickCanvasY - knobCanvasY;
+            if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
+                draggedKnob = knob === 0 ? 9 : 10; // Tail Length = 9, Tail Width = 10
+                attachMouseMove();
+                dragStartMouseX = mouseX;
+                dragStartMouseY = mouseY;
+                
+                const menuItems = [boidProps.tailLength, boidProps.tailWidth];
+                dragStartValue = menuItems[knob];
+                return true;
+            }
+        }
+        
+        // Check trace radio buttons (vertical column on the right)
+        const traceButtonRadius = knobRadius * 0.25;
+        const traceCol = 3.5;
+        const traceButtonY1 = menuOriginY + (0 * knobSpacing) + (0.85 * knobRadius) + menuTopMargin;
+        const traceButtonY2 = traceButtonY1 + 0.8 * knobRadius;
+        const traceButtonY3 = traceButtonY2 + 0.8 * knobRadius;
+        const traceButtonY4 = traceButtonY3 + 0.8 * knobRadius;
+        const traceButtonX = menuOriginX + traceCol * knobSpacing - 0.5 * knobRadius;
+        
+        // Black button
+        let tdx = clickCanvasX - traceButtonX;
+        let tdy = clickCanvasY - traceButtonY1;
+        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
+            boidTraceMode = 1;
+            return true;
+        }
+        
+        // White button
+        tdx = clickCanvasX - traceButtonX;
+        tdy = clickCanvasY - traceButtonY2;
+        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
+            boidTraceMode = 3;
+            return true;
+        }
+        
+        // Color button
+        tdx = clickCanvasX - traceButtonX;
+        tdy = clickCanvasY - traceButtonY3;
+        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
+            boidTraceMode = 2;
+            return true;
+        }
+        
+        // Trace None button
+        tdx = clickCanvasX - traceButtonX;
+        tdy = clickCanvasY - traceButtonY4;
+        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
+            boidTraceMode = 0;
+            return true;
+        }
+        
+        // Check fill radio buttons (below trace buttons)
+        const fillButtonY1 = traceButtonY4 + 1.0 * knobRadius;
+        const fillButtonY2 = fillButtonY1 + 0.8 * knobRadius;
+        
+        // Fill button
+        tdx = clickCanvasX - traceButtonX;
+        tdy = clickCanvasY - fillButtonY1;
+        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
+            boidFillEnabled = true;
+            return true;
+        }
+        
+        // Fill None button
+        tdx = clickCanvasX - traceButtonX;
+        tdy = clickCanvasY - fillButtonY2;
+        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
+            boidFillEnabled = false;
+            return true;
+        }
+        
+        // Check scrollable boid type list click
+        const listCol = 2.5;
+        const listX = menuOriginX + listCol * knobSpacing - 1.15 * knobRadius;
+        const bracketTopY = traceButtonY1 - 0.4 * knobRadius;
+        const listY = bracketTopY;
+        const fillBracketBottomY = fillButtonY2 + 0.4 * knobRadius;
+        const listWidth = knobRadius * 2.3;
+        const listHeight = fillBracketBottomY - bracketTopY;
+        const itemHeight = knobRadius * 0.72;
+        
+        if (clickCanvasX >= listX && clickCanvasX <= listX + listWidth &&
+            clickCanvasY >= listY && clickCanvasY <= listY + listHeight) {
+            const relativeY = clickCanvasY - listY + boidTypeScrollOffset;
+            const clickedIndex = Math.floor(relativeY / itemHeight);
+            
+            if (clickedIndex >= 0 && clickedIndex < boidTypeLabels.length) {
+                selectedBoidType = clickedIndex;
+                if (clickedIndex === 0) {
+                    doTriangleBoids();
+                } else if (clickedIndex === 1) {
+                    doArrowBoids();
+                } else if (clickedIndex === 2) {
+                    doFlappyBoids();
+                } else if (clickedIndex === 3) {
+                    doCircleBoids();
+                } else if (clickedIndex === 4) {
+                    doEllipseBoids();
+                } else if (clickedIndex === 5) {
+                    doSquareBoids();
+                } else if (clickedIndex === 6) {
+                    doAirfoilBoids();
+                } else if (clickedIndex === 7) {
+                    doGlowBoids();
+                }
+                return true;
+            }
+        }
+        
+        // Check if menu background was clicked (for dragging entire menu)
+        const clickX = mouseX * cScale;
+        const clickY = canvas.height - mouseY * cScale;
+        
+        if (clickX >= menuOriginX - padding && clickX <= menuOriginX + menuWidth + padding &&
+            clickY >= menuOriginY - padding && clickY <= menuOriginY + menuHeight + padding) {
+            isDraggingStylingMenu = true;
+            attachMouseMove();
+            stylingMenuDragStartX = mouseX;
+            stylingMenuDragStartY = mouseY;
+            stylingMenuDragInitialX = stylingMenuX;
+            stylingMenuDragInitialY = stylingMenuY;
+            return true;
+        }
+        
+        return false;
     }
     
     // Helper function for color menu clicks
     function checkColorMenuClick() {
         if (!colorMenuVisible || colorMenuOpacity <= 0.5) return false;
-        const knobRadius = 0.1 * cScale;
+        const knobRadius = 0.1 * menuScale;
         const colorWheelRadius = knobRadius * 1.7;
         const sliderWidth = knobRadius * 0.6;
         const sliderHeight = colorWheelRadius * 2;
@@ -529,10 +747,12 @@ mousedownHandler = function(e) {
                 // Hide other menus
                 menuVisible = false;
                 skyMenuVisible = false;
+                stylingMenuVisible = false;
             } else {
                 // Restore menu states when paint tool is deactivated
                 menuVisible = menuVisibleBeforePaint;
                 skyMenuVisible = skyMenuVisibleBeforePaint;
+                stylingMenuVisible = stylingMenuVisibleBeforePaint;
             }
             updateMouseListeners();
             return true;
@@ -639,17 +859,20 @@ mousedownHandler = function(e) {
                 skyMenuVisibleBeforePaint = skyMenuVisible;
                 drawMenuVisibleBeforePaint = drawMenuVisible;
                 colorMenuVisibleBeforePaint = colorMenuVisible;
+                stylingMenuVisibleBeforePaint = stylingMenuVisible;
                 // Hide all menus
                 menuVisible = false;
                 skyMenuVisible = false;
                 drawMenuVisible = false;
                 colorMenuVisible = false;
+                stylingMenuVisible = false;
             } else {
                 // Restore menu states when dye tool is deactivated
                 menuVisible = menuVisibleBeforePaint;
                 skyMenuVisible = skyMenuVisibleBeforePaint;
                 drawMenuVisible = drawMenuVisibleBeforePaint;
                 colorMenuVisible = colorMenuVisibleBeforePaint;
+                stylingMenuVisible = stylingMenuVisibleBeforePaint;
             }
             updateMouseListeners();
             // Ensure cursor position is updated immediately for smooth transition
@@ -791,11 +1014,11 @@ mousedownHandler = function(e) {
     // Helper function for sim menu clicks
     function checkSimMenuClick() {
         if (!menuVisible || menuOpacity <= 0.5) return false;
-        const knobRadius = 0.1 * cScale;
+        const knobRadius = 0.1 * menuScale;
         const knobSpacing = knobRadius * 3;
         const menuTopMargin = 0.2 * knobRadius; // Must match the margin in drawSimMenu
-        const menuWidth = knobSpacing * 3;
-        const menuHeight = knobSpacing * 2 + knobRadius * 3.5;
+        const menuWidth = knobSpacing * 2;
+        const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
         const padding = 1.7 * knobRadius;
         const menuUpperLeftX = menuX * cScale;
         const menuUpperLeftY = (canvas.height - menuY * cScale);
@@ -819,11 +1042,13 @@ mousedownHandler = function(e) {
         }
         
         // Check individual knobs first
-        for (let knob = 0; knob < 11; knob++) {
+        // Display order: numBoids, size, visual, rule1, rule2, rule3, speed, confinement
+        const displayOrder = [0, 1, 2, 5, 6, 7, 3, 8];
+        for (let displayPos = 0; displayPos < displayOrder.length; displayPos++) {
+            const knob = displayOrder[displayPos];
             if (knob === 4) continue; // Skip removed knob
-            const layoutIndex = knob > 4 ? knob - 1 : knob;
-            const row = Math.floor(layoutIndex / 4);
-            const col = layoutIndex % 4;
+            const row = Math.floor(displayPos / 3);
+            const col = displayPos % 3;
             const knobCanvasX = menuOriginX + col * knobSpacing;
             const knobCanvasY = menuOriginY + row * knobSpacing + menuTopMargin;
             
@@ -846,23 +1071,6 @@ mousedownHandler = function(e) {
             }
         }
         
-        // Check tail color radio buttons (below tail length knob)
-        const tailColorRadioRadius = knobRadius * 0.25;
-        const tailKnobRow = 2;
-        const tailButtonsCenterX = 0.5; // Center between columns 0 and 1
-        
-        for (let i = 0; i < 5; i++) {
-            const buttonX = menuOriginX + tailButtonsCenterX * knobSpacing + (i - 2) * knobRadius * 1.0;
-            const buttonY = menuOriginY + tailKnobRow * knobSpacing + knobRadius * 2.9 + menuTopMargin;
-            const rdx = clickCanvasX - buttonX;
-            const rdy = clickCanvasY - buttonY;
-            
-            if (rdx * rdx + rdy * rdy < tailColorRadioRadius * tailColorRadioRadius) {
-                tailColorMode = i;
-                return true;
-            }
-        }
-        
         // Check radio buttons (vertically stacked in column 2)
         const radioButtonRadius = knobRadius * 0.25;
         const radioCol = 2;
@@ -879,105 +1087,6 @@ mousedownHandler = function(e) {
             resetParameters();
             return true;
         }
-        
-        // Check trace/fill toggle buttons (4th column below confinement)
-        const traceButtonRadius = knobRadius * 0.25;
-        const traceCol = 3;
-        const traceButtonY1 = menuOriginY + (2 * knobSpacing) - (0.6 * knobRadius) + menuTopMargin;
-        const traceButtonY2 = traceButtonY1 + 0.8 * knobRadius;
-        const traceButtonY3 = traceButtonY2 + 0.8 * knobRadius;
-        const traceButtonY4 = traceButtonY3 + 0.8 * knobRadius;
-        const fillButtonY1 = traceButtonY4 + 1.0 * knobRadius;
-        const fillButtonY2 = fillButtonY1 + 0.8 * knobRadius;
-        const traceButtonX = menuOriginX + traceCol * knobSpacing - 0.5 * knobRadius;
-        
-        // Black button
-        let tdx = clickCanvasX - traceButtonX;
-        let tdy = clickCanvasY - traceButtonY1;
-        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
-            boidTraceMode = 1;
-            return true;
-        }
-        
-        // White button
-        tdx = clickCanvasX - traceButtonX;
-        tdy = clickCanvasY - traceButtonY2;
-        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
-            boidTraceMode = 3;
-            return true;
-        }
-        
-        // Color button
-        tdx = clickCanvasX - traceButtonX;
-        tdy = clickCanvasY - traceButtonY3;
-        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
-            boidTraceMode = 2;
-            return true;
-        }
-        
-        // Trace None button
-        tdx = clickCanvasX - traceButtonX;
-        tdy = clickCanvasY - traceButtonY4;
-        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
-            boidTraceMode = 0;
-            return true;
-        }
-        
-        // Fill button
-        tdx = clickCanvasX - traceButtonX;
-        tdy = clickCanvasY - fillButtonY1;
-        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
-            boidFillEnabled = true;
-            return true;
-        }
-        
-        // Fill None button
-        tdx = clickCanvasX - traceButtonX;
-        tdy = clickCanvasY - fillButtonY2;
-        if (tdx * tdx + tdy * tdy < traceButtonRadius * traceButtonRadius) {
-            boidFillEnabled = false;
-            return true;
-        }
-        
-        // Check scrollable boid type list click
-        const listCol = 2;
-        const listX = menuOriginX + listCol * knobSpacing - 1.15 * knobRadius;
-        const listTitleY = menuOriginY + (2 * knobSpacing) - (2.0 * knobRadius) + menuTopMargin;
-        const listY = listTitleY + knobRadius * 0.96;
-        const listWidth = knobRadius * 2.3;
-        const listHeight = knobRadius * 5.04;
-        const itemHeight = knobRadius * 0.72;
-        
-        if (clickCanvasX >= listX && clickCanvasX <= listX + listWidth &&
-            clickCanvasY >= listY && clickCanvasY <= listY + listHeight) {
-            // Calculate which item was clicked
-            const relativeY = clickCanvasY - listY + boidTypeScrollOffset;
-            const clickedIndex = Math.floor(relativeY / itemHeight);
-            
-            if (clickedIndex >= 0 && clickedIndex < boidTypeLabels.length) {
-                selectedBoidType = clickedIndex;
-                // Call the appropriate function
-                if (clickedIndex === 0) {
-                    doTriangleBoids();
-                } else if (clickedIndex === 1) {
-                    doArrowBoids();
-                } else if (clickedIndex === 2) {
-                    doFlappyBoids();
-                } else if (clickedIndex === 3) {
-                    doCircleBoids();
-                } else if (clickedIndex === 4) {
-                    doEllipseBoids();
-                } else if (clickedIndex === 5) {
-                    doSquareBoids();
-                } else if (clickedIndex === 6) {
-                    doAirfoilBoids();
-                } else if (clickedIndex === 7) {
-                    doGlowBoids();
-                }
-                return true;
-            }
-        }
-
         
         // Check if menu background was clicked (for dragging entire menu)
         const clickX = mouseX * cScale;
@@ -1001,7 +1110,7 @@ mousedownHandler = function(e) {
     function checkDrawMenuClick() {
         if (!drawMenuVisible || drawMenuOpacity <= 0.5) return false;
         
-        const knobRadius = 0.1 * cScale;
+        const knobRadius = 0.1 * menuScale;
         const knobSpacing = knobRadius * 3;
         const menuWidth = knobSpacing * 2;
         const menuHeight = knobSpacing * 1.5;
@@ -1037,7 +1146,7 @@ mousedownHandler = function(e) {
         
         // Check magnet toggle button (row 0, col 0)
         // Magnet visual size: 0.06 * cScale radius, extends vertically from -1.5 to +0.1 * iconRadius
-        const magnetIconRadius = 0.06 * cScale;
+        const magnetIconRadius = 0.04 * menuScale;
         const magnetClickRadius = magnetIconRadius * 1.6; // Match visual extent
         const magnetCol = 0;
         const magnetRow = 0;
@@ -1110,13 +1219,15 @@ mousedownHandler = function(e) {
                 drawMenu: drawMenuVisible,
                 colorMenu: colorMenuVisible,
                 skyMenu: skyMenuVisible,
-                simMenu: menuVisible
+                simMenu: menuVisible,
+                stylingMenu: stylingMenuVisible
             };
             mainMenuVisible = false;
             drawMenuVisible = false;
             colorMenuVisible = false;
             skyMenuVisible = false;
             menuVisible = false;
+            stylingMenuVisible = false;
             
             return true;
         }
@@ -1171,7 +1282,7 @@ mousedownHandler = function(e) {
     // Helper function for sky menu clicks
     function checkSkyMenuClick() {
         if (!skyMenuVisible || skyMenuOpacity <= 0.5 || !window.skyRenderer) return false;
-        const knobRadius = 0.1 * cScale;
+        const knobRadius = 0.1 * menuScale;
         const knobSpacing = knobRadius * 3;
         const menuWidth = knobSpacing * 3;
         const menuHeight = knobSpacing * 2.25;
@@ -1350,10 +1461,12 @@ mousedownHandler = function(e) {
                 menuVisibleBeforeCamera = menuVisible;
                 colorMenuVisibleBeforeCamera = colorMenuVisible;
                 skyMenuVisibleBeforeCamera = skyMenuVisible;
+                stylingMenuVisibleBeforeCamera = stylingMenuVisible;
                 // Hide all menus
                 menuVisible = false;
                 colorMenuVisible = false;
                 skyMenuVisible = false;
+                stylingMenuVisible = false;
             }
             updateMouseListeners();
             return true;
@@ -1530,6 +1643,7 @@ mouseupHandler = function(e) {
             colorMenuVisible = savedMenuStatesForPath.colorMenu;
             skyMenuVisible = savedMenuStatesForPath.skyMenu;
             menuVisible = savedMenuStatesForPath.simMenu;
+            stylingMenuVisible = savedMenuStatesForPath.stylingMenu;
             
             // Enable magnet and start following the path
             magnetActive = true;
@@ -1546,6 +1660,7 @@ mouseupHandler = function(e) {
             mainMenuVisible = savedMenuStatesForPath.mainMenu;
             drawMenuVisible = savedMenuStatesForPath.drawMenu;
             colorMenuVisible = savedMenuStatesForPath.colorMenu;
+            stylingMenuVisible = savedMenuStatesForPath.stylingMenu;
             skyMenuVisible = savedMenuStatesForPath.skyMenu;
             menuVisible = savedMenuStatesForPath.simMenu;
         }
@@ -1568,6 +1683,7 @@ mouseupHandler = function(e) {
             menuVisible = menuVisibleBeforeCamera;
             colorMenuVisible = colorMenuVisibleBeforeCamera;
             skyMenuVisible = skyMenuVisibleBeforeCamera;
+            stylingMenuVisible = stylingMenuVisibleBeforeCamera;
         }
     }
     
@@ -1581,6 +1697,7 @@ mouseupHandler = function(e) {
     draggedSkyKnob = null;
     draggedDrawKnob = null;
     isDraggingMenu = false;
+    isDraggingStylingMenu = false;
     isDraggingColorMenu = false;
     isDraggingSkyMenu = false;
     isDraggingDrawMenu = false;
@@ -1656,6 +1773,15 @@ function handleMouseMove(e) {
         const deltaY = mouseY - drawMenuDragStartY;
         drawMenuX = drawMenuStartX + deltaX;
         drawMenuY = drawMenuStartY + deltaY;
+        return;
+    }
+    
+    // Handle styling menu dragging
+    if (isDraggingStylingMenu) {
+        const deltaX = mouseX - stylingMenuDragStartX;
+        const deltaY = mouseY - stylingMenuDragStartY;
+        stylingMenuX = stylingMenuDragInitialX + deltaX;
+        stylingMenuY = stylingMenuDragInitialY + deltaY;
         return;
     }
     
@@ -2239,22 +2365,27 @@ let wheelHandler = function(e) {
     const mouseCanvasX = (e.clientX - rect.left);
     const mouseCanvasY = (e.clientY - rect.top);
     
-    // Check if mouse is over boid type list in simulation menu
-    if (menuVisible && menuOpacity > 0.5) {
-        const knobRadius = 0.1 * cScale;
+    // Check if mouse is over boid type list in styling menu
+    if (stylingMenuVisible && stylingMenuOpacity > 0.5) {
+        const knobRadius = 0.1 * menuScale;
         const knobSpacing = knobRadius * 3;
         const menuTopMargin = 0.2 * knobRadius;
-        const menuUpperLeftX = menuX * cScale;
-        const menuUpperLeftY = canvas.height - menuY * cScale;
+        const menuUpperLeftX = stylingMenuX * cScale;
+        const menuUpperLeftY = canvas.height - stylingMenuY * cScale;
         const menuOriginX = menuUpperLeftX + knobSpacing;
         const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
         
-        const listCol = 2;
+        const listCol = 2.5;
         const listX = menuOriginX + listCol * knobSpacing - 1.15 * knobRadius;
-        const listTitleY = menuOriginY + (2 * knobSpacing) - (2.0 * knobRadius) + menuTopMargin;
-        const listY = listTitleY + knobRadius * 0.96;
+        const traceButtonY1 = menuOriginY + (0 * knobSpacing) + (0.85 * knobRadius) + menuTopMargin;
+        const traceButtonY4 = traceButtonY1 + 0.8 * knobRadius * 3;
+        const bracketTopY = traceButtonY1 - 0.4 * knobRadius;
+        const fillButtonY1 = traceButtonY4 + 1.0 * knobRadius;
+        const fillButtonY2 = fillButtonY1 + 0.8 * knobRadius;
+        const fillBracketBottomY = fillButtonY2 + 0.4 * knobRadius;
+        const listY = bracketTopY;
         const listWidth = knobRadius * 2.3;
-        const listHeight = knobRadius * 5.04;
+        const listHeight = fillBracketBottomY - bracketTopY;
         const itemHeight = knobRadius * 0.72;
         
         if (mouseCanvasX >= listX && mouseCanvasX <= listX + listWidth &&
@@ -5526,7 +5657,7 @@ class BOID {
             // Calculate aspect ratio based on speed (faster = more slender)
             const speed = Math.sqrt(this.vel.x * this.vel.x + this.vel.y * this.vel.y);
             const normalizedSpeed = Math.min(speed / 2.0, 1.0); // Normalize speed
-            const aspectRatio = 1.0 + normalizedSpeed * 3.0; // Range from 1.0 (round) to 5.0 (slender)
+            const aspectRatio = 1.0 + normalizedSpeed * 2.0; // Range from 1.0 (round) to 3.0 (slender)
             
             // Get velocity angle for rotation (negate y for canvas coordinate system)
             const angle = Math.atan2(-this.vel.y, this.vel.x);
@@ -5537,7 +5668,7 @@ class BOID {
             
             // Draw ellipse (keep length constant, shrink width with speed)
             c.beginPath();
-            c.ellipse(0, 0, 0.6 * radScale, 0.6 * radScale / aspectRatio, 0, 0, 2 * Math.PI);
+            c.ellipse(0, 0, 0.8 * radScale, 0.8 * radScale / aspectRatio, 0, 0, 2 * Math.PI);
             
             // Apply colors
             if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
@@ -5873,24 +6004,24 @@ function drawMainMenu() {
     const ellipsisY = canvas.height - ellipsisWorldY * cScale;
     
     // Menu dimensions (horizontal layout)
-    const itemHeight = 0.12 * cScale;
-    const itemWidth = 0.24 * cScale;
-    const padding = 0.02 * cScale;
-    const iconSize = 0.06 * cScale;
+    const itemHeight = 0.12 * menuScale;
+    const itemWidth = 0.24 * menuScale;
+    const padding = 0.02 * menuScale;
+    const iconSize = 0.06 * menuScale;
     const menuHeight = itemHeight + (padding * 2);
-    const menuWidth = (itemWidth * 4) + (padding * 5);
+    const menuWidth = (itemWidth * 5) + (padding * 6);
     
     // Menu position - to the right of ellipsis with animation
     // Position menu so it extends downward and is clearly visible
-    const menuBaseX = ellipsisX + 0.08 * cScale;
-    const menuX = menuBaseX + mainMenuXOffset * cScale;
-    const menuY = ellipsisY - 0.04 * cScale; // Position top of menu slightly above ellipsis center
+    const menuBaseX = ellipsisX + 0.08 * menuScale;
+    const menuX = menuBaseX + mainMenuXOffset * menuScale;
+    const menuY = ellipsisY - 0.04 * menuScale; // Position top of menu slightly above ellipsis center
     
     c.save();
     c.globalAlpha = mainMenuOpacity;
     
     // Draw menu background with rounded corners
-    const cornerRadius = 0.02 * cScale;
+    const cornerRadius = 0.02 * menuScale;
     c.beginPath();
     c.moveTo(menuX + cornerRadius, menuY);
     c.lineTo(menuX + menuWidth - cornerRadius, menuY);
@@ -5912,6 +6043,7 @@ function drawMainMenu() {
     // Menu items configuration
     const menuItems = [
         { label: 'Simulation', active: menuVisible, icon: 'sim' },
+        { label: 'Styling', active: stylingMenuVisible, icon: 'style' },
         { label: 'Sky', active: skyMenuVisible, icon: 'sky' },
         { label: 'Paint', active: colorMenuVisible, icon: 'paint' },
         { label: 'Draw', active: drawMenuVisible, icon: 'draw' }
@@ -5945,6 +6077,8 @@ function drawMainMenu() {
                 c.fillStyle = `hsla(30, 90%, 60%, 0.3)`;
             } else if (item.icon === 'draw') {
                 c.fillStyle = `hsla(340, 70%, 60%, 0.3)`;
+            } else if (item.icon === 'style') {
+                c.fillStyle = `hsla(140, 80%, 60%, 0.3)`;
             }
         } else {
             c.fillStyle = `hsla(0, 0%, 15%, 0.6)`;
@@ -5960,7 +6094,7 @@ function drawMainMenu() {
         
         c.strokeStyle = iconColor;
         c.fillStyle = iconColor;
-        c.lineWidth = 0.006 * cScale;
+        c.lineWidth = 0.006 * menuScale;
         c.lineCap = 'round';
         c.lineJoin = 'round';
         
@@ -6114,13 +6248,48 @@ function drawMainMenu() {
             c.fill();
             
             c.restore();
+        
+        // Draw style icon --------------------
+        } else if (item.icon === 'style') {
+            // Draw necktie icon (two separate polygons)
+            const tieWidth = iconSize * 0.42;
+            const tieLength = iconSize * 0.95;
+            const gapSize = iconSize * 0.05;
+            
+            c.save();
+            c.translate(iconX, iconY);
+            
+            const tieColor = item.active ? `hsla(0, 0%, 90%, 1.0)` : `hsla(0, 0%, 30%, 1.0)`;
+            
+            c.fillStyle = tieColor;
+            
+            // Draw knot (4-sided polygon - trapezoid)
+            c.beginPath();
+            c.moveTo(-tieWidth * 0.55, -tieLength * 0.5);  // Top left
+            c.lineTo(tieWidth * 0.55, -tieLength * 0.5);   // Top right
+            c.lineTo(tieWidth * 0.22, -tieLength * 0.2);   // Bottom right
+            c.lineTo(-tieWidth * 0.22, -tieLength * 0.2);  // Bottom left
+            c.closePath();
+            c.fill();
+            
+            // Draw tie body (5-sided polygon - pentagon)
+            c.beginPath();
+            c.moveTo(-tieWidth * 0.27, -tieLength * 0.2 + gapSize);  // Top left
+            c.lineTo(tieWidth * 0.27, -tieLength * 0.2 + gapSize);   // Top right
+            c.lineTo(tieWidth * 0.5, tieLength * 0.48);             // Right side
+            c.lineTo(0, tieLength * 0.6);                           // Bottom point
+            c.lineTo(-tieWidth * 0.5, tieLength * 0.48);            // Left side
+            c.closePath();
+            c.fill();
+            
+            c.restore();
         }
         
         // Draw label text (centered below icon)
         c.fillStyle = item.active ? 
             `hsla(210, 0%, 90%, 1.0)` : 
             `hsla(210, 0%, 80%, 1.0)`;
-        c.font = `bold ${0.028 * cScale}px verdana`;
+        c.font = `bold ${0.028 * menuScale}px verdana`;
         c.textAlign = 'center';
         c.textBaseline = 'top';
         c.fillText(item.label, iconX, iconY + iconSize * 0.75);
@@ -6194,7 +6363,11 @@ function drawSimMenu() {
     const menuItems = [
         boidProps.numBoids, boidProps.boidRadius, boidProps.visualRange, boidProps.speedLimit,
         null, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
-        boidProps.turnFactor, boidProps.tailLength, boidProps.tailWidth];
+        boidProps.turnFactor];
+
+    // Display order: determines visual position of knobs
+    // Maps display position to knob index (numBoids, size, visual, rule1, rule2, rule3, speed, confinement)
+    const displayOrder = [0, 1, 2, 5, 6, 7, 3, 8];
 
     // Define min/max ranges for each parameter
     const ranges = [
@@ -6206,12 +6379,10 @@ function drawSimMenu() {
         {min: 0, max: 100},          // avoidFactor
         {min: 0, max: 50},           // matchingFactor
         {min: 0, max: 20},           // centeringFactor
-        {min: 0, max: 5},            // turnFactor
-        {min: 0, max: 100},          // trailLength
-        {min: 1.0, max: 5.0}         // tailWidth
+        {min: 0, max: 5}             // turnFactor
     ];
 
-    const knobRadius = 0.1 * cScale;
+    const knobRadius = 0.1 * menuScale;
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius; // Control vertical offset of elements within the menu
     const menuUpperLeftX = menuX * cScale;
@@ -6229,8 +6400,8 @@ function drawSimMenu() {
     */
 
     // Draw overall menu background with rounded corners
-    const menuWidth = knobSpacing * 3;
-    const menuHeight = knobSpacing * 2 + knobRadius * 3.5;
+    const menuWidth = knobSpacing * 2;
+    const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
     const padding = 1.7 * knobRadius;
     const cornerRadius = 0.05 * cScale;
     c.beginPath();
@@ -6256,9 +6427,9 @@ function drawSimMenu() {
 
     // Draw title
     c.fillStyle = `hsla(210, 80%, 80%, ${menuOpacity})`;
-    c.font = `bold ${0.05 * cScale}px verdana`;
+    c.font = `bold ${0.05 * menuScale}px verdana`;
     c.textAlign = 'center';
-    c.fillText('SIMULATION', menuWidth / 2, -padding + 0.04 * cScale);
+    c.fillText('SIMULATION', menuWidth / 2, -padding + 0.04 * menuScale);
     
     // Draw close icon in upper left corner (round button)
     const closeIconRadius = knobRadius * 0.25;
@@ -6285,12 +6456,12 @@ function drawSimMenu() {
 
     // Draw knobs ---------------------------------------------
     c.lineCap = 'round';
-    for (var knob = 0; knob < menuItems.length; knob++) {
+    for (var displayPos = 0; displayPos < displayOrder.length; displayPos++) {
+        const knob = displayOrder[displayPos];
         if (knob === 4) continue; // Skip removed knob
         // fill and trace knob background
-        const layoutIndex = knob > 4 ? knob - 1 : knob;
-        const row = Math.floor(layoutIndex / 4);
-        const col = layoutIndex % 4;
+        const row = Math.floor(displayPos / 3);
+        const col = displayPos % 3;
         const knobX = col * knobSpacing;
         const knobY = row * knobSpacing + menuTopMargin;
         c.beginPath();
@@ -6298,7 +6469,7 @@ function drawSimMenu() {
         c.fillStyle = `hsla(210, 40%, 15%, ${0.9 * menuOpacity})`;
         c.fill();
         c.strokeStyle = `hsla(210, 40%, 50%, ${menuOpacity})`;
-        c.lineWidth = 0.003 * cScale;
+        c.lineWidth = 0.003 * menuScale;
         c.stroke();
 
         // draw needle / knob indicator
@@ -6334,7 +6505,7 @@ function drawSimMenu() {
         c.strokeStyle = gradient;
         c.beginPath();
         c.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
-        c.lineWidth = 0.02 * cScale;
+        c.lineWidth = 0.02 * menuScale;
         c.stroke();
 
         // Draw needle
@@ -6346,7 +6517,7 @@ function drawSimMenu() {
         c.moveTo(knobX, knobY);
         c.lineTo(pointerEndX, pointerEndY);
         c.strokeStyle = `hsla(210, 80%, 80%, ${menuOpacity})`;
-        c.lineWidth = 0.008 * cScale;
+        c.lineWidth = 0.008 * menuScale;
         c.stroke();
 
         // draw knob label
@@ -6366,8 +6537,6 @@ function drawSimMenu() {
             case 6: label = 'Rule 2: Alignment'; break;
             case 7: label = 'Rule 3: Cohesion'; break;
             case 8: label = 'Confinement'; break;
-            case 9: label = 'Tail Length'; break;
-            case 10: label = 'Tail Width'; break;
         }
         c.font = `${0.29 * knobRadius}px verdana`;
         c.strokeStyle = `hsla(210, 80%, 0%, ${0.6 * menuOpacity})`;
@@ -6387,352 +6556,12 @@ function drawSimMenu() {
             case 6: valueText = (boidProps.matchingFactor).toFixed(1); break;
             case 7: valueText = (boidProps.centeringFactor).toFixed(1); break;
             case 8: valueText = (boidProps.turnFactor).toFixed(1); break;
-            case 9: valueText = boidProps.tailLength.toString(); break;
-            case 10: valueText = (boidProps.tailWidth).toFixed(1); break;
         }
         c.font = `${0.25 * knobRadius}px verdana`;
         c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
         c.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
     }
 
-    // Draw tail color radio buttons below tail length knob (knob 9)
-    const tailColorRadioRadius = knobRadius * 0.25;
-    const tailKnobRow = 2;
-    const tailButtonsCenterX = 0.5; // Center between columns 0 and 1
-    const tailRadioLabels = ['None', 'Black', 'White', 'Hue', 'Hue2'];
-    
-    // Draw bracket and label for tail style buttons
-    const tailBracketY = tailKnobRow * knobSpacing + knobRadius * 2.4 + menuTopMargin;
-    const tailBracketLeftX = tailButtonsCenterX * knobSpacing - 2.4 * knobRadius;
-    const tailBracketRightX = tailButtonsCenterX * knobSpacing + 2.4 * knobRadius;
-    const tailBracketHeight = 0.15 * knobRadius;
-    
-    c.beginPath();
-    c.moveTo(tailBracketLeftX, tailBracketY);
-    c.lineTo(tailBracketLeftX, tailBracketY - tailBracketHeight);
-    c.lineTo(tailBracketRightX, tailBracketY - tailBracketHeight);
-    c.lineTo(tailBracketRightX, tailBracketY);
-    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-    c.lineWidth = 0.04 * knobRadius;
-    c.stroke();
-    
-    // Draw "Tail Style" label
-    c.textAlign = 'center';
-    c.textBaseline = 'bottom';
-    c.font = `${0.28 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.lineWidth = 0.02 * knobRadius;
-    c.strokeText('Tail Style', tailButtonsCenterX * knobSpacing, tailBracketY - tailBracketHeight - 0.1 * knobRadius);
-    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('Tail Style', tailButtonsCenterX * knobSpacing, tailBracketY - tailBracketHeight - 0.1 * knobRadius);
-    
-    for (let i = 0; i < 5; i++) {
-        const buttonX = tailButtonsCenterX * knobSpacing + (i - 2) * knobRadius * 1.0;
-        const buttonY = tailKnobRow * knobSpacing + knobRadius * 2.9 + menuTopMargin;
-        
-        // Draw outer circle
-        c.beginPath();
-        c.arc(buttonX, buttonY, tailColorRadioRadius, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
-        c.fill();
-        c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-        c.lineWidth = 0.04 * knobRadius;
-        c.stroke();
-        
-        // Draw filled center if selected
-        if (tailColorMode === i) {
-            c.beginPath();
-            c.arc(buttonX, buttonY, tailColorRadioRadius * 0.5, 0, 2 * Math.PI);
-            c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
-            c.fill();
-        }
-
-        // Draw label below button
-        c.textAlign = 'center';
-        c.textBaseline = 'top';
-        c.font = `${0.24 * knobRadius}px verdana`;
-        c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-        c.lineWidth = 0.02 * knobRadius;
-        c.strokeText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
-        c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-        c.fillText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
-    }
-    
-    // Draw trace/fill radio buttons in 4th column below confinement knob
-    const traceButtonRadius = knobRadius * 0.25;
-    const traceCol = 3;
-    const traceButtonY1 = (2 * knobSpacing) - (0.6 * knobRadius) + menuTopMargin;
-    const traceButtonY2 = traceButtonY1 + 0.8 * knobRadius;
-    const traceButtonY3 = traceButtonY2 + 0.8 * knobRadius;
-    const traceButtonY4 = traceButtonY3 + 0.8 * knobRadius;
-    const fillButtonY1 = traceButtonY4 + 1.0 * knobRadius;
-    const fillButtonY2 = fillButtonY1 + 0.8 * knobRadius;
-    
-    const traceButtonX = traceCol * knobSpacing - 0.5 * knobRadius;
-    
-    // Draw bracket and label for trace buttons
-    const bracketX = traceButtonX - traceButtonRadius - 0.35 * knobRadius;
-    const bracketTopY = traceButtonY1 - 0.4 * knobRadius;
-    const bracketBottomY = traceButtonY4 + 0.4 * knobRadius;
-    const bracketMidY = (bracketTopY + bracketBottomY) / 2;
-    const bracketWidth = 0.15 * knobRadius;
-    
-    c.beginPath();
-    c.moveTo(bracketX + bracketWidth, bracketTopY);
-    c.lineTo(bracketX, bracketTopY);
-    c.lineTo(bracketX, bracketBottomY);
-    c.lineTo(bracketX + bracketWidth, bracketBottomY);
-    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-    c.lineWidth = 0.04 * knobRadius;
-    c.stroke();
-    
-    // Draw rotated "Trace" label
-    c.save();
-    c.translate(bracketX - 0.3 * knobRadius, bracketMidY);
-    c.rotate(-Math.PI / 2);
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.font = `${0.3 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.strokeText('Trace', 0, 0.04 * knobRadius);
-    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('Trace', 0, 0);
-    c.restore();
-    
-    // Trace button (dark outline)
-    c.beginPath();
-    c.arc(traceButtonX, traceButtonY1, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
-    c.fill();
-    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-    c.lineWidth = 0.05 * knobRadius;
-    c.stroke();
-    if (boidTraceMode === 1) {
-        c.beginPath();
-        c.arc(traceButtonX, traceButtonY1, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
-        c.fill();
-    }
-    c.textAlign = 'left';
-    c.textBaseline = 'middle';
-    c.font = `${0.28 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.strokeText('Black', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY1);
-    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('Black', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY1);
-    
-    // White button
-    c.beginPath();
-    c.arc(traceButtonX, traceButtonY2, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
-    c.fill();
-    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-    c.lineWidth = 0.05 * knobRadius;
-    c.stroke();
-    if (boidTraceMode === 3) {
-        c.beginPath();
-        c.arc(traceButtonX, traceButtonY2, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
-        c.fill();
-    }
-    c.textAlign = 'left';
-    c.textBaseline = 'middle';
-    c.font = `${0.28 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.strokeText('White', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY2);
-    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('White', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY2);
-    
-    // Color button (colored outline)
-    c.beginPath();
-    c.arc(traceButtonX, traceButtonY3, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
-    c.fill();
-    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-    c.lineWidth = 0.05 * knobRadius;
-    c.stroke();
-    if (boidTraceMode === 2) {
-        c.beginPath();
-        c.arc(traceButtonX, traceButtonY3, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
-        c.fill();
-    }
-    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.strokeText('Color', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY3);
-    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('Color', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY3);
-    
-    // Trace None button
-    c.beginPath();
-    c.arc(traceButtonX, traceButtonY4, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
-    c.fill();
-    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-    c.lineWidth = 0.05 * knobRadius;
-    c.stroke();
-    if (boidTraceMode === 0) {
-        c.beginPath();
-        c.arc(traceButtonX, traceButtonY4, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
-        c.fill();
-    }
-    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.strokeText('None', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY4);
-    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('None', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY4);
-    
-    // Draw bracket and label for fill buttons
-    const fillBracketX = traceButtonX - traceButtonRadius - 0.35 * knobRadius;
-    const fillBracketTopY = fillButtonY1 - 0.4 * knobRadius;
-    const fillBracketBottomY = fillButtonY2 + 0.4 * knobRadius;
-    const fillBracketMidY = (fillBracketTopY + fillBracketBottomY) / 2;
-    
-    c.beginPath();
-    c.moveTo(fillBracketX + bracketWidth, fillBracketTopY);
-    c.lineTo(fillBracketX, fillBracketTopY);
-    c.lineTo(fillBracketX, fillBracketBottomY);
-    c.lineTo(fillBracketX + bracketWidth, fillBracketBottomY);
-    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-    c.lineWidth = 0.04 * knobRadius;
-    c.stroke();
-    
-    // Draw rotated "Fill" label
-    c.save();
-    c.translate(fillBracketX - 0.3 * knobRadius, fillBracketMidY);
-    c.rotate(-Math.PI / 2);
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.font = `${0.3 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.strokeText('Fill', 0, 0.04 * knobRadius);
-    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('Fill', 0, 0);
-    c.restore();
-    
-    // Fill button
-    c.beginPath();
-    c.arc(traceButtonX, fillButtonY1, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
-    c.fill();
-    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-    c.lineWidth = 0.05 * knobRadius;
-    c.stroke();
-    if (boidFillEnabled) {
-        c.beginPath();
-        c.arc(traceButtonX, fillButtonY1, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
-        c.fill();
-    }
-    c.textAlign = 'left';
-    c.textBaseline = 'middle';
-    c.font = `${0.28 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.strokeText('Fill', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + fillButtonY1);
-    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('Fill', traceButtonX + traceButtonRadius + 0.2 * knobRadius, fillButtonY1);
-    
-    // Fill None button
-    c.beginPath();
-    c.arc(traceButtonX, fillButtonY2, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(210, 80%, 20%, ${0.3 * menuOpacity})`;
-    c.fill();
-    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-    c.lineWidth = 0.05 * knobRadius;
-    c.stroke();
-    if (!boidFillEnabled) {
-        c.beginPath();
-        c.arc(traceButtonX, fillButtonY2, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(210, 0%, 90%, ${menuOpacity})`;
-        c.fill();
-    }
-    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.strokeText('None', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + fillButtonY2);
-    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('None', traceButtonX + traceButtonRadius + 0.2 * knobRadius, fillButtonY2);
-    
-    // Draw scrollable boid type selection list
-    const listCol = 2;
-    const listX = listCol * knobSpacing - 1.15 * knobRadius;
-    const listTitleY = (2 * knobSpacing) - (2.0 * knobRadius) + menuTopMargin;
-    const listY = listTitleY + knobRadius * 0.96;
-    const listWidth = knobRadius * 2.3;
-    const listHeight = knobRadius * 5.04;
-    const itemHeight = knobRadius * 0.72;
-    const listCornerRadius = knobRadius * 0.22;
-    
-    // Draw "Boid Style" title (rotated 90 degrees CCW on left side)
-    c.save();
-    c.translate(listX - 0.4 * knobRadius, listY + listHeight / 2);
-    c.rotate(-Math.PI / 2);
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.font = `${0.28 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-    c.strokeText('Boid Style', 0, 0.04 * knobRadius);
-    c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-    c.fillText('Boid Style', 0, 0);
-    c.restore();
-    
-    // Draw list background with rounded corners
-    c.fillStyle = `hsla(210, 80%, 10%, ${0.5 * menuOpacity})`;
-    c.beginPath();
-    c.roundRect(listX, listY, listWidth, listHeight, listCornerRadius);
-    c.fill();
-    c.strokeStyle = `hsla(210, 80%, 70%, ${menuOpacity})`;
-    c.lineWidth = 0.04 * knobRadius;
-    c.stroke();
-    
-    // Setup clipping region for scrollable content
-    c.save();
-    c.beginPath();
-    c.rect(listX, listY, listWidth, listHeight);
-    c.clip();
-    
-    // Draw list items
-    const visibleItems = Math.ceil(listHeight / itemHeight) + 1;
-    const startIndex = Math.max(0, Math.floor(boidTypeScrollOffset / itemHeight));
-    const endIndex = Math.min(boidTypeLabels.length, startIndex + visibleItems);
-    
-    for (let i = startIndex; i < endIndex; i++) {
-        const itemY = listY + (i * itemHeight) - boidTypeScrollOffset;
-        
-        // Draw selection highlight
-        if (selectedBoidType === i) {
-            c.fillStyle = `hsla(320, 90%, 70%, ${0.7 * menuOpacity})`;
-            c.beginPath();
-            const highlightPadding = itemHeight * 0.15;
-            c.roundRect(listX + 0.5 * highlightPadding, itemY + highlightPadding, listWidth - 2 * highlightPadding, itemHeight - highlightPadding * 2, (itemHeight - highlightPadding * 2) / 2);
-            c.fill();
-        }
-        
-        // Draw item text
-        c.textAlign = 'left';
-        c.textBaseline = 'middle';
-        c.font = `${0.3 * knobRadius}px verdana`;
-        
-        // Shadow for contrast
-        c.strokeStyle = `hsla(210, 80%, 0%, ${0.5 * menuOpacity})`;
-        c.strokeText(boidTypeLabels[i], listX + 0.15 * knobRadius + 0.04 * knobRadius, itemY + itemHeight / 2 + 0.04 * knobRadius);
-        
-        // Main text
-        c.fillStyle = `hsla(210, 80%, 90%, ${menuOpacity})`;
-        c.fillText(boidTypeLabels[i], listX + 0.15 * knobRadius, itemY + itemHeight / 2);
-    }
-    
-    c.restore();
-    
-    // Draw scrollbar if content overflows
-    const maxScroll = Math.max(0, (boidTypeLabels.length * itemHeight) - listHeight);
-    if (maxScroll > 0) {
-        const scrollbarWidth = 0.1 * knobRadius;
-        const scrollbarX = listX + listWidth - scrollbarWidth - 0.05 * knobRadius;
-        const scrollbarHeight = listHeight * (listHeight / (boidTypeLabels.length * itemHeight));
-        const scrollbarY = listY + (boidTypeScrollOffset / maxScroll) * (listHeight - scrollbarHeight);
-        
-        c.fillStyle = `hsla(210, 80%, 60%, ${0.7 * menuOpacity})`;
-        c.fillRect(scrollbarX, scrollbarY, scrollbarWidth, scrollbarHeight);
-    }
-    
     // Draw reset button --------------------------------------
     const resetButtonRadius = knobRadius * 0.4;
     const resetButtonX = padding - 0.0 * knobRadius;
@@ -6791,12 +6620,507 @@ function drawSimMenu() {
     c.fillStyle = `hsla(0, 0%, 80%, ${menuOpacity})`;
     c.fillText('fps', padding - 1.1 * knobRadius, menuHeight + padding - 0.42 * knobRadius);
 
-    // Draw version text in bottom left corner
+    // Draw version number text in bottom left corner
     c.textAlign = 'left';
     c.textBaseline = 'bottom';
     c.font = `${0.24 * knobRadius}px monospace`;
     c.fillStyle = `hsla(0, 0%, 60%, ${menuOpacity})`;
-    c.fillText('v1.49', padding + 7.8 * knobRadius, menuHeight + padding - 0.15 * knobRadius);
+    c.fillText('v1.50', padding + 4.8 * knobRadius, menuHeight + padding - 0.15 * knobRadius);
+
+    c.restore();
+}
+
+//  DRAW STYLING MENU  ---------------------------------------------------------------------
+function drawStylingMenu() {
+    // Only draw menu if it has some opacity
+    if (stylingMenuOpacity <= 0) return;
+    
+    const menuItems = [
+        boidProps.tailLength, boidProps.tailWidth];
+
+    // Define min/max ranges for each parameter
+    const ranges = [
+        {min: 0, max: 100},          // trailLength
+        {min: 1.0, max: 5.0}         // tailWidth
+    ];
+
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuTopMargin = 0.2 * knobRadius;
+    const menuUpperLeftX = stylingMenuX * cScale;
+    const menuUpperLeftY = canvas.height - stylingMenuY * cScale;
+    const fullMeterSweep = 1.6 * Math.PI;
+    const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+
+    c.save();
+    c.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
+
+    const padding = 0.4 * knobRadius;
+    const menuWidth = 4 * knobSpacing;
+    const menuHeight = 2.25 * knobSpacing;
+    
+    // Draw menu background with rounded corners
+    const cornerRadius = 0.05 * menuScale;
+    c.beginPath();
+    c.moveTo(-padding + cornerRadius, -padding);
+    c.lineTo(menuWidth + padding - cornerRadius, -padding);
+    c.quadraticCurveTo(menuWidth + padding, -padding, menuWidth + padding, -padding + cornerRadius);
+    c.lineTo(menuWidth + padding, menuHeight + padding - cornerRadius);
+    c.quadraticCurveTo(menuWidth + padding, menuHeight + padding, menuWidth + padding - cornerRadius, menuHeight + padding);
+    c.lineTo(-padding + cornerRadius, menuHeight + padding);
+    c.quadraticCurveTo(-padding, menuHeight + padding, -padding, menuHeight + padding - cornerRadius);
+    c.lineTo(-padding, -padding + cornerRadius);
+    c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
+    c.closePath();
+    const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsla(140, 40%, 20%, ${0.9 * stylingMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsla(140, 40%, 5%, ${0.9 * stylingMenuOpacity})`);
+    c.fillStyle = menuGradient;
+    c.fill();
+    c.strokeStyle = `hsla(140, 60%, 80%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.003 * menuScale;
+    c.stroke();
+
+    // Draw title
+    c.fillStyle = `hsla(140, 30%, 80%, ${stylingMenuOpacity})`;
+    c.font = `bold ${0.05 * menuScale}px verdana`;
+    c.textAlign = 'center';
+    c.fillText('STYLING', menuWidth / 2, -padding + 0.04 * menuScale);
+    
+    // Draw close icon in upper left corner (round button)
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+    
+    // Red background circle
+    c.beginPath();
+    c.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(0, 70%, 40%, ${stylingMenuOpacity})`;
+    c.fill();
+    
+    // Black X
+    c.strokeStyle = `hsla(0, 0%, 0%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.lineCap = 'round';
+    const xSize = closeIconRadius * 0.4;
+    c.beginPath();
+    c.moveTo(closeIconX - xSize, closeIconY - xSize);
+    c.lineTo(closeIconX + xSize, closeIconY + xSize);
+    c.moveTo(closeIconX + xSize, closeIconY - xSize);
+    c.lineTo(closeIconX - xSize, closeIconY + xSize);
+    c.stroke();
+
+    // Draw knobs (Tail Length and Tail Width)
+    c.lineCap = 'round';
+    for (var knob = 0; knob < menuItems.length; knob++) {
+        const col = knob % 2;
+        const row = 0;
+        const knobX = (col + 0.5) * knobSpacing;
+        const knobY = (row + 0.5) * knobSpacing + menuTopMargin;
+        c.beginPath();
+        c.arc(knobX, knobY, 1.05 *knobRadius, 0, 2 * Math.PI, false);
+        c.fillStyle = `hsla(140, 40%, 15%, ${0.9 * stylingMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(140, 40%, 50%, ${stylingMenuOpacity})`;
+        c.lineWidth = 0.003 * menuScale;
+        c.stroke();
+
+        // Calculate normalized value
+        let value = menuItems[knob];
+        const range = ranges[knob];
+        const normalizedValue = (value - range.min) / (range.max - range.min);
+
+        // Draw meter arc with gradient
+        const gradient = c.createLinearGradient(
+            knobX + Math.cos(meterStart) * knobRadius,
+            knobY + Math.sin(meterStart) * knobRadius,
+            knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+            knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+        );
+        gradient.addColorStop(0, `hsla(160, 40%, 50%, ${stylingMenuOpacity})`);
+        gradient.addColorStop(0.5, `hsla(140, 40%, 50%, ${stylingMenuOpacity})`);
+        c.strokeStyle = gradient;
+        c.beginPath();
+        c.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
+        c.lineWidth = 0.02 * menuScale;
+        c.stroke();
+
+        // Draw needle
+        const pointerAngle = meterStart + fullMeterSweep * normalizedValue;
+        const pointerLength = knobRadius * 0.6;
+        const pointerEndX = knobX + Math.cos(pointerAngle) * pointerLength;
+        const pointerEndY = knobY + Math.sin(pointerAngle) * pointerLength;
+        c.beginPath();
+        c.moveTo(knobX, knobY);
+        c.lineTo(pointerEndX, pointerEndY);
+        c.strokeStyle = `hsla(140, 80%, 80%, ${stylingMenuOpacity})`;
+        c.lineWidth = 0.008 * menuScale;
+        c.stroke();
+
+        // knob label
+        c.textAlign = 'center';
+        c.textBaseline = 'top';
+        let label = '';
+        switch(knob) {
+            case 0: label = 'Tail Length'; break;
+            case 1: label = 'Tail Width'; break;
+        }
+        c.font = `${0.29 * knobRadius}px verdana`;
+        c.strokeStyle = `hsla(140, 80%, 0%, ${0.6 * stylingMenuOpacity})`;
+        c.strokeText(label, 0.04 * knobRadius + knobX, 0.04 * knobRadius + (knobY + 1.35 * knobRadius));
+        c.font = ` ${0.29 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(140, 80%, 95%, ${stylingMenuOpacity})`;
+        c.fillText(label, knobX, knobY + 1.35 * knobRadius);
+
+        // draw knob value
+        let valueText = '';
+        switch(knob) {
+            case 0: valueText = boidProps.tailLength.toString(); break;
+            case 1: valueText = (boidProps.tailWidth).toFixed(1); break;
+        }
+        c.font = `${0.25 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(160, 80%, 50%, ${stylingMenuOpacity})`;
+        c.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
+    }
+
+    // Draw tail color radio buttons
+    const tailColorRadioRadius = knobRadius * 0.25;
+    const tailButtonRow = 1;
+    const tailButtonsCenterX = 1.0;
+    const tailRadioLabels = ['None', 'Black', 'White', 'Hue', 'Hue2'];
+    
+    // Draw bracket and label for tail style buttons
+    const tailBracketY = tailButtonRow * knobSpacing + knobRadius * 1.25 + menuTopMargin;
+    const tailBracketLeftX = tailButtonsCenterX * knobSpacing - 2.4 * knobRadius;
+    const tailBracketRightX = tailButtonsCenterX * knobSpacing + 2.4 * knobRadius;
+    const tailBracketHeight = 0.15 * knobRadius;
+    
+    c.beginPath();
+    c.moveTo(tailBracketLeftX, tailBracketY);
+    c.lineTo(tailBracketLeftX, tailBracketY - tailBracketHeight);
+    c.lineTo(tailBracketRightX, tailBracketY - tailBracketHeight);
+    c.lineTo(tailBracketRightX, tailBracketY);
+    c.strokeStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.04 * knobRadius;
+    c.stroke();
+    
+    // Draw "Tail Style" label
+    c.textAlign = 'center';
+    c.textBaseline = 'bottom';
+    c.font = `${0.28 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(140, 20%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.lineWidth = 0.02 * knobRadius;
+    c.strokeText('Tail Style', 0.04 * knobRadius + tailButtonsCenterX * knobSpacing, 0.04 * knobRadius + tailBracketY - tailBracketHeight - 0.1 * knobRadius);
+    c.fillStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.fillText('Tail Style', tailButtonsCenterX * knobSpacing, tailBracketY - tailBracketHeight - 0.1 * knobRadius);
+    
+    for (let i = 0; i < 5; i++) {
+        const buttonX = tailButtonsCenterX * knobSpacing + (i - 2) * knobRadius * 1.0;
+        const buttonY = tailButtonRow * knobSpacing + knobRadius * 1.75 + menuTopMargin;
+        
+        // Draw outer circle
+        c.beginPath();
+        c.arc(buttonX, buttonY, tailColorRadioRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+        c.lineWidth = 0.04 * knobRadius;
+        c.stroke();
+        
+        // Draw filled center if selected
+        if (tailColorMode === i) {
+            c.beginPath();
+            c.arc(buttonX, buttonY, tailColorRadioRadius * 0.5, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+            c.fill();
+        }
+
+        // Draw label below button
+        c.textAlign = 'center';
+        c.textBaseline = 'top';
+        c.font = `${0.24 * knobRadius}px verdana`;
+        c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+        c.lineWidth = 0.02 * knobRadius;
+        c.strokeText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
+        c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+        c.fillText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
+    }
+    
+    // Draw trace/fill radio buttons
+    const traceButtonRadius = knobRadius * 0.25;
+    const traceCol = 3.5;
+    const traceButtonY1 = (0 * knobSpacing) + (0.85 * knobRadius) + menuTopMargin;
+    const traceButtonY2 = traceButtonY1 + 0.8 * knobRadius;
+    const traceButtonY3 = traceButtonY2 + 0.8 * knobRadius;
+    const traceButtonY4 = traceButtonY3 + 0.8 * knobRadius;
+    const fillButtonY1 = traceButtonY4 + 1.0 * knobRadius;
+    const fillButtonY2 = fillButtonY1 + 0.8 * knobRadius;
+    
+    const traceButtonX = traceCol * knobSpacing - 0.5 * knobRadius;
+    
+    // Draw bracket and label for trace buttons
+    const bracketX = traceButtonX - traceButtonRadius - 0.35 * knobRadius;
+    const bracketTopY = traceButtonY1 - 0.4 * knobRadius;
+    const bracketBottomY = traceButtonY4 + 0.4 * knobRadius;
+    const bracketMidY = (bracketTopY + bracketBottomY) / 2;
+    const bracketWidth = 0.15 * knobRadius;
+    
+    c.beginPath();
+    c.moveTo(bracketX + bracketWidth, bracketTopY);
+    c.lineTo(bracketX, bracketTopY);
+    c.lineTo(bracketX, bracketBottomY);
+    c.lineTo(bracketX + bracketWidth, bracketBottomY);
+    c.strokeStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.04 * knobRadius;
+    c.stroke();
+    
+    // Draw rotated "Trace" label
+    c.save();
+    c.translate(bracketX - 0.3 * knobRadius, bracketMidY);
+    c.rotate(-Math.PI / 2);
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = `${0.3 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(140, 20%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeText('Trace', 0, 0.04 * knobRadius);
+    c.fillStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.fillText('Trace', 0, 0);
+    c.restore();
+    
+    // Trace button (dark outline)
+    c.beginPath();
+    c.arc(traceButtonX, traceButtonY1, traceButtonRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.stroke();
+    if (boidTraceMode === 1) {
+        c.beginPath();
+        c.arc(traceButtonX, traceButtonY1, traceButtonRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fill();
+    }
+    c.textAlign = 'left';
+    c.textBaseline = 'middle';
+    c.font = `${0.28 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeText('Black', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY1);
+    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillText('Black', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY1);
+    
+    // White button
+    c.beginPath();
+    c.arc(traceButtonX, traceButtonY2, traceButtonRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.stroke();
+    if (boidTraceMode === 3) {
+        c.beginPath();
+        c.arc(traceButtonX, traceButtonY2, traceButtonRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fill();
+    }
+    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeText('White', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY2);
+    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillText('White', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY2);
+    
+    // Color button
+    c.beginPath();
+    c.arc(traceButtonX, traceButtonY3, traceButtonRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.stroke();
+    if (boidTraceMode === 2) {
+        c.beginPath();
+        c.arc(traceButtonX, traceButtonY3, traceButtonRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fill();
+    }
+    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeText('Color', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY3);
+    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillText('Color', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY3);
+    
+    // Trace None button
+    c.beginPath();
+    c.arc(traceButtonX, traceButtonY4, traceButtonRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.stroke();
+    if (boidTraceMode === 0) {
+        c.beginPath();
+        c.arc(traceButtonX, traceButtonY4, traceButtonRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fill();
+    }
+    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeText('None', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY4);
+    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillText('None', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY4);
+    
+    // Draw bracket and label for fill buttons
+    const fillBracketX = traceButtonX - traceButtonRadius - 0.35 * knobRadius;
+    const fillBracketTopY = fillButtonY1 - 0.4 * knobRadius;
+    const fillBracketBottomY = fillButtonY2 + 0.4 * knobRadius;
+    const fillBracketMidY = (fillBracketTopY + fillBracketBottomY) / 2;
+    
+    c.beginPath();
+    c.moveTo(fillBracketX + bracketWidth, fillBracketTopY);
+    c.lineTo(fillBracketX, fillBracketTopY);
+    c.lineTo(fillBracketX, fillBracketBottomY);
+    c.lineTo(fillBracketX + bracketWidth, fillBracketBottomY);
+    c.strokeStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.04 * knobRadius;
+    c.stroke();
+    
+    // Draw rotated "Fill" label
+    c.save();
+    c.translate(fillBracketX - 0.3 * knobRadius, fillBracketMidY);
+    c.rotate(-Math.PI / 2);
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = `${0.3 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(140, 20%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeText('Fill', 0, 0.04 * knobRadius);
+    c.fillStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.fillText('Fill', 0, 0);
+    c.restore();
+    
+    // Fill button
+    c.beginPath();
+    c.arc(traceButtonX, fillButtonY1, traceButtonRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.stroke();
+    if (boidFillEnabled) {
+        c.beginPath();
+        c.arc(traceButtonX, fillButtonY1, traceButtonRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fill();
+    }
+    c.textAlign = 'left';
+    c.textBaseline = 'middle';
+    c.font = `${0.28 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeText('Fill', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + fillButtonY1);
+    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillText('Fill', traceButtonX + traceButtonRadius + 0.2 * knobRadius, fillButtonY1);
+    
+    // Fill None button
+    c.beginPath();
+    c.arc(traceButtonX, fillButtonY2, traceButtonRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.stroke();
+    if (!boidFillEnabled) {
+        c.beginPath();
+        c.arc(traceButtonX, fillButtonY2, traceButtonRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fill();
+    }
+    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeText('None', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + fillButtonY2);
+    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillText('None', traceButtonX + traceButtonRadius + 0.2 * knobRadius, fillButtonY2);
+    
+    // Draw scrollable boid type selection list
+    const listCol = 2.5;
+    const listX = listCol * knobSpacing - 1.15 * knobRadius;
+    const listWidth = knobRadius * 2.3;
+    const listY = bracketTopY;
+    const listHeight = fillBracketBottomY - bracketTopY;
+    const itemHeight = knobRadius * 0.72;
+    const listCornerRadius = knobRadius * 0.22;
+    
+    // Draw "Boid Style" title (rotated 90 degrees CCW on left side)
+    c.save();
+    c.translate(listX - 0.4 * knobRadius, listY + listHeight / 2);
+    c.rotate(-Math.PI / 2);
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = `${0.28 * knobRadius}px verdana`;
+    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeText('Boid Style', 0, 0.04 * knobRadius);
+    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillText('Boid Style', 0, 0);
+    c.restore();
+    
+    // Draw list background with rounded corners
+    c.fillStyle = `hsla(140, 80%, 10%, ${0.5 * stylingMenuOpacity})`;
+    c.beginPath();
+    c.roundRect(listX, listY, listWidth, listHeight, listCornerRadius);
+    c.fill();
+    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.lineWidth = 0.04 * knobRadius;
+    c.stroke();
+    
+    // Setup clipping region for scrollable content
+    c.save();
+    c.beginPath();
+    c.rect(listX, listY, listWidth, listHeight);
+    c.clip();
+    
+    // Draw list items
+    const visibleItems = Math.ceil(listHeight / itemHeight) + 1;
+    const startIndex = Math.max(0, Math.floor(boidTypeScrollOffset / itemHeight));
+    const endIndex = Math.min(boidTypeLabels.length, startIndex + visibleItems);
+    
+    for (let i = startIndex; i < endIndex; i++) {
+        const itemY = listY + (i * itemHeight) - boidTypeScrollOffset;
+        
+        /*// Draw selection highlight
+        if (selectedBoidType === i) {
+            c.fillStyle = `hsla(160, 80%, 40%, ${0.4 * stylingMenuOpacity})`;
+            c.fillRect(listX, itemY, listWidth, itemHeight);
+        }*/
+
+        // Draw selection highlight
+        if (selectedBoidType === i) {
+            c.fillStyle = `hsla(320, 90%, 70%, ${0.7 * stylingMenuOpacity})`;
+            c.beginPath();
+            const highlightPadding = itemHeight * 0.15;
+            c.roundRect(
+                listX + 0.7 * highlightPadding, 
+                itemY + 0.8 *highlightPadding, 
+                listWidth - 2.5 * highlightPadding, 
+                itemHeight - highlightPadding * 2, 
+                (itemHeight - highlightPadding * 2) / 2);
+            c.fill();
+        }
+        
+        // Draw item text
+        c.textAlign = 'left';
+        c.textBaseline = 'middle';
+        c.font = `${0.28 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+        c.fillText(boidTypeLabels[i], listX + 0.3 * knobRadius, itemY + itemHeight / 2);
+    }
+    
+    c.restore();
+    
+    // Draw scrollbar if content overflows
+    const maxScroll = Math.max(0, (boidTypeLabels.length * itemHeight) - listHeight);
+    if (maxScroll > 0) {
+        const scrollbarWidth = 0.1 * knobRadius;
+        const scrollbarX = listX + listWidth - scrollbarWidth - 0.05 * knobRadius;
+        const scrollbarHeight = listHeight * (listHeight / (boidTypeLabels.length * itemHeight));
+        const scrollbarY = listY + (boidTypeScrollOffset / maxScroll) * (listHeight - scrollbarHeight);
+        
+        c.fillStyle = `hsla(320, 90%, 70%, ${0.7 * stylingMenuOpacity})`;
+        c.fillRect(scrollbarX, scrollbarY, scrollbarWidth, scrollbarHeight);
+    }
 
     c.restore();
 }
@@ -6806,7 +7130,7 @@ function drawColorMenu() {
     // Only draw menu if it has some opacity
     if (colorMenuOpacity <= 0) return;
     
-    const knobRadius = 0.1 * cScale;
+    const knobRadius = 0.1 * menuScale;
     const colorWheelRadius = knobRadius * 1.7;
     const sliderWidth = knobRadius * 0.6;
     const sliderHeight = colorWheelRadius * 2;
@@ -6827,7 +7151,7 @@ function drawColorMenu() {
     const menuHeight = colorMenuAnimatedHeight;
     const padding = 0.8 * knobRadius;
     
-    const cornerRadius = 0.05 * cScale;
+    const cornerRadius = 0.05 * menuScale;
     c.beginPath();
     c.moveTo(-padding + cornerRadius, -padding);
     c.lineTo(menuWidth + padding - cornerRadius, -padding);
@@ -6851,14 +7175,14 @@ function drawColorMenu() {
     c.fillStyle = menuGradient;
     c.fill();
     c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
-    c.lineWidth = 0.004 * cScale;
+    c.lineWidth = 0.004 * menuScale;
     c.stroke();
 
     // Draw title
     c.fillStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
-    c.font = `bold ${0.05 * cScale}px verdana`;
+    c.font = `bold ${0.05 * menuScale}px verdana`;
     c.textAlign = 'center';
-    c.fillText('PAINT', menuWidth / 2, -padding + 0.04 * cScale);
+    c.fillText('PAINT', menuWidth / 2, -padding + 0.04 * menuScale);
     
     // Draw close icon in upper left corner
     const closeIconRadius = knobRadius * 0.25;
@@ -6917,7 +7241,7 @@ function drawColorMenu() {
     c.beginPath();
     c.arc(selectorX, selectorY, knobRadius * 0.2, 0, 2 * Math.PI);
     c.strokeStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
-    c.lineWidth = 0.005 * cScale;
+    c.lineWidth = 0.005 * menuScale;
     c.stroke();
     
     // Draw lightness slider
@@ -6933,7 +7257,7 @@ function drawColorMenu() {
     
     // Draw border around slider
     c.strokeStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity * 0.5})`;
-    c.lineWidth = 0.005 * cScale;
+    c.lineWidth = 0.005 * menuScale;
     c.strokeRect(lightnessSliderX, lightnessSliderY, sliderWidth, sliderHeight);
     
     // Draw lightness selector
@@ -6942,7 +7266,7 @@ function drawColorMenu() {
     c.moveTo(lightnessSliderX, lightnessIndicatorY);
     c.lineTo(lightnessSliderX + sliderWidth, lightnessIndicatorY);
     c.strokeStyle = `hsla(0, 0%, ${selectedLightness > 90 ? 50 : 100}%, ${colorMenuOpacity})`;
-    c.lineWidth = 0.007 * cScale;
+    c.lineWidth = 0.007 * menuScale;
     c.stroke();
     
     // Draw spraypaint icon (aerosol can in profile) ---------
@@ -7114,7 +7438,7 @@ function drawColorMenu() {
     // top cap with a line
     c.strokeStyle = rimGradient;
     c.beginPath();
-    c.lineWidth = 0.005 * cScale;
+    c.lineWidth = 0.005 * menuScale;
     c.moveTo(-canRadius * 0.34, -canRadius * 0.53);
     c.lineTo(canRadius * 0.34, -canRadius * 0.53);
     c.lineCap = 'round';
@@ -7124,7 +7448,7 @@ function drawColorMenu() {
     // Bottom cap with a line
     c.strokeStyle = rimGradient;
     c.beginPath();
-    c.lineWidth = 0.005 * cScale;
+    c.lineWidth = 0.005 * menuScale;
     c.moveTo(-canRadius * 0.34, canRadius * 0.7);
     c.lineTo(canRadius * 0.34, canRadius * 0.7);
     c.stroke();
@@ -7150,7 +7474,7 @@ function drawColorMenu() {
     c.closePath();
     c.fill();
     c.strokeStyle = `hsla(210, 60%, 80%, ${colorMenuOpacity * 0.3})`;
-    c.lineWidth = 0.004 * cScale;
+    c.lineWidth = 0.004 * menuScale;
     c.stroke();
     
     // Calculate slider position (0.05 to 0.5 range)
@@ -7177,7 +7501,7 @@ function drawColorMenu() {
     c.fillStyle = sliderKnobGradient;
     c.fill();
     c.strokeStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`; 
-    c.lineWidth = 0.005 * cScale;
+    c.lineWidth = 0.005 * menuScale;
     c.stroke();
     
     // Draw value label
@@ -7205,7 +7529,7 @@ function drawColorMenu() {
         c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
         c.fill();
         c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
-        c.lineWidth = 0.01 * cScale;
+        c.lineWidth = 0.01 * menuScale;
         c.stroke();
         
         // Black and white button
@@ -7230,12 +7554,12 @@ function drawColorMenu() {
 
         // Draw line from paint all button to dye one button
         c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
-        c.setLineDash([0.02 * cScale, 0.02 * cScale]);
-        c.lineWidth = 0.008 * cScale;
+        c.setLineDash([0.02 * menuScale, 0.02 * menuScale]);
+        c.lineWidth = 0.008 * menuScale;
         c.lineCap = 'round';
         c.beginPath();
         c.moveTo(buttonStartX + buttonSpacing * 3, buttonY);
-        const lineRadScale = 0.035 * cScale;
+        const lineRadScale = 0.035 * menuScale;
         const lineB = 1.5;
         const dropEndY = buttonY + buttonSpacing * 1.0 + lineB * lineRadScale;
         c.lineTo(buttonStartX + buttonSpacing * 4.5, dropEndY);
@@ -7255,7 +7579,7 @@ function drawColorMenu() {
         
         c.save();
         c.translate(dropX, dropY);
-        const radScale = 0.035 * cScale;
+        const radScale = 0.035 * menuScale;
 
         // Draw airfoil  -----------
         const numPoints = 24; 
@@ -7315,7 +7639,7 @@ function drawColorMenu() {
     c.fillText('Paint', buttonStartX + buttonSpacing * 3, buttonY + buttonRadius * 1.5);
     
     // Dye label with shadow
-    const textRadScale = 0.035 * cScale;
+    const textRadScale = 0.035 * menuScale;
     const textB = 1.5;
     const dropletCenterY = buttonY + buttonSpacing * 1.0;
     const dyeTextY = dropletCenterY + 2 * textB * textRadScale + buttonRadius * 0.3;
@@ -7324,7 +7648,6 @@ function drawColorMenu() {
     c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
     c.fillText('Dye', buttonStartX + buttonSpacing * 4.75, dyeTextY);
     
-
     // Color by direction button
     c.beginPath();
     c.arc(buttonStartX + buttonSpacing * 4, buttonY, buttonRadius, 0, 2 * Math.PI);
@@ -7429,7 +7752,7 @@ function drawColorMenu() {
     c.fillStyle = `hsla(210, 0%, 15%, ${0.9 * colorMenuOpacity})`;
     c.fill();
     c.strokeStyle = `hsla(210, 0%, 50%, ${colorMenuOpacity})`;
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
     c.stroke();
     
     // Calculate normalized value
@@ -7447,7 +7770,7 @@ function drawColorMenu() {
     c.strokeStyle = gradient;
     c.beginPath();
     c.arc(hueSensitivityKnobX, hueSensitivityKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
-    c.lineWidth = 0.02 * cScale;
+    c.lineWidth = 0.02 * menuScale;
     c.stroke();
     
     // Draw needle
@@ -7459,7 +7782,7 @@ function drawColorMenu() {
     c.moveTo(hueSensitivityKnobX, hueSensitivityKnobY);
     c.lineTo(pointerEndX, pointerEndY);
     c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
-    c.lineWidth = 0.008 * cScale;
+    c.lineWidth = 0.008 * menuScale;
     c.stroke();
 
     // Draw value label
@@ -7487,7 +7810,7 @@ function drawColorMenu() {
     c.fillStyle = `hsla(210, 0%, 15%, ${0.9 * colorMenuOpacity})`;
     c.fill();
     c.strokeStyle = `hsla(210, 0%, 50%, ${colorMenuOpacity})`;
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
     c.stroke();
     
     // Convert hueTicker to normalized value using logarithmic scale
@@ -7508,7 +7831,7 @@ function drawColorMenu() {
     c.strokeStyle = tickerGradient;
     c.beginPath();
     c.arc(hueTickerKnobX, hueTickerKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * tickerNormalized);
-    c.lineWidth = 0.02 * cScale;
+    c.lineWidth = 0.02 * menuScale;
     c.stroke();
     
     // Draw needle
@@ -7520,7 +7843,7 @@ function drawColorMenu() {
     c.moveTo(hueTickerKnobX, hueTickerKnobY);
     c.lineTo(tickerPointerEndX, tickerPointerEndY);
     c.strokeStyle = `hsla(210, 0%, 80%, ${colorMenuOpacity})`;
-    c.lineWidth = 0.008 * cScale;
+    c.lineWidth = 0.008 * menuScale;
     c.stroke();
 
     // Draw value label
@@ -8225,7 +8548,7 @@ function drawSkyMenu() {
     
     const labels = ['Turbidity', 'Rayleigh Scattering', 'Mie Scattering', 'Scatter Focus', 'Sun Azimuth', 'Auto Azimuth', 'Sun Elevation', 'Exposure', 'Field of View', 'Auto Elevation'];
     
-    const knobRadius = 0.1 * cScale;
+    const knobRadius = 0.1 * menuScale;
     const knobSpacing = knobRadius * 3;
     const menuUpperLeftX = skyMenuX * cScale;
     const menuUpperLeftY = canvas.height - skyMenuY * cScale;
@@ -8240,7 +8563,7 @@ function drawSkyMenu() {
     const menuHeight = knobSpacing * 2.25;
     const padding = 1.7 * knobRadius;
     
-    const cornerRadius = 0.05 * cScale;
+    const cornerRadius = 0.05 * menuScale;
     c.beginPath();
     c.moveTo(-padding + cornerRadius, -padding);
     c.lineTo(menuWidth + padding - cornerRadius, -padding);
@@ -8253,7 +8576,7 @@ function drawSkyMenu() {
     c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
     c.closePath();
     c.strokeStyle = `hsla(30, 80%, 60%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.004 * cScale;
+    c.lineWidth = 0.004 * menuScale;
     const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
     menuGradient.addColorStop(0, `hsla(30, 70%, 25%, ${0.9 * skyMenuOpacity})`);
     menuGradient.addColorStop(1, `hsla(30, 70%, 10%, ${0.9 * skyMenuOpacity})`);
@@ -8286,9 +8609,9 @@ function drawSkyMenu() {
     
     // Draw title
     c.fillStyle = `hsla(30, 80%, 80%, ${skyMenuOpacity})`;
-    c.font = `bold ${0.05 * cScale}px verdana`;
+    c.font = `bold ${0.05 * menuScale}px verdana`;
     c.textAlign = 'center';
-    c.fillText('SKY', menuWidth / 2, -padding + 0.04 * cScale);
+    c.fillText('SKY', menuWidth / 2, -padding + 0.04 * menuScale);
     
     // Draw knobs for each parameter
     for (let i = 0; i < menuItems.length && i < 10; i++) {
@@ -8320,7 +8643,7 @@ function drawSkyMenu() {
         c.fillStyle = `hsla(30, 40%, 15%, ${0.9 *skyMenuOpacity})`;
         c.fill();
         c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-        c.lineWidth = 0.003 * cScale;
+        c.lineWidth = 0.003 * menuScale;
         c.stroke();
         
         // Draw meter arc - for azimuth (index 4), draw full circle
@@ -8345,7 +8668,7 @@ function drawSkyMenu() {
         gradient.addColorStop(0.5, `hsla(35, 80%, 60%, ${skyMenuOpacity})`);
         c.strokeStyle = gradient;
         //c.strokeStyle = `hsla(30, 80%, 60%, ${skyMenuOpacity})`;
-        c.lineWidth = 0.02 * cScale;
+        c.lineWidth = 0.02 * menuScale;
         c.stroke();
         
         // Draw knob pointer
@@ -8367,14 +8690,14 @@ function drawSkyMenu() {
         c.moveTo(x, y);
         c.lineTo(pointerEndX, pointerEndY);
         c.strokeStyle = `hsla(30, 80%, 80%, ${skyMenuOpacity})`;
-        c.lineWidth = 0.008 * cScale;
+        c.lineWidth = 0.008 * menuScale;
         c.stroke();
         
         // Draw label
         c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-        c.font = `${0.032 * cScale}px sans-serif`;
+        c.font = `${0.032 * menuScale}px sans-serif`;
         c.textAlign = 'center';
-        c.fillText(labels[i], x, y + knobRadius + 0.04 * cScale);
+        c.fillText(labels[i], x, y + knobRadius + 0.04 * menuScale);
         
         // Draw value
         let decimals;
@@ -8385,7 +8708,7 @@ function drawSkyMenu() {
         let displayValue = value.toFixed(decimals);
         if (i === 4 || i === 8) displayValue += '°'; // Add degree symbol for azimuth and FOV
         c.fillStyle = `hsla(150, 50%, 60%, ${skyMenuOpacity})`;
-        c.font = `${0.025 * cScale}px sans-serif`;
+        c.font = `${0.025 * menuScale}px sans-serif`;
         c.fillText(displayValue, x, y + knobRadius * 0.60);
     }
     
@@ -8403,7 +8726,7 @@ function drawSkyMenu() {
     c.fillStyle = `hsla(30, 40%, 15%, ${0.9 * skyMenuOpacity})`; // Knob fill color
     c.fill();
     c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
     c.stroke();
     
     // Draw filled center (green when on, red when off)
@@ -8426,7 +8749,7 @@ function drawSkyMenu() {
     c.fillStyle = `hsla(30, 40%, 15%, ${0.9 * skyMenuOpacity})`; // Knob fill color
     c.fill();
     c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
     c.stroke();
     
     // Draw filled center (green when on, red when off)
@@ -8449,7 +8772,7 @@ function drawSkyMenu() {
     c.fillStyle = `hsla(30, 40%, 15%, ${0.9 * skyMenuOpacity})`; // Knob fill color
     c.fill();
     c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
     c.stroke();
     
     // Draw filled center (green when on, red when off)
@@ -8476,7 +8799,7 @@ function drawSkyMenu() {
     c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
     c.fill();
     c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
     c.stroke();
     if (showClouds) {
         c.beginPath();
@@ -8485,7 +8808,7 @@ function drawSkyMenu() {
         c.fill();
     }
     c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-    c.font = `${0.028 * cScale}px sans-serif`;
+    c.font = `${0.028 * menuScale}px sans-serif`;
     c.fillText('Clouds', cloudsX, cloudsY + knobRadius * 0.5);
     
     // Plane toggle (top-right)
@@ -8496,7 +8819,7 @@ function drawSkyMenu() {
     c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
     c.fill();
     c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
     c.stroke();
     if (showPlane) {
         c.beginPath();
@@ -8515,7 +8838,7 @@ function drawSkyMenu() {
     c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
     c.fill();
     c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
     c.stroke();
     if (showBalloons) {
         c.beginPath();
@@ -8535,7 +8858,7 @@ function drawSkyMenu() {
     c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
     c.fill();
     c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
     c.stroke();
     if (showHotAirBalloon) {
         c.beginPath();
@@ -8556,7 +8879,7 @@ function drawSkyMenu() {
         `hsla(120, 90%, 60%, ${skyMenuOpacity})` : 
         `hsla(0, 50%, 40%, ${skyMenuOpacity})`;
     c.strokeStyle = `hsla(0, 0%, 10%, ${skyMenuOpacity})`
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
     c.lineCap = 'round';
     c.lineJoin = 'round';
 
@@ -8644,16 +8967,12 @@ function drawSkyMenu() {
 
     // Draw lock icon only if skyHandActive is false
     if (!skyHandActive) {
-        const lockSize = 40;
+        const lockSize = menuScale * 0.1;
         const lockY = -lockSize / 4; // Position slightly above center
-        
-        // Draw lock body (rectangle)
-        c.fillStyle = 'hsl(0, 0%, 70%)';
-        c.fillRect(camX - lockSize/4, buttonY + lockY, lockSize/2, lockSize/2.5);
         
         // Draw lock shackle (arc on top)
         c.strokeStyle = 'hsl(0, 0%, 90%)';
-        c.lineWidth = 3;
+        c.lineWidth = 0.01 * menuScale;
         c.beginPath();
         c.arc(camX, buttonY +(lockY - 0.15 * lockSize), lockSize/6, Math.PI, 0, false);
         c.stroke();
@@ -8665,16 +8984,20 @@ function drawSkyMenu() {
         c.moveTo(camX + lockSize/6, buttonY + lockY);
         c.lineTo(camX + lockSize/6, buttonY + (lockY - 0.15 * lockSize));
         c.stroke();
+
+        // Draw lock body (rectangle)
+        c.fillStyle = 'hsl(0, 0%, 70%)';
+        c.fillRect(camX - lockSize/4, buttonY + lockY, lockSize/2, lockSize/2.5);
     }
     
     // Label
     c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-    c.font = `${0.028 * cScale}px sans-serif`;
+    c.font = `${0.028 * menuScale}px sans-serif`;
     c.textAlign = 'center';
     c.fillText('Adjust Sky Camera', camX, buttonY + knobRadius * 0.7);
     
     // Credit link at bottom left - split into two parts
-    c.font = `${0.032 * cScale}px sans-serif`;
+    c.font = `${0.032 * menuScale}px sans-serif`;
     c.textAlign = 'left';
     const creditX = -padding + 0.3 * knobRadius;
     const creditY = menuHeight + padding - 0.3 * knobRadius;
@@ -8699,7 +9022,7 @@ function drawDrawMenu() {
     // Placeholder menu - will contain draw tools in future
     const menuItems = [];
     
-    const knobRadius = 0.1 * cScale;
+    const knobRadius = 0.1 * menuScale;
     const knobSpacing = knobRadius * 3;
     const menuUpperLeftX = drawMenuX * cScale;
     const menuUpperLeftY = canvas.height - drawMenuY * cScale;
@@ -8712,7 +9035,7 @@ function drawDrawMenu() {
     const menuHeight = knobSpacing * 1.5;
     const padding = 1.7 * knobRadius;
     
-    const cornerRadius = 0.05 * cScale;
+    const cornerRadius = 0.05 * menuScale;
     c.beginPath();
     c.moveTo(-padding + cornerRadius, -padding);
     c.lineTo(menuWidth + padding - cornerRadius, -padding);
@@ -8758,9 +9081,9 @@ function drawDrawMenu() {
     
     // Draw title
     c.fillStyle = `hsla(340, 80%, 80%, ${drawMenuOpacity})`;
-    c.font = `bold ${0.05 * cScale}px verdana`;
+    c.font = `bold ${0.05 * menuScale}px verdana`;
     c.textAlign = 'center';
-    c.fillText('DRAW', menuWidth / 2, -padding + 0.04 * cScale);
+    c.fillText('DRAW', menuWidth / 2, -padding + 0.04 * menuScale);
     
     // Grid layout: 3 columns, 2 rows (expandable)
     const menuTopMargin = 0.2 * knobRadius;
@@ -8770,7 +9093,7 @@ function drawDrawMenu() {
     const gridStartY = menuTopMargin;
     
     // Draw magnet toggle button (row 0, col 0 - upper left)
-    const magnetButtonRadius = 0.06 * cScale;
+    const magnetButtonRadius = 0.06 * menuScale;
     const iconRadius = magnetButtonRadius;
     const magnetCol = 0;
     const magnetRow = 0;
@@ -8817,7 +9140,7 @@ function drawDrawMenu() {
     };
 
     // black base for poles and arc
-    c.lineWidth = 25;
+    c.lineWidth = menuScale * 0.06;
     // Left pole
     c.beginPath();
     c.moveTo(magnetButtonX - iconRadius, magnetButtonY - 0.9 * iconRadius);
@@ -8846,7 +9169,7 @@ function drawDrawMenu() {
     c.stroke();
 
     // colored overlay for poles and arc
-    c.lineWidth = 22;
+    c.lineWidth = menuScale * 0.05;
     const grau = `hsla(0, 0%, 50%, ${drawMenuOpacity})`;
     const lichtgrau = `hsla(0, 0%, 80%, ${drawMenuOpacity})`;
     const rott = `hsla(0, 85%, 40%, ${drawMenuOpacity})`;
@@ -8892,7 +9215,7 @@ function drawDrawMenu() {
     c.fillText("+", magnetButtonX + iconRadius + 0.01 * iconRadius, magnetButtonY - 1.18 * iconRadius);
 
     // draw force level indicator dot gauge along the bottom U of the magnget
-    const gaugeRadius = 3;
+    const gaugeRadius = magnetButtonRadius * 0.15;
     const gaugeSteps = 10;
     // draw gauge dots in an arc centered on the U-bend
     for (let i = 0; i < gaugeSteps; i++) {
@@ -8916,9 +9239,9 @@ function drawDrawMenu() {
     
     // Draw label
     c.fillStyle = `hsla(340, 70%, 90%, ${drawMenuOpacity})`;
-    c.font = `${0.028 * cScale}px verdana`;
+    c.font = `${0.028 * menuScale}px verdana`;
     c.textAlign = 'center';
-    c.fillText('Magnet on/off', magnetButtonX, magnetButtonY + magnetButtonRadius + 0.07 * cScale);
+    c.fillText('Magnet on/off', magnetButtonX, magnetButtonY + magnetButtonRadius + 0.075 * menuScale);
     
     // Draw Pull Strength knob (row 0, col 1)
     const pullKnobCol = 1;
@@ -8934,7 +9257,8 @@ function drawDrawMenu() {
     c.fillStyle = `hsla(340, 40%, 15%, ${0.9 * drawMenuOpacity})`;
     c.fill();
     c.strokeStyle = `hsla(340, 40%, 50%, ${drawMenuOpacity})`;
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
+    c.lineCap = 'round';
     c.stroke();
     
     // Calculate normalized value
@@ -8954,7 +9278,7 @@ function drawDrawMenu() {
     c.strokeStyle = pullGradient;
     c.beginPath();
     c.arc(pullKnobX, pullKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * pullNormalizedValue);
-    c.lineWidth = 0.02 * cScale;
+    c.lineWidth = 0.02 * menuScale;
     c.stroke();
     
     // Draw needle
@@ -8966,8 +9290,9 @@ function drawDrawMenu() {
     c.moveTo(pullKnobX, pullKnobY);
     c.lineTo(pullPointerEndX, pullPointerEndY);
     c.strokeStyle = `hsla(340, 80%, 80%, ${drawMenuOpacity})`;
-    c.lineWidth = 0.008 * cScale;
+    c.lineWidth = 0.008 * menuScale;
     c.stroke();
+    c.lineCap = 'butt';
     
     // Draw knob label (with shadow)
     c.textAlign = 'center';
@@ -9017,7 +9342,7 @@ function drawDrawMenu() {
     c.strokeStyle = radiusGradient;
     c.beginPath();
     c.arc(radiusKnobX, radiusKnobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * radiusNormalizedValue);
-    c.lineWidth = 0.02 * cScale;
+    c.lineWidth = 0.02 * menuScale;
     c.lineCap = 'round';
     c.stroke();
     c.lineCap = 'butt';
@@ -9031,7 +9356,7 @@ function drawDrawMenu() {
     c.moveTo(radiusKnobX, radiusKnobY);
     c.lineTo(radiusPointerEndX, radiusPointerEndY);
     c.strokeStyle = `hsla(340, 80%, 80%, ${drawMenuOpacity})`;
-    c.lineWidth = 0.008 * cScale;
+    c.lineWidth = 0.008 * menuScale;
     c.stroke();
     
     // Draw knob label (with shadow)
@@ -9107,7 +9432,7 @@ function drawDrawMenu() {
     // Draw label
     c.textAlign = 'center';
     c.fillStyle = `hsla(340, 70%, 90%, ${drawMenuOpacity})`;
-    c.font = `${0.029 * cScale}px verdana`;
+    c.font = `${0.029 * menuScale}px verdana`;
     c.strokeStyle = `hsla(340, 80%, 0%, ${0.6 * drawMenuOpacity})`;
     c.strokeText('Trace Path', 0.04 * knobRadius + traceX, 0.04 * knobRadius + (traceY + 1.35 * knobRadius));
     c.fillStyle = `hsla(340, 80%, 95%, ${drawMenuOpacity})`;
@@ -9125,7 +9450,7 @@ function drawDrawMenu() {
     c.fillStyle = `hsla(340, 40%, 15%, ${0.9 * drawMenuOpacity})`;
     c.fill();
     c.strokeStyle = `hsla(340, 40%, 50%, ${drawMenuOpacity})`;
-    c.lineWidth = 0.003 * cScale;
+    c.lineWidth = 0.003 * menuScale;
     c.stroke();
     
     // Calculate normalized value
@@ -9136,6 +9461,7 @@ function drawDrawMenu() {
     const topAngle = -Math.PI / 2; // 12 o'clock position
     const halfSweep = 0.8 * Math.PI; // Half of fullMeterSweep (1.6 * Math.PI / 2)
     
+    c.lineCap = 'round';
     if (magnetPathSpeed >= 0) {
         // Positive speed: arc extends clockwise from 12 o'clock
         const speedNormalizedValue = magnetPathSpeed / speedMax;
@@ -9152,7 +9478,7 @@ function drawDrawMenu() {
         c.strokeStyle = speedGradient;
         c.beginPath();
         c.arc(speedKnobX, speedKnobY, knobRadius * 0.85, topAngle, topAngle + arcSweep);
-        c.lineWidth = 0.02 * cScale;
+        c.lineWidth = 0.02 * menuScale;
         c.stroke();
         
         // Draw needle
@@ -9164,7 +9490,7 @@ function drawDrawMenu() {
         c.moveTo(speedKnobX, speedKnobY);
         c.lineTo(speedPointerEndX, speedPointerEndY);
         c.strokeStyle = `hsla(340, 80%, 80%, ${drawMenuOpacity})`;
-        c.lineWidth = 0.008 * cScale;
+        c.lineWidth = 0.008 * menuScale;
         c.stroke();
     } else {
         // Negative speed: arc extends counterclockwise from 12 o'clock
@@ -9182,7 +9508,7 @@ function drawDrawMenu() {
         c.strokeStyle = speedGradient;
         c.beginPath();
         c.arc(speedKnobX, speedKnobY, knobRadius * 0.85, topAngle - arcSweep, topAngle);
-        c.lineWidth = 0.02 * cScale;
+        c.lineWidth = 0.02 * menuScale;
         c.stroke();
         
         // Draw needle
@@ -9194,9 +9520,10 @@ function drawDrawMenu() {
         c.moveTo(speedKnobX, speedKnobY);
         c.lineTo(speedPointerEndX, speedPointerEndY);
         c.strokeStyle = `hsla(340, 80%, 80%, ${drawMenuOpacity})`;
-        c.lineWidth = 0.008 * cScale;
+        c.lineWidth = 0.008 * menuScale;
         c.stroke();
     }
+    c.lineCap = 'butt';
     
     // Draw knob label (with shadow)
     c.textAlign = 'center';
@@ -9224,7 +9551,7 @@ function drawDrawMenu() {
     c.save();
     c.translate(wandIconX, wandIconY);
     
-    // Draw a smaller version of the wand
+    // Draw a smaller image of the wand
     const iconWandLength = wandIconSize * 0.8;
     const iconWandWidth = wandIconSize * 0.05;
     const iconWandAngle = 0.25 * Math.PI; 
@@ -9300,7 +9627,7 @@ function drawDrawMenu() {
     // Draw label
     c.textAlign = 'center';
     c.fillStyle = `hsla(340, 70%, 90%, ${drawMenuOpacity})`;
-    c.font = `${0.029 * cScale}px verdana`;
+    c.font = `${0.029 * menuScale}px verdana`;
     c.strokeStyle = `hsla(340, 80%, 0%, ${0.6 * drawMenuOpacity})`;
     c.strokeText('Make Boids', 0.04 * knobRadius + wandIconX, 0.04 * knobRadius + (wandIconY + 1.35 * knobRadius));
     c.fillStyle = `hsla(340, 80%, 95%, ${drawMenuOpacity})`;
@@ -9372,7 +9699,7 @@ function simulateEverything() {
     }
     
     // Animate color menu height when spray tool is toggled
-    const knobRadius = 0.1 * cScale;
+    const knobRadius = 0.1 * menuScale;
     const spacing = knobRadius * 0.5;
     const targetHeight = spraypaintActive ? spacing * 7 : spacing * 20;
     const heightTransitionSpeed = 15; // Speed of height transition
@@ -9395,6 +9722,13 @@ function simulateEverything() {
         drawMenuOpacity = Math.min(1, drawMenuOpacity + menuFadeSpeed * deltaT);
     } else if ((!drawMenuVisible || spraypaintActive) && drawMenuOpacity > 0) {
         drawMenuOpacity = Math.max(0, drawMenuOpacity - menuFadeSpeed * deltaT);
+    }
+    
+    // Update styling menu opacity for fade in/out
+    if (stylingMenuVisible && stylingMenuOpacity < 1) {
+        stylingMenuOpacity = Math.min(1, stylingMenuOpacity + menuFadeSpeed * deltaT);
+    } else if (!stylingMenuVisible && stylingMenuOpacity > 0) {
+        stylingMenuOpacity = Math.max(0, stylingMenuOpacity - menuFadeSpeed * deltaT);
     }
     
     // Update auto elevation if enabled
@@ -9834,7 +10168,8 @@ function drawEverything() {
         {draw: drawSkyMenu, z: skyMenuZOrder},
         {draw: drawColorMenu, z: colorMenuZOrder},
         {draw: drawSimMenu, z: menuZOrder},
-        {draw: drawDrawMenu, z: drawMenuZOrder}
+        {draw: drawDrawMenu, z: drawMenuZOrder},
+        {draw: drawStylingMenu, z: stylingMenuZOrder}
     ];
     menus.sort((a, b) => a.z - b.z);
     for (let menu of menus) {
