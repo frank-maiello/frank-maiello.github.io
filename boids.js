@@ -1,5 +1,5 @@
 /*
-B0IDS 1.50 :: emergent flocking behavior ::
+B0IDS 1.51 :: emergent flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -18,9 +18,8 @@ canvas.height = height;
 simMinWidth = 2.0;
 cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
 
-// Master menu size control - limit maximum menu scale
-const maxMenuScale = 600; // Maximum pixel size reference for menus
-const menuScale = Math.min(cScale, maxMenuScale / simMinWidth);
+// Master menu size control
+const menuScale = 350;
 
 simWidth = canvas.width / cScale;
 simHeight = canvas.height / cScale;
@@ -128,8 +127,8 @@ let stylingMenuDragInitialX = 0;
 let stylingMenuDragInitialY = 0;
 
 // Boid type selection (0=arrows, 1=circles, 2=airfoils, 3=birds, 4=none)
-let selectedBoidType = 1; // Default to Arrows
-let previousBoidType = 1; // Remembers last type before None was selected
+let selectedBoidType = 2; // Default to Birds
+let previousBoidType = 2; // Remembers last type before None was selected
 let boidTypeScrollOffset = 0; // Scroll position for boid type list
 let boidTypeLabels = ['Triangles', 'Arrows', 'Birds', 'Circles', 'Ellipses', 'Squares', 'Teardrops', 'Bubbles'];
 let tailColorMode = 0; // 0 = none, 1 = black, 2 = white, 3 = selected hue, 4 = hue2
@@ -244,6 +243,7 @@ let tracePathActive = false;
 let isDrawingPath = false;
 let pathExists = false;
 let pathPoints = [];
+let pathSmoothLevel = 0; // Number of times path has been smoothed
 let pathLength = 0; // Total length of the path in world units
 let pathCumulativeDistances = []; // Cumulative distance at each point for arc-length parameterization
 let magnetPathProgress = 0;
@@ -1018,7 +1018,7 @@ mousedownHandler = function(e) {
         const knobSpacing = knobRadius * 3;
         const menuTopMargin = 0.2 * knobRadius; // Must match the margin in drawSimMenu
         const menuWidth = knobSpacing * 2;
-        const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
+        const menuHeight = knobSpacing * 2 + knobRadius * 2.0;
         const padding = 1.7 * knobRadius;
         const menuUpperLeftX = menuX * cScale;
         const menuUpperLeftY = (canvas.height - menuY * cScale);
@@ -1041,14 +1041,10 @@ mousedownHandler = function(e) {
             return true;
         }
         
-        // Check individual knobs first
-        // Display order: numBoids, size, visual, rule1, rule2, rule3, speed, confinement
-        const displayOrder = [0, 1, 2, 5, 6, 7, 3, 8];
-        for (let displayPos = 0; displayPos < displayOrder.length; displayPos++) {
-            const knob = displayOrder[displayPos];
-            if (knob === 4) continue; // Skip removed knob
-            const row = Math.floor(displayPos / 3);
-            const col = displayPos % 3;
+        // Check individual knobs
+        for (let knob = 0; knob < 9; knob++) {
+            const row = Math.floor(knob / 3);
+            const col = knob % 3;
             const knobCanvasX = menuOriginX + col * knobSpacing;
             const knobCanvasY = menuOriginY + row * knobSpacing + menuTopMargin;
             
@@ -1063,9 +1059,9 @@ mousedownHandler = function(e) {
                 
                 // Store the starting value
                 const menuItems = [
-                    Boids.length, boidRadius * 100, boidProps.visualRange, boidProps.speedLimit,
-                    null, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
-                    boidProps.turnFactor, boidProps.tailLength, boidProps.tailWidth];
+                    Boids.length, boidRadius * 100, boidProps.visualRange,
+                    boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
+                    boidProps.speedLimit, boidProps.turnFactor, marginFactor];
                 dragStartValue = menuItems[knob];
                 return true;
             }
@@ -1209,6 +1205,7 @@ mousedownHandler = function(e) {
             tracePathActive = true;
             isDrawingPath = false; // Don't start drawing yet
             pathPoints = [];
+            pathSmoothLevel = 0; // Reset smooth level
             
             // Update mouse listeners for cursor tracking
             updateMouseListeners();
@@ -1620,8 +1617,15 @@ mouseupHandler = function(e) {
         
         // Smooth and close the path if we have enough points
         if (pathPoints.length > 2) {
-            // Smooth the path using Chaikin's algorithm (2 iterations)
-            pathPoints = smoothPath(pathPoints, 2);
+            // Smooth the path using Chaikin's algorithm (3 iterations for aggressive jitter removal)
+            pathPoints = smoothPath(pathPoints, 3);
+            
+            // Apply automatic aggressive smoothing (equivalent to 30 manual presses)
+            for (let i = 0; i < 30; i++) {
+                pathSmoothLevel = i; // Set level for progressive smoothing
+                applyManualSmoothing();
+            }
+            pathSmoothLevel = 30; // Set final level to 30
             
             // Calculate total path length and cumulative distances
             pathLength = 0;
@@ -1987,17 +1991,15 @@ function handleMouseMove(e) {
     // Handle knob dragging
     if (draggedKnob !== null && draggedKnob !== 4) {
         const ranges = [
-            {min: 100, max: 5000},      // numBoids
-            {min: 1, max: 10},           // boidRadius (scaled by 100)
-            {min: 0.05, max: 0.5},       // visualRange
-            {min: 0.1, max: 3.0},        // speedLimit
-            {min: 0.0, max: 0.2},        // (removed)
-            {min: 0, max: 100},          // avoidFactor
-            {min: 0, max: 50},           // matchingFactor
-            {min: 0, max: 20},           // centeringFactor
-            {min: 0, max: 5},            // turnFactor
-            {min: 0, max: 100},          // trailLength
-            {min: 1.0, max: 5.0}         // tailWidth
+            {min: 100, max: 5000},      // 0: numBoids
+            {min: 1, max: 10},           // 1: boidRadius (scaled by 100)
+            {min: 0.05, max: 0.5},       // 2: visualRange
+            {min: 0, max: 100},          // 3: avoidFactor
+            {min: 0, max: 50},           // 4: matchingFactor
+            {min: 0, max: 20},           // 5: centeringFactor
+            {min: 0.1, max: 3.0},        // 6: speedLimit
+            {min: 0, max: 5},            // 7: turnFactor
+            {min: 0.0, max: 0.40}        // 8: marginFactor
         ];
         
         // Calculate drag delta (combined horizontal and vertical)
@@ -2124,13 +2126,15 @@ function handleMouseMove(e) {
                 // Update dependent properties
                 SpatialGrid = new SpatialHashGrid(boidProps.visualRange / 2)
                 break;
-            case 3: boidProps.speedLimit = newValue; break;
-            case 5: boidProps.avoidFactor = newValue; break;
-            case 6: boidProps.matchingFactor = newValue; break;
-            case 7: boidProps.centeringFactor = newValue; break;
-            case 8: boidProps.turnFactor = newValue; break;
-            case 9: boidProps.tailLength = Math.round(newValue); break;
-            case 10: boidProps.tailWidth = newValue; break;
+            case 3: boidProps.avoidFactor = newValue; break;
+            case 4: boidProps.matchingFactor = newValue; break;
+            case 5: boidProps.centeringFactor = newValue; break;
+            case 6: boidProps.speedLimit = newValue; break;
+            case 7: boidProps.turnFactor = newValue; break;
+            case 8: 
+                marginFactor = newValue;
+                boidProps.margin = Math.min(marginFactor * simWidth, marginFactor * simHeight);
+                break;
         }
         return;
     }
@@ -2194,6 +2198,7 @@ function handleMouseMove(e) {
         return;
     }
     
+    // Handle wand dragging and boid spawning
     if (isDraggingWand) {
         wandPosX = (mouseX - wandDragOffsetX) / simWidth;
         wandPosY = (mouseY - wandDragOffsetY) / simHeight;
@@ -2212,13 +2217,21 @@ function handleMouseMove(e) {
             
             // Spawn a boid from the tip with random outward velocity
             const velAngle = Math.random() * 2 * Math.PI;
-            const velMag = 1.0 + Math.random() * 1.0;
+            const velMag = 1.0 + Math.random() * 10.0;
             const vel = new Vector2(Math.cos(velAngle) * velMag, Math.sin(velAngle) * velMag);
             const pos = new Vector2(tipX, tipY);
             const hue = Math.random() * 360;
             
             const newBoid = new BOID(pos, vel, hue, false, false);
-            newBoid.arrow = true;
+            // Set boid type based on selectedBoidType
+            newBoid.triangleBoid = selectedBoidType === 0;
+            newBoid.arrow = selectedBoidType === 1;
+            newBoid.flappy = selectedBoidType === 2;
+            newBoid.circle = selectedBoidType === 3;
+            newBoid.ellipseBoid = selectedBoidType === 4;
+            newBoid.square = selectedBoidType === 5;
+            newBoid.airfoil = selectedBoidType === 6;
+            newBoid.glowBoid = selectedBoidType === 7;
             Boids.push(newBoid);
             
             wandPrevX = wandPosX;
@@ -2516,6 +2529,54 @@ function smoothPath(points, iterations) {
     }
     
     return smoothed;
+}
+
+// Apply additional manual smoothing to existing path
+// Extremely aggressive smoothing to reduce sharp angles across the entire path
+function applyManualSmoothing() {
+    if (pathPoints.length < 3) return;
+    
+    // Number of smoothing passes increases with each button press
+    const passes = 2 + pathSmoothLevel;
+    
+    // Apply multiple passes of aggressive smoothing
+    for (let pass = 0; pass < passes; pass++) {
+        const smoothedPoints = [];
+        const len = pathPoints.length;
+        
+        // Extremely aggressive weight that increases with smooth level
+        // Start at 0.6 and increase to nearly 0.9
+        const baseWeight = 0.6 + pathSmoothLevel * 0.05;
+        const weight = Math.min(baseWeight, 0.85);
+        
+        for (let i = 0; i < len; i++) {
+            const prev = pathPoints[(i - 1 + len) % len];
+            const curr = pathPoints[i];
+            const next = pathPoints[(i + 1) % len];
+            
+            // Use weighted average with very high weight on neighbors
+            // This aggressively pulls each point toward the average of its neighbors
+            const smoothX = curr.x * (1 - weight) + (prev.x + next.x) / 2 * weight;
+            const smoothY = curr.y * (1 - weight) + (prev.y + next.y) / 2 * weight;
+            
+            smoothedPoints.push({x: smoothX, y: smoothY});
+        }
+        
+        pathPoints = smoothedPoints;
+    }
+    
+    // Recalculate path length and cumulative distances
+    pathLength = 0;
+    pathCumulativeDistances = [0];
+    for (let i = 0; i < pathPoints.length; i++) {
+        const p1 = pathPoints[i];
+        const p2 = pathPoints[(i + 1) % pathPoints.length];
+        const segmentLength = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        pathLength += segmentLength;
+        if (i < pathPoints.length - 1) {
+            pathCumulativeDistances.push(pathLength);
+        }
+    }
 }
 
 //  SPATIAL HASH GRID CLASS ---------------------------------------------------------------------
@@ -5182,11 +5243,13 @@ class BOID {
             this.flapper += 0.3 * boidSpeed; 
             if (this.flapper >= 1.8) {
                 this.flapOut = false;
+                this.flapper = 1.8; // Clamp to maximum
             }
         } else if (this.flappy && !this.flapOut) {
             this.flapper -= 0.6 * boidSpeed; 
             if (this.flapper <= 0) {
                 this.flapOut = true;
+                this.flapper = 0; // Clamp to minimum
             }
         }
         // Update position based on velocity
@@ -6342,44 +6405,26 @@ function drawSimMenu() {
     
     // Only draw menu if it has some opacity
     if (menuOpacity <= 0) return;
-    
-    // variables to control:
-    
-    // numBoids - range from 100 to 5000, integer
-    // boidRadius - range from 1 to 10, integer
-    // visualRange - range from 0.05 to 0.5
-    // speedLimit - range from 0.1 to 3.0
 
-    // Rule #1: minDistance - range from 0.0 to 0.2
-    // Rule #1: avoidFactor - range from 0 to 100, integer
-    // Rule #2: matchingFactor - range from 0 to 50, integer
-    // Rule #3: centeringFactor - range from 0 to 20, integer
-
-    // turnFactor - range from 0 to 100, integer
-    // trailLength - range from 0 to 100, integer
-
-    // fps display
-
+    // Draw boid bounds when menu is active
+    drawBounds()
+     
     const menuItems = [
-        boidProps.numBoids, boidProps.boidRadius, boidProps.visualRange, boidProps.speedLimit,
-        null, boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
-        boidProps.turnFactor];
-
-    // Display order: determines visual position of knobs
-    // Maps display position to knob index (numBoids, size, visual, rule1, rule2, rule3, speed, confinement)
-    const displayOrder = [0, 1, 2, 5, 6, 7, 3, 8];
+        boidProps.numBoids, boidProps.boidRadius, boidProps.visualRange,
+        boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
+        boidProps.speedLimit, boidProps.turnFactor, marginFactor];
 
     // Define min/max ranges for each parameter
     const ranges = [
-        {min: 100, max: 5000},      // numBoids
-        {min: 1, max: 10},           // boidRadius (scaled by 100)
-        {min: 0.05, max: 0.5},       // visualRange
-        {min: 0.1, max: 3.0},        // speedLimit
-        {min: 0.0, max: 0.2},        // (removed) was minDistance
-        {min: 0, max: 100},          // avoidFactor
-        {min: 0, max: 50},           // matchingFactor
-        {min: 0, max: 20},           // centeringFactor
-        {min: 0, max: 5}             // turnFactor
+        {min: 100, max: 5000},      // 0: numBoids
+        {min: 1, max: 10},           // 1: boidRadius (scaled by 100)
+        {min: 0.05, max: 0.5},       // 2: visualRange
+        {min: 0, max: 100},          // 3: avoidFactor
+        {min: 0, max: 50},           // 4: matchingFactor
+        {min: 0, max: 20},           // 5: centeringFactor
+        {min: 0.1, max: 3.0},        // 6: speedLimit
+        {min: 0, max: 5},            // 7: turnFactor
+        {min: 0.0, max: 0.40}        // 8: marginFactor
     ];
 
     const knobRadius = 0.1 * menuScale;
@@ -6401,7 +6446,7 @@ function drawSimMenu() {
 
     // Draw overall menu background with rounded corners
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 2 + knobRadius * 2.5;
+    const menuHeight = knobSpacing * 2 + knobRadius * 2.0;
     const padding = 1.7 * knobRadius;
     const cornerRadius = 0.05 * cScale;
     c.beginPath();
@@ -6456,12 +6501,10 @@ function drawSimMenu() {
 
     // Draw knobs ---------------------------------------------
     c.lineCap = 'round';
-    for (var displayPos = 0; displayPos < displayOrder.length; displayPos++) {
-        const knob = displayOrder[displayPos];
-        if (knob === 4) continue; // Skip removed knob
+    for (var knob = 0; knob < menuItems.length; knob++) {
         // fill and trace knob background
-        const row = Math.floor(displayPos / 3);
-        const col = displayPos % 3;
+        const row = Math.floor(knob / 3);
+        const col = knob % 3;
         const knobX = col * knobSpacing;
         const knobY = row * knobSpacing + menuTopMargin;
         c.beginPath();
@@ -6531,12 +6574,12 @@ function drawSimMenu() {
             case 0: label = "Number of Boids"; break;
             case 1: label = 'Size'; break;
             case 2: label = 'Visual Range'; break;
-            case 3: label = 'Speed Limit'; break;
-            case 4: label = 'blank'; break;
-            case 5: label = 'Rule 1: Separation'; break;
-            case 6: label = 'Rule 2: Alignment'; break;
-            case 7: label = 'Rule 3: Cohesion'; break;
-            case 8: label = 'Confinement'; break;
+            case 3: label = 'Rule 1: Separation'; break;
+            case 4: label = 'Rule 2: Alignment'; break;
+            case 5: label = 'Rule 3: Cohesion'; break;
+            case 6: label = 'Speed Limit'; break;
+            case 7: label = 'Corralling Force'; break;
+            case 8: label = 'Corral Margin'; break;
         }
         c.font = `${0.29 * knobRadius}px verdana`;
         c.strokeStyle = `hsla(210, 80%, 0%, ${0.6 * menuOpacity})`;
@@ -6551,11 +6594,12 @@ function drawSimMenu() {
             case 0: valueText = Boids.length; break;
             case 1: valueText = (boidRadius * 100).toFixed(1); break;
             case 2: valueText = (boidProps.visualRange).toFixed(2); break;
-            case 3: valueText = (boidProps.speedLimit).toFixed(1); break;
-            case 5: valueText = (boidProps.avoidFactor).toFixed(0); break;
-            case 6: valueText = (boidProps.matchingFactor).toFixed(1); break;
-            case 7: valueText = (boidProps.centeringFactor).toFixed(1); break;
-            case 8: valueText = (boidProps.turnFactor).toFixed(1); break;
+            case 3: valueText = (boidProps.avoidFactor).toFixed(0); break;
+            case 4: valueText = (boidProps.matchingFactor).toFixed(1); break;
+            case 5: valueText = (boidProps.centeringFactor).toFixed(1); break;
+            case 6: valueText = (boidProps.speedLimit).toFixed(1); break;
+            case 7: valueText = (boidProps.turnFactor).toFixed(1); break;
+            case 8: valueText = (marginFactor).toFixed(2); break;
         }
         c.font = `${0.25 * knobRadius}px verdana`;
         c.fillStyle = `hsla(160, 80%, 50%, ${menuOpacity})`;
@@ -6625,7 +6669,7 @@ function drawSimMenu() {
     c.textBaseline = 'bottom';
     c.font = `${0.24 * knobRadius}px monospace`;
     c.fillStyle = `hsla(0, 0%, 60%, ${menuOpacity})`;
-    c.fillText('v1.50', padding + 4.8 * knobRadius, menuHeight + padding - 0.15 * knobRadius);
+    c.fillText('v1.51', padding + 4.8 * knobRadius, menuHeight + padding - 0.15 * knobRadius);
 
     c.restore();
 }
@@ -7529,7 +7573,7 @@ function drawColorMenu() {
         c.fillStyle = `hsla(0, 0%, 0%, ${colorMenuOpacity})`;
         c.fill();
         c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
-        c.lineWidth = 0.01 * menuScale;
+        c.lineWidth = 0.007 * menuScale;
         c.stroke();
         
         // Black and white button
@@ -7551,6 +7595,31 @@ function drawColorMenu() {
         c.fillStyle = `hsla(0, 0%, 100%, ${colorMenuOpacity})`;
         c.fill();
         c.stroke();
+        
+        // Draw labels for first three buttons
+        c.font = `${0.025 * menuScale}px verdana`;
+        c.textAlign = 'center';
+        c.textBaseline = 'top';
+        const labelY = buttonY + buttonRadius * 1.3;
+        
+        // Black label
+        c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
+        c.lineWidth = 0.02 * knobRadius;
+        c.strokeText('Black', 0.01 * knobRadius + buttonStartX, 0.01 * knobRadius + labelY);
+        c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+        c.fillText('Black', buttonStartX, labelY);
+        
+        // B&W label
+        c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
+        c.strokeText('B&W', 0.01 * knobRadius + buttonStartX + buttonSpacing, 0.01 * knobRadius + labelY);
+        c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+        c.fillText('B&W', buttonStartX + buttonSpacing, labelY);
+        
+        // White label
+        c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
+        c.strokeText('White', 0.01 * knobRadius + buttonStartX + buttonSpacing * 2, 0.01 * knobRadius + labelY);
+        c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+        c.fillText('White', buttonStartX + buttonSpacing * 2, labelY);
 
         // Draw line from paint all button to dye one button
         c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
@@ -7571,7 +7640,19 @@ function drawColorMenu() {
         c.arc(buttonStartX + buttonSpacing * 3, buttonY, buttonRadius, 0, 2 * Math.PI);
         c.fillStyle = `hsla(${selectedHue}, ${selectedSaturation}%, ${selectedLightness}%, ${colorMenuOpacity})`;
         c.fill();
+        c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
+        c.lineWidth = 0.007 * menuScale;
         c.stroke();
+        
+        // Paint label
+        c.font = `${0.025 * menuScale}px verdana`;
+        c.textAlign = 'center';
+        c.textBaseline = 'top';
+        c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
+        c.lineWidth = 0.02 * knobRadius;
+        c.strokeText('Paint', 0.01 * knobRadius + buttonStartX + buttonSpacing * 3, 0.01 * knobRadius + buttonY + buttonRadius * 1.3);
+        c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+        c.fillText('Paint', buttonStartX + buttonSpacing * 3, buttonY + buttonRadius * 1.3);
 
         // Selected color button - dye one (raindrop icon)
         const dropX = buttonStartX + buttonSpacing * 4.75;
@@ -7632,11 +7713,11 @@ function drawColorMenu() {
     c.textAlign = 'center';
     c.textBaseline = 'top';
     
-    // Paint label with shadow
+    /*// Paint label with shadow
     c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
     c.strokeText('Paint', 0.02 * knobRadius + buttonStartX + buttonSpacing * 3, 0.02 * knobRadius + buttonY + buttonRadius * 1.5);
     c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
-    c.fillText('Paint', buttonStartX + buttonSpacing * 3, buttonY + buttonRadius * 1.5);
+    c.fillText('Paint', buttonStartX + buttonSpacing * 3, buttonY + buttonRadius * 1.5);*/
     
     // Dye label with shadow
     const textRadScale = 0.035 * menuScale;
@@ -7662,7 +7743,18 @@ function drawColorMenu() {
         buttonRadius * 2, buttonRadius * 2);
     c.restore();
     c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.007 * menuScale;
     c.stroke();
+    
+    // Dir label
+    c.font = `${0.025 * menuScale}px verdana`;
+    c.textAlign = 'center';
+    c.textBaseline = 'top';
+    c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
+    c.lineWidth = 0.02 * knobRadius;
+    c.strokeText('Dir', 0.01 * knobRadius + buttonStartX + buttonSpacing * 4, 0.01 * knobRadius + buttonY + buttonRadius * 1.3);
+    c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+    c.fillText('Dir', buttonStartX + buttonSpacing * 4, buttonY + buttonRadius * 1.3);
     
     // Velocity-sensitive color cycling button
     c.beginPath();
@@ -7679,7 +7771,19 @@ function drawColorMenu() {
     c.fillStyle = velocityGradient;
     c.fill();
     c.strokeStyle = `hsla(210, 0%, 70%, ${colorMenuOpacity})`;
+    c.lineWidth = 0.007 * menuScale;
     c.stroke();
+    
+    // Speed label
+    c.font = `${0.025 * menuScale}px verdana`;
+    c.textAlign = 'center';
+    c.textBaseline = 'top';
+    c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
+    c.lineWidth = 0.02 * knobRadius;
+    c.strokeText('Speed', 0.01 * knobRadius + buttonStartX + buttonSpacing * 5, 0.01 * knobRadius + buttonY + buttonRadius * 1.3);
+    c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
+    c.fillText('Speed', buttonStartX + buttonSpacing * 5, buttonY + buttonRadius * 1.3);
+    
     } // End of if (!spraypaintActive)
 
     // Only draw knobs and segregation buttons when spray tool is not active
@@ -7942,11 +8046,11 @@ function resetParameters() {
 function makeBoids() {
     Boids = [];
     boidRadius = 0.02;
-
+    marginFactor = 0.1;
+    
     boidProps = {
         numBoids: 2000,
-        marginX: Math.min(0.3 * simWidth, 0.3 * simHeight),
-        marginY: Math.min(0.3 * simWidth, 0.3 * simHeight),
+        margin: Math.min(marginFactor * simWidth, marginFactor * simHeight),
         minDistance: 5.0 * boidRadius, // Rule #1 - The distance to stay away from other Boids
         avoidFactor: 50.0, // Rule #1 -Adjust velocity by this %
         matchingFactor: 10.0, // Rule #2 - Adjust velocity by this %
@@ -7988,21 +8092,49 @@ function makeBoids() {
         hue = 0;
         if (i == 0) {
             // White boid
-            Boids.push(new BOID(pos, vel, hue, true, false));
+            const whiteBoid = new BOID(pos, vel, hue, true, false);
+            whiteBoid.triangleBoid = selectedBoidType === 0;
+            whiteBoid.arrow = selectedBoidType === 1;
+            whiteBoid.flappy = selectedBoidType === 2;
+            whiteBoid.circle = selectedBoidType === 3;
+            whiteBoid.ellipseBoid = selectedBoidType === 4;
+            whiteBoid.square = selectedBoidType === 5;
+            whiteBoid.airfoil = selectedBoidType === 6;
+            whiteBoid.glowBoid = selectedBoidType === 7;
+            Boids.push(whiteBoid);
         } else if (i == 1) {
             // Black boid
-            Boids.push(new BOID(pos, vel, hue, false, true));
+            const blackBoid = new BOID(pos, vel, hue, false, true);
+            blackBoid.triangleBoid = selectedBoidType === 0;
+            blackBoid.arrow = selectedBoidType === 1;
+            blackBoid.flappy = selectedBoidType === 2;
+            blackBoid.circle = selectedBoidType === 3;
+            blackBoid.ellipseBoid = selectedBoidType === 4;
+            blackBoid.square = selectedBoidType === 5;
+            blackBoid.airfoil = selectedBoidType === 6;
+            blackBoid.glowBoid = selectedBoidType === 7;
+            Boids.push(blackBoid);
         } else {
-            Boids.push(new BOID(pos, vel, hue, false, false));
+            const newBoid = new BOID(pos, vel, hue, false, false);
+            // Set boid type based on selectedBoidType
+            newBoid.triangleBoid = selectedBoidType === 0;
+            newBoid.arrow = selectedBoidType === 1;
+            newBoid.flappy = selectedBoidType === 2;
+            newBoid.circle = selectedBoidType === 3;
+            newBoid.ellipseBoid = selectedBoidType === 4;
+            newBoid.square = selectedBoidType === 5;
+            newBoid.airfoil = selectedBoidType === 6;
+            newBoid.glowBoid = selectedBoidType === 7;
+            Boids.push(newBoid);
         }
     }
 }
 
 // WAND VARIABLES -----------------
-let wandPosX = 0.5;
-let wandPosY = 0.5;
+let wandPosX = 0.85;
+let wandPosY = 0.65;
 let wandAngle = 0.4 * Math.PI;
-let wandSize = 1;
+let wandSize = 0.5;
 let wandActive = false;
 let isDraggingWand = false;
 let wandDragOffsetX = 0;
@@ -8010,12 +8142,6 @@ let wandDragOffsetY = 0;
 let wandPrevX = 0.5;
 let wandPrevY = 0.5;
 let wandSpawnTimer = 0;
-
-// APPLY WAND ---------------------
-function applyWand(wandX, wandY, wandAngle, wandSize) {
-    drawWand(wandX, wandY, wandAngle, wandSize)
-    // spawn boids at wand tip
-}
 
 // DRAW WAND ---------------------
 function drawWand(wandX, wandY, wandAngle, wandSize) {
@@ -8049,9 +8175,31 @@ function drawWand(wandX, wandY, wandAngle, wandSize) {
     
     // Move to star tip position (beyond the base/handle)
     c.translate(wandLength * cScale * -0.1, 0);
+
+    // Draw sparkles
+    const time = Date.now() / 1000;
+    const numSparkles = 24;
+    for (let i = 0; i < numSparkles; i++) {
+        const sparkleAngle = (i * 13.7 + i * i * 0.3) + time * 0.5;
+        const sparkleProgress = ((time * 2 + i * 0.5) % 2) / 2; // 0 to 1 cycle
+        const sparkleRadius = sparkleProgress * wandLength * 0.6;
+        const sparkleX = Math.cos(sparkleAngle) * sparkleRadius * cScale;
+        const sparkleY = Math.sin(sparkleAngle) * sparkleRadius * cScale;
+        const sparkleSize = 0.0025 * cScale;
+        const sparkleAlpha = 1.0 - sparkleProgress;
+        c.fillStyle = `hsla(0, 0%, 100%, ${sparkleAlpha})`;
+        c.beginPath();
+        c.arc(
+            sparkleX, 
+            sparkleY, 
+            sparkleSize, 
+            0, 
+            2 * Math.PI);
+        c.fill();
+    }
             
     // Draw each black outline for star points
-    c.lineWidth = 0.02 * cScale;
+    c.lineWidth = 0.009 * cScale;
     for (let i = 0; i < 5; i++) {
         const angle = (i * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * wandAngle);
         const x = Math.cos(angle) * wandLength * 0.2 * cScale;
@@ -8070,12 +8218,12 @@ function drawWand(wandX, wandY, wandAngle, wandSize) {
         c.moveTo(x, y);
         c.lineTo(innerX, innerY);
         c.lineTo(nextX, nextY);
-        c.strokeStyle = `hsla(0, 0%, 0%, 0.3)`;
+        c.strokeStyle = `hsla(0, 0%, 0%, 0.5)`;
         c.stroke();
     }
 
     // Draw each star point with different colors
-    c.lineWidth = 0.007 * cScale;
+    c.lineWidth = 0.004 * cScale;
     for (let i = 0; i < 5; i++) {
         const angle = (i * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * wandAngle);
         const x = Math.cos(angle) * wandLength * 0.2 * cScale;
@@ -8100,7 +8248,7 @@ function drawWand(wandX, wandY, wandAngle, wandSize) {
     }
 
     // Draw each star point with different colors
-    c.lineWidth = 0.007 * cScale;
+    c.lineWidth = 0.004 * cScale;
     for (let i = 0; i < 5; i++) {
         const angle = (i * (2 * Math.PI / 5) - Math.PI / 2 - 0.25 * wandAngle);
         const x = Math.cos(angle) * wandLength * 0.1 * cScale;
@@ -8123,8 +8271,10 @@ function drawWand(wandX, wandY, wandAngle, wandSize) {
         
         c.stroke();
     }
-    
+
     c.restore();
+
+    
 }
 
 // CHECK IF MOUSE IS NEAR WAND -----------
@@ -8161,18 +8311,30 @@ function isMouseNearWand(mx, my, wandX, wandY, wandAngle, wandSize) {
 
 // HANDLE BOID BOUNDS - RECTANGULAR -------------
 function handleBounds(boid) {
-    if (boid.pos.x <= boidProps.marginX) {
+    if (boid.pos.x <= boidProps.margin) {
         boid.vel.x += boidProps.turnFactor * deltaT;
     }
-    if (boid.pos.x >= simWidth - boidProps.marginX) {
+    if (boid.pos.x >= simWidth - boidProps.margin) {
         boid.vel.x -= boidProps.turnFactor * deltaT;
     }
-    if (boid.pos.y <= boidProps.marginY) {
+    if (boid.pos.y <= boidProps.margin) {
         boid.vel.y += boidProps.turnFactor * deltaT;
     }
-    if (boid.pos.y >= simHeight - boidProps.marginY) {
+    if (boid.pos.y >= simHeight - boidProps.margin) {
         boid.vel.y -= boidProps.turnFactor * deltaT;
     }
+}
+
+function drawBounds() {
+    c.strokeStyle = `hsla(0, 0%, 100%, ${0.5 *menuOpacity})`;
+    c.lineWidth = 0.003 * cScale;
+    c.setLineDash([0.01 * cScale, 0.01 * cScale]);
+    c.strokeRect(
+        boidProps.margin * cScale,
+        (boidProps.margin) * cScale,
+        (simWidth - 2 * boidProps.margin) * cScale,
+        (simHeight - 2 * boidProps.margin) * cScale);
+    c.setLineDash([]);
 }
 
 /*
@@ -9553,7 +9715,7 @@ function drawDrawMenu() {
     
     // Draw a smaller image of the wand
     const iconWandLength = wandIconSize * 0.8;
-    const iconWandWidth = wandIconSize * 0.05;
+    const iconWandWidth = wandIconSize * 0.04;
     const iconWandAngle = 0.25 * Math.PI; 
     
     c.rotate(iconWandAngle);
@@ -9564,7 +9726,7 @@ function drawDrawMenu() {
     
     // Draw black end background
     c.beginPath();
-    c.arc(iconWandLength, 0, iconWandWidth * 2.0, 0, Math.PI * 2);
+    c.arc(iconWandLength, 0, iconWandWidth * 1.5, 0, Math.PI * 2);
     c.fill();
     
     // Draw red wand shaft
@@ -9573,7 +9735,7 @@ function drawDrawMenu() {
     
     // Draw red end
     c.beginPath();
-    c.arc(iconWandLength, 0, iconWandWidth * 1.5, 0, Math.PI * 2);
+    c.arc(iconWandLength, 0, iconWandWidth * 1.1, 0, Math.PI * 2);
     c.fill();
     
     // Move to star position
@@ -10099,9 +10261,11 @@ function drawEverything() {
         if (menuVisible && (boid.whiteBoid || boid.blackBoid)) {
             c.beginPath();
             c.arc(cX(boid.pos), cY(boid.pos), boidProps.visualRange * cScale, 0, 2 * Math.PI);
-            c.strokeStyle = boid.whiteBoid ? 'hsla(0, 0%, 90%, 0.5)' : 'hsla(0, 0%, 10%, 0.5)';
+            c.strokeStyle = boid.whiteBoid ? 'hsla(0, 0%, 100%, 0.5)' : 'hsla(0, 0%, 0%, 0.5)';
             c.lineWidth = 2;
+            c.setLineDash([5, 5]);
             c.stroke();
+            c.setLineDash([]);
         }
     }
     
@@ -10148,7 +10312,7 @@ function drawEverything() {
 
     // Draw wand --------
     if (wandActive) {
-        applyWand(wandPosX * simWidth, wandPosY * simHeight, wandAngle, wandSize);
+        drawWand(wandPosX * simWidth, wandPosY * simHeight, wandAngle, wandSize);
     }
 
     // Draw spray particles --------
