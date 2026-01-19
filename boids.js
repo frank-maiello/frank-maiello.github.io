@@ -10589,7 +10589,7 @@ let startupWarmupTimer = 0; // Timer for startup warm-up period
 let startupWarmupPeriod = 3.0; // Wait 3 seconds after startup before monitoring FPS
 let isWarmedUp = false; // Track if warm-up period is complete
 let runtimeTimer = 0; // Track total runtime
-let runtimeLockPeriod = 30.0; // Lock boid count after 30 seconds
+let runtimeLockPeriod = 25.0; // Lock boid count after 25 seconds
 
 // Reset warmup state for clean restart
 function resetWarmupState() {
@@ -10871,11 +10871,9 @@ function drawStats() {
     // Calculate opacity based on fade out
     let opacity = 1.0;
     if (boidCountLocked) {
+        fadeOutTimer += deltaT;
         if (fadeOutTimer >= fadeOutDuration) {
             return; // Completely faded out, don't draw
-        }
-        if (fadeOutTimer < fadeOutDuration) {
-            fadeOutTimer += deltaT;
         }
         opacity = 1.0 - (fadeOutTimer / fadeOutDuration);
     }
@@ -10891,7 +10889,7 @@ function drawStats() {
     
     // Prepare text
     //const fpsText = `${currentFPS.toFixed(0)} fps`;
-    const boidText = `please wait... making ${Boids.length} boids`;
+    const boidText = `making ${Boids.length} boids`;
     const boidLockedText = `settled on ${Boids.length} boids`;
     
     // Position at bottom right with padding
@@ -10899,6 +10897,47 @@ function drawStats() {
     const lineHeight = 20;
     const x = canvas.width - padding;
     let y = canvas.height - padding;
+
+    // Draw progress bar (below text)
+    const barWidth = 200;
+    const barHeight = 8;
+    const barX = x - barWidth;
+    const barY = y - 8;
+    
+    // Move text position up
+    const textY = y - lineHeight + 5;
+    const progress = boidCountLocked ? 1.0 : Math.min(1.0, runtimeTimer / runtimeLockPeriod);
+    const radius = barHeight / 2;
+    
+    // Helper function to draw rounded rectangle
+    const drawRoundedRect = (x, y, width, height, radius, fill, stroke) => {
+        c.beginPath();
+        c.moveTo(x + radius, y);
+        c.lineTo(x + width - radius, y);
+        c.arc(x + width - radius, y + radius, radius, -Math.PI/2, Math.PI/2);
+        c.lineTo(x + radius, y + height);
+        c.arc(x + radius, y + radius, radius, Math.PI/2, 3*Math.PI/2);
+        c.closePath();
+        if (fill) {
+            c.fillStyle = fill;
+            c.fill();
+        }
+        if (stroke) {
+            c.strokeStyle = stroke;
+            c.lineWidth = 1;
+            c.stroke();
+        }
+    };
+    
+    // Draw background
+    drawRoundedRect(barX, barY, barWidth, barHeight, radius, `rgba(0, 0, 0, ${0.5 * opacity})`, null);
+    
+    // Draw progress fill
+    const fillWidth = Math.max(barHeight, barWidth * progress); // Ensure minimum width for rounded ends
+    drawRoundedRect(barX, barY, fillWidth, barHeight, radius, `rgba(0, 255, 0, ${opacity})`, null);
+    
+    // Draw border
+    drawRoundedRect(barX, barY, barWidth, barHeight, radius, null, `rgba(255, 255, 255, ${opacity})`);
 
     // Draw boid count
     // White text
@@ -10912,7 +10951,7 @@ function drawStats() {
     // Use different text based on whether boid count is locked
     const displayText = boidCountLocked ? boidLockedText : boidText;
     //c.fillText('Please wait', x - 2 *padding, y - lineHeight);
-    c.fillText(displayText, x, y);
+    c.fillText(displayText, x, textY);
     
     /*
     // Draw FPS above it
