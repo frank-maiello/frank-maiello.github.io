@@ -4385,10 +4385,10 @@ class CLOUD {
         if (this.isForeground && initialForegroundCloudTextVisible) {
             const r = this.radius * cScale;
             c.fillStyle = 'hsl(200, 60%, 30%)';
-            c.font = `bold ${r * 0.4}px monospace`;
+            c.font = `bold ${r * 0.4}px comic sans ms, sans-serif`;
             c.textAlign = 'center';
             c.textBaseline = 'middle';
-            c.fillText("B 0 I D S", cx, cy + r * 0.25);
+            c.fillText("B 0 I D S", cx, cy + r * 0.30);
         }
         
         // Draw tutorial message
@@ -4397,7 +4397,7 @@ class CLOUD {
             c.save();
             
             // Draw text with shadow for readability
-            c.font = `italic ${r * 0.22}px sans-serif`;
+            c.font = `italic ${r * 0.22}px comic sans ms, sans-serif`;
             c.textAlign = 'center';
             c.textBaseline = 'middle';
             
