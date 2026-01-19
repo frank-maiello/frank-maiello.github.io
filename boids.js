@@ -134,7 +134,7 @@ let boidTypeLabels = ['Triangles', 'Arrows', 'Birds', 'Circles', 'Ellipses', 'Sq
 let tailColorMode = 0; // 0 = none, 1 = black, 2 = white, 3 = selected hue, 4 = hue2
 
 // Boid rendering toggles
-let boidTraceMode = 2; // 0=none, 1=dark trace, 2=colored trace, 3=white trace
+let boidTraceMode = 1; // 0=none, 1=dark trace, 2=colored trace, 3=white trace
 let boidFillEnabled = true; // Controls fill operations
 
 // Styling menu visibility state
@@ -5367,6 +5367,7 @@ class BOID {
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
             c.rotate(angle);
+            if (this.dyedBoid) c.scale(2, 2);
             
             // Draw isosceles triangle pointing right
             const height = 1.4 * radScale;
@@ -5420,6 +5421,7 @@ class BOID {
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
             c.rotate(-angle); // for arrows
+            if (this.dyedBoid) c.scale(2, 2);
             
             // fill body ----------
             c.beginPath();
@@ -5488,11 +5490,12 @@ class BOID {
 
         // Draw glowing boid --------------------------------------------
         if (this.glowBoid) {
+            const drawScale = this.dyedBoid ? 2 : 1;
             c.beginPath();
-            c.arc(cX(this.pos), cY(this.pos), radScale, 0, 2 * Math.PI);
+            c.arc(cX(this.pos), cY(this.pos), radScale * drawScale, 0, 2 * Math.PI);
             var glowBallShading = c.createRadialGradient(
                 cX(this.pos), cY(this.pos), 0,
-                cX(this.pos), cY(this.pos), radScale
+                cX(this.pos), cY(this.pos), radScale * drawScale
             );
             if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
                 // Soap bubble with prismatic effect and transparent center
@@ -5500,7 +5503,7 @@ class BOID {
                 // Base bubble with transparent center and prismatic rim
                 let bubbleGradient = c.createRadialGradient(
                     cX(this.pos), cY(this.pos), 0, 
-                    cX(this.pos), cY(this.pos), radScale
+                    cX(this.pos), cY(this.pos), radScale * drawScale
                 );
                 
                 // Very transparent center - bubbles are thin and don't reflect much light here
@@ -5521,11 +5524,11 @@ class BOID {
                 c.fill();
 
                 // Specular highlight (light source reflection)
-                const highlightX = (this.pos.x - (0.25 * this.radius)) * cScale;
-                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius)) * cScale;
+                const highlightX = (this.pos.x - (0.25 * this.radius * drawScale)) * cScale;
+                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius * drawScale)) * cScale;
                 const highlightGradient = c.createRadialGradient(
                     highlightX, highlightY, 0, 
-                    highlightX, highlightY, 0.5 * radScale
+                    highlightX, highlightY, 0.5 * radScale * drawScale
                 );
                 
                 // Bright white highlight with prismatic edge
@@ -5540,7 +5543,7 @@ class BOID {
                 // White soap bubble with subtle iridescence
                 let bubbleGradient = c.createRadialGradient(
                     cX(this.pos), cY(this.pos), 0, 
-                    cX(this.pos), cY(this.pos), radScale
+                    cX(this.pos), cY(this.pos), radScale * drawScale
                 );
                 
                 bubbleGradient.addColorStop(0.0, `hsla(0, 0%, 98%, 0.05)`);
@@ -5555,11 +5558,11 @@ class BOID {
                 c.fillStyle = bubbleGradient;
                 c.fill();
 
-                const highlightX = (this.pos.x - (0.25 * this.radius)) * cScale;
-                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius)) * cScale;
+                const highlightX = (this.pos.x - (0.25 * this.radius * drawScale)) * cScale;
+                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius * drawScale)) * cScale;
                 const highlightGradient = c.createRadialGradient(
                     highlightX, highlightY, 0, 
-                    highlightX, highlightY, 0.5 * radScale
+                    highlightX, highlightY, 0.5 * radScale * drawScale
                 );
                 
                 highlightGradient.addColorStop(0.0, `hsla(0, 0%, 100%, 0.7)`);
@@ -5573,7 +5576,7 @@ class BOID {
                 // Dark bubble with subtle color
                 let bubbleGradient = c.createRadialGradient(
                     cX(this.pos), cY(this.pos), 0, 
-                    cX(this.pos), cY(this.pos), radScale
+                    cX(this.pos), cY(this.pos), radScale * drawScale
                 );
                 
                 bubbleGradient.addColorStop(0.0, `hsla(0, 0%, 8%, 0.05)`);
@@ -5606,7 +5609,7 @@ class BOID {
                 // Flashing colored bubble - brighter and more saturated
                 let bubbleGradient = c.createRadialGradient(
                     cX(this.pos), cY(this.pos), 0, 
-                    cX(this.pos), cY(this.pos), radScale
+                    cX(this.pos), cY(this.pos), radScale * drawScale
                 );
                 
                 const flashLight = Math.min(95, this.lightness * 1.5);
@@ -5622,11 +5625,11 @@ class BOID {
                 c.fillStyle = bubbleGradient;
                 c.fill();
 
-                const highlightX = (this.pos.x - (0.25 * this.radius)) * cScale;
-                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius)) * cScale;
+                const highlightX = (this.pos.x - (0.25 * this.radius * drawScale)) * cScale;
+                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius * drawScale)) * cScale;
                 const highlightGradient = c.createRadialGradient(
                     highlightX, highlightY, 0, 
-                    highlightX, highlightY, 0.5 * radScale
+                    highlightX, highlightY, 0.5 * radScale * drawScale
                 );
                 
                 highlightGradient.addColorStop(0.0, `hsla(0, 0%, 100%, 0.8)`);
@@ -5640,7 +5643,7 @@ class BOID {
                 // Flashing black bubble - same as non-flashing black
                 let bubbleGradient = c.createRadialGradient(
                     cX(this.pos), cY(this.pos), 0, 
-                    cX(this.pos), cY(this.pos), radScale
+                    cX(this.pos), cY(this.pos), radScale * drawScale
                 );
                 
                 bubbleGradient.addColorStop(0.0, `hsla(0, 0%, 8%, 0.05)`);
@@ -5655,11 +5658,11 @@ class BOID {
                 c.fillStyle = bubbleGradient;
                 c.fill();
 
-                const highlightX = (this.pos.x - (0.25 * this.radius)) * cScale;
-                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius)) * cScale;
+                const highlightX = (this.pos.x - (0.25 * this.radius * drawScale)) * cScale;
+                const highlightY = canvas.height - (this.pos.y + (0.35 * this.radius * drawScale)) * cScale;
                 const highlightGradient = c.createRadialGradient(
                     highlightX, highlightY, 0, 
-                    highlightX, highlightY, 0.5 * radScale
+                    highlightX, highlightY, 0.5 * radScale * drawScale
                 );
                 
                 highlightGradient.addColorStop(0.0, `hsla(0, 0%, 40%, 0.5)`);
@@ -5675,9 +5678,10 @@ class BOID {
 
         // Draw circle boid --------------------------------------------
         if (!this.arrow && this.circle && !this.airfoil) {
+            const drawScale = this.dyedBoid ? 2 : 1;
             c.beginPath();
             //c.arc(0, 0, radScale, 0, 2 * Math.PI);
-            c.arc(cX(this.pos), cY(this.pos), 0.6 * radScale, 0, 2 * Math.PI);
+            c.arc(cX(this.pos), cY(this.pos), 0.6 * radScale * drawScale, 0, 2 * Math.PI);
             if (!this.whiteBoid && !this.blackBoid && !this.flashing) {
                 c.fillStyle = this.cachedFillStyle;
                 //c.strokeStyle = this.cachedStrokeStyle;
@@ -5728,6 +5732,7 @@ class BOID {
             // Move to boid position and rotate to velocity direction
             c.translate(cX(this.pos), cY(this.pos));
             c.rotate(angle);
+            if (this.dyedBoid) c.scale(2, 2);
             
             // Draw ellipse (keep length constant, shrink width with speed)
             c.beginPath();
@@ -5790,7 +5795,8 @@ class BOID {
             }
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
-            c.rotate(-angle); 
+            c.rotate(-angle);
+            if (this.dyedBoid) c.scale(2, 2);
             if (boidFillEnabled) {
                 c.fillRect(0.5 * radScale, -0.5 * radScale, radScale, radScale);
             }
@@ -5815,7 +5821,8 @@ class BOID {
             const angle = Math.atan2(this.vel.y, this.vel.x);
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
-            c.rotate(-angle); 
+            c.rotate(-angle);
+            if (this.dyedBoid) c.scale(2, 2); 
 
             /* boid shape reference:
 
@@ -5889,7 +5896,8 @@ class BOID {
             const angle = Math.atan2(this.vel.y, this.vel.x);
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
-            c.rotate(.5 * Math.PI - angle); // for teadrops
+            c.rotate(.5 * Math.PI - angle);
+            if (this.dyedBoid) c.scale(2, 2); // for teadrops
         
             const numPoints = 32; 
             const a = 0.2;
@@ -6722,7 +6730,7 @@ function drawStylingMenu() {
     c.fillStyle = menuGradient;
     c.fill();
     c.strokeStyle = `hsla(140, 60%, 80%, ${stylingMenuOpacity})`;
-    c.lineWidth = 0.003 * menuScale;
+    c.lineWidth = 0.004 * menuScale;
     c.stroke();
 
     // Draw title
@@ -7986,6 +7994,7 @@ function resetParameters() {
     boidProps.centeringFactor = 5.0;
     boidProps.speedLimit = 1.1;
     boidProps.turnFactor = 1.0;
+    marginFactor = 0.1;
     boidProps.tailLength = 10;
     boidProps.tailWidth = 1.0;
     
