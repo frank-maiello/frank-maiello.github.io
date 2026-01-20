@@ -1,5 +1,5 @@
 /*
-B0IDS 1.51 :: emergent flocking behavior ::
+B0IDS 1.52 :: emergent flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -106,6 +106,7 @@ let stylingMenuY = simHeight - 0.6; // World coordinates
 
 // Menu knob dragging state
 let draggedKnob = null; // Index of the knob being dragged
+let draggedStylingKnob = null; // Index of styling knob being dragged
 let draggedSkyKnob = null; // Index of the sky knob being dragged
 let draggedDrawKnob = null; // Index of knob being dragged in draw menu
 let dragStartMouseX = 0;
@@ -196,6 +197,7 @@ let skyCameraYawStart = 0;
 let menuVisibleBeforeCamera = false;
 let colorMenuVisibleBeforeCamera = false;
 let skyMenuVisibleBeforeCamera = false;
+let drawMenuVisibleBeforeCamera = false;
 
 // Store menu states before paint tool activation
 let menuVisibleBeforePaint = false;
@@ -217,6 +219,9 @@ let autoElevationInitial = 0; // Initial elevation when auto mode was enabled
 
 // Offscreen canvas for color wheel
 let colorWheelCanvas = null;
+
+// Offscreen canvas for hot air balloon
+let hotAirBalloonCanvas = null;
 let colorWheelContext = null;
 
 // Array to store painted color dots on color wheel (hue and saturation pairs)
@@ -538,7 +543,7 @@ mousedownHandler = function(e) {
             const kdx = clickCanvasX - knobCanvasX;
             const kdy = clickCanvasY - knobCanvasY;
             if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
-                draggedKnob = knob === 0 ? 9 : 10; // Tail Length = 9, Tail Width = 10
+                draggedStylingKnob = knob; // Tail Length = 0, Tail Width = 1
                 attachMouseMove();
                 dragStartMouseX = mouseX;
                 dragStartMouseY = mouseY;
@@ -919,7 +924,7 @@ mousedownHandler = function(e) {
         if (!spraypaintActive) {
             const hueTickerY = colorMenuOriginY + colorWheelRadius * 2 + spacing * 2 + knobRadius * 1.5 + knobRadius / 3;
             const segRadioRadius = knobRadius * 0.25;
-            const segButtonY = hueTickerY + knobRadius * 2.6;
+            const segButtonY = hueTickerY + knobRadius * 3.3;
             const segButtonSpacing = knobRadius * 1.3;
             const segButtonStartX = colorMenuOriginX + colorWheelRadius - segButtonSpacing * 0.5;
             const segModeMap = [0, 2, 1]; // Map visual position to segregationMode value
@@ -1459,11 +1464,13 @@ mousedownHandler = function(e) {
                 colorMenuVisibleBeforeCamera = colorMenuVisible;
                 skyMenuVisibleBeforeCamera = skyMenuVisible;
                 stylingMenuVisibleBeforeCamera = stylingMenuVisible;
+                drawMenuVisibleBeforeCamera = drawMenuVisible;
                 // Hide all menus
                 menuVisible = false;
                 colorMenuVisible = false;
                 skyMenuVisible = false;
                 stylingMenuVisible = false;
+                drawMenuVisible = false;
             }
             updateMouseListeners();
             return true;
@@ -1688,6 +1695,7 @@ mouseupHandler = function(e) {
             colorMenuVisible = colorMenuVisibleBeforeCamera;
             skyMenuVisible = skyMenuVisibleBeforeCamera;
             stylingMenuVisible = stylingMenuVisibleBeforeCamera;
+            drawMenuVisible = drawMenuVisibleBeforeCamera;
         }
     }
     
@@ -1698,6 +1706,7 @@ mouseupHandler = function(e) {
     
     draggedCloud = null;
     draggedKnob = null;
+    draggedStylingKnob = null;
     draggedSkyKnob = null;
     draggedDrawKnob = null;
     isDraggingMenu = false;
@@ -1786,6 +1795,33 @@ function handleMouseMove(e) {
         const deltaY = mouseY - stylingMenuDragStartY;
         stylingMenuX = stylingMenuDragInitialX + deltaX;
         stylingMenuY = stylingMenuDragInitialY + deltaY;
+        return;
+    }
+    
+    // Handle styling menu knob dragging
+    if (draggedStylingKnob !== null) {
+        const dragDeltaX = mouseX - dragStartMouseX;
+        const dragDeltaY = (mouseY - dragStartMouseY);
+        const dragDelta = dragDeltaX + dragDeltaY;
+        
+        const dragSensitivity = 0.5;
+        const normalizedDelta = dragDelta / dragSensitivity;
+        
+        if (draggedStylingKnob === 0) { // Tail Length
+            const tailMin = 1;
+            const tailMax = 100;
+            const rangeSize = tailMax - tailMin;
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            newValue = Math.max(tailMin, Math.min(tailMax, newValue));
+            boidProps.tailLength = newValue;
+        } else if (draggedStylingKnob === 1) { // Tail Width
+            const widthMin = 1;
+            const widthMax = 5;
+            const rangeSize = widthMax - widthMin;
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            newValue = Math.max(widthMin, Math.min(widthMax, newValue));
+            boidProps.tailWidth = newValue;
+        }
         return;
     }
     
@@ -2985,492 +3021,39 @@ class HOTAIRBALLOON {
         }
     }
     draw() {
-        const radScale = this.radius * cScale;
-        const balloonRadius = 0.2 * radScale + (this.pos.x / simWidth) * 0.3 * radScale;
-        c.save();
-        c.translate(cX(this.pos), cY(this.pos));
-        
-        // draw balloon as spherical with a net over the top half, like a vintage hot air balloon
-        // Sphere is centered at (0, -0.5 * balloonRadius) with radius balloonRadius
-        const sphereCenterY = -0.5 * balloonRadius;
-        const balloonLightness = 30 + (this.pos.x / simWidth) * 30;
-        const gradient = c.createRadialGradient(
-            -balloonRadius * 0.3,
-            sphereCenterY + balloonRadius * 0.4, 
-            0, 
-            0, 
-            sphereCenterY, 
-            balloonRadius * 1.2);
-        gradient.addColorStop(0, `hsl(180, 80%, ${balloonLightness}%)`);
-        gradient.addColorStop(1, `hsl(220, 60%, ${0.60 * balloonLightness}%)`);
-        c.fillStyle = gradient;
-
-        // Draw round top
-        c.beginPath();
-        c.arc(
-            0,
-            sphereCenterY,
-            balloonRadius,   
-            0, 
-            2 * Math.PI);
-        c.fill();
-        c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
-        c.lineWidth = 0.03 * balloonRadius;
-        c.stroke();
-
-        // draw bottom ellipse
-        c.beginPath();
-        c.ellipse(
-            0,
-            sphereCenterY,
-            balloonRadius,
-            balloonRadius * 1.3,
-            0,
-            Math.PI,
-            2 * Math.PI,
-            true);
+        // Use cached offscreen canvas if available
+        if (hotAirBalloonCanvas) {
+            const radScale = this.radius * cScale;
+            const balloonRadius = 0.2 * radScale + (this.pos.x / simWidth) * 0.3 * radScale;
             
-        c.lineWidth = 0.022 * balloonRadius;
-        c.fill();
-        c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
-        c.stroke();
-
-        // Draw net over top half of balloon (viewed from horizontal side angle)
-        const sphereTop = sphereCenterY - balloonRadius;
-        const sphereEquator = sphereCenterY;
-        
-        // Vertical meridian lines - evenly spaced from equator, from top to equator
-        const verticalLines = 8;
-        //c.strokeStyle = `hsla(30, 50%, 10%, 0.7)`;
-        //c.lineWidth = 0.75;
-        for (let i = 0; i <= verticalLines; i++) {
-            // Evenly space along visible arc of equator (from -π/2 to +π/2)
-            const angle = (i / verticalLines - 0.5) * Math.PI; // -π/2 to +π/2
-            c.beginPath();
-            for (let j = 0; j <= 20; j++) {
-                const t = j / 20; // 0 at top, 1 at equator
-                const currentAngle = -Math.PI / 2 + t * (Math.PI / 2); // -90° to 0°
-                const cosCurrentAngle = Math.cos(currentAngle);
-                const x = balloonRadius * Math.sin(angle) * cosCurrentAngle;
-                const y = sphereCenterY + balloonRadius * Math.sin(currentAngle);
-                if (j === 0) {
-                    c.moveTo(x, y);
-                } else {
-                    c.lineTo(x, y);
-                }
-            }
-            // Calculate intersection with equator ellipse
-            const equatorX = balloonRadius * Math.sin(angle);
-            const equatorEllipseY = sphereEquator + balloonRadius * 0.3 * Math.sqrt(1 - (equatorX / balloonRadius) ** 2);
-            c.lineTo(equatorX, equatorEllipseY);
-            c.stroke();
+            // Calculate scale relative to pre-rendered size (2x resolution)
+            const standardScale = 0.25 * Math.max(canvas.width, canvas.height) / Math.max(simWidth, simHeight);
+            const standardBalloonRadius = 0.35 * standardScale * 2; // 2x rendering
+            const scale = balloonRadius / standardBalloonRadius;
+            
+            c.save();
+            c.translate(cX(this.pos), cY(this.pos));
+            // Enable smoothing to downsample 2x image smoothly
+            c.imageSmoothingEnabled = true;
+            c.imageSmoothingQuality = 'high';
+            
+            // Draw image at specific size
+            const drawWidth = hotAirBalloonCanvas.width * scale;
+            const drawHeight = hotAirBalloonCanvas.height * scale;
+            c.drawImage(
+                hotAirBalloonCanvas,
+                -drawWidth / 2,
+                -drawHeight / 2,
+                drawWidth,
+                drawHeight
+            );
+            
+            c.restore();
+            return;
         }
         
-        // Horizontal latitude lines - circular arcs at different heights
-        const horizontalLines = 3;
-        c.lineWidth = 0.03 * balloonRadius;
-        for (let i = 1; i <= horizontalLines; i++) {
-            const t = i / (horizontalLines + 1); // Position from top to equator
-            const currentAngle = -Math.PI / 2 + t * (Math.PI / 2); // -90° to 0°
-            const yPos = sphereCenterY + balloonRadius * Math.sin(currentAngle);
-            const circleRadius = balloonRadius * Math.cos(currentAngle);
-            
-            // Draw front half of ellipse only (omit rear arcs)
-            c.beginPath();
-            c.ellipse(0, yPos, circleRadius, circleRadius * 0.3, 0, -0.1, Math.PI + 0.1);
-            c.stroke();
-        }
-        
-        // Draw thicker equator band
-        c.beginPath();
-        c.ellipse(0, sphereEquator, balloonRadius, balloonRadius * 0.3, 0, -0.1, Math.PI + 0.1);
-        //c.strokeStyle = `hsla(30, 0%, 10%, 0.7)`;
-        //c.lineWidth = 0.03 * balloonRadius;
-        c.stroke();
-        
-        // Draw basket with rounded corners and cylindrical shading
-        const basketWidth = balloonRadius * 0.5;
-        const basketHeight = balloonRadius * 0.4;
-        const basketY = 1.4 * balloonRadius + basketHeight * 0.5;
-        const cornerRadius = basketWidth * 0.15;
-
-        // Connect meridian line endpoints to basket with draped cables
-        c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
-        c.lineWidth = 0.022 * balloonRadius;
-        const basketTop = basketY - basketHeight / 2;
-        for (let i = 0; i <= verticalLines; i++) {
-            const angle = (i / verticalLines - 0.5) * Math.PI;
-            
-            const normalizedPos = Math.abs(i / verticalLines - 0.5) * 2; // 0 at center, 1 at edges
-            
-            // For only the outermost cables, attach below the equator
-            let connectionX, connectionY;
-            if (normalizedPos > 0.8) {
-                // Only the very outer cables attach progressively lower
-                const verticalOffset = (normalizedPos - 0.8) / 0.2 * (Math.PI / 12); // Up to 15° below equator for outermost
-                const connectionAngle = verticalOffset; // below equator
-                const connY = sphereCenterY + balloonRadius * Math.sin(connectionAngle);
-                const circleRadiusAtHeight = balloonRadius * Math.cos(connectionAngle);
-                connectionX = circleRadiusAtHeight * Math.sin(angle);
-                // Project onto ellipse for side view
-                connectionY = connY + circleRadiusAtHeight * 0.3 * Math.sqrt(Math.max(0, 1 - (Math.sin(angle)) ** 2));
-            } else {
-                // Most cables attach at equator
-                const equatorX = balloonRadius * Math.sin(angle);
-                connectionX = equatorX;
-                connectionY = sphereEquator + balloonRadius * 0.3 * Math.sqrt(Math.max(0, 1 - (equatorX / balloonRadius) ** 2));
-            }
-            
-            // Connect to basket - distribute connections evenly along basket width
-            const basketX = (i / verticalLines - 0.5) * basketWidth;
-            
-            // Draw draped cable using quadratic curve
-            c.beginPath();
-            c.moveTo(connectionX, connectionY);
-            
-            // Create draping curve with control point offset
-            const midX = (connectionX + basketX) / 2;
-            const midY = (connectionY + basketTop) / 2;
-            // Add drape - how much the cable sags (much more for outer cables)
-            const drape = balloonRadius * 0.25 * (1 + normalizedPos * normalizedPos * 1.5);
-            const controlY = midY + drape; // Drape downward (positive Y is down from balloon)
-            
-            c.quadraticCurveTo(midX, controlY, basketX, basketTop);
-            c.stroke();
-        }
-
-        // draw bottom ellipse
-        c.beginPath();
-        c.ellipse(
-            0,
-            sphereCenterY,
-            balloonRadius,
-            balloonRadius * 1.3,
-            0,
-            Math.PI,
-            2 * Math.PI,
-            true);
-            
-        c.lineWidth = 0.03 * balloonRadius;
-        c.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
-        c.stroke();
-
-        // Draw basket as 3D cylinder with elliptical top and bottom
-        const basketTopRadiusX = basketWidth / 1.8;
-        const basketTopRadiusY = basketTopRadiusX * 0.3; // Ellipse compression for 3D view
-        const basketBottomRadiusX = basketTopRadiusX * 0.8; // Bottom 90% as wide
-        const basketBottomRadiusY = basketTopRadiusY * 0.8;
-        //const basketTop = basketY - basketHeight / 2;
-        const basketBottom = basketY + basketHeight / 2;
-        
-        // Create linear gradient for cylindrical appearance
-        const basketGradient = c.createLinearGradient(
-            -basketWidth / 2, 0,
-            basketWidth / 2, 0
-        );
-        basketGradient.addColorStop(0, `hsl(30, 60%, 20%)`);
-        basketGradient.addColorStop(0.4, `hsl(30, 70%, 35%)`);
-        basketGradient.addColorStop(0.45, `hsl(30, 70%, 35%)`);
-        basketGradient.addColorStop(1, `hsl(30, 60%, 20%)`);
-
-        // Draw bottom ellipse (darkest - furthest from light)
-        c.fillStyle = `hsl(30, 50%, 15%)`;
-        c.beginPath();
-        c.ellipse(
-            0, 
-            basketBottom, 
-            basketBottomRadiusX, 
-            basketBottomRadiusY, 
-            0, 
-            Math.PI, 
-            Math.PI * 2,
-            true);
-        c.fill();
-        c.beginPath();
-        c.ellipse(
-            0, 
-            basketBottom, 
-            basketBottomRadiusX, 
-            basketBottomRadiusY, 
-            0, 
-            0, 
-            Math.PI * 2,
-            true);
-        c.strokeStyle = `hsl(30, 40%, 10%)`;
-        c.lineWidth = 0.05 * balloonRadius;
-        c.stroke();
-
-        // Draw basket as filled shape
-        c.fillStyle = basketGradient;
-        c.beginPath();
-        c.moveTo(-basketTopRadiusX, basketTop + basketTopRadiusY);
-        c.lineTo(-basketBottomRadiusX, basketBottom);
-        c.ellipse(0, basketBottom, basketBottomRadiusX, basketBottomRadiusY, 0, Math.PI, 0, true);
-        c.lineTo(basketBottomRadiusX, basketBottom);
-        c.lineTo(basketTopRadiusX, basketTop + basketTopRadiusY);
-        c.ellipse(0, basketTop, basketTopRadiusX, basketTopRadiusY, 0, 0, Math.PI, true);
-        c.closePath();
-        c.fill();
-        
-        // Draw top ellipse stroke (interior visible edge)
-        c.beginPath();
-        c.ellipse(
-            0, 
-            basketTop, 
-            basketTopRadiusX, 
-            basketTopRadiusY, 
-            0, 
-            0, 
-            Math.PI * 2);
-        c.fillStyle = `hsl(30, 30%, 15%)`;
-        c.fill();
-        
-        // Draw top front ellipse stroke 
-        c.beginPath();
-        c.ellipse(
-            0, 
-            basketTop, 
-            basketTopRadiusX, 
-            basketTopRadiusY, 
-            0, 
-            0, 
-            Math.PI * 2);
-        c.strokeStyle = `hsl(30, 40%, 40%)`;
-        c.lineWidth = 0.03 * balloonRadius;
-        c.stroke();
-
-        // Draw wicker pattern on basket
-        c.strokeStyle = `hsl(30, 70%, 20%)`;
-        c.lineWidth = 0.01 * balloonRadius;
-        
-        // Horizontal wicker strands
-        const wickerRows = 7;
-        for (let i = 0; i <= wickerRows; i++) {
-            const t = i / wickerRows;
-            const y = basketTop + basketHeight * t;
-            const topRadius = basketTopRadiusX - (basketTopRadiusX - basketBottomRadiusX) * t;
-            const vertRadius = (basketTopRadiusY - (basketTopRadiusY - basketBottomRadiusY) * t) * 0.95;
-            
-            c.beginPath();
-            c.ellipse(0, y, topRadius * 0.95, vertRadius, 0, 0.02, Math.PI - 0.02);
-            c.stroke();
-        }
-        
-        // Vertical wicker strands
-        const wickerColumns = 9;
-        for (let i = 0; i <= wickerColumns; i++) {
-            const angle = (i / wickerColumns) * Math.PI;
-            const xTop = Math.cos(angle) * basketTopRadiusX * 0.95;
-            const xBottom = Math.cos(angle) * basketBottomRadiusX * 0.95;
-            
-            // Calculate starting y position on the visible top rim ellipse
-            const topRimOffset = basketTopRadiusY * Math.sin(angle);
-            const startY = basketTop + topRimOffset;
-            
-            // Calculate ending y position on the visible bottom rim ellipse
-            const bottomRimOffset = basketBottomRadiusY * Math.sin(angle);
-            const endY = basketBottom + bottomRimOffset;
-            
-            c.beginPath();
-            c.moveTo(xTop, startY);
-            
-            for (let j = 1; j <= 10; j++) {
-                const t = j / 10;
-                const y = basketTop + basketHeight * t;
-                const x = xTop + (xBottom - xTop) * t;
-                const offsetY = (basketTopRadiusY - (basketTopRadiusY - basketBottomRadiusY) * t) * 0.6;
-                const waveFactor = Math.sin(t * Math.PI) * 0.15;
-                
-                c.lineTo(x, y + offsetY * waveFactor);
-            }
-            
-            c.lineTo(xBottom, endY);
-            c.stroke();
-        }
-
-        // Draw bunny in basket
-        const bunnyScale = basketTopRadiusX;
-        const maxEarHeight = bunnyScale * 1.2;
-        const earHeight = maxEarHeight;
-        const headRadius = bunnyScale * 0.48;
-        const earWidth = bunnyScale * 0.12;
-        const earSpacing = bunnyScale * 0.15;
-        
-        // Position bunny head inside basket
-        const headY = basketTop + basketHeight * 0.1;
-        
-        const earBottomY = headY - headRadius * 0.3;
-        const earTopY = earBottomY - earHeight;
-        const earCenterY = (earBottomY + earTopY) / 2;
-        
-        // Draw left ear
-        const leftEarGradient = c.createLinearGradient(0, earTopY, 0, earBottomY);
-        leftEarGradient.addColorStop(0, 'hsl(195, 75%, 85%)');
-        leftEarGradient.addColorStop(0.5, 'hsl(200, 70%, 75%)');
-        leftEarGradient.addColorStop(1, 'hsl(205, 65%, 65%)');
-        c.fillStyle = leftEarGradient;
-        c.beginPath();
-        const leftEarX = -earSpacing * 2.0;
-        const leftEarW = earWidth * 1.5;
-        const leftEarH = earHeight / 2;
-        c.save();
-        c.translate(leftEarX, earCenterY);
-        c.rotate(-0.18);
-        // Create airfoil shape - rounded tip at top, wider at bottom
-        c.moveTo(0, -leftEarH);
-        c.bezierCurveTo(leftEarW * 0.6, -leftEarH, leftEarW * 0.85, -leftEarH * 0.6, leftEarW * 0.9, -leftEarH * 0.2);
-        c.bezierCurveTo(leftEarW, leftEarH * 0.3, leftEarW * 0.7, leftEarH * 0.85, 0, leftEarH);
-        c.bezierCurveTo(-leftEarW * 0.7, leftEarH * 0.85, -leftEarW, leftEarH * 0.3, -leftEarW * 0.9, -leftEarH * 0.2);
-        c.bezierCurveTo(-leftEarW * 0.85, -leftEarH * 0.6, -leftEarW * 0.6, -leftEarH, 0, -leftEarH);
-        c.closePath();
-        c.fill();
-        c.strokeStyle = 'hsl(200, 50%, 55%)';
-        c.lineWidth = 0.003 * cScale;
-        c.stroke();
-        c.restore();
-        
-        // Draw left inner ear
-        c.fillStyle = 'hsl(195, 65%, 90%)';
-        c.beginPath();
-        const leftInnerW = earWidth * 0.75;
-            const leftInnerH = earHeight / 2 * 0.7;
-            
-        c.save();
-
-        c.translate(leftEarX, earCenterY);
-        c.rotate(-0.18);
-        c.moveTo(0, -leftInnerH);
-        c.bezierCurveTo(leftInnerW * 0.6, -leftInnerH, leftInnerW * 0.85, -leftInnerH * 0.6, leftInnerW * 0.9, -leftInnerH * 0.2);
-        c.bezierCurveTo(leftInnerW, leftInnerH * 0.3, leftInnerW * 0.7, leftInnerH * 0.85, 0, leftInnerH);
-        c.bezierCurveTo(-leftInnerW * 0.7, leftInnerH * 0.85, -leftInnerW, leftInnerH * 0.3, -leftInnerW * 0.9, -leftInnerH * 0.2);
-        c.bezierCurveTo(-leftInnerW * 0.85, -leftInnerH * 0.6, -leftInnerW * 0.6, -leftInnerH, 0, -leftInnerH);
-        c.closePath();
-        c.fill();
-
-        c.restore();
-            
-        // Draw right ear
-        const rightEarGradient = c.createLinearGradient(0, earTopY, 0, earBottomY);
-        rightEarGradient.addColorStop(0, 'hsl(195, 75%, 85%)');
-        rightEarGradient.addColorStop(0.5, 'hsl(200, 70%, 75%)');
-        rightEarGradient.addColorStop(1, 'hsl(205, 65%, 65%)');
-        c.fillStyle = rightEarGradient;
-        c.beginPath();
-        const rightEarX = earSpacing * 2.0;
-        const rightEarW = earWidth * 1.5;
-        const rightEarH = earHeight / 2;
-
-        c.save();
-
-        c.translate(rightEarX, earCenterY);
-        c.rotate(0.18);
-        // Create airfoil shape - rounded tip at top, wider at bottom
-        c.moveTo(0, -rightEarH);
-        c.bezierCurveTo(rightEarW * 0.6, -rightEarH, rightEarW * 0.85, -rightEarH * 0.6, rightEarW * 0.9, -rightEarH * 0.2);
-        c.bezierCurveTo(rightEarW, rightEarH * 0.3, rightEarW * 0.7, rightEarH * 0.85, 0, rightEarH);
-        c.bezierCurveTo(-rightEarW * 0.7, rightEarH * 0.85, -rightEarW, rightEarH * 0.3, -rightEarW * 0.9, -rightEarH * 0.2);
-        c.bezierCurveTo(-rightEarW * 0.85, -rightEarH * 0.6, -rightEarW * 0.6, -rightEarH, 0, -rightEarH);
-        c.closePath();
-        c.fill();
-        c.strokeStyle = 'hsl(200, 50%, 55%)';
-        c.lineWidth = 0.003 * cScale;
-        c.stroke();
-        c.restore();
-        
-        // Draw right inner ear
-        c.fillStyle = 'hsl(195, 65%, 90%)';
-        c.beginPath();
-        const rightInnerW = earWidth * 0.75;
-        const rightInnerH = earHeight / 2 * 0.7;
-        c.save();
-        c.translate(rightEarX, earCenterY);
-        c.rotate(0.18);
-        c.moveTo(0, -rightInnerH);
-        c.bezierCurveTo(rightInnerW * 0.6, -rightInnerH, rightInnerW * 0.85, -rightInnerH * 0.6, rightInnerW * 0.9, -rightInnerH * 0.2);
-        c.bezierCurveTo(rightInnerW, rightInnerH * 0.3, rightInnerW * 0.7, rightInnerH * 0.85, 0, rightInnerH);
-        c.bezierCurveTo(-rightInnerW * 0.7, rightInnerH * 0.85, -rightInnerW, rightInnerH * 0.3, -rightInnerW * 0.9, -rightInnerH * 0.2);
-        c.bezierCurveTo(-rightInnerW * 0.85, -rightInnerH * 0.6, -rightInnerW * 0.6, -rightInnerH, 0, -rightInnerH);
-        c.closePath();
-        c.fill();
-
-        c.restore();
-        
-        // Draw bunny head
-        const headGradient = c.createRadialGradient(-headRadius * 0.3, headY - headRadius * 0.3, 0, 0, headY, headRadius);
-        headGradient.addColorStop(0, 'hsl(195, 70%, 85%)');
-        headGradient.addColorStop(0.7, 'hsl(200, 65%, 75%)');
-        headGradient.addColorStop(1, 'hsl(205, 60%, 65%)');
-        
-        c.fillStyle = headGradient;
-        c.beginPath();
-        c.arc(
-            0, 
-            headY, 
-            headRadius, 
-            Math.PI * 0.9, 
-            Math.PI * 2.1,
-        false);
-        c.fill();
-        
-        // Draw eyes
-        const eyeY = headY - headRadius * 0.22;
-        const eyeSpacing = headRadius * 0.4;
-        const eyeWidth = headRadius * 0.2;
-        const eyeHeight = headRadius * 0.35;
-        const pupilWidth = headRadius * 0.1014;
-        const pupilHeight = headRadius * 0.2028;
-        const eyeAngle = 0.15;
-        const pupilOffsetY = headRadius * 0.05;
-        const pupilOffsetX = headRadius * 0.02;
-        
-        // Left eye
-        c.fillStyle = 'white';
-        c.beginPath();
-        c.ellipse(-eyeSpacing, eyeY, eyeWidth, eyeHeight, -eyeAngle, 0, Math.PI * 2);
-        c.fill();
-        
-        c.fillStyle = 'hsl(210, 60%, 30%)';
-        c.beginPath();
-        c.ellipse(-eyeSpacing + pupilOffsetX, eyeY + pupilOffsetY, pupilWidth, pupilHeight, -eyeAngle, 0, Math.PI * 2);
-        c.fill();
-        
-        c.fillStyle = 'white';
-        c.beginPath();
-        c.arc(-eyeSpacing + pupilOffsetX - pupilWidth * 0.3, eyeY + pupilOffsetY - pupilHeight * 0.6, headRadius * 0.04, 0, Math.PI * 2);
-        c.fill();
-        
-        // Right eye
-        c.fillStyle = 'white';
-        c.beginPath();
-        c.ellipse(eyeSpacing, eyeY, eyeWidth, eyeHeight, eyeAngle, 0, Math.PI * 2);
-        c.fill();
-        
-        c.fillStyle = 'hsl(210, 60%, 30%)';
-        c.beginPath();
-        c.ellipse(eyeSpacing - pupilOffsetX, eyeY + pupilOffsetY, pupilWidth, pupilHeight, eyeAngle, 0, Math.PI * 2);
-        c.fill();
-        
-        c.fillStyle = 'white';
-        c.beginPath();
-        c.arc(eyeSpacing - pupilOffsetX + pupilWidth * 0.3, eyeY + pupilOffsetY - pupilHeight * 0.6, headRadius * 0.04, 0, Math.PI * 2);
-        c.fill();
-
-        // Draw top front ellipse stroke 
-        c.beginPath();
-        c.ellipse(
-            0, 
-            basketTop, 
-            basketTopRadiusX, 
-            basketTopRadiusY, 
-            0, 
-            Math.PI, 
-            Math.PI * 2,
-            true);
-        c.strokeStyle = `hsl(30, 40%, 60%)`;
-        c.lineWidth = 0.03 * balloonRadius;
-        c.stroke();
-        
-        c.restore();
+        // Fallback: render nothing if cache unavailable
+        // (Re-enable preRenderHotAirBalloon() in makeHotAirBalloon to use cache)
     }
 }
 
@@ -3479,13 +3062,482 @@ function makeHotAirBalloon() {
     HotAirBalloon = [];
     const radius = 0.25;
     const pos = new Vector2(
-        1.2 * simWidth, 
+        2 * simWidth, 
         //0.6 * simHeight + Math.random() * 0.3 *simHeight); 
-        0.15 * simHeight + 0.75 * Math.random() * simHeight);
+        0.3 * simHeight + 0.70 * Math.random() * simHeight);
     const vel = new Vector2(
         -0.01, 
-        (Math.random() - 0.5) * 0.007);
+        (Math.random() - 0.5) * 0.01);
     HotAirBalloon.push(new HOTAIRBALLOON(radius, pos, vel));
+    
+}
+
+// Pre-render hot air balloon to offscreen canvas for performance
+function preRenderHotAirBalloon() {
+    // Calculate size for standard rendering (at middle position)
+    const standardRadius = 0.25;
+    const standardScale = standardRadius * Math.max(canvas.width, canvas.height) / Math.max(simWidth, simHeight);
+    const balloonRadius = 0.35 * standardScale; // Average size
+    
+    // Create offscreen canvas at 2x resolution for anti-aliasing
+    const canvasSize = balloonRadius * 6 * 2; // 2x for anti-aliasing
+    hotAirBalloonCanvas = document.createElement('canvas');
+    hotAirBalloonCanvas.width = canvasSize;
+    hotAirBalloonCanvas.height = canvasSize;
+    
+    const ctx = hotAirBalloonCanvas.getContext('2d');
+    ctx.save();
+    ctx.translate(canvasSize / 2, canvasSize / 2 + balloonRadius * 2);
+    ctx.scale(2, 2);
+    
+    const renderBalloonRadius = balloonRadius; // Draw at native size, scaled 2x by context
+    
+    // Use average lightness value (middle of simulation)
+    const sphereCenterY = -0.5 * renderBalloonRadius;
+    const balloonLightness = 45; // Average: 30 + 0.5 * 30
+    const gradient = ctx.createRadialGradient(
+        -renderBalloonRadius * 0.3,
+        sphereCenterY + renderBalloonRadius * 0.4, 
+        0, 
+        0, 
+        sphereCenterY, 
+        renderBalloonRadius * 1.2);
+    gradient.addColorStop(0, `hsl(180, 80%, ${balloonLightness}%)`);
+    gradient.addColorStop(1, `hsl(220, 60%, ${0.60 * balloonLightness}%)`);
+    ctx.fillStyle = gradient;
+
+    // Draw round top
+    ctx.beginPath();
+    ctx.arc(0, sphereCenterY, renderBalloonRadius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+    ctx.lineWidth = 0.03 * renderBalloonRadius;
+    ctx.stroke();
+
+    // Draw bottom ellipse with gradient fill (before rigging so cables are on top)
+    ctx.beginPath();
+    ctx.ellipse(
+        0,
+        sphereCenterY,
+        renderBalloonRadius,
+        renderBalloonRadius * 1.3,
+        0,
+        Math.PI,
+        2 * Math.PI,
+        true);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // Draw bottom ellipse stroke
+    ctx.beginPath();
+    ctx.ellipse(
+        0,
+        sphereCenterY,
+        renderBalloonRadius,
+        renderBalloonRadius * 1.3,
+        0,
+        Math.PI,
+        2 * Math.PI,
+        true);
+        
+    ctx.lineWidth = 0.03 * renderBalloonRadius;
+    ctx.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+    ctx.stroke();
+
+    // Draw net rigging
+    const verticalLines = 8;
+    const sphereEquator = sphereCenterY;
+    ctx.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+    ctx.lineWidth = 0.03 * renderBalloonRadius;
+    
+    for (let i = 0; i <= verticalLines; i++) {
+        const angle = (i / verticalLines - 0.5) * Math.PI;
+        
+        ctx.beginPath();
+        ctx.moveTo(0, sphereCenterY - renderBalloonRadius);
+        
+        const segments = 20;
+        for (let j = 1; j <= segments; j++) {
+            const t = j / segments;
+            const currentAngle = -Math.PI / 2 + t * (Math.PI / 2);
+            const yPos = sphereCenterY + renderBalloonRadius * Math.sin(currentAngle);
+            const circleRadius = renderBalloonRadius * Math.cos(currentAngle);
+            const xPos = circleRadius * Math.sin(angle);
+            const zDepth = circleRadius * Math.cos(angle);
+            const ellipseY = yPos + circleRadius * 0.3 * Math.sqrt(Math.max(0, 1 - (xPos / circleRadius) ** 2));
+            
+            ctx.lineTo(xPos, ellipseY);
+        }
+        ctx.stroke();
+    }
+    
+    // Horizontal rigging lines
+    const horizontalLines = 3;
+    ctx.lineWidth = 0.03 * renderBalloonRadius;
+    for (let i = 1; i <= horizontalLines; i++) {
+        const t = i / (horizontalLines + 1);
+        const currentAngle = -Math.PI / 2 + t * (Math.PI / 2);
+        const yPos = sphereCenterY + renderBalloonRadius * Math.sin(currentAngle);
+        const circleRadius = renderBalloonRadius * Math.cos(currentAngle);
+        
+        ctx.beginPath();
+        ctx.ellipse(0, yPos, circleRadius, circleRadius * 0.3, 0, -0.1, Math.PI + 0.1);
+        ctx.stroke();
+    }
+    
+    // Draw thicker equator band
+    ctx.beginPath();
+    ctx.ellipse(0, sphereEquator, renderBalloonRadius, renderBalloonRadius * 0.3, 0, -0.1, Math.PI + 0.1);
+    ctx.stroke();
+    
+    // Draw basket
+    const basketWidth = renderBalloonRadius * 0.5;
+    const basketHeight = renderBalloonRadius * 0.4;
+    const basketY = 1.4 * renderBalloonRadius + basketHeight * 0.5;
+    const cornerRadius = basketWidth * 0.15;
+
+    // Draw cables connecting balloon to basket
+    ctx.strokeStyle = `hsla(30, 0%, 20%, 0.7)`;
+    ctx.lineWidth = 0.022 * renderBalloonRadius;
+    const basketTop = basketY - basketHeight / 2;
+    
+    for (let i = 0; i <= verticalLines; i++) {
+        const angle = (i / verticalLines - 0.5) * Math.PI;
+        const normalizedPos = Math.abs(i / verticalLines - 0.5) * 2;
+        
+        let connectionX, connectionY;
+        if (normalizedPos > 0.8) {
+            const verticalOffset = (normalizedPos - 0.8) / 0.2 * (Math.PI / 12);
+            const connectionAngle = verticalOffset;
+            const connY = sphereCenterY + renderBalloonRadius * Math.sin(connectionAngle);
+            const circleRadiusAtHeight = renderBalloonRadius * Math.cos(connectionAngle);
+            connectionX = circleRadiusAtHeight * Math.sin(angle);
+            connectionY = connY + circleRadiusAtHeight * 0.3 * Math.sqrt(Math.max(0, 1 - (Math.sin(angle)) ** 2));
+        } else {
+            const equatorX = renderBalloonRadius * Math.sin(angle);
+            connectionX = equatorX;
+            connectionY = sphereEquator + renderBalloonRadius * 0.3 * Math.sqrt(Math.max(0, 1 - (equatorX / renderBalloonRadius) ** 2));
+        }
+        
+        const basketX = (i / verticalLines - 0.5) * basketWidth;
+        
+        ctx.beginPath();
+        ctx.moveTo(connectionX, connectionY);
+        
+        const midX = (connectionX + basketX) / 2;
+        const midY = (connectionY + basketTop) / 2;
+        const drape = renderBalloonRadius * 0.25 * (1 + normalizedPos * normalizedPos * 1.5);
+        const controlY = midY + drape;
+        
+        ctx.quadraticCurveTo(midX, controlY, basketX, basketTop);
+        ctx.stroke();
+    }
+
+    
+
+    // Draw basket as 3D cylinder
+    const basketTopRadiusX = basketWidth / 1.8;
+    const basketTopRadiusY = basketTopRadiusX * 0.3;
+    const basketBottomRadiusX = basketTopRadiusX * 0.8;
+    const basketBottomRadiusY = basketTopRadiusY * 0.8;
+    const basketBottom = basketY + basketHeight / 2;
+    
+    // Basket gradient
+    const basketGradient = ctx.createLinearGradient(
+        -basketWidth / 2, 0,
+        basketWidth / 2, 0
+    );
+    basketGradient.addColorStop(0, `hsl(30, 60%, 20%)`);
+    basketGradient.addColorStop(0.4, `hsl(30, 70%, 35%)`);
+    basketGradient.addColorStop(0.45, `hsl(30, 70%, 35%)`);
+    basketGradient.addColorStop(1, `hsl(30, 60%, 20%)`);
+
+    // Bottom ellipse
+    ctx.fillStyle = `hsl(30, 50%, 15%)`;
+    ctx.beginPath();
+    ctx.ellipse(
+        0, 
+        basketBottom, 
+        basketBottomRadiusX, 
+        basketBottomRadiusY, 
+        0, 
+        Math.PI, 
+        Math.PI * 2,
+        true);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(
+        0, 
+        basketBottom, 
+        basketBottomRadiusX, 
+        basketBottomRadiusY, 
+        0, 
+        0, 
+        Math.PI * 2,
+        true);
+    ctx.strokeStyle = `hsl(30, 40%, 10%)`;
+    ctx.lineWidth = 0.05 * renderBalloonRadius;
+    ctx.stroke();
+
+    // Basket filled shape
+    ctx.fillStyle = basketGradient;
+    ctx.beginPath();
+    ctx.moveTo(-basketTopRadiusX, basketTop + basketTopRadiusY);
+    ctx.lineTo(-basketBottomRadiusX, basketBottom);
+    ctx.ellipse(0, basketBottom, basketBottomRadiusX, basketBottomRadiusY, 0, Math.PI, 0, true);
+    ctx.lineTo(basketBottomRadiusX, basketBottom);
+    ctx.lineTo(basketTopRadiusX, basketTop + basketTopRadiusY);
+    ctx.ellipse(0, basketTop, basketTopRadiusX, basketTopRadiusY, 0, 0, Math.PI, true);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Top interior
+    ctx.beginPath();
+    ctx.ellipse(
+        0, 
+        basketTop, 
+        basketTopRadiusX, 
+        basketTopRadiusY, 
+        0, 
+        0, 
+        Math.PI * 2);
+    ctx.fillStyle = `hsl(30, 30%, 15%)`;
+    ctx.fill();
+    
+    // Top rim
+    ctx.beginPath();
+    ctx.ellipse(
+        0, 
+        basketTop, 
+        basketTopRadiusX, 
+        basketTopRadiusY, 
+        0, 
+        0, 
+        Math.PI * 2);
+    ctx.strokeStyle = `hsl(30, 40%, 40%)`;
+    ctx.lineWidth = 0.03 * renderBalloonRadius;
+    ctx.stroke();
+
+    // Wicker pattern - horizontal strands
+    ctx.strokeStyle = `hsl(30, 70%, 20%)`;
+    ctx.lineWidth = 0.01 * renderBalloonRadius;
+    
+    const wickerRows = 7;
+    for (let i = 0; i <= wickerRows; i++) {
+        const t = i / wickerRows;
+        const y = basketTop + basketHeight * t;
+        const topRadius = basketTopRadiusX - (basketTopRadiusX - basketBottomRadiusX) * t;
+        const vertRadius = (basketTopRadiusY - (basketTopRadiusY - basketBottomRadiusY) * t) * 0.95;
+        
+        ctx.beginPath();
+        ctx.ellipse(0, y, topRadius * 0.95, vertRadius, 0, 0.02, Math.PI - 0.02);
+        ctx.stroke();
+    }
+    
+    // Wicker pattern - vertical strands
+    const wickerColumns = 9;
+    for (let i = 0; i <= wickerColumns; i++) {
+        const angle = (i / wickerColumns) * Math.PI;
+        const xTop = Math.cos(angle) * basketTopRadiusX * 0.95;
+        const xBottom = Math.cos(angle) * basketBottomRadiusX * 0.95;
+        
+        const topRimOffset = basketTopRadiusY * Math.sin(angle);
+        const startY = basketTop + topRimOffset;
+        
+        const bottomRimOffset = basketBottomRadiusY * Math.sin(angle);
+        const endY = basketBottom + bottomRimOffset;
+        
+        ctx.beginPath();
+        ctx.moveTo(xTop, startY);
+        
+        for (let j = 1; j <= 10; j++) {
+            const t = j / 10;
+            const y = basketTop + basketHeight * t;
+            const x = xTop + (xBottom - xTop) * t;
+            const offsetY = (basketTopRadiusY - (basketTopRadiusY - basketBottomRadiusY) * t) * 0.6;
+            const waveFactor = Math.sin(t * Math.PI) * 0.15;
+            
+            ctx.lineTo(x, y + offsetY * waveFactor);
+        }
+        
+        ctx.lineTo(xBottom, endY);
+        ctx.stroke();
+    }
+
+    // Draw bunny
+    const bunnyScale = basketTopRadiusX;
+    const maxEarHeight = bunnyScale * 1.2;
+    const earHeight = maxEarHeight;
+    const headRadius = bunnyScale * 0.48;
+    const earWidth = bunnyScale * 0.12;
+    const earSpacing = bunnyScale * 0.15;
+    
+    const headY = basketTop + basketHeight * 0.1;
+    
+    const earBottomY = headY - headRadius * 0.3;
+    const earTopY = earBottomY - earHeight;
+    const earCenterY = (earBottomY + earTopY) / 2;
+    
+    // Left ear
+    const leftEarGradient = ctx.createLinearGradient(0, earTopY, 0, earBottomY);
+    leftEarGradient.addColorStop(0, 'hsl(195, 75%, 85%)');
+    leftEarGradient.addColorStop(0.5, 'hsl(200, 70%, 75%)');
+    leftEarGradient.addColorStop(1, 'hsl(205, 65%, 65%)');
+    ctx.fillStyle = leftEarGradient;
+    ctx.beginPath();
+    const leftEarX = -earSpacing * 2.0;
+    const leftEarW = earWidth * 1.5;
+    const leftEarH = earHeight / 2;
+    ctx.save();
+    ctx.translate(leftEarX, earCenterY);
+    ctx.rotate(-0.18);
+    ctx.moveTo(0, -leftEarH);
+    ctx.bezierCurveTo(leftEarW * 0.6, -leftEarH, leftEarW * 0.85, -leftEarH * 0.6, leftEarW * 0.9, -leftEarH * 0.2);
+    ctx.bezierCurveTo(leftEarW, leftEarH * 0.3, leftEarW * 0.7, leftEarH * 0.85, 0, leftEarH);
+    ctx.bezierCurveTo(-leftEarW * 0.7, leftEarH * 0.85, -leftEarW, leftEarH * 0.3, -leftEarW * 0.9, -leftEarH * 0.2);
+    ctx.bezierCurveTo(-leftEarW * 0.85, -leftEarH * 0.6, -leftEarW * 0.6, -leftEarH, 0, -leftEarH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'hsl(200, 50%, 55%)';
+    ctx.lineWidth = 0.003 * standardScale;
+    ctx.stroke();
+    ctx.restore();
+    
+    // Left inner ear
+    ctx.fillStyle = 'hsl(320, 50%, 70%)';
+    ctx.beginPath();
+    const leftInnerW = earWidth * 0.75;
+    const leftInnerH = earHeight / 2 * 0.7;
+    ctx.save();
+    ctx.translate(leftEarX, earCenterY);
+    ctx.rotate(-0.18);
+    ctx.moveTo(0, -leftInnerH);
+    ctx.bezierCurveTo(leftInnerW * 0.6, -leftInnerH, leftInnerW * 0.85, -leftInnerH * 0.6, leftInnerW * 0.9, -leftInnerH * 0.2);
+    ctx.bezierCurveTo(leftInnerW, leftInnerH * 0.3, leftInnerW * 0.7, leftInnerH * 0.85, 0, leftInnerH);
+    ctx.bezierCurveTo(-leftInnerW * 0.7, leftInnerH * 0.85, -leftInnerW, leftInnerH * 0.3, -leftInnerW * 0.9, -leftInnerH * 0.2);
+    ctx.bezierCurveTo(-leftInnerW * 0.85, -leftInnerH * 0.6, -leftInnerW * 0.6, -leftInnerH, 0, -leftInnerH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+        
+    // Right ear
+    const rightEarGradient = ctx.createLinearGradient(0, earTopY, 0, earBottomY);
+    rightEarGradient.addColorStop(0, 'hsl(195, 75%, 85%)');
+    rightEarGradient.addColorStop(0.5, 'hsl(200, 70%, 75%)');
+    rightEarGradient.addColorStop(1, 'hsl(205, 65%, 65%)');
+    ctx.fillStyle = rightEarGradient;
+    ctx.beginPath();
+    const rightEarX = earSpacing * 2.0;
+    const rightEarW = earWidth * 1.5;
+    const rightEarH = earHeight / 2;
+    ctx.save();
+    ctx.translate(rightEarX, earCenterY);
+    ctx.rotate(0.18);
+    ctx.moveTo(0, -rightEarH);
+    ctx.bezierCurveTo(rightEarW * 0.6, -rightEarH, rightEarW * 0.85, -rightEarH * 0.6, rightEarW * 0.9, -rightEarH * 0.2);
+    ctx.bezierCurveTo(rightEarW, rightEarH * 0.3, rightEarW * 0.7, rightEarH * 0.85, 0, rightEarH);
+    ctx.bezierCurveTo(-rightEarW * 0.7, rightEarH * 0.85, -rightEarW, rightEarH * 0.3, -rightEarW * 0.9, -rightEarH * 0.2);
+    ctx.bezierCurveTo(-rightEarW * 0.85, -rightEarH * 0.6, -rightEarW * 0.6, -rightEarH, 0, -rightEarH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'hsl(200, 50%, 55%)';
+    ctx.lineWidth = 0.003 * standardScale;
+    ctx.stroke();
+    ctx.restore();
+    
+    // Right inner ear
+    ctx.fillStyle = 'hsl(320, 50%, 70%)';
+    ctx.beginPath();
+    const rightInnerW = earWidth * 0.75;
+    const rightInnerH = earHeight / 2 * 0.7;
+    ctx.save();
+    ctx.translate(rightEarX, earCenterY);
+    ctx.rotate(0.18);
+    ctx.moveTo(0, -rightInnerH);
+    ctx.bezierCurveTo(rightInnerW * 0.6, -rightInnerH, rightInnerW * 0.85, -rightInnerH * 0.6, rightInnerW * 0.9, -rightInnerH * 0.2);
+    ctx.bezierCurveTo(rightInnerW, rightInnerH * 0.3, rightInnerW * 0.7, rightInnerH * 0.85, 0, rightInnerH);
+    ctx.bezierCurveTo(-rightInnerW * 0.7, rightInnerH * 0.85, -rightInnerW, rightInnerH * 0.3, -rightInnerW * 0.9, -rightInnerH * 0.2);
+    ctx.bezierCurveTo(-rightInnerW * 0.85, -rightInnerH * 0.6, -rightInnerW * 0.6, -rightInnerH, 0, -rightInnerH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    
+    // Bunny head
+    const headGradient = ctx.createRadialGradient(-headRadius * 0.3, headY - headRadius * 0.3, 0, 0, headY, headRadius);
+    headGradient.addColorStop(0, 'hsl(195, 70%, 85%)');
+    headGradient.addColorStop(0.7, 'hsl(200, 65%, 75%)');
+    headGradient.addColorStop(1, 'hsl(205, 60%, 65%)');
+    
+    ctx.fillStyle = headGradient;
+    ctx.beginPath();
+    ctx.arc(
+        0, 
+        headY, 
+        headRadius, 
+        Math.PI * 0.9, 
+        Math.PI * 2.1,
+        false);
+    ctx.fill();
+    
+    // Eyes
+    const eyeY = headY - headRadius * 0.22;
+    const eyeSpacing = headRadius * 0.4;
+    const eyeWidth = headRadius * 0.2;
+    const eyeHeight = headRadius * 0.35;
+    const pupilWidth = headRadius * 0.1014;
+    const pupilHeight = headRadius * 0.2028;
+    const eyeAngle = 0.15;
+    const pupilOffsetY = headRadius * 0.05;
+    const pupilOffsetX = headRadius * 0.02;
+    
+    // Left eye
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.ellipse(-eyeSpacing, eyeY, eyeWidth, eyeHeight, -eyeAngle, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillStyle = 'hsl(210, 60%, 30%)';
+    ctx.beginPath();
+    ctx.ellipse(-eyeSpacing + pupilOffsetX, eyeY + pupilOffsetY, pupilWidth, pupilHeight, -eyeAngle, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.arc(-eyeSpacing + pupilOffsetX - pupilWidth * 0.3, eyeY + pupilOffsetY - pupilHeight * 0.6, headRadius * 0.04, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Right eye
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.ellipse(eyeSpacing, eyeY, eyeWidth, eyeHeight, eyeAngle, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillStyle = 'hsl(210, 60%, 30%)';
+    ctx.beginPath();
+    ctx.ellipse(eyeSpacing - pupilOffsetX, eyeY + pupilOffsetY, pupilWidth, pupilHeight, eyeAngle, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.arc(eyeSpacing - pupilOffsetX + pupilWidth * 0.3, eyeY + pupilOffsetY - pupilHeight * 0.6, headRadius * 0.04, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Top front ellipse stroke 
+    ctx.beginPath();
+    ctx.ellipse(
+        0, 
+        basketTop, 
+        basketTopRadiusX, 
+        basketTopRadiusY, 
+        0, 
+        Math.PI, 
+        Math.PI * 2,
+        true);
+    ctx.strokeStyle = `hsl(30, 40%, 60%)`;
+    ctx.lineWidth = 0.03 * balloonRadius;
+    ctx.stroke();
+    
+    ctx.restore();
 }
 
 // BALLOON CLASS ---------------------------------------------------------------------
@@ -5874,16 +5926,17 @@ class BOID {
             if (boidFillEnabled) {
                 c.fill();
             }
+            c.lineWidth = 1.0;
             if (boidTraceMode > 0) {
                 if (boidTraceMode === 1) {
                     c.strokeStyle = 'hsl(0, 0%, 0%)';
-                    c.lineWidth = 1.0;
                 } else if (boidTraceMode === 2) {
                     c.strokeStyle = this.cachedStrokeStyle;
-                    c.lineWidth = 2.0;
+                    if (!boidFillEnabled) {
+                        c.lineWidth = 2.0;
+                    } 
                 } else if (boidTraceMode === 3) {
                     c.strokeStyle = 'hsl(0, 0%, 90%)';
-                    c.lineWidth = 1.0;
                 }
                 c.stroke();
             }
@@ -6677,7 +6730,7 @@ function drawSimMenu() {
     c.textBaseline = 'bottom';
     c.font = `${0.24 * knobRadius}px monospace`;
     c.fillStyle = `hsla(0, 0%, 60%, ${menuOpacity})`;
-    c.fillText('v1.51', padding + 4.8 * knobRadius, menuHeight + padding - 0.15 * knobRadius);
+    c.fillText('v1.52', padding + 4.8 * knobRadius, menuHeight + padding - 0.15 * knobRadius);
 
     c.restore();
 }
@@ -6725,16 +6778,16 @@ function drawStylingMenu() {
     c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
     c.closePath();
     const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `hsla(140, 40%, 20%, ${0.9 * stylingMenuOpacity})`);
-    menuGradient.addColorStop(1, `hsla(140, 40%, 5%, ${0.9 * stylingMenuOpacity})`);
+    menuGradient.addColorStop(0, `hsla(320, 40%, 40%, ${0.9 * stylingMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsla(320, 40%, 10%, ${0.9 * stylingMenuOpacity})`);
     c.fillStyle = menuGradient;
     c.fill();
-    c.strokeStyle = `hsla(140, 60%, 80%, ${stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 60%, 80%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.004 * menuScale;
     c.stroke();
-
+//320, 90%, 70%
     // Draw title
-    c.fillStyle = `hsla(140, 30%, 80%, ${stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 30%, 80%, ${stylingMenuOpacity})`;
     c.font = `bold ${0.05 * menuScale}px verdana`;
     c.textAlign = 'center';
     c.fillText('STYLING', menuWidth / 2, -padding + 0.04 * menuScale);
@@ -6771,9 +6824,9 @@ function drawStylingMenu() {
         const knobY = (row + 0.5) * knobSpacing + menuTopMargin;
         c.beginPath();
         c.arc(knobX, knobY, 1.05 *knobRadius, 0, 2 * Math.PI, false);
-        c.fillStyle = `hsla(140, 40%, 15%, ${0.9 * stylingMenuOpacity})`;
+        c.fillStyle = `hsla(320, 40%, 15%, ${0.9 * stylingMenuOpacity})`;
         c.fill();
-        c.strokeStyle = `hsla(140, 40%, 50%, ${stylingMenuOpacity})`;
+        c.strokeStyle = `hsla(320, 40%, 50%, ${stylingMenuOpacity})`;
         c.lineWidth = 0.003 * menuScale;
         c.stroke();
 
@@ -6789,8 +6842,8 @@ function drawStylingMenu() {
             knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
             knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
         );
-        gradient.addColorStop(0, `hsla(160, 40%, 50%, ${stylingMenuOpacity})`);
-        gradient.addColorStop(0.5, `hsla(140, 40%, 50%, ${stylingMenuOpacity})`);
+        gradient.addColorStop(0, `hsla(320, 40%, 50%, ${stylingMenuOpacity})`);
+        gradient.addColorStop(0.5, `hsla(300, 40%, 50%, ${stylingMenuOpacity})`);
         c.strokeStyle = gradient;
         c.beginPath();
         c.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
@@ -6805,7 +6858,7 @@ function drawStylingMenu() {
         c.beginPath();
         c.moveTo(knobX, knobY);
         c.lineTo(pointerEndX, pointerEndY);
-        c.strokeStyle = `hsla(140, 80%, 80%, ${stylingMenuOpacity})`;
+        c.strokeStyle = `hsla(320, 80%, 80%, ${stylingMenuOpacity})`;
         c.lineWidth = 0.008 * menuScale;
         c.stroke();
 
@@ -6818,17 +6871,17 @@ function drawStylingMenu() {
             case 1: label = 'Tail Width'; break;
         }
         c.font = `${0.29 * knobRadius}px verdana`;
-        c.strokeStyle = `hsla(140, 80%, 0%, ${0.6 * stylingMenuOpacity})`;
+        c.strokeStyle = `hsla(320, 80%, 0%, ${0.6 * stylingMenuOpacity})`;
         c.strokeText(label, 0.04 * knobRadius + knobX, 0.04 * knobRadius + (knobY + 1.35 * knobRadius));
         c.font = ` ${0.29 * knobRadius}px verdana`;
-        c.fillStyle = `hsla(140, 80%, 95%, ${stylingMenuOpacity})`;
+        c.fillStyle = `hsla(320, 80%, 95%, ${stylingMenuOpacity})`;
         c.fillText(label, knobX, knobY + 1.35 * knobRadius);
 
         // draw knob value
         let valueText = '';
         switch(knob) {
-            case 0: valueText = boidProps.tailLength.toString(); break;
-            case 1: valueText = (boidProps.tailWidth).toFixed(1); break;
+            case 0: valueText = boidProps.tailLength.toFixed(0); break;
+            case 1: valueText = (boidProps.tailWidth * 10).toFixed(0); break;
         }
         c.font = `${0.25 * knobRadius}px verdana`;
         c.fillStyle = `hsla(160, 80%, 50%, ${stylingMenuOpacity})`;
@@ -6852,7 +6905,7 @@ function drawStylingMenu() {
     c.lineTo(tailBracketLeftX, tailBracketY - tailBracketHeight);
     c.lineTo(tailBracketRightX, tailBracketY - tailBracketHeight);
     c.lineTo(tailBracketRightX, tailBracketY);
-    c.strokeStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 20%, 90%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.04 * knobRadius;
     c.stroke();
     
@@ -6860,10 +6913,10 @@ function drawStylingMenu() {
     c.textAlign = 'center';
     c.textBaseline = 'bottom';
     c.font = `${0.28 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(140, 20%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 20%, 0%, ${0.5 * stylingMenuOpacity})`;
     c.lineWidth = 0.02 * knobRadius;
     c.strokeText('Tail Style', 0.04 * knobRadius + tailButtonsCenterX * knobSpacing, 0.04 * knobRadius + tailBracketY - tailBracketHeight - 0.1 * knobRadius);
-    c.fillStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 20%, 90%, ${stylingMenuOpacity})`;
     c.fillText('Tail Style', tailButtonsCenterX * knobSpacing, tailBracketY - tailBracketHeight - 0.1 * knobRadius);
     
     for (let i = 0; i < 5; i++) {
@@ -6873,9 +6926,9 @@ function drawStylingMenu() {
         // Draw outer circle
         c.beginPath();
         c.arc(buttonX, buttonY, tailColorRadioRadius, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+        c.fillStyle = `hsla(320, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
         c.fill();
-        c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+        c.strokeStyle = `hsla(320, 80%, 70%, ${stylingMenuOpacity})`;
         c.lineWidth = 0.04 * knobRadius;
         c.stroke();
         
@@ -6883,7 +6936,7 @@ function drawStylingMenu() {
         if (tailColorMode === i) {
             c.beginPath();
             c.arc(buttonX, buttonY, tailColorRadioRadius * 0.5, 0, 2 * Math.PI);
-            c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+            c.fillStyle = `hsla(320, 0%, 90%, ${stylingMenuOpacity})`;
             c.fill();
         }
 
@@ -6891,10 +6944,10 @@ function drawStylingMenu() {
         c.textAlign = 'center';
         c.textBaseline = 'top';
         c.font = `${0.24 * knobRadius}px verdana`;
-        c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+        c.strokeStyle = `hsla(320, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
         c.lineWidth = 0.02 * knobRadius;
         c.strokeText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
-        c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+        c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
         c.fillText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
     }
     
@@ -6922,7 +6975,7 @@ function drawStylingMenu() {
     c.lineTo(bracketX, bracketTopY);
     c.lineTo(bracketX, bracketBottomY);
     c.lineTo(bracketX + bracketWidth, bracketBottomY);
-    c.strokeStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 20%, 90%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.04 * knobRadius;
     c.stroke();
     
@@ -6933,89 +6986,89 @@ function drawStylingMenu() {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.font = `${0.3 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(140, 20%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 20%, 0%, ${0.5 * stylingMenuOpacity})`;
     c.strokeText('Trace', 0, 0.04 * knobRadius);
-    c.fillStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 20%, 90%, ${stylingMenuOpacity})`;
     c.fillText('Trace', 0, 0);
     c.restore();
     
     // Trace button (dark outline)
     c.beginPath();
     c.arc(traceButtonX, traceButtonY1, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
     c.fill();
-    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 70%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.05 * knobRadius;
     c.stroke();
     if (boidTraceMode === 1) {
         c.beginPath();
         c.arc(traceButtonX, traceButtonY1, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fillStyle = `hsla(320, 0%, 90%, ${stylingMenuOpacity})`;
         c.fill();
     }
     c.textAlign = 'left';
     c.textBaseline = 'middle';
     c.font = `${0.28 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
     c.strokeText('Black', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY1);
-    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
     c.fillText('Black', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY1);
     
     // White button
     c.beginPath();
     c.arc(traceButtonX, traceButtonY2, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
     c.fill();
-    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 70%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.05 * knobRadius;
     c.stroke();
     if (boidTraceMode === 3) {
         c.beginPath();
         c.arc(traceButtonX, traceButtonY2, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fillStyle = `hsla(320, 0%, 90%, ${stylingMenuOpacity})`;
         c.fill();
     }
-    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
     c.strokeText('White', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY2);
-    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
     c.fillText('White', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY2);
     
     // Color button
     c.beginPath();
     c.arc(traceButtonX, traceButtonY3, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
     c.fill();
-    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 70%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.05 * knobRadius;
     c.stroke();
     if (boidTraceMode === 2) {
         c.beginPath();
         c.arc(traceButtonX, traceButtonY3, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fillStyle = `hsla(320, 0%, 90%, ${stylingMenuOpacity})`;
         c.fill();
     }
-    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
     c.strokeText('Color', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY3);
-    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
     c.fillText('Color', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY3);
     
     // Trace None button
     c.beginPath();
     c.arc(traceButtonX, traceButtonY4, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
     c.fill();
-    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 70%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.05 * knobRadius;
     c.stroke();
     if (boidTraceMode === 0) {
         c.beginPath();
         c.arc(traceButtonX, traceButtonY4, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fillStyle = `hsla(320, 0%, 90%, ${stylingMenuOpacity})`;
         c.fill();
     }
-    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
     c.strokeText('None', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + traceButtonY4);
-    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
     c.fillText('None', traceButtonX + traceButtonRadius + 0.2 * knobRadius, traceButtonY4);
     
     // Draw bracket and label for fill buttons
@@ -7029,7 +7082,7 @@ function drawStylingMenu() {
     c.lineTo(fillBracketX, fillBracketTopY);
     c.lineTo(fillBracketX, fillBracketBottomY);
     c.lineTo(fillBracketX + bracketWidth, fillBracketBottomY);
-    c.strokeStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 20%, 90%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.04 * knobRadius;
     c.stroke();
     
@@ -7040,51 +7093,51 @@ function drawStylingMenu() {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.font = `${0.3 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(140, 20%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 20%, 0%, ${0.5 * stylingMenuOpacity})`;
     c.strokeText('Fill', 0, 0.04 * knobRadius);
-    c.fillStyle = `hsla(140, 20%, 90%, ${stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 20%, 90%, ${stylingMenuOpacity})`;
     c.fillText('Fill', 0, 0);
     c.restore();
     
     // Fill button
     c.beginPath();
     c.arc(traceButtonX, fillButtonY1, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
     c.fill();
-    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 70%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.05 * knobRadius;
     c.stroke();
     if (boidFillEnabled) {
         c.beginPath();
         c.arc(traceButtonX, fillButtonY1, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fillStyle = `hsla(320, 0%, 90%, ${stylingMenuOpacity})`;
         c.fill();
     }
     c.textAlign = 'left';
     c.textBaseline = 'middle';
     c.font = `${0.28 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
     c.strokeText('Fill', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + fillButtonY1);
-    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
     c.fillText('Fill', traceButtonX + traceButtonRadius + 0.2 * knobRadius, fillButtonY1);
     
     // Fill None button
     c.beginPath();
     c.arc(traceButtonX, fillButtonY2, traceButtonRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(140, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
     c.fill();
-    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 70%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.05 * knobRadius;
     c.stroke();
     if (!boidFillEnabled) {
         c.beginPath();
         c.arc(traceButtonX, fillButtonY2, traceButtonRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(140, 0%, 90%, ${stylingMenuOpacity})`;
+        c.fillStyle = `hsla(320, 0%, 90%, ${stylingMenuOpacity})`;
         c.fill();
     }
-    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
     c.strokeText('None', 0.04 * knobRadius + traceButtonX + traceButtonRadius + 0.2 * knobRadius, 0.04 * knobRadius + fillButtonY2);
-    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
     c.fillText('None', traceButtonX + traceButtonRadius + 0.2 * knobRadius, fillButtonY2);
     
     // Draw scrollable boid type selection list
@@ -7103,18 +7156,18 @@ function drawStylingMenu() {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.font = `${0.28 * knobRadius}px verdana`;
-    c.strokeStyle = `hsla(140, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
     c.strokeText('Boid Style', 0, 0.04 * knobRadius);
-    c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
     c.fillText('Boid Style', 0, 0);
     c.restore();
     
     // Draw list background with rounded corners
-    c.fillStyle = `hsla(140, 80%, 10%, ${0.5 * stylingMenuOpacity})`;
+    c.fillStyle = `hsla(320, 80%, 10%, ${0.5 * stylingMenuOpacity})`;
     c.beginPath();
     c.roundRect(listX, listY, listWidth, listHeight, listCornerRadius);
     c.fill();
-    c.strokeStyle = `hsla(140, 80%, 70%, ${stylingMenuOpacity})`;
+    c.strokeStyle = `hsla(320, 80%, 70%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.04 * knobRadius;
     c.stroke();
     
@@ -7140,7 +7193,7 @@ function drawStylingMenu() {
 
         // Draw selection highlight
         if (selectedBoidType === i) {
-            c.fillStyle = `hsla(320, 90%, 70%, ${0.7 * stylingMenuOpacity})`;
+            c.fillStyle = `hsla(140, 90%, 70%, ${0.7 * stylingMenuOpacity})`;
             c.beginPath();
             const highlightPadding = itemHeight * 0.15;
             c.roundRect(
@@ -7156,7 +7209,7 @@ function drawStylingMenu() {
         c.textAlign = 'left';
         c.textBaseline = 'middle';
         c.font = `${0.28 * knobRadius}px verdana`;
-        c.fillStyle = `hsla(140, 80%, 90%, ${stylingMenuOpacity})`;
+        c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
         c.fillText(boidTypeLabels[i], listX + 0.3 * knobRadius, itemY + itemHeight / 2);
     }
     
@@ -7170,7 +7223,7 @@ function drawStylingMenu() {
         const scrollbarHeight = listHeight * (listHeight / (boidTypeLabels.length * itemHeight));
         const scrollbarY = listY + (boidTypeScrollOffset / maxScroll) * (listHeight - scrollbarHeight);
         
-        c.fillStyle = `hsla(320, 90%, 70%, ${0.7 * stylingMenuOpacity})`;
+        c.fillStyle = `hsla(140, 90%, 70%, ${0.7 * stylingMenuOpacity})`;
         c.fillRect(scrollbarX, scrollbarY, scrollbarWidth, scrollbarHeight);
     }
 
@@ -7608,7 +7661,7 @@ function drawColorMenu() {
         c.font = `${0.025 * menuScale}px verdana`;
         c.textAlign = 'center';
         c.textBaseline = 'top';
-        const labelY = buttonY + buttonRadius * 1.3;
+        const labelY = buttonY + buttonRadius * 1.5;
         
         // Black label
         c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
@@ -7658,9 +7711,9 @@ function drawColorMenu() {
         c.textBaseline = 'top';
         c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
         c.lineWidth = 0.02 * knobRadius;
-        c.strokeText('Paint', 0.01 * knobRadius + buttonStartX + buttonSpacing * 3, 0.01 * knobRadius + buttonY + buttonRadius * 1.3);
+        c.strokeText('Paint', 0.01 * knobRadius + buttonStartX + buttonSpacing * 3, 0.01 * knobRadius + labelY);
         c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
-        c.fillText('Paint', buttonStartX + buttonSpacing * 3, buttonY + buttonRadius * 1.3);
+        c.fillText('Paint', buttonStartX + buttonSpacing * 3, labelY);
 
         // Selected color button - dye one (raindrop icon)
         const dropX = buttonStartX + buttonSpacing * 4.75;
@@ -7756,13 +7809,11 @@ function drawColorMenu() {
     
     // Dir label
     c.font = `${0.025 * menuScale}px verdana`;
-    c.textAlign = 'center';
-    c.textBaseline = 'top';
     c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
     c.lineWidth = 0.02 * knobRadius;
-    c.strokeText('Dir', 0.01 * knobRadius + buttonStartX + buttonSpacing * 4, 0.01 * knobRadius + buttonY + buttonRadius * 1.3);
+    c.strokeText('Dir', 0.01 * knobRadius + buttonStartX + buttonSpacing * 4, 0.01 * knobRadius + labelY);
     c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
-    c.fillText('Dir', buttonStartX + buttonSpacing * 4, buttonY + buttonRadius * 1.3);
+    c.fillText('Dir', buttonStartX + buttonSpacing * 4, labelY);
     
     // Velocity-sensitive color cycling button
     c.beginPath();
@@ -7788,9 +7839,9 @@ function drawColorMenu() {
     c.textBaseline = 'top';
     c.strokeStyle = `hsla(210, 0%, 0%, ${0.6 * colorMenuOpacity})`;
     c.lineWidth = 0.02 * knobRadius;
-    c.strokeText('Speed', 0.01 * knobRadius + buttonStartX + buttonSpacing * 5, 0.01 * knobRadius + buttonY + buttonRadius * 1.3);
+    c.strokeText('Speed', 0.01 * knobRadius + buttonStartX + buttonSpacing * 5, 0.01 * knobRadius + labelY);
     c.fillStyle = `hsla(210, 0%, 90%, ${colorMenuOpacity})`;
-    c.fillText('Speed', buttonStartX + buttonSpacing * 5, buttonY + buttonRadius * 1.3);
+    c.fillText('Speed', buttonStartX + buttonSpacing * 5, labelY);
     
     } // End of if (!spraypaintActive)
 
@@ -7807,7 +7858,7 @@ function drawColorMenu() {
         
         // Draw segregation radio buttons below the knobs
         const segRadioRadius = knobRadius * 0.25;
-        const segButtonY = hueTickerKnobY + knobRadius * 2.6;
+        const segButtonY = hueTickerKnobY + knobRadius * 3.3;
         const segButtonSpacing = knobRadius * 1.3;
         const segButtonStartX = colorWheelRadius - segButtonSpacing * 0.5;
         const segLabels = ['None', 'Partial', 'Total'];
@@ -7849,10 +7900,10 @@ function drawColorMenu() {
     c.font = `${0.3 * knobRadius}px verdana`;
     c.fillStyle = `hsla(0, 0%, 0%, ${0.5 * colorMenuOpacity})`;
     //c.lineWidth = 0.02 * knobRadius;
-    c.fillText('Flocking by Color', (segButtonStartX + segButtonSpacing) + 2, (segButtonY + 3.3 * segRadioRadius) + 2);
+    c.fillText('Flocking by Color', (segButtonStartX + segButtonSpacing) + 2, (segButtonY - 3.4 * segRadioRadius) + 2);
     c.fillStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
     c.lineWidth = 0.02 * knobRadius;
-    c.fillText('Flocking by Color', segButtonStartX + segButtonSpacing, segButtonY + 3.3 * segRadioRadius);
+    c.fillText('Flocking by Color', segButtonStartX + segButtonSpacing, segButtonY - 3.4 * segRadioRadius);
             
     // Draw hueSensitivity knob
     const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - 1.6 * Math.PI);
@@ -10994,8 +11045,11 @@ function setupScene() {
     makeAirplane();
     // make balloon ----------
     initBalloon();
+    // Pre-render the hot air balloon to offscreen canvas
+    preRenderHotAirBalloon();
     // make hot air balloon ----------
     makeHotAirBalloon()
+    
     // Make magnet ----------
     makeMagnet(); 
     // make spatial grid ----------
