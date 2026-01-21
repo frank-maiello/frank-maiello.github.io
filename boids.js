@@ -1,5 +1,5 @@
 /*
-B0IDS 1.52 :: emergent flocking behavior ::
+B0IDS 1.53 :: emergent flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -14,6 +14,33 @@ width = window.innerWidth;
 height = window.innerHeight;
 canvas.width = width;
 canvas.height = height;
+
+// WebGL canvas for GPU rendering (offscreen, will be composited)
+let glCanvas = null;
+let gl = null;
+let gpuCircleProgram = null;
+let gpuCircleFillProgram = null;
+let gpuCircleBuffer = null;
+let gpuCircleColorBuffer = null;
+
+// Create offscreen WebGL canvas
+glCanvas = document.createElement('canvas');
+glCanvas.width = width;
+glCanvas.height = height;
+// Don't add to DOM - keep it offscreen for compositing
+
+try {
+    gl = glCanvas.getContext('webgl', { 
+        premultipliedAlpha: false, 
+        alpha: true,
+        antialias: true
+    });
+    if (gl) {
+        initWebGL();
+    }
+} catch (e) {
+    console.warn('WebGL not available:', e);
+}
 
 simMinWidth = 2.0;
 cScale = Math.min(canvas.width, canvas.height) / simMinWidth;
@@ -131,7 +158,7 @@ let stylingMenuDragInitialY = 0;
 let selectedBoidType = 2; // Default to Birds
 let previousBoidType = 2; // Remembers last type before None was selected
 let boidTypeScrollOffset = 0; // Scroll position for boid type list
-let boidTypeLabels = ['Triangles', 'Arrows', 'Birds', 'Circles', 'Ellipses', 'Squares', 'Teardrops', 'Bubbles'];
+let boidTypeLabels = ['Triangles', 'Arrows', 'Birds', 'Circles', 'GPU Circles', 'Ellipses', 'Squares', 'Teardrops', 'Bubbles'];
 let tailColorMode = 0; // 0 = none, 1 = black, 2 = white, 3 = selected hue, 4 = hue2
 
 // Boid rendering toggles
@@ -302,6 +329,121 @@ function createColorWheel() {
     }
 }
 createColorWheel();
+
+// Initialize WebGL for GPU circle rendering
+function initWebGL() {
+    if (!gl) return;
+    
+    // Vertex shader - for filled circles
+    const fillVertexShaderSource = `
+        attribute vec2 a_position;
+        attribute vec3 a_color;
+        attribute vec2 a_offset;
+        attribute float a_radius;
+        varying vec3 v_color;
+        varying vec2 v_pos;
+        uniform vec2 u_resolution;
+        
+        void main() {
+            v_color = a_color;
+            v_pos = a_position;
+            vec2 worldPos = a_offset + a_position * a_radius;
+            vec2 clipSpace = ((worldPos / u_resolution) * 2.0 - 1.0) * vec2(1, -1);
+            gl_Position = vec4(clipSpace, 0, 1);
+        }
+    `;
+    
+    // Fragment shader - for filled circles
+    const fillFragmentShaderSource = `
+        precision mediump float;
+        varying vec3 v_color;
+        varying vec2 v_pos;
+        
+        void main() {
+            float dist = length(v_pos);
+            if (dist > 1.0) discard;
+            gl_FragColor = vec4(v_color, 1.0);
+        }
+    `;
+    
+    // Vertex shader - for stroked circles
+    const strokeVertexShaderSource = `
+        attribute vec2 a_position;
+        attribute vec3 a_color;
+        attribute vec2 a_offset;
+        attribute float a_radius;
+        varying vec3 v_color;
+        varying vec2 v_pos;
+        uniform vec2 u_resolution;
+        
+        void main() {
+            v_color = a_color;
+            v_pos = a_position;
+            vec2 worldPos = a_offset + a_position * a_radius;
+            vec2 clipSpace = ((worldPos / u_resolution) * 2.0 - 1.0) * vec2(1, -1);
+            gl_Position = vec4(clipSpace, 0, 1);
+        }
+    `;
+    
+    // Fragment shader - for stroked circles
+    const strokeFragmentShaderSource = `
+        precision mediump float;
+        varying vec3 v_color;
+        varying vec2 v_pos;
+        uniform float u_lineWidth;
+        
+        void main() {
+            float dist = length(v_pos);
+            float outerEdge = 1.0;
+            float innerEdge = 1.0 - u_lineWidth;
+            if (dist > outerEdge || dist < innerEdge) discard;
+            gl_FragColor = vec4(v_color, 1.0);
+        }
+    `;
+    
+    // Compile shader
+    function compileShader(source, type) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+            gl.deleteShader(shader);
+            return null;
+        }
+        return shader;
+    }
+    
+    // Create program
+    function createProgram(vertexSource, fragmentSource) {
+        const vertexShader = compileShader(vertexSource, gl.VERTEX_SHADER);
+        const fragmentShader = compileShader(fragmentSource, gl.FRAGMENT_SHADER);
+        if (!vertexShader || !fragmentShader) return null;
+        
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error('Program link error:', gl.getProgramInfoLog(program));
+            return null;
+        }
+        return program;
+    }
+    
+    // Create programs
+    gpuCircleFillProgram = createProgram(fillVertexShaderSource, fillFragmentShaderSource);
+    gpuCircleProgram = createProgram(strokeVertexShaderSource, strokeFragmentShaderSource);
+    
+    // Create buffers
+    gpuCircleBuffer = gl.createBuffer();
+    gpuCircleColorBuffer = gl.createBuffer();
+    
+    // Enable blending for transparency
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+}
 
 // Mouse down event handler ------------------------------
 mousedownHandler = function(e) {
@@ -641,12 +783,14 @@ mousedownHandler = function(e) {
                 } else if (clickedIndex === 3) {
                     doCircleBoids();
                 } else if (clickedIndex === 4) {
-                    doEllipseBoids();
+                    doGPUCircleBoids();
                 } else if (clickedIndex === 5) {
-                    doSquareBoids();
+                    doEllipseBoids();
                 } else if (clickedIndex === 6) {
-                    doAirfoilBoids();
+                    doSquareBoids();
                 } else if (clickedIndex === 7) {
+                    doAirfoilBoids();
+                } else if (clickedIndex === 8) {
                     doGlowBoids();
                 }
                 return true;
@@ -1887,7 +2031,7 @@ function handleMouseMove(e) {
     
     // Handle color wheel dragging
     if (isDraggingColorWheel) {
-        const knobRadius = 0.1 * cScale;
+        const knobRadius = 0.1 * menuScale;
         const colorWheelRadius = knobRadius * 1.7;
         const wheelCenterX = (colorMenuX * cScale) + colorWheelRadius;
         const wheelCenterY = (canvas.height - colorMenuY * cScale) + colorWheelRadius;
@@ -1904,7 +2048,7 @@ function handleMouseMove(e) {
     
     // Handle lightness slider dragging
     if (isDraggingLightness) {
-        const knobRadius = 0.1 * cScale;
+        const knobRadius = 0.1 * menuScale;
         const colorWheelRadius = knobRadius * 1.7;
         const spacing = knobRadius * 0.5;
         const sliderHeight = colorWheelRadius * 2;
@@ -1959,7 +2103,7 @@ function handleMouseMove(e) {
     
     // Handle spray slider dragging
     if (isDraggingSpraySlider) {
-        const knobRadius = 0.1 * cScale;
+        const knobRadius = 0.1 * menuScale;
         const canRadius = knobRadius * 1.2;
         const spacing = knobRadius * 0.5;
         const colorWheelRadius = knobRadius * 1.7;
@@ -2025,7 +2169,7 @@ function handleMouseMove(e) {
     }
     
     // Handle knob dragging
-    if (draggedKnob !== null && draggedKnob !== 4) {
+    if (draggedKnob !== null) {
         const ranges = [
             {min: 100, max: 5000},      // 0: numBoids
             {min: 1, max: 10},           // 1: boidRadius (scaled by 100)
@@ -2137,10 +2281,11 @@ function handleMouseMove(e) {
                         newBoid.arrow = selectedBoidType === 1;
                         newBoid.flappy = selectedBoidType === 2;
                         newBoid.circle = selectedBoidType === 3;
-                        newBoid.ellipseBoid = selectedBoidType === 4;
-                        newBoid.square = selectedBoidType === 5;
-                        newBoid.airfoil = selectedBoidType === 6;
-                        newBoid.glowBoid = selectedBoidType === 7;
+                        newBoid.gpuCircle = selectedBoidType === 4;
+                        newBoid.ellipseBoid = selectedBoidType === 5;
+                        newBoid.square = selectedBoidType === 6;
+                        newBoid.airfoil = selectedBoidType === 7;
+                        newBoid.glowBoid = selectedBoidType === 8;
                         
                         // Insert before the last 2 special boids
                         Boids.splice(Boids.length - 2, 0, newBoid);
@@ -2264,10 +2409,11 @@ function handleMouseMove(e) {
             newBoid.arrow = selectedBoidType === 1;
             newBoid.flappy = selectedBoidType === 2;
             newBoid.circle = selectedBoidType === 3;
-            newBoid.ellipseBoid = selectedBoidType === 4;
-            newBoid.square = selectedBoidType === 5;
-            newBoid.airfoil = selectedBoidType === 6;
-            newBoid.glowBoid = selectedBoidType === 7;
+            newBoid.gpuCircle = selectedBoidType === 4;
+            newBoid.ellipseBoid = selectedBoidType === 5;
+            newBoid.square = selectedBoidType === 6;
+            newBoid.airfoil = selectedBoidType === 7;
+            newBoid.glowBoid = selectedBoidType === 8;
             Boids.push(newBoid);
             
             wandPrevX = wandPosX;
@@ -2355,6 +2501,12 @@ function resizeCanvas() {
     height = window.innerHeight;
     canvas.width = width;
     canvas.height = height;
+    
+    // Resize WebGL canvas too
+    if (glCanvas) {
+        glCanvas.width = width;
+        glCanvas.height = height;
+    }
 
     const oldSimWidth = simWidth;
     const oldSimHeight = simHeight;
@@ -2830,21 +2982,19 @@ class SprayParticle {
         this.life = 1.0; // Full life
         this.decay = 0.5 + Math.random() * 0.5; // Decay speed
     }
-    
-    update(dt) {
-        this.x += this.vx * dt;
-        this.y += this.vy * dt;
-        this.life -= this.decay * dt;
+    update() {
+        this.x += this.vx * deltaT;
+        this.y += this.vy * deltaT;
+        this.life -= this.decay * deltaT;
         // Grow the particle
         if (this.size < this.maxSize) {
-            this.size += 0.08 * dt;
+            this.size += 0.1 * deltaT;
         }
         return this.life > 0; // Return true if still alive
     }
-    
     draw() {
-        const alpha = Math.max(0, this.life);
-        c.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${alpha * 0.6})`;
+        const alpha = this.life // Fade out as life decreases
+        c.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${alpha})`;
         c.beginPath();
         c.arc(cX({x: this.x}), cY({y: this.y}), this.size * cScale, 0, 2 * Math.PI);
         c.fill();
@@ -5317,6 +5467,9 @@ class BOID {
         }
     }
     draw() {
+        // GPU circles are rendered by WebGL, skip canvas rendering
+        if (this.gpuCircle) return;
+        
         // scale size based on velocity
         const radScale = this.radius * cScale;
         this.speedAdjust = this.vel.length() / boidProps.speedLimit;
@@ -5586,7 +5739,7 @@ class BOID {
                 // Bright white highlight with prismatic edge
                 highlightGradient.addColorStop(0.0, `hsla(0, 0%, 100%, 0.6)`);
                 highlightGradient.addColorStop(0.3, `hsla(${this.hue + 180}, 60%, 85%, 0.4)`);
-                highlightGradient.addColorStop(0.6, `hsla(${this.hue}, 70%, 75%, 0.2)`);
+                highlightGradient.addColorStop(0.6, `hsla(${this.hue}, 70%, 55%, 0.2)`);
                 highlightGradient.addColorStop(1.0, `hsla(0, 0%, 100%, 0.0)`);
                 
                 c.fillStyle = highlightGradient;
@@ -6007,6 +6160,7 @@ function doTriangleBoids() {
         boid.triangleBoid = true;
         boid.arrow = false;
         boid.circle = false;
+        boid.gpuCircle = false;
         boid.ellipseBoid = false;
         boid.airfoil = false;
         boid.flappy = false;
@@ -6020,6 +6174,7 @@ function doArrowBoids() {
         boid.triangleBoid = false;
         boid.arrow = true;
         boid.circle = false;
+        boid.gpuCircle = false;
         boid.airfoil = false;
         boid.flappy = false;
         boid.square = false;
@@ -6032,6 +6187,21 @@ function doCircleBoids() {
         boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = true;
+        boid.gpuCircle = false;
+        boid.ellipseBoid = false;
+        boid.airfoil = false;
+        boid.flappy = false;
+        boid.square = false;
+        boid.glowBoid = false;
+    }
+}
+
+function doGPUCircleBoids() {
+    for (let boid of Boids) {
+        boid.triangleBoid = false;
+        boid.arrow = false;
+        boid.circle = false;
+        boid.gpuCircle = true;
         boid.ellipseBoid = false;
         boid.airfoil = false;
         boid.flappy = false;
@@ -6045,6 +6215,7 @@ function doEllipseBoids() {
         boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = false;
+        boid.gpuCircle = false;
         boid.ellipseBoid = true;
         boid.airfoil = false;
         boid.flappy = false;
@@ -6058,6 +6229,7 @@ function doGlowBoids() {
         boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = false;
+        boid.gpuCircle = false;
         boid.ellipseBoid = false;
         boid.airfoil = false;
         boid.flappy = false;
@@ -6071,6 +6243,7 @@ function doSquareBoids() {
         boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = false;
+        boid.gpuCircle = false;
         boid.ellipseBoid = false;
         boid.airfoil = false;
         boid.flappy = false;
@@ -6084,6 +6257,7 @@ function doAirfoilBoids() {
         boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = false;
+        boid.gpuCircle = false;
         boid.ellipseBoid = false;
         boid.airfoil = true;
         boid.flappy = false;
@@ -6097,6 +6271,7 @@ function doFlappyBoids() {
         boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = false;
+        boid.gpuCircle = false;
         boid.ellipseBoid = false;
         boid.airfoil = false;
         boid.flappy = true;
@@ -6110,6 +6285,7 @@ function doNoneBoids() {
         boid.triangleBoid = false;
         boid.arrow = false;
         boid.circle = false;
+        boid.gpuCircle = false;
         boid.ellipseBoid = false;
         boid.airfoil = false;
         boid.flappy = false;
@@ -6730,7 +6906,7 @@ function drawSimMenu() {
     c.textBaseline = 'bottom';
     c.font = `${0.24 * knobRadius}px monospace`;
     c.fillStyle = `hsla(0, 0%, 60%, ${menuOpacity})`;
-    c.fillText('v1.52', padding + 4.8 * knobRadius, menuHeight + padding - 0.15 * knobRadius);
+    c.fillText('v1.53', padding + 4.8 * knobRadius, menuHeight + padding - 0.15 * knobRadius);
 
     c.restore();
 }
@@ -6785,7 +6961,7 @@ function drawStylingMenu() {
     c.strokeStyle = `hsla(320, 60%, 80%, ${stylingMenuOpacity})`;
     c.lineWidth = 0.004 * menuScale;
     c.stroke();
-//320, 90%, 70%
+
     // Draw title
     c.fillStyle = `hsla(320, 30%, 80%, ${stylingMenuOpacity})`;
     c.font = `bold ${0.05 * menuScale}px verdana`;
@@ -6842,8 +7018,8 @@ function drawStylingMenu() {
             knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
             knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
         );
-        gradient.addColorStop(0, `hsla(320, 40%, 50%, ${stylingMenuOpacity})`);
-        gradient.addColorStop(0.5, `hsla(300, 40%, 50%, ${stylingMenuOpacity})`);
+        gradient.addColorStop(0, `hsla(320, 40%, 70%, ${stylingMenuOpacity})`);
+        gradient.addColorStop(0.5, `hsla(280, 40%, 70%, ${stylingMenuOpacity})`);
         c.strokeStyle = gradient;
         c.beginPath();
         c.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
@@ -6858,7 +7034,7 @@ function drawStylingMenu() {
         c.beginPath();
         c.moveTo(knobX, knobY);
         c.lineTo(pointerEndX, pointerEndY);
-        c.strokeStyle = `hsla(320, 80%, 80%, ${stylingMenuOpacity})`;
+        c.strokeStyle = `hsla(320, 80%, 85%, ${stylingMenuOpacity})`;
         c.lineWidth = 0.008 * menuScale;
         c.stroke();
 
@@ -6884,7 +7060,7 @@ function drawStylingMenu() {
             case 1: valueText = (boidProps.tailWidth * 10).toFixed(0); break;
         }
         c.font = `${0.25 * knobRadius}px verdana`;
-        c.fillStyle = `hsla(160, 80%, 50%, ${stylingMenuOpacity})`;
+        c.fillStyle = `hsla(160, 80%, 60%, ${stylingMenuOpacity})`;
         c.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
     }
 
@@ -6928,7 +7104,7 @@ function drawStylingMenu() {
         c.arc(buttonX, buttonY, tailColorRadioRadius, 0, 2 * Math.PI);
         c.fillStyle = `hsla(320, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
         c.fill();
-        c.strokeStyle = `hsla(320, 80%, 70%, ${stylingMenuOpacity})`;
+        c.strokeStyle = `hsla(320, 70%, 90%, ${stylingMenuOpacity})`;
         c.lineWidth = 0.04 * knobRadius;
         c.stroke();
         
@@ -8090,10 +8266,11 @@ function resetParameters() {
                 newBoid.arrow = selectedBoidType === 1;
                 newBoid.flappy = selectedBoidType === 2;
                 newBoid.circle = selectedBoidType === 3;
-                newBoid.ellipseBoid = selectedBoidType === 4;
-                newBoid.square = selectedBoidType === 5;
-                newBoid.airfoil = selectedBoidType === 6;
-                newBoid.glowBoid = selectedBoidType === 7;
+                newBoid.gpuCircle = selectedBoidType === 4;
+                newBoid.ellipseBoid = selectedBoidType === 5;
+                newBoid.square = selectedBoidType === 6;
+                newBoid.airfoil = selectedBoidType === 7;
+                newBoid.glowBoid = selectedBoidType === 8;
                 
                 // Insert before the last 2 special boids
                 Boids.splice(Boids.length - 2, 0, newBoid);
@@ -8157,10 +8334,11 @@ function makeBoids() {
             whiteBoid.arrow = selectedBoidType === 1;
             whiteBoid.flappy = selectedBoidType === 2;
             whiteBoid.circle = selectedBoidType === 3;
-            whiteBoid.ellipseBoid = selectedBoidType === 4;
-            whiteBoid.square = selectedBoidType === 5;
-            whiteBoid.airfoil = selectedBoidType === 6;
-            whiteBoid.glowBoid = selectedBoidType === 7;
+            whiteBoid.gpuCircle = selectedBoidType === 4;
+            whiteBoid.ellipseBoid = selectedBoidType === 5;
+            whiteBoid.square = selectedBoidType === 6;
+            whiteBoid.airfoil = selectedBoidType === 7;
+            whiteBoid.glowBoid = selectedBoidType === 8;
             Boids.push(whiteBoid);
         } else if (i == 1) {
             // Black boid
@@ -8169,10 +8347,11 @@ function makeBoids() {
             blackBoid.arrow = selectedBoidType === 1;
             blackBoid.flappy = selectedBoidType === 2;
             blackBoid.circle = selectedBoidType === 3;
-            blackBoid.ellipseBoid = selectedBoidType === 4;
-            blackBoid.square = selectedBoidType === 5;
-            blackBoid.airfoil = selectedBoidType === 6;
-            blackBoid.glowBoid = selectedBoidType === 7;
+            blackBoid.gpuCircle = selectedBoidType === 4;
+            blackBoid.ellipseBoid = selectedBoidType === 5;
+            blackBoid.square = selectedBoidType === 6;
+            blackBoid.airfoil = selectedBoidType === 7;
+            blackBoid.glowBoid = selectedBoidType === 8;
             Boids.push(blackBoid);
         } else {
             const newBoid = new BOID(pos, vel, hue, false, false);
@@ -8181,10 +8360,11 @@ function makeBoids() {
             newBoid.arrow = selectedBoidType === 1;
             newBoid.flappy = selectedBoidType === 2;
             newBoid.circle = selectedBoidType === 3;
-            newBoid.ellipseBoid = selectedBoidType === 4;
-            newBoid.square = selectedBoidType === 5;
-            newBoid.airfoil = selectedBoidType === 6;
-            newBoid.glowBoid = selectedBoidType === 7;
+            newBoid.gpuCircle = selectedBoidType === 4;
+            newBoid.ellipseBoid = selectedBoidType === 5;
+            newBoid.square = selectedBoidType === 6;
+            newBoid.airfoil = selectedBoidType === 7;
+            newBoid.glowBoid = selectedBoidType === 8;
             Boids.push(newBoid);
         }
     }
@@ -10073,6 +10253,18 @@ function simulateEverything() {
         handleMagnet(boid);
         handleBounds(boid);
         boid.simulate();
+
+        // Draw spray particles emanating from dyed boid
+        if (boid.dyedBoid) {
+            // Spawn particles more frequently for better visibility
+            if (Math.random() < 0.5) { // 50% chance per frame
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = 0.01 + Math.random() * 0.02;
+                const px = boid.pos.x + Math.cos(angle) * distance;
+                const py = boid.pos.y + Math.sin(angle) * distance;
+                sprayParticles.push(new SprayParticle(px, py, boid.hue, boid.saturation, boid.lightness));
+            }
+        }
         
         // Update spatial grid position incrementally
         SpatialGrid.updateBoid(boid);
@@ -10227,6 +10419,258 @@ function simulateEverything() {
     }
 }
 
+//  DRAW GPU CIRCLES WITH WEBGL  ------------
+function drawGPUCircles() {
+    if (!gl) return;
+    
+    // Skip drawing if trace mode is None and fill is disabled
+    if (!boidFillEnabled && boidTraceMode === 0) return;
+    
+    // Collect all GPU circle boids
+    const gpuBoids = [];
+    for (let boid of Boids) {
+        if (boid.gpuCircle) {
+            gpuBoids.push(boid);
+        }
+    }
+    
+    if (gpuBoids.length === 0) return;
+    
+    // Prepare data arrays
+    const positions = [];
+    const colors = [];
+    const offsets = [];
+    const radii = [];
+    
+    // Circle vertices (6 vertices for 2 triangles forming a quad)
+    const circleVerts = [
+        -1, -1,  1, -1,  1,  1,
+        -1, -1,  1,  1, -1,  1
+    ];
+    
+    // Helper function to calculate boid fill color
+    const getBoidFillColor = (boid) => {
+        let r, g, b;
+        if (boid.whiteBoid) {
+            r = g = b = 0.9;
+        } else if (boid.blackBoid) {
+            r = g = b = 0.1;
+        } else if (boid.flashing && !boid.blackBoid) {
+            const flashLight = Math.min(100, boid.lightness * 1.5) / 100;
+            const hue = (boid.hue + 70) % 360;
+            const sat = boid.saturation / 100;
+            const hsl2rgb = (h, s, l) => {
+                const c = (1 - Math.abs(2 * l - 1)) * s;
+                const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+                const m = l - c / 2;
+                let r1, g1, b1;
+                if (h < 60) { r1 = c; g1 = x; b1 = 0; }
+                else if (h < 120) { r1 = x; g1 = c; b1 = 0; }
+                else if (h < 180) { r1 = 0; g1 = c; b1 = x; }
+                else if (h < 240) { r1 = 0; g1 = x; b1 = c; }
+                else if (h < 300) { r1 = x; g1 = 0; b1 = c; }
+                else { r1 = c; g1 = 0; b1 = x; }
+                return [r1 + m, g1 + m, b1 + m];
+            };
+            [r, g, b] = hsl2rgb(hue, sat, flashLight);
+        } else if (boid.flashing && boid.blackBoid) {
+            r = g = b = 0.9;
+        } else {
+            const hue = boid.hue;
+            const sat = boid.saturation / 100;
+            const light = boid.lightness / 100;
+            const hsl2rgb = (h, s, l) => {
+                const c = (1 - Math.abs(2 * l - 1)) * s;
+                const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+                const m = l - c / 2;
+                let r1, g1, b1;
+                if (h < 60) { r1 = c; g1 = x; b1 = 0; }
+                else if (h < 120) { r1 = x; g1 = c; b1 = 0; }
+                else if (h < 180) { r1 = 0; g1 = c; b1 = x; }
+                else if (h < 240) { r1 = 0; g1 = x; b1 = c; }
+                else if (h < 300) { r1 = x; g1 = 0; b1 = c; }
+                else { r1 = c; g1 = 0; b1 = x; }
+                return [r1 + m, g1 + m, b1 + m];
+            };
+            [r, g, b] = hsl2rgb(hue, sat, light);
+        }
+        return [r, g, b];
+    };
+    
+    // Helper function to calculate trace stroke color
+    const getTraceStrokeColor = (boid) => {
+        let r, g, b;
+        if (boidTraceMode === 1) {
+            // Black trace
+            r = g = b = 0.0;
+        } else if (boidTraceMode === 3) {
+            // White trace
+            r = g = b = 0.9;
+        } else if (boidTraceMode === 2) {
+            // Colored trace - use darker version of boid color
+            const hue = boid.hue - 70;
+            const sat = boid.saturation / 100;
+            const light = (boid.lightness * 0.8) / 100;
+            const hsl2rgb = (h, s, l) => {
+                const c = (1 - Math.abs(2 * l - 1)) * s;
+                const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+                const m = l - c / 2;
+                let r1, g1, b1;
+                const hMod = ((h % 360) + 360) % 360;
+                if (hMod < 60) { r1 = c; g1 = x; b1 = 0; }
+                else if (hMod < 120) { r1 = x; g1 = c; b1 = 0; }
+                else if (hMod < 180) { r1 = 0; g1 = c; b1 = x; }
+                else if (hMod < 240) { r1 = 0; g1 = x; b1 = c; }
+                else if (hMod < 300) { r1 = x; g1 = 0; b1 = c; }
+                else { r1 = c; g1 = 0; b1 = x; }
+                return [r1 + m, g1 + m, b1 + m];
+            };
+            [r, g, b] = hsl2rgb(hue, sat, light);
+        }
+        return [r, g, b];
+    };
+    
+    for (let boid of gpuBoids) {
+        const radScale = boid.radius * cScale;
+        const drawScale = boid.dyedBoid ? 2 : 1;
+        const radius = 0.6 * radScale * drawScale;
+        
+        // Calculate position in canvas space
+        const x = boid.pos.x * cScale;
+        const y = glCanvas.height - (boid.pos.y * cScale);
+        
+        // Use fill colors for now (will be recalculated for strokes later)
+        const [r, g, b] = getBoidFillColor(boid);
+        
+        // Add 6 vertices (2 triangles) for this circle
+        for (let i = 0; i < 6; i++) {
+            positions.push(circleVerts[i * 2], circleVerts[i * 2 + 1]);
+            colors.push(r, g, b);
+            offsets.push(x, y);
+            radii.push(radius);
+        }
+    }
+    
+    if (positions.length === 0) return;
+    
+    // Draw fills first if enabled
+    if (boidFillEnabled) {
+        const fillProgram = gpuCircleFillProgram;
+        if (!fillProgram) return;
+        
+        gl.useProgram(fillProgram);
+        
+        // Set resolution uniform
+        const resolutionLoc = gl.getUniformLocation(fillProgram, 'u_resolution');
+        gl.uniform2f(resolutionLoc, glCanvas.width, glCanvas.height);
+        
+        // Upload position data
+        const posLoc = gl.getAttribLocation(fillProgram, 'a_position');
+        gl.bindBuffer(gl.ARRAY_BUFFER, gpuCircleBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+        
+        // Upload color data
+        const colorLoc = gl.getAttribLocation(fillProgram, 'a_color');
+        const colorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(colorLoc);
+        gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+        
+        // Upload offset data
+        const offsetLoc = gl.getAttribLocation(fillProgram, 'a_offset');
+        const offsetBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, offsetBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(offsets), gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(offsetLoc);
+        gl.vertexAttribPointer(offsetLoc, 2, gl.FLOAT, false, 0, 0);
+        
+        // Upload radius data
+        const radiusLoc = gl.getAttribLocation(fillProgram, 'a_radius');
+        const radiusBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, radiusBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(radii), gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(radiusLoc);
+        gl.vertexAttribPointer(radiusLoc, 1, gl.FLOAT, false, 0, 0);
+        
+        // Draw all filled circles
+        gl.drawArrays(gl.TRIANGLES, 0, positions.length / 2);
+        
+        // Cleanup
+        gl.deleteBuffer(colorBuffer);
+        gl.deleteBuffer(offsetBuffer);
+        gl.deleteBuffer(radiusBuffer);
+    }
+    
+    // Draw strokes on top if trace mode is enabled
+    if (boidTraceMode > 0) {
+        const strokeProgram = gpuCircleProgram;
+        if (!strokeProgram) return;
+        
+        gl.useProgram(strokeProgram);
+        
+        // Set resolution uniform
+        const resolutionLoc = gl.getUniformLocation(strokeProgram, 'u_resolution');
+        gl.uniform2f(resolutionLoc, glCanvas.width, glCanvas.height);
+        
+        // Set line width for stroke mode
+        const lineWidthLoc = gl.getUniformLocation(strokeProgram, 'u_lineWidth');
+        // Thicker lines for all trace modes to improve appearance
+        const lineWidth = boidTraceMode === 1 ? 0.2 : (boidTraceMode === 2 ? 0.3 : 0.2);
+        gl.uniform1f(lineWidthLoc, lineWidth);
+        
+        // Upload position data
+        const posLoc = gl.getAttribLocation(strokeProgram, 'a_position');
+        gl.bindBuffer(gl.ARRAY_BUFFER, gpuCircleBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+        
+        // Recalculate colors for trace mode
+        const strokeColors = [];
+        for (let boid of gpuBoids) {
+            const [r, g, b] = getTraceStrokeColor(boid);
+            for (let i = 0; i < 6; i++) {
+                strokeColors.push(r, g, b);
+            }
+        }
+        
+        // Upload stroke color data
+        const colorLoc = gl.getAttribLocation(strokeProgram, 'a_color');
+        const colorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(strokeColors), gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(colorLoc);
+        gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+        
+        // Upload offset data
+        const offsetLoc = gl.getAttribLocation(strokeProgram, 'a_offset');
+        const offsetBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, offsetBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(offsets), gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(offsetLoc);
+        gl.vertexAttribPointer(offsetLoc, 2, gl.FLOAT, false, 0, 0);
+        
+        // Upload radius data
+        const radiusLoc = gl.getAttribLocation(strokeProgram, 'a_radius');
+        const radiusBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, radiusBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(radii), gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(radiusLoc);
+        gl.vertexAttribPointer(radiusLoc, 1, gl.FLOAT, false, 0, 0);
+        
+        // Draw all stroked circles
+        gl.drawArrays(gl.TRIANGLES, 0, positions.length / 2);
+        
+        // Cleanup
+        gl.deleteBuffer(colorBuffer);
+        gl.deleteBuffer(offsetBuffer);
+        gl.deleteBuffer(radiusBuffer);
+    }
+}
+
 //  DRAW EVERYTHING  ------------
 function drawEverything() {
     // Clear canvas
@@ -10304,19 +10748,7 @@ function drawEverything() {
         }
 
         boid.draw();
-        
-        // Draw spray particles emanating from dyed boid
-        if (boid.dyedBoid) {
-            // Spawn particles more frequently for better visibility
-            if (Math.random() < 0.5) { // 50% chance per frame
-                const angle = Math.random() * 2 * Math.PI;
-                const distance = 0.01 + Math.random() * 0.02;
-                const px = boid.pos.x + Math.cos(angle) * distance;
-                const py = boid.pos.y + Math.sin(angle) * distance;
-                sprayParticles.push(new SprayParticle(px, py, boid.hue, boid.saturation, boid.lightness));
-            }
-        }
-        
+
         // Draw visual range circle for white and black boids when menu is active
         if (menuVisible && (boid.whiteBoid || boid.blackBoid)) {
             c.beginPath();
@@ -10327,6 +10759,25 @@ function drawEverything() {
             c.stroke();
             c.setLineDash([]);
         }
+    }
+    
+    // Draw GPU circles using WebGL --------
+    if (gl && (gpuCircleFillProgram || gpuCircleProgram)) {
+        // Clear WebGL canvas
+        gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        
+        // Render GPU circles
+        drawGPUCircles();
+        
+        // Composite WebGL canvas onto 2D canvas at this point in draw order
+        c.drawImage(glCanvas, 0, 0);
+    }
+    
+    // Draw spray particles --------
+    for (let particle of sprayParticles) {
+        particle.draw();
     }
     
     // Draw airplane --------
@@ -10373,11 +10824,6 @@ function drawEverything() {
     // Draw wand --------
     if (wandActive) {
         drawWand(wandPosX * simWidth, wandPosY * simHeight, wandAngle, wandSize);
-    }
-
-    // Draw spray particles --------
-    for (let particle of sprayParticles) {
-        particle.draw();
     }
 
     // Draw magnet --------
@@ -10893,10 +11339,11 @@ function warmupSequence() {
                     newBoid.arrow = selectedBoidType === 1;
                     newBoid.flappy = selectedBoidType === 2;
                     newBoid.circle = selectedBoidType === 3;
-                    newBoid.ellipseBoid = selectedBoidType === 4;
-                    newBoid.square = selectedBoidType === 5;
-                    newBoid.airfoil = selectedBoidType === 6;
-                    newBoid.glowBoid = selectedBoidType === 7;
+                    newBoid.gpuCircle = selectedBoidType === 4;
+                    newBoid.ellipseBoid = selectedBoidType === 5;
+                    newBoid.square = selectedBoidType === 6;
+                    newBoid.airfoil = selectedBoidType === 7;
+                    newBoid.glowBoid = selectedBoidType === 8;
                     
                     // Insert before the last 2 special boids
                     Boids.splice(Boids.length - 2, 0, newBoid);
