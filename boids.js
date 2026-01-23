@@ -1,5 +1,5 @@
 /*
-B0IDS 1.53 :: emergent flocking behavior ::
+B0IDS 1.54 :: emergent flocking behavior ::
 copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com ::
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -160,6 +160,7 @@ let previousBoidType = 2; // Remembers last type before None was selected
 let boidTypeScrollOffset = 0; // Scroll position for boid type list
 let boidTypeLabels = ['Triangles', 'Arrows', 'Birds', 'Circles', 'GPU Circles', 'Ellipses', 'Squares', 'Teardrops', 'Bubbles'];
 let tailColorMode = 0; // 0 = none, 1 = black, 2 = white, 3 = selected hue, 4 = hue2
+let tailTaperMode = 0; // 0 = normal, 1 = tapered
 
 // Boid rendering toggles
 let boidTraceMode = 1; // 0=none, 1=dark trace, 2=colored trace, 3=white trace
@@ -671,6 +672,21 @@ mousedownHandler = function(e) {
             
             if (rdx * rdx + rdy * rdy < tailColorRadioRadius * tailColorRadioRadius) {
                 tailColorMode = i;
+                return true;
+            }
+        }
+        
+        // Check tail taper radio buttons (below tail color buttons)
+        const taperButtonRow = 1;
+        const taperButtonY = menuOriginY + taperButtonRow * knobSpacing + knobRadius * 2.95 + menuTopMargin;
+        
+        for (let i = 0; i < 2; i++) {
+            const buttonX = menuOriginX + tailButtonsCenterX * knobSpacing + (i - 0.5) * knobRadius * 1.0;
+            const rdx = clickCanvasX - buttonX;
+            const rdy = clickCanvasY - taperButtonY;
+            
+            if (rdx * rdx + rdy * rdy < tailColorRadioRadius * tailColorRadioRadius) {
+                tailTaperMode = i;
                 return true;
             }
         }
@@ -1960,7 +1976,7 @@ function handleMouseMove(e) {
             boidProps.tailLength = newValue;
         } else if (draggedStylingKnob === 1) { // Tail Width
             const widthMin = 1;
-            const widthMax = 5;
+            const widthMax = 10;
             const rangeSize = widthMax - widthMin;
             let newValue = dragStartValue + normalizedDelta * rangeSize;
             newValue = Math.max(widthMin, Math.min(widthMax, newValue));
@@ -3703,14 +3719,16 @@ class BALLOON {
         this.stringPhase = Math.random() * Math.PI * 2; // Random starting phase for wave
         this.popping = false;
         this.tumbleAngle = 0; // Rotation angle for knot tumbling when popped
+        this.timeSincePop = 0;
+        this.shockwaveRadius = 0.15
     }
     simulate() {
         if (this.popping) {
             // When popping, balloon collapses and falls
-            const timeSincePop = (performance.now() - this.popStartTime) / 1000; // in seconds
+            this.timeSincePop = (performance.now() - this.popStartTime) / 1000; // in seconds
             
             // Collapse the balloon rapidly
-            this.radius = Math.max(0.01, 0.15 * (1 - Math.min(timeSincePop * 2, 1)));
+            this.radius = Math.max(0.01, 0.15 * (1 - Math.min(this.timeSincePop * 2, 1)));
             
             // Fall downward with gravity
             this.vel.y -= 0.8 * deltaT; // Strong downward acceleration
@@ -3813,7 +3831,7 @@ class BALLOON {
             
             if (this.popping) {
                 // U-turn animation: knot falls and drags string down smoothly
-                const timeSincePop = (performance.now() - this.popStartTime) / 1000;
+                this.timeSincePop = (performance.now() - this.popStartTime) / 1000;
                 
                 // Knot is at t=0, string extends downward (t increases = further from knot)
                 const knotBottomY = knotStartY + originalRadScale * 0.58;
@@ -3824,7 +3842,7 @@ class BALLOON {
                 // Simplified physics: each segment lags behind based on distance from knot
                 // The further from knot, the more delay in responding to the fall
                 const delay = t * 0.5; // Segments lag proportionally to distance
-                const effectiveTime = Math.max(0, timeSincePop - delay);
+                const effectiveTime = Math.max(0, this.timeSincePop - delay);
                 
                 // Each segment falls with the same gravity, just delayed
                 const fallAcceleration = 0.7;
@@ -3906,8 +3924,8 @@ class BALLOON {
         // Draw balloon (collapsed when popping)
         if (this.popping) {
             // Draw wrinkled/collapsed balloon shape at top, around knot
-            const timeSincePop = (performance.now() - this.popStartTime) / 1000;
-            const collapseAmount = Math.min(timeSincePop * 2, 1);
+            this.timeSincePop = (performance.now() - this.popStartTime) / 1000;
+            const collapseAmount = Math.min(this.timeSincePop * 2, 1);
             
             c.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness * 0.5}%, ${0.6 * (1 - collapseAmount)})`;
             c.strokeStyle = `hsla(${this.hue}, 50%, 30%, ${0.8 * (1 - collapseAmount)})`;
@@ -3919,7 +3937,7 @@ class BALLOON {
             const balloonScrapY = knotStartY + originalRadScale * 0.2; // Above the knot
             for (let i = 0; i < points; i++) {
                 const angle = (i / points) * Math.PI * 2;
-                const radiusVariation = 0.5 + Math.sin(angle * 3 + timeSincePop * 10) * 0.3;
+                const radiusVariation = 0.5 + Math.sin(angle * 3 + this.timeSincePop * 10) * 0.3;
                 const px = Math.cos(angle) * originalRadScale * 0.3 * radiusVariation;
                 const py = balloonScrapY + Math.sin(angle) * originalRadScale * 0.2 * radiusVariation;
                 if (i === 0) {
@@ -3931,6 +3949,33 @@ class BALLOON {
             c.closePath();
             c.fill();
             c.stroke();
+
+            // draw tiny particles around circumference, moving outward when popping 
+            const particleCount = 60;
+            for (let i = 0; i < particleCount; i++) {
+                const angle = (i / particleCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+                const distance = radScale * (1.0 + Math.random() * 0.5 + (performance.now() - this.popStartTime) / 200);
+                const particleX = Math.cos(angle) * distance;
+                const particleY = -radScale * 0.3 + Math.sin(angle) * distance;
+                const particleRadius = Math.max(radScale * 0.01, radScale * 0.05 * (1.0 - this.timeSincePop / 0.5));
+                
+                c.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${1.0 - this.timeSincePop / 0.5})`;
+                c.beginPath();
+                c.arc(particleX, particleY, particleRadius, 0, Math.PI * 2);
+                c.fill();
+            }
+
+            // draw fading shockwave ring, starting at circuference of balloon
+            this.timeSincePop = (performance.now() - this.popStartTime) / 1000;
+            const shockwaveAlpha = Math.max(0, 0.8 - 5 * this.timeSincePop);
+            c.strokeStyle = `hsla(${this.hue}, ${this.saturation}%, 80%, ${shockwaveAlpha})`;
+            c.lineWidth = 10 * shockwaveAlpha;
+            c.beginPath();
+            c.arc(0, -radScale * 0.3, this.shockwaveRadius * cScale, 0, Math.PI * 2);
+            c.stroke();
+            this.shockwaveRadius += 0.002 / this.timeSincePop; // slow shockwave outward expansion
+            
+
         } else {
             // Draw normal inflated balloon
             const gradient = c.createRadialGradient(
@@ -3940,8 +3985,8 @@ class BALLOON {
                 0, 
                 -radScale * 0.3, 
                 1.2 *radScale);
-            gradient.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.8)`);
-            gradient.addColorStop(1, `hsla(${this.hue}, ${this.saturation * 0.75}%, 10%, 1.0)`);
+            gradient.addColorStop(0, `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, 0.7)`);
+            gradient.addColorStop(1, `hsla(${this.hue}, ${this.saturation * 0.75}%, 10%, 0.9)`);
             c.fillStyle = gradient;
             c.beginPath();
             c.ellipse(
@@ -3956,23 +4001,6 @@ class BALLOON {
             c.strokeStyle = `hsl(${this.hue}, 50%, 30%)`;
             c.lineWidth = 2;
             c.stroke();
-        }
-
-        // draw tiny particles around circumference, moving outward when popping 
-        if (this.popping) {
-            const particleCount = 60;
-            for (let i = 0; i < particleCount; i++) {
-                const angle = (i / particleCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-                const distance = radScale * (1.0 + Math.random() * 0.5 + (performance.now() - this.popStartTime) / 200);
-                const particleX = Math.cos(angle) * distance;
-                const particleY = -radScale * 0.3 + Math.sin(angle) * distance;
-                const particleRadius = Math.max(radScale * 0.01, radScale * 0.05 * (1.0 - (performance.now() - this.popStartTime) / 500));
-                
-                c.fillStyle = `hsla(${this.hue}, ${this.saturation}%, ${this.lightness}%, ${1.0 - (performance.now() - this.popStartTime) / 500})`;
-                c.beginPath();
-                c.arc(particleX, particleY, particleRadius, 0, Math.PI * 2);
-                c.fill();
-            }
         }
         
         c.restore();
@@ -5427,6 +5455,7 @@ class BOID {
         this.lastLightness = -1;
         this.flapper = 0;
         this.flapOut = true;
+        this.flapPause = 0; // Timer for pause at bottom of flap
     }
     get left() {
         return this.pos.x - this.radius;
@@ -5450,8 +5479,13 @@ class BOID {
         } else if (this.flappy && !this.flapOut) {
             this.flapper -= 0.6 * boidSpeed; 
             if (this.flapper <= 0) {
-                this.flapOut = true;
                 this.flapper = 0; // Clamp to minimum
+                // pause briefly at bottom of flap
+                this.flapPause += boidSpeed * deltaT;
+                if (this.flapPause >= 0.2) { // Pause for 0.2 seconds
+                    this.flapOut = true;
+                    this.flapPause = 0; // Reset pause timer
+                }
             }
         }
         // Update position based on velocity
@@ -5520,12 +5554,6 @@ class BOID {
 
         // Draw tail ----------
         if (boidProps.doTails == true && boidProps.tailLength > 0 && this.tail.length > 0 && tailColorMode !== 0) {
-            c.beginPath();
-            c.moveTo(cX({x: this.tail[0][0]}), cY({y: this.tail[0][1]}));
-            for (var point of this.tail) {
-                c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
-            }
-            
             // Apply tail color based on tailColorMode
             if (tailColorMode === 1) {
                 // Black tail
@@ -5540,29 +5568,45 @@ class BOID {
                 // Alternate hue tail
                 c.strokeStyle = `hsla(${Math.round(this.hue - 70)}, ${Math.round(this.saturation)}%, ${Math.round(this.lightness)}%, 0.5)`;
             }
-
-            //c.lineWidth = 1.0 + (1 - this.speedAdjust) * 1.0;
-            // line width scales with boid size and inversely with speed, and with tail width slider
-            //c.lineWidth = (0.3 + (1 - this.speedAdjust)) * radScale * 0.5 * boidProps.tailWidth;
-            c.lineWidth = radScale * 0.2 * boidProps.tailWidth;
+            let baseLineWidth = radScale * 0.2 * boidProps.tailWidth;
             // Override for special boids
             if (this.whiteBoid) {
                 c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
-                c.lineWidth = 4 * boidProps.tailWidth;
+                baseLineWidth = 4 * boidProps.tailWidth;
             } else if (this.blackBoid && !this.flashing) {
                 c.strokeStyle = `hsla(0, 0%, 5%, 0.5)`;
-                c.lineWidth = 4 * boidProps.tailWidth;
+                baseLineWidth = 4 * boidProps.tailWidth;
             } else if (this.flashing && !this.blackBoid) {
                 c.strokeStyle = `hsla(0, 0%, ${this.lightness * 1.5}%, 1.0)`;
-                c.lineWidth = (1.0 + (1 - this.speedAdjust) * 1.0) * boidProps.tailWidth;
+                baseLineWidth = (1.0 + (1 - this.speedAdjust) * 1.0) * boidProps.tailWidth;
             } else if (this.flashing && this.blackBoid) {
                 c.strokeStyle = `hsla(0, 0%, 95%, 0.5)`;
-                c.lineWidth = (1.0 + (1 - this.speedAdjust) * 1.0) * boidProps.tailWidth;
+                baseLineWidth = (1.0 + (1 - this.speedAdjust) * 1.0) * boidProps.tailWidth;
             }
-            
             c.lineJoin = 'butt';
             c.lineCap = 'round';
-            c.stroke();
+            // Draw tail with tapering if enabled
+            if (tailTaperMode === 1) {
+                // Tapered tail - draw segments with decreasing width
+                for (let i = 0; i < this.tail.length - 1; i++) {
+                    // Calculate taper factor (0 at oldest point, 1 at newest point)
+                    const taperFactor = (i + 1) / this.tail.length;
+                    c.lineWidth = baseLineWidth * taperFactor;
+                    c.beginPath();
+                    c.moveTo(cX({x: this.tail[i][0]}), cY({y: this.tail[i][1]}));
+                    c.lineTo(cX({x: this.tail[i + 1][0]}), cY({y: this.tail[i + 1][1]}));
+                    c.stroke();
+                }
+            } else {
+                // Normal tail - constant width
+                c.lineWidth = baseLineWidth;
+                c.beginPath();
+                c.moveTo(cX({x: this.tail[0][0]}), cY({y: this.tail[0][1]}));
+                for (var point of this.tail) {
+                    c.lineTo(cX({x: point[0]}), cY({y: point[1]}));
+                }
+                c.stroke();
+            }
         }
 
         // Draw triangle boid --------------------------------------------
@@ -6044,21 +6088,26 @@ class BOID {
             const boidSize = 2.0 * radScale;
             const headLength = boidSize * 0.2;
             const headWidth = boidSize * 0.2;
-            const bodyLength = boidSize * 0.3;
-            const bodyWidth = boidSize * 0.2;
+            const bodyLength = boidSize * 0.2;
+            const bodyWidth = boidSize * 0.1;
             const tailLength = boidSize * 0.4;
-            const tailWidth = boidSize * 0.1;
-            const wingSpan = boidSize * this.flapper;
+            const tailWidth = boidSize * 0.2;
+            const wingSpan = 0.4 * boidSize + 0.5 * boidSize * this.flapper;
             
             // start at tail
             c.beginPath();
-            c.moveTo(0, bodyYCenter - 0.5 * tailWidth); // tail top
+            c.moveTo(0.4 * tailLength, bodyYCenter); // tail inside vee
+            c.lineTo(0, bodyYCenter - 0.5 * tailWidth); // tail top outside vee
             c.lineTo(tailLength, bodyYCenter - 0.5 * bodyWidth); // rear of left wing
-            c.lineTo(tailLength - 0.1 * bodyLength, bodyYCenter - 0.5 * bodyWidth - 0.5 * wingSpan); // left wing tip
+            c.lineTo(tailLength - 0.5 * bodyLength, bodyYCenter - 0.5 * bodyWidth - 0.5 * wingSpan); // left wing tip
+            c.lineTo(tailLength + 0.5 * bodyLength, bodyYCenter - 0.5 * bodyWidth - 0.25 * wingSpan); // left wing tip
+            
             c.lineTo(tailLength + bodyLength, bodyYCenter - 0.5 * headWidth);  // front of left wing / rear of head
             c.lineTo(tailLength + bodyLength + headLength, bodyYCenter); // tip of head
             c.lineTo(tailLength + bodyLength, bodyYCenter + 0.5 * headWidth);  // front of wing / rear of head
-            c.lineTo(tailLength - 0.1 * bodyLength, bodyYCenter + 0.5 * bodyWidth + 0.5 * wingSpan); // right wing tip
+            c.lineTo(tailLength + 0.5 * bodyLength, bodyYCenter + 0.5 * bodyWidth + 0.25 * wingSpan); // right wing tip
+            c.lineTo(tailLength - 0.5 * bodyLength, bodyYCenter + 0.5 * bodyWidth + 0.5 * wingSpan); // right wing tip
+            
             c.lineTo(tailLength, bodyYCenter + 0.5 * bodyWidth); // rear of right wing
             c.lineTo(0, bodyYCenter + 0.5 * tailWidth); // tail bottom
             c.closePath();
@@ -6906,7 +6955,7 @@ function drawSimMenu() {
     c.textBaseline = 'bottom';
     c.font = `${0.24 * knobRadius}px monospace`;
     c.fillStyle = `hsla(0, 0%, 60%, ${menuOpacity})`;
-    c.fillText('v1.53', padding + 4.8 * knobRadius, menuHeight + padding - 0.15 * knobRadius);
+    c.fillText('v1.54', padding + 4.8 * knobRadius, menuHeight + padding - 0.15 * knobRadius);
 
     c.restore();
 }
@@ -6922,7 +6971,7 @@ function drawStylingMenu() {
     // Define min/max ranges for each parameter
     const ranges = [
         {min: 0, max: 100},          // trailLength
-        {min: 1.0, max: 5.0}         // tailWidth
+        {min: 1.0, max: 10.0}         // tailWidth
     ];
 
     const knobRadius = 0.1 * menuScale;
@@ -7019,7 +7068,7 @@ function drawStylingMenu() {
             knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
         );
         gradient.addColorStop(0, `hsla(320, 40%, 70%, ${stylingMenuOpacity})`);
-        gradient.addColorStop(0.5, `hsla(280, 40%, 70%, ${stylingMenuOpacity})`);
+        gradient.addColorStop(0.5, `hsla(360, 40%, 70%, ${stylingMenuOpacity})`);
         c.strokeStyle = gradient;
         c.beginPath();
         c.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
@@ -7125,6 +7174,41 @@ function drawStylingMenu() {
         c.strokeText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
         c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
         c.fillText(tailRadioLabels[i], buttonX, buttonY + tailColorRadioRadius + 0.15 * knobRadius);
+    }
+    
+    // Draw tail taper radio buttons (Normal and Tapered)
+    const taperButtonY = tailButtonRow * knobSpacing + knobRadius * 2.95 + menuTopMargin;
+    const taperRadioLabels = ['Normal', 'Tapered'];
+    
+    for (let i = 0; i < 2; i++) {
+        const buttonX = tailButtonsCenterX * knobSpacing + (i - 0.5) * knobRadius * 1.0;
+        
+        // Draw outer circle
+        c.beginPath();
+        c.arc(buttonX, taperButtonY, tailColorRadioRadius, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(320, 80%, 20%, ${0.3 * stylingMenuOpacity})`;
+        c.fill();
+        c.strokeStyle = `hsla(320, 70%, 90%, ${stylingMenuOpacity})`;
+        c.lineWidth = 0.04 * knobRadius;
+        c.stroke();
+        
+        // Draw filled center if selected
+        if (tailTaperMode === i) {
+            c.beginPath();
+            c.arc(buttonX, taperButtonY, tailColorRadioRadius * 0.5, 0, 2 * Math.PI);
+            c.fillStyle = `hsla(320, 0%, 90%, ${stylingMenuOpacity})`;
+            c.fill();
+        }
+
+        // Draw label below button
+        c.textAlign = 'center';
+        c.textBaseline = 'top';
+        c.font = `${0.24 * knobRadius}px verdana`;
+        c.strokeStyle = `hsla(320, 80%, 0%, ${0.5 * stylingMenuOpacity})`;
+        c.lineWidth = 0.02 * knobRadius;
+        c.strokeText(taperRadioLabels[i], buttonX, taperButtonY + tailColorRadioRadius + 0.15 * knobRadius);
+        c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
+        c.fillText(taperRadioLabels[i], buttonX, taperButtonY + tailColorRadioRadius + 0.15 * knobRadius);
     }
     
     // Draw trace/fill radio buttons
@@ -7369,7 +7453,7 @@ function drawStylingMenu() {
 
         // Draw selection highlight
         if (selectedBoidType === i) {
-            c.fillStyle = `hsla(140, 90%, 70%, ${0.7 * stylingMenuOpacity})`;
+            c.fillStyle = `hsla(140, 90%, 60%, ${0.6 * stylingMenuOpacity})`;
             c.beginPath();
             const highlightPadding = itemHeight * 0.15;
             c.roundRect(
@@ -7385,6 +7469,8 @@ function drawStylingMenu() {
         c.textAlign = 'left';
         c.textBaseline = 'middle';
         c.font = `${0.28 * knobRadius}px verdana`;
+        c.fillStyle = `hsla(0, 0%, 0%, ${stylingMenuOpacity})`;
+        c.fillText(boidTypeLabels[i], listX + 0.3 * knobRadius + 2, itemY + itemHeight / 2 + 2);
         c.fillStyle = `hsla(320, 80%, 90%, ${stylingMenuOpacity})`;
         c.fillText(boidTypeLabels[i], listX + 0.3 * knobRadius, itemY + itemHeight / 2);
     }
@@ -8755,6 +8841,9 @@ function handleClouds(boid) {
     // BALLOON AVOIDANCE
     if (showBalloons) {
         for (let balloon of Balloons) {
+            // Skip popped balloons - they should not interact with boids
+            if (balloon.popping) continue;
+            
             const balloonDx = boid.pos.x - balloon.pos.x;
             const balloonDy = boid.pos.y - balloon.pos.y;
             const balloonDistSq = balloonDx * balloonDx + balloonDy * balloonDy;
