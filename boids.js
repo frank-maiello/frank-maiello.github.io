@@ -90,6 +90,7 @@ let savedPaintMenuVisible = true;
 let savedSkyMenuVisible = true;
 let savedDrawMenuVisible = true;
 let savedStylingMenuVisible = true;
+let savedPropsMenuVisible = true;
 
 // Menu visibility state
 let menuVisible = false;
@@ -106,10 +107,11 @@ let drawMenuOpacity = 0;
 
 // Menu z-order (higher number = on top)
 let menuZOrder = 3;
-let colorMenuZOrder = 2;
+let colorMenuZOrder = 5;
 let skyMenuZOrder = 0;
-let drawMenuZOrder = 1;
-let stylingMenuZOrder = 4;
+let drawMenuZOrder = 4;
+let stylingMenuZOrder = 6;
+let propsMenuZOrder = 2;
 
 // Menu position
 let menuX = 0.1; // World coordinates
@@ -128,8 +130,12 @@ let colorMenuX = 1.0; // World coordinates
 let colorMenuY = simHeight - 0.65; // World coordinates
 
 // Styling menu position
-let stylingMenuX = 0.5; // World coordinates
+let stylingMenuX = 0.6; // World coordinates
 let stylingMenuY = simHeight - 0.6; // World coordinates
+
+// Props menu position
+let propsMenuX = 0.85; // World coordinates
+let propsMenuY = simHeight - 0.25; // World coordinates
 
 // Menu knob dragging state
 let draggedKnob = null; // Index of the knob being dragged
@@ -154,6 +160,13 @@ let stylingMenuDragStartY = 0;
 let stylingMenuDragInitialX = 0;
 let stylingMenuDragInitialY = 0;
 
+// Props menu dragging state
+let isDraggingPropsMenu = false;
+let propsMenuDragStartX = 0;
+let propsMenuDragStartY = 0;
+let propsMenuStartX = 0;
+let propsMenuStartY = 0;
+
 // Boid type selection (0=arrows, 1=circles, 2=airfoils, 3=birds, 4=none)
 let selectedBoidType = 2; // Default to Birds
 let previousBoidType = 2; // Remembers last type before None was selected
@@ -168,7 +181,11 @@ let boidFillEnabled = true; // Controls fill operations
 
 // Styling menu visibility state
 let stylingMenuVisible = false;
-let stylingMenuOpacity = 0; 
+let stylingMenuOpacity = 0;
+
+// Props menu visibility state
+let propsMenuVisible = false;
+let propsMenuOpacity = 0;
 
 // Color menu visibility state
 let colorMenuVisible = false;
@@ -226,18 +243,21 @@ let menuVisibleBeforeCamera = false;
 let colorMenuVisibleBeforeCamera = false;
 let skyMenuVisibleBeforeCamera = false;
 let drawMenuVisibleBeforeCamera = false;
+let propsMenuVisibleBeforeCamera = false;
 
 // Store menu states before paint tool activation
 let menuVisibleBeforePaint = false;
 let skyMenuVisibleBeforePaint = false;
 let drawMenuVisibleBeforePaint = false;
 let colorMenuVisibleBeforePaint = false;
+let propsMenuVisibleBeforePaint = false;
 
 // Sky object visibility toggles
 let showClouds = true;
 let showPlane = true;
 let showBalloons = true;
 let showHotAirBalloon = true;
+let showPerch = false;
 
 // Auto elevation state
 let autoElevation = true;
@@ -267,6 +287,8 @@ let hueTickerDragStart = 0;
 // Set magnet state
 let magnetActive = false;
 let isDraggingMagnet = false;
+let isDraggingPerch = false;
+let draggedPerchIndex = -1;
 let magnetForce = 5.0;
 let magnetEffectRadius = 0.5;
 let poleGlowTicker = 0;
@@ -290,6 +312,10 @@ let rainbowFullyFormedTime = 0; // Time when rainbow reached 100%
 let rainbowOpacity = 1.0; // Opacity for fade out
 let Hearts = [];
 let rainbowHeartSpawnRate = 0.3; // Probability of spawning hearts each frame (0 to 1)
+
+// Perching boids state
+let boidsPerched = 0; // Number of currently perched boids
+let Perches = []; // Array of perch objects  
 
 // Create offscreen canvas for color wheel
 function createColorWheel() {
@@ -510,11 +536,13 @@ mousedownHandler = function(e) {
             savedSkyMenuVisible = skyMenuVisible;
             savedDrawMenuVisible = drawMenuVisible;
             savedStylingMenuVisible = stylingMenuVisible;
+            savedPropsMenuVisible = propsMenuVisible;
             menuVisible = false;
             colorMenuVisible = false;
             skyMenuVisible = false;
             drawMenuVisible = false;
             stylingMenuVisible = false;
+            propsMenuVisible = false;
         } else {
             // Opening main menu - restore saved submenu visibility states
             menuVisible = savedSimMenuVisible;
@@ -522,6 +550,7 @@ mousedownHandler = function(e) {
             skyMenuVisible = savedSkyMenuVisible;
             drawMenuVisible = savedDrawMenuVisible;
             stylingMenuVisible = savedStylingMenuVisible;
+            propsMenuVisible = savedPropsMenuVisible;
         }
         mainMenuVisible = !mainMenuVisible;
         return;
@@ -535,7 +564,7 @@ mousedownHandler = function(e) {
         const itemWidth = 0.24 * menuScale;
         const padding = 0.02 * menuScale;
         const menuHeight = itemHeight + (padding * 2);
-        const menuWidth = (itemWidth * 5) + (padding * 6);
+        const menuWidth = (itemWidth * 6) + (padding * 7);
         const menuBaseX = ellipsisX + 0.08 * menuScale;
         const menuX = menuBaseX + mainMenuXOffset * menuScale;
         const menuY = ellipsisY - 0.01 * menuScale;
@@ -551,37 +580,43 @@ mousedownHandler = function(e) {
             const relativeX = clickCanvasX - menuX - padding;
             const itemIndex = Math.floor(relativeX / (itemWidth + padding));
             
-            if (itemIndex >= 0 && itemIndex < 5) {
+            if (itemIndex >= 0 && itemIndex < 6) {
                 // Toggle the corresponding menu
                 if (itemIndex === 0) {
                     menuVisible = !menuVisible;
                     if (menuVisible) {
-                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder, propsMenuZOrder);
                         menuZOrder = maxZ + 1;
                     }
                 } else if (itemIndex === 1) {
                     stylingMenuVisible = !stylingMenuVisible;
                     if (stylingMenuVisible) {
-                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder, propsMenuZOrder);
                         stylingMenuZOrder = maxZ + 1;
                     }
                 } else if (itemIndex === 2) {
                     skyMenuVisible = !skyMenuVisible;
                     if (skyMenuVisible) {
-                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder, propsMenuZOrder);
                         skyMenuZOrder = maxZ + 1;
                     }
                 } else if (itemIndex === 3) {
                     colorMenuVisible = !colorMenuVisible;
                     if (colorMenuVisible) {
-                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder, propsMenuZOrder);
                         colorMenuZOrder = maxZ + 1;
                     }
                 } else if (itemIndex === 4) {
                     drawMenuVisible = !drawMenuVisible;
                     if (drawMenuVisible) {
-                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder, propsMenuZOrder);
                         drawMenuZOrder = maxZ + 1;
+                    }
+                } else if (itemIndex === 5) {
+                    propsMenuVisible = !propsMenuVisible;
+                    if (propsMenuVisible) {
+                        const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder, propsMenuZOrder);
+                        propsMenuZOrder = maxZ + 1;
                     }
                 }
             }
@@ -606,25 +641,77 @@ mousedownHandler = function(e) {
         }
     }
     
+    // Check perch click
+    if (Perches.length > 0) {
+        const clickCanvasX = mouseX * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        
+        for (let i = 0; i < Perches.length; i++) {
+            const perch = Perches[i];
+            const perchCanvasX = perch.x * cScale;
+            const perchCanvasY = (simHeight - perch.y) * cScale;
+            const perchHalfLength = (perch.length / 2) * cScale;
+            const perchHeight = 0.02 * cScale;
+            
+            // Check if click is within perch bounds (with larger hit area)
+            if (clickCanvasX >= perchCanvasX - perchHalfLength - 30 &&
+                clickCanvasX <= perchCanvasX + perchHalfLength + 30 &&
+                clickCanvasY >= perchCanvasY - 30 &&
+                clickCanvasY <= perchCanvasY + perchHeight + 50) { // Larger margin for easier clicking
+                isDraggingPerch = true;
+                draggedPerchIndex = i;
+                attachMouseMove();
+                return;
+            }
+        }
+    }
+    
+    // Check perch click
+    if (Perches.length > 0) {
+        const clickCanvasX = mouseX * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        
+        for (let i = 0; i < Perches.length; i++) {
+            const perch = Perches[i];
+            const perchCanvasX = perch.x * cScale;
+            const perchCanvasY = (simHeight - perch.y) * cScale;
+            const perchHalfLength = (perch.length / 2) * cScale;
+            const perchHeight = 0.02 * cScale;
+            
+            // Check if click is within perch bounds (with larger hit area)
+            if (clickCanvasX >= perchCanvasX - perchHalfLength - 30 &&
+                clickCanvasX <= perchCanvasX + perchHalfLength + 30 &&
+                clickCanvasY >= perchCanvasY - 30 &&
+                clickCanvasY <= perchCanvasY + perchHeight + 50) { // Larger margin for easier clicking
+                isDraggingPerch = true;
+                draggedPerchIndex = i;
+                attachMouseMove();
+                return;
+            }
+        }
+    }
+    
     // Check menus in reverse z-order (highest priority first)
     const menuChecks = [
         {check: checkDrawMenuClick, z: drawMenuZOrder, name: 'draw'},
         {check: checkStylingMenuClick, z: stylingMenuZOrder, name: 'styling'},
         {check: checkSkyMenuClick, z: skyMenuZOrder, name: 'sky'},
         {check: checkColorMenuClick, z: colorMenuZOrder, name: 'color'},
-        {check: checkSimMenuClick, z: menuZOrder, name: 'sim'}
+        {check: checkSimMenuClick, z: menuZOrder, name: 'sim'},
+        {check: checkPropsMenuClick, z: propsMenuZOrder, name: 'props'}
     ];
     menuChecks.sort((a, b) => b.z - a.z); // Sort highest to lowest
     
     for (let menuCheck of menuChecks) {
         if (menuCheck.check()) {
             // Bring this menu to front
-            const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder);
+            const maxZ = Math.max(menuZOrder, colorMenuZOrder, skyMenuZOrder, drawMenuZOrder, stylingMenuZOrder, propsMenuZOrder);
             if (menuCheck.name === 'sim') menuZOrder = maxZ + 1;
             else if (menuCheck.name === 'color') colorMenuZOrder = maxZ + 1;
             else if (menuCheck.name === 'sky') skyMenuZOrder = maxZ + 1;
             else if (menuCheck.name === 'draw') drawMenuZOrder = maxZ + 1;
             else if (menuCheck.name === 'styling') stylingMenuZOrder = maxZ + 1;
+            else if (menuCheck.name === 'props') propsMenuZOrder = maxZ + 1;
             return; // Stop checking other menus
         }
     }
@@ -909,15 +996,18 @@ mousedownHandler = function(e) {
                 // Store current menu states
                 menuVisibleBeforePaint = menuVisible;
                 skyMenuVisibleBeforePaint = skyMenuVisible;
+                propsMenuVisibleBeforePaint = propsMenuVisible;
                 // Hide other menus
                 menuVisible = false;
                 skyMenuVisible = false;
                 stylingMenuVisible = false;
+                propsMenuVisible = false;
             } else {
                 // Restore menu states when paint tool is deactivated
                 menuVisible = menuVisibleBeforePaint;
                 skyMenuVisible = skyMenuVisibleBeforePaint;
                 stylingMenuVisible = stylingMenuVisibleBeforePaint;
+                propsMenuVisible = propsMenuVisibleBeforePaint;
             }
             updateMouseListeners();
             return true;
@@ -1025,12 +1115,14 @@ mousedownHandler = function(e) {
                 drawMenuVisibleBeforePaint = drawMenuVisible;
                 colorMenuVisibleBeforePaint = colorMenuVisible;
                 stylingMenuVisibleBeforePaint = stylingMenuVisible;
+                propsMenuVisibleBeforePaint = propsMenuVisible;
                 // Hide all menus
                 menuVisible = false;
                 skyMenuVisible = false;
                 drawMenuVisible = false;
                 colorMenuVisible = false;
                 stylingMenuVisible = false;
+                propsMenuVisible = false;
             } else {
                 // Restore menu states when dye tool is deactivated
                 menuVisible = menuVisibleBeforePaint;
@@ -1038,6 +1130,7 @@ mousedownHandler = function(e) {
                 drawMenuVisible = drawMenuVisibleBeforePaint;
                 colorMenuVisible = colorMenuVisibleBeforePaint;
                 stylingMenuVisible = stylingMenuVisibleBeforePaint;
+                propsMenuVisible = propsMenuVisibleBeforePaint;
             }
             updateMouseListeners();
             // Ensure cursor position is updated immediately for smooth transition
@@ -1562,52 +1655,6 @@ mousedownHandler = function(e) {
         // Check toggle buttons
         const buttonY = knobSpacing * 2;
         
-        // Object visibility toggle buttons - 2x2 grid centered below azimuth knob (column 0)
-        const buttonRowY = menuOriginY + buttonY;
-        const buttonSpacing = knobRadius * 1.5;
-        const gridCenterX = menuOriginX + knobSpacing * 0.0; // Column 0 (azimuth)
-        const buttonRowSpacing = knobRadius * 1.2;
-        
-        // Clouds checkbox (top-left)
-        const cloudsX = gridCenterX - 0.5 * buttonSpacing;
-        const cloudsY = buttonRowY - 0.5 * buttonRowSpacing;
-        const cdx3 = clickCanvasX - cloudsX;
-        const cdy3 = clickCanvasY - cloudsY;
-        if (cdx3 * cdx3 + cdy3 * cdy3 < checkboxRadius * checkboxRadius) {
-            showClouds = !showClouds;
-            return true;
-        }
-        
-        // Plane checkbox (top-right)
-        const planeX = gridCenterX + 0.5 * buttonSpacing;
-        const planeY = buttonRowY - 0.5 * buttonRowSpacing;
-        const pdx = clickCanvasX - planeX;
-        const pdy = clickCanvasY - planeY;
-        if (pdx * pdx + pdy * pdy < checkboxRadius * checkboxRadius) {
-            showPlane = !showPlane;
-            return true;
-        }
-        
-        // Balloons checkbox (bottom-left)
-        const balloonsX = gridCenterX - 0.5 * buttonSpacing;
-        const balloonsY = buttonRowY + 0.5 * buttonRowSpacing;
-        const bdx = clickCanvasX - balloonsX;
-        const bdy = clickCanvasY - balloonsY;
-        if (bdx * bdx + bdy * bdy < checkboxRadius * checkboxRadius) {
-            showBalloons = !showBalloons;
-            return true;
-        }
-        
-        // Hot Air Balloon checkbox (bottom-right)
-        const hotAirBalloonX = gridCenterX + 0.5 * buttonSpacing;
-        const hotAirBalloonY = buttonRowY + 0.5 * buttonRowSpacing;
-        const habdx = clickCanvasX - hotAirBalloonX;
-        const habdy = clickCanvasY - hotAirBalloonY;
-        if (habdx * habdx + habdy * habdy < checkboxRadius * checkboxRadius) {
-            showHotAirBalloon = !showHotAirBalloon;
-            return true;
-        }
-        
         // Camera icon (column 2, row 2)
         const handX = menuOriginX + knobSpacing * 2.0;
         const handY = menuOriginY + buttonY;
@@ -1625,12 +1672,14 @@ mousedownHandler = function(e) {
                 skyMenuVisibleBeforeCamera = skyMenuVisible;
                 stylingMenuVisibleBeforeCamera = stylingMenuVisible;
                 drawMenuVisibleBeforeCamera = drawMenuVisible;
+                propsMenuVisibleBeforeCamera = propsMenuVisible;
                 // Hide all menus
                 menuVisible = false;
                 colorMenuVisible = false;
                 skyMenuVisible = false;
                 stylingMenuVisible = false;
                 drawMenuVisible = false;
+                propsMenuVisible = false;
             }
             updateMouseListeners();
             return true;
@@ -1670,6 +1719,105 @@ mousedownHandler = function(e) {
         }
         
         return false; // Click was not on sky menu
+    }
+    
+    // Helper function for props menu clicks
+    function checkPropsMenuClick() {
+        if (!propsMenuVisible || propsMenuOpacity <= 0.5) return false;
+        const knobRadius = 0.1 * menuScale;
+        const knobSpacing = knobRadius * 3;
+        const menuWidth = 2.5 * knobSpacing;
+        const menuHeight = 2.5 * knobSpacing;
+        const padding = 0.4 * knobRadius;
+        const menuUpperLeftX = propsMenuX * cScale;
+        const menuUpperLeftY = (canvas.height - propsMenuY * cScale);
+        const menuOriginX = menuUpperLeftX + knobSpacing;
+        const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+        
+        const clickCanvasX = mouseX * cScale;
+        const clickCanvasY = canvas.height - mouseY * cScale;
+        
+        // Check close icon
+        const closeIconRadius = knobRadius * 0.25;
+        const closeIconX = menuOriginX - padding + closeIconRadius + 0.2 * knobRadius;
+        const closeIconY = menuOriginY - padding + closeIconRadius + 0.2 * knobRadius;
+        const cdx = clickCanvasX - closeIconX;
+        const cdy = clickCanvasY - closeIconY;
+        
+        if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+            propsMenuVisible = false;
+            return true;
+        }
+        
+        // Check toggle buttons in grid starting at top-left
+        const checkboxRadius = knobRadius * 0.25;
+        const buttonSpacing = knobSpacing * 0.55;
+        const gridStartX = menuOriginX + 0.15 * knobSpacing;
+        const gridStartY = menuOriginY + 0.15 * knobSpacing;
+        
+        // Clouds (row 0, col 0)
+        const cloudsX = gridStartX + 0.5 * buttonSpacing;
+        const cloudsY = gridStartY + 0.5 * buttonSpacing;
+        const cdx3 = clickCanvasX - cloudsX;
+        const cdy3 = clickCanvasY - cloudsY;
+        if (cdx3 * cdx3 + cdy3 * cdy3 < (checkboxRadius * 1.5) * (checkboxRadius * 1.5)) {
+            showClouds = !showClouds;
+            return true;
+        }
+        
+        // Airplane (row 0, col 1)
+        const planeX = gridStartX + 1.5 * buttonSpacing;
+        const planeY = gridStartY + 0.5 * buttonSpacing;
+        const pdx = clickCanvasX - planeX;
+        const pdy = clickCanvasY - planeY;
+        if (pdx * pdx + pdy * pdy < (checkboxRadius * 1.5) * (checkboxRadius * 1.5)) {
+            showPlane = !showPlane;
+            return true;
+        }
+        
+        // Party Balloons (row 1, col 0)
+        const balloonsX = gridStartX + 0.5 * buttonSpacing;
+        const balloonsY = gridStartY + 1.5 * buttonSpacing;
+        const bdx = clickCanvasX - balloonsX;
+        const bdy = clickCanvasY - balloonsY;
+        if (bdx * bdx + bdy * bdy < (checkboxRadius * 1.5) * (checkboxRadius * 1.5)) {
+            showBalloons = !showBalloons;
+            return true;
+        }
+        
+        // Hot Air Balloon (row 1, col 1)
+        const hotAirBalloonX = gridStartX + 1.5 * buttonSpacing;
+        const hotAirBalloonY = gridStartY + 1.5 * buttonSpacing;
+        const habdx = clickCanvasX - hotAirBalloonX;
+        const habdy = clickCanvasY - hotAirBalloonY;
+        if (habdx * habdx + habdy * habdy < (checkboxRadius * 1.5) * (checkboxRadius * 1.5)) {
+            showHotAirBalloon = !showHotAirBalloon;
+            return true;
+        }
+        
+        // Perch (row 2, col 0)
+        const perchX = gridStartX + 0.5 * buttonSpacing;
+        const perchY = gridStartY + 2.5 * buttonSpacing;
+        const pdx2 = clickCanvasX - perchX;
+        const pdy2 = clickCanvasY - perchY;
+        if (pdx2 * pdx2 + pdy2 * pdy2 < (checkboxRadius * 1.5) * (checkboxRadius * 1.5)) {
+            showPerch = !showPerch;
+            return true;
+        }
+        
+        // Check if props menu background was clicked (for dragging entire menu)
+        if (clickCanvasX >= menuOriginX - padding && clickCanvasX <= menuOriginX + menuWidth + padding &&
+            clickCanvasY >= menuOriginY - padding && clickCanvasY <= menuOriginY + menuHeight + padding) {
+            isDraggingPropsMenu = true;
+            attachMouseMove();
+            propsMenuDragStartX = mouseX;
+            propsMenuDragStartY = mouseY;
+            propsMenuStartX = propsMenuX;
+            propsMenuStartY = propsMenuY;
+            return true;
+        }
+        
+        return false; // Click was not on props menu
     }
     
     // Handle path drawing
@@ -1856,6 +2004,7 @@ mouseupHandler = function(e) {
             skyMenuVisible = skyMenuVisibleBeforeCamera;
             stylingMenuVisible = stylingMenuVisibleBeforeCamera;
             drawMenuVisible = drawMenuVisibleBeforeCamera;
+            propsMenuVisible = propsMenuVisibleBeforeCamera;
         }
     }
     
@@ -1874,6 +2023,7 @@ mouseupHandler = function(e) {
     isDraggingColorMenu = false;
     isDraggingSkyMenu = false;
     isDraggingDrawMenu = false;
+    isDraggingPropsMenu = false;
     isDraggingSky = false;
     isDraggingColorWheel = false;
     isDraggingLightness = false;
@@ -1881,6 +2031,10 @@ mouseupHandler = function(e) {
     isDraggingHueTicker = false;
     isDraggingSpraySlider = false;
     isDraggingMagnet = false;
+    isDraggingPerch = false;
+    draggedPerchIndex = -1;
+    isDraggingPerch = false;
+    draggedPerchIndex = -1;
     isDraggingWand = false;
     isSpraying = false;
     
@@ -1910,6 +2064,54 @@ function handleMouseMove(e) {
     if (isDraggingMagnet && Magnet.length > 0) {
         Magnet[0].x = mouseX;
         Magnet[0].y = mouseY;
+        return;
+    }
+    
+    // Handle perch dragging
+    if (isDraggingPerch && draggedPerchIndex >= 0 && draggedPerchIndex < Perches.length) {
+        const perch = Perches[draggedPerchIndex];
+        
+        // Move perch to mouse position
+        perch.x = mouseX;
+        perch.y = mouseY;
+        
+        // Make all boids perched on this perch fly away
+        for (let boid of Boids) {
+            if (boid.perched && boid.perchTarget === perch) {
+                boid.perched = false;
+                boid.perchTarget = null;
+                
+                // Give boid initial velocity to take flight
+                boid.vel.x = (Math.random() - 0.5) * 0.5;
+                boid.vel.y = 0.3 + Math.random() * 0.3; // Upward velocity
+                
+                boidsPerched--;
+            }
+        }
+        return;
+    }
+    
+    // Handle perch dragging
+    if (isDraggingPerch && draggedPerchIndex >= 0 && draggedPerchIndex < Perches.length) {
+        const perch = Perches[draggedPerchIndex];
+        
+        // Move perch to mouse position
+        perch.x = mouseX;
+        perch.y = mouseY;
+        
+        // Make all boids perched on this perch fly away
+        for (let boid of Boids) {
+            if (boid.perched && boid.perchTarget === perch) {
+                boid.perched = false;
+                boid.perchTarget = null;
+                
+                // Give boid initial velocity to take flight
+                boid.vel.x = (Math.random() - 0.5) * 0.5;
+                boid.vel.y = 0.3 + Math.random() * 0.3; // Upward velocity
+                
+                boidsPerched--;
+            }
+        }
         return;
     }
     
@@ -1955,6 +2157,15 @@ function handleMouseMove(e) {
         const deltaY = mouseY - stylingMenuDragStartY;
         stylingMenuX = stylingMenuDragInitialX + deltaX;
         stylingMenuY = stylingMenuDragInitialY + deltaY;
+        return;
+    }
+    
+    // Handle props menu dragging
+    if (isDraggingPropsMenu) {
+        const deltaX = mouseX - propsMenuDragStartX;
+        const deltaY = mouseY - propsMenuDragStartY;
+        propsMenuX = propsMenuStartX + deltaX;
+        propsMenuY = propsMenuStartY + deltaY;
         return;
     }
     
@@ -5455,7 +5666,15 @@ class BOID {
         this.lastLightness = -1;
         this.flapper = 0;
         this.flapOut = true;
-        this.flapPause = 0; // Timer for pause at bottom of flap
+        this.flapPause = 0; 
+        this.perched = false;
+        this.approachingPerch = false; // True when boid is flying toward a perch to land
+        this.perchStartTime = 0;
+        this.perchTimeAllowed = 0;
+        this.perchTarget = null; // Which perch the boid is on
+        this.perchPosition = 0; // Position along the perch (0 to 1)
+        this.perchAngle = 0; // Random angle when perched (for natural variation)
+        this.visualScale = 1.0; // Visual size multiplier (for perching animation)
     }
     get left() {
         return this.pos.x - this.radius;
@@ -5464,6 +5683,13 @@ class BOID {
         return this.pos.x + this.radius;
     }
     simulate() {
+        // Perched boids don't move
+        if (this.perched) {
+            this.vel.x = 0;
+            this.vel.y = 0;
+            return;
+        }
+        
         // Enforce speed limit
         const boidSpeed = this.vel.length();
         if (boidSpeed > boidProps.speedLimit) {
@@ -5504,9 +5730,17 @@ class BOID {
         // GPU circles are rendered by WebGL, skip canvas rendering
         if (this.gpuCircle) return;
         
-        // scale size based on velocity
-        const radScale = this.radius * cScale;
-        this.speedAdjust = this.vel.length() / boidProps.speedLimit;
+        // scale size based on velocity (with visual scale for perching animation)
+        const radScale = this.radius * (this.visualScale || 1.0) * cScale;
+        
+        // Calculate speedAdjust - when perched, simulate varying speed for animations
+        if (this.perched) {
+            const timeElapsed = (Date.now() - this.perchStartTime) / 1000;
+            // Vary between 0.3 and 0.8 to trigger speed-based dimension changes
+            this.speedAdjust = 0.55 + Math.sin(timeElapsed * 2.0 + this.hue * 0.1) * 0.25;
+        } else {
+            this.speedAdjust = this.vel.length() / boidProps.speedLimit;
+        }
 
         // arrow dimensions ----------
         const arrowLength = Math.max((this.speedAdjust) * 1.5 * radScale, 1 * radScale);
@@ -5550,7 +5784,7 @@ class BOID {
             this.lastHue = hueRounded;
             this.lastSaturation = satRounded;
             this.lastLightness = lightRounded;
-        } 
+        }
 
         // Draw tail ----------
         if (boidProps.doTails == true && boidProps.tailLength > 0 && this.tail.length > 0 && tailColorMode !== 0) {
@@ -5611,7 +5845,8 @@ class BOID {
 
         // Draw triangle boid --------------------------------------------
         if (this.triangleBoid && !this.arrow && !this.circle && !this.airfoil) {
-            const angle = Math.atan2(-this.vel.y, this.vel.x);
+            // Perched boids point upward with slight variation, otherwise use velocity direction
+            const angle = this.perched ? (-Math.PI / 2 + this.perchAngle) : Math.atan2(-this.vel.y, this.vel.x);
             
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
@@ -5665,7 +5900,8 @@ class BOID {
 
         // Draw arrow boid --------------------------------------------
         if (this.arrow && !this.circle && !this.airfoil) {
-            const angle = Math.atan2(this.vel.y, this.vel.x);
+            // Perched boids point upward with slight variation, otherwise use velocity direction
+            const angle = this.perched ? (Math.PI / 2 + this.perchAngle) : Math.atan2(this.vel.y, this.vel.x);
 
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
@@ -5970,13 +6206,24 @@ class BOID {
         if (this.ellipseBoid && !this.arrow && !this.circle && !this.airfoil) {
             c.save();
             
-            // Calculate aspect ratio based on speed (faster = more slender)
-            const speed = Math.sqrt(this.vel.x * this.vel.x + this.vel.y * this.vel.y);
-            const normalizedSpeed = Math.min(speed / 2.0, 1.0); // Normalize speed
-            const aspectRatio = 1.0 + normalizedSpeed * 2.0; // Range from 1.0 (round) to 3.0 (slender)
+            // Calculate aspect ratio based on speed
+            let speed, normalizedSpeed, aspectRatio, angle;
             
-            // Get velocity angle for rotation (negate y for canvas coordinate system)
-            const angle = Math.atan2(-this.vel.y, this.vel.x);
+            if (this.perched) {
+                // When perched, simulate varying speed for aspect ratio animation
+                const timeElapsed = (Date.now() - this.perchStartTime) / 1000;
+                speed = 0.5 + Math.sin(timeElapsed * 2.0 + this.hue * 0.1) * 0.4; // 0.1 to 0.9
+                normalizedSpeed = Math.min(speed / 2.0, 1.0);
+                aspectRatio = 1.0 + normalizedSpeed * 2.0;
+                angle = -Math.PI / 2 + this.perchAngle; // Use perch angle
+            } else {
+                // Calculate aspect ratio based on actual speed (faster = more slender)
+                speed = Math.sqrt(this.vel.x * this.vel.x + this.vel.y * this.vel.y);
+                normalizedSpeed = Math.min(speed / 2.0, 1.0);
+                aspectRatio = 1.0 + normalizedSpeed * 2.0; // Range from 1.0 (round) to 3.0 (slender)
+                // Get velocity angle for rotation (negate y for canvas coordinate system)
+                angle = Math.atan2(-this.vel.y, this.vel.x);
+            }
             
             // Move to boid position and rotate to velocity direction
             c.translate(cX(this.pos), cY(this.pos));
@@ -6067,7 +6314,8 @@ class BOID {
 
         // Draw flappy boid --------------------------------------------
         if (this.flappy) {
-            const angle = Math.atan2(this.vel.y, this.vel.x);
+            // Perched boids point upward with slight variation, otherwise use velocity direction
+            const angle = this.perched ? (Math.PI / 2 + this.perchAngle) : Math.atan2(this.vel.y, this.vel.x);
             c.save();
             c.translate(cX(this.pos), cY(this.pos));
             c.rotate(-angle);
@@ -6358,7 +6606,7 @@ function drawMainMenu() {
     const padding = 0.02 * menuScale;
     const iconSize = 0.06 * menuScale;
     const menuHeight = itemHeight + (padding * 2);
-    const menuWidth = (itemWidth * 5) + (padding * 6);
+    const menuWidth = (itemWidth * 6) + (padding * 7);
     
     // Menu position - to the right of ellipsis with animation
     // Position menu so it extends downward and is clearly visible
@@ -6395,7 +6643,8 @@ function drawMainMenu() {
         { label: 'Styling', active: stylingMenuVisible, icon: 'style' },
         { label: 'Sky', active: skyMenuVisible, icon: 'sky' },
         { label: 'Paint', active: colorMenuVisible, icon: 'paint' },
-        { label: 'Draw', active: drawMenuVisible, icon: 'draw' }
+        { label: 'Draw', active: drawMenuVisible, icon: 'draw' },
+        { label: 'Props', active: propsMenuVisible, icon: 'props' }
     ];
     
     // Draw menu items
@@ -6428,6 +6677,8 @@ function drawMainMenu() {
                 c.fillStyle = `hsla(340, 70%, 60%, 0.3)`;
             } else if (item.icon === 'style') {
                 c.fillStyle = `hsla(140, 80%, 60%, 0.3)`;
+            } else if (item.icon === 'props') {
+                c.fillStyle = `hsla(120, 70%, 40%, 0.3)`;
             }
         } else {
             c.fillStyle = `hsla(0, 0%, 15%, 0.6)`;
@@ -6632,6 +6883,44 @@ function drawMainMenu() {
             c.fill();
             
             c.restore();
+        
+        // Draw props icon --------------------
+        } else if (item.icon === 'props') {
+            // Draw balloon cluster icon
+            const balloonRadius = iconSize * 0.2;
+            const balloons = [
+                { x: -iconSize * 0.15, y: -iconSize * 0.2, hue: 0 },
+                { x: iconSize * 0.15, y: -iconSize * 0.25, hue: 200 },
+                { x: 0, y: 0, hue: 120 }
+            ];
+            
+            for (let balloon of balloons) {
+                // Balloon body
+                c.fillStyle = item.active ? 
+                    `hsla(${balloon.hue}, 70%, 60%, 0.8)` : 
+                    `hsla(${balloon.hue}, 30%, 40%, 0.8)`;
+                c.beginPath();
+                c.ellipse(
+                    iconX + balloon.x,
+                    iconY + balloon.y,
+                    balloonRadius * 0.85,
+                    balloonRadius,
+                    0,
+                    0,
+                    2 * Math.PI
+                );
+                c.fill();
+                
+                // String
+                c.strokeStyle = item.active ? 
+                    `hsla(0, 0%, 80%, 0.8)` : 
+                    `hsla(0, 0%, 40%, 0.8)`;
+                c.lineWidth = 0.004 * menuScale;
+                c.beginPath();
+                c.moveTo(iconX + balloon.x, iconY + balloon.y + balloonRadius);
+                c.lineTo(iconX, iconY + iconSize * 0.45);
+                c.stroke();
+            }
         }
         
         // Draw label text (centered below icon)
@@ -7489,6 +7778,195 @@ function drawStylingMenu() {
         c.fillRect(scrollbarX, scrollbarY, scrollbarWidth, scrollbarHeight);
     }
 
+    c.restore();
+}
+
+//  DRAW PROPS MENU  ---------------------------------------------------------------------
+function drawPropsMenu() {
+    // Only draw menu if it has some opacity
+    if (propsMenuOpacity <= 0) return;
+    
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuUpperLeftX = propsMenuX * cScale;
+    const menuUpperLeftY = canvas.height - propsMenuY * cScale;
+    
+    c.save();
+    c.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
+    
+    const padding = 0.4 * knobRadius;
+    const menuWidth = 2.5 * knobSpacing;
+    const menuHeight = 2.5 * knobSpacing;
+    
+    // Draw menu background with rounded corners
+    const cornerRadius = 0.05 * menuScale;
+    c.beginPath();
+    c.moveTo(-padding + cornerRadius, -padding);
+    c.lineTo(menuWidth + padding - cornerRadius, -padding);
+    c.quadraticCurveTo(menuWidth + padding, -padding, menuWidth + padding, -padding + cornerRadius);
+    c.lineTo(menuWidth + padding, menuHeight + padding - cornerRadius);
+    c.quadraticCurveTo(menuWidth + padding, menuHeight + padding, menuWidth + padding - cornerRadius, menuHeight + padding);
+    c.lineTo(-padding + cornerRadius, menuHeight + padding);
+    c.quadraticCurveTo(-padding, menuHeight + padding, -padding, menuHeight + padding - cornerRadius);
+    c.lineTo(-padding, -padding + cornerRadius);
+    c.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
+    c.closePath();
+    const menuGradient = c.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsla(120, 40%, 25%, ${0.9 * propsMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsla(120, 40%, 8%, ${0.9 * propsMenuOpacity})`);
+    c.fillStyle = menuGradient;
+    c.fill();
+    c.strokeStyle = `hsla(120, 40%, 70%, ${propsMenuOpacity})`;
+    c.lineWidth = 0.004 * menuScale;
+    c.stroke();
+    
+    // Draw title
+    c.fillStyle = `hsla(120, 30%, 75%, ${propsMenuOpacity})`;
+    c.font = `bold ${0.05 * menuScale}px verdana`;
+    c.textAlign = 'center';
+    c.fillText('PROPS', menuWidth / 2, -padding + 0.04 * menuScale);
+    
+    // Draw close icon in upper left corner (round button)
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+    
+    // Red background circle
+    c.beginPath();
+    c.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(0, 70%, 40%, ${propsMenuOpacity})`;
+    c.fill();
+    
+    // Black X
+    c.strokeStyle = `hsla(0, 0%, 0%, ${propsMenuOpacity})`;
+    c.lineWidth = 0.05 * knobRadius;
+    c.lineCap = 'round';
+    const xSize = closeIconRadius * 0.4;
+    c.beginPath();
+    c.moveTo(closeIconX - xSize, closeIconY - xSize);
+    c.lineTo(closeIconX + xSize, closeIconY + xSize);
+    c.moveTo(closeIconX + xSize, closeIconY - xSize);
+    c.lineTo(closeIconX - xSize, closeIconY + xSize);
+    c.stroke();
+    
+    // Draw toggle buttons in grid starting at top-left
+    const checkboxRadius = knobRadius * 0.25;
+    const buttonSpacing = knobSpacing * 0.55;
+    const gridStartX = 0.15 * knobSpacing;
+    const gridStartY = 0.15 * knobSpacing;
+    
+    // Clouds (row 0, col 0)
+    const cloudsX = gridStartX + 0.5 * buttonSpacing;
+    const cloudsY = gridStartY + 0.5 * buttonSpacing;
+    c.beginPath();
+    c.arc(cloudsX, cloudsY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(120, 40%, 10%, ${0.3 * propsMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(120, 60%, 30%, ${propsMenuOpacity})`;
+    c.lineWidth = 0.003 * menuScale;
+    c.stroke();
+    if (showClouds) {
+        c.beginPath();
+        c.arc(cloudsX, cloudsY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 80%, ${propsMenuOpacity})`;
+        c.fill();
+    }
+    c.fillStyle = `hsla(0, 0%, 80%, ${propsMenuOpacity})`;
+    c.font = `${0.028 * menuScale}px sans-serif`;
+    c.textAlign = 'center';
+    c.lineWidth = 0.003 * menuScale;
+    c.strokeStyle = `hsla(0, 0%, 0%, ${0.6 * propsMenuOpacity})`;
+    c.strokeText('Clouds', 0.002 * menuScale + cloudsX, 0.002 * menuScale + cloudsY + knobRadius * 0.5);
+    c.fillText('Clouds', cloudsX, cloudsY + knobRadius * 0.5);
+    
+    // Airplane (row 0, col 1)
+    const planeX = gridStartX + 1.5 * buttonSpacing;
+    const planeY = gridStartY + 0.5 * buttonSpacing;
+    c.beginPath();
+    c.arc(planeX, planeY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(120, 40%, 10%, ${0.3 * propsMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(120, 60%, 30%, ${propsMenuOpacity})`;
+    c.lineWidth = 0.003 * menuScale;
+    c.stroke();
+    if (showPlane) {
+        c.beginPath();
+        c.arc(planeX, planeY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 80%, ${propsMenuOpacity})`;
+        c.fill();
+    }
+    c.fillStyle = `hsla(0, 0%, 80%, ${propsMenuOpacity})`;
+    c.strokeStyle = `hsla(0, 0%, 0%, ${0.6 * propsMenuOpacity})`;
+    c.strokeText('Airplane', 0.002 * menuScale + planeX, 0.002 * menuScale + planeY + knobRadius * 0.5);
+    c.fillText('Airplane', planeX, planeY + knobRadius * 0.5);
+    
+    // Party Balloons (row 1, col 0)
+    const balloonsX = gridStartX + 0.5 * buttonSpacing;
+    const balloonsY = gridStartY + 1.5 * buttonSpacing;
+    c.beginPath();
+    c.arc(balloonsX, balloonsY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(120, 40%, 10%, ${0.3 * propsMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(120, 60%, 30%, ${propsMenuOpacity})`;
+    c.lineWidth = 0.003 * menuScale;
+    c.stroke();
+    if (showBalloons) {
+        c.beginPath();
+        c.arc(balloonsX, balloonsY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 80%, ${propsMenuOpacity})`;
+        c.fill();
+    }
+    c.fillStyle = `hsla(0, 0%, 80%, ${propsMenuOpacity})`;
+    c.strokeStyle = `hsla(0, 0%, 0%, ${0.6 * propsMenuOpacity})`;
+    c.strokeText('Party', 0.002 * menuScale + balloonsX, 0.002 * menuScale + balloonsY + knobRadius * 0.50);
+    c.fillText('Party', balloonsX, balloonsY + knobRadius * 0.50);
+    c.strokeText('Balloons', 0.002 * menuScale + balloonsX, 0.002 * menuScale + balloonsY + knobRadius * 0.80);
+    c.fillText('Balloons', balloonsX, balloonsY + knobRadius * 0.80);
+    
+    // Hot Air Balloon (row 1, col 1)
+    const hotAirBalloonX = gridStartX + 1.5 * buttonSpacing;
+    const hotAirBalloonY = gridStartY + 1.5 * buttonSpacing;
+    c.beginPath();
+    c.arc(hotAirBalloonX, hotAirBalloonY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(120, 40%, 10%, ${0.3 * propsMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(120, 60%, 30%, ${propsMenuOpacity})`;
+    c.lineWidth = 0.003 * menuScale;
+    c.stroke();
+    if (showHotAirBalloon) {
+        c.beginPath();
+        c.arc(hotAirBalloonX, hotAirBalloonY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 80%, ${propsMenuOpacity})`;
+        c.fill();
+    }
+    c.fillStyle = `hsla(0, 0%, 80%, ${propsMenuOpacity})`;
+    c.strokeStyle = `hsla(0, 0%, 0%, ${0.6 * propsMenuOpacity})`;
+    c.strokeText('Hot Air', 0.002 * menuScale + hotAirBalloonX, 0.002 * menuScale + hotAirBalloonY + knobRadius * 0.50);
+    c.fillText('Hot Air', hotAirBalloonX, hotAirBalloonY + knobRadius * 0.50);
+    c.strokeText('Balloon', 0.002 * menuScale + hotAirBalloonX, 0.002 * menuScale + hotAirBalloonY + knobRadius * 0.80);
+    c.fillText('Balloon', hotAirBalloonX, hotAirBalloonY + knobRadius * 0.80);
+    
+    // Perch (row 2, col 0)
+    const perchX = gridStartX + 0.5 * buttonSpacing;
+    const perchY = gridStartY + 2.5 * buttonSpacing;
+    c.beginPath();
+    c.arc(perchX, perchY, checkboxRadius, 0, 2 * Math.PI);
+    c.fillStyle = `hsla(120, 40%, 10%, ${0.3 * propsMenuOpacity})`;
+    c.fill();
+    c.strokeStyle = `hsla(120, 60%, 30%, ${propsMenuOpacity})`;
+    c.lineWidth = 0.003 * menuScale;
+    c.stroke();
+    if (showPerch) {
+        c.beginPath();
+        c.arc(perchX, perchY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+        c.fillStyle = `hsla(0, 0%, 80%, ${propsMenuOpacity})`;
+        c.fill();
+    }
+    c.fillStyle = `hsla(0, 0%, 80%, ${propsMenuOpacity})`;
+    c.strokeStyle = `hsla(0, 0%, 0%, ${0.6 * propsMenuOpacity})`;
+    c.strokeText('Perch', 0.002 * menuScale + perchX, 0.002 * menuScale + perchY + knobRadius * 0.5);
+    c.fillText('Perch', perchX, perchY + knobRadius * 0.5);
+    
     c.restore();
 }
 
@@ -8389,6 +8867,7 @@ function makeBoids() {
         currentFlashCycle: 0, // Track which flash cycle we're in
         hueSensitivity: 40, // How much the hue changes based on speed
         hueTicker: 0.01, // How fast the hue cycles
+        maxPerchedBoid: 20 // How many boids can stay perched
     };
 
     // (no trails for phone?)  ---------
@@ -8799,6 +9278,240 @@ function handleMagnet(boid) {
     }
 }
 
+class PERCH {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.length = 0.3 * simWidth;
+        this.balloonHeight = 0.25; // Height of balloons above perch
+        
+        // Create cluster of 5 balloons on each side
+        this.leftBalloons = [];
+        this.rightBalloons = [];
+        for (let i = 0; i < 5; i++) {
+            this.leftBalloons.push({
+                hue: 360 * Math.random(),
+                sat: 40 + Math.random() * 60,
+                light: 40 + Math.random() * 30,
+                stringPhase: Math.random() * Math.PI * 2,
+                stringFreq: 1.3 + Math.random() * 0.4,
+                offsetX: (Math.random() - 0.5) * 0.04,
+                offsetY: (Math.random() - 0.5) * 0.04,
+                stringLengthOffset: Math.random() * 2 // 0 to 2 radii above base height
+            });
+            this.rightBalloons.push({
+                hue: 360 * Math.random(),
+                sat: 40 + Math.random() * 60,
+                light: 40 + Math.random() * 30,
+                stringPhase: Math.random() * Math.PI * 2,
+                stringFreq: 1.3 + Math.random() * 0.4,
+                offsetX: (Math.random() - 0.5) * 0.04,
+                offsetY: (Math.random() - 0.5) * 0.04,
+                stringLengthOffset: Math.random() * 2 // 0 to 2 radii above base height
+            });
+        }
+    }
+    draw() {
+        const leftX = this.x - 0.5 * this.length;
+        const rightX = this.x + 0.5 * this.length;
+        const balloonY = this.y + this.balloonHeight;
+        const balloonRadius = 0.09; // Smaller radius for cluster
+        
+        // Draw balloons and strings together
+        // Left cluster - draw each balloon with its string
+        for (let balloon of this.leftBalloons) {
+            balloon.stringPhase += deltaT * balloon.stringFreq;
+            const radScale = balloonRadius * cScale;
+            const amplitude = radScale * 0.22;
+            const waveOffset = Math.sin(balloon.stringPhase + Math.PI * 2) * amplitude / cScale;
+            const balloonX = leftX + waveOffset + balloon.offsetX;
+            const balloonYPos = balloonY + balloon.offsetY + balloon.stringLengthOffset * balloonRadius;
+            
+            this.drawBalloon(balloonX, balloonYPos, balloonRadius, balloon.hue, balloon.sat, balloon.light);
+            this.drawString(leftX, this.y, balloonX, balloonYPos, balloonRadius, -1, balloon.stringPhase, amplitude / cScale);
+        }
+        
+        // Right cluster - draw each balloon with its string
+        for (let balloon of this.rightBalloons) {
+            balloon.stringPhase += deltaT * balloon.stringFreq;
+            const radScale = balloonRadius * cScale;
+            const amplitude = radScale * 0.20;
+            const waveOffset = Math.sin(balloon.stringPhase + Math.PI * 2) * amplitude / cScale;
+            const balloonX = rightX + waveOffset + balloon.offsetX;
+            const balloonYPos = balloonY + balloon.offsetY + balloon.stringLengthOffset * balloonRadius;
+            
+            this.drawBalloon(balloonX, balloonYPos, balloonRadius, balloon.hue, balloon.sat, balloon.light);
+            this.drawString(rightX, this.y, balloonX, balloonYPos, balloonRadius, -1, balloon.stringPhase, amplitude / cScale);
+        }
+        
+        // Draw perch bar
+        c.beginPath();
+        c.strokeStyle = `hsl(0, 0%, 10%)`;
+        c.lineWidth = 3.0;
+        c.moveTo((this.x - 0.52 * this.length) * cScale, (simHeight - this.y) * cScale + 1);
+        c.lineTo((this.x + 0.52 * this.length) * cScale, (simHeight - this.y) * cScale + 1);
+        c.stroke(); 
+        // balls on each end
+        c.beginPath();
+        c.fillStyle = `hsl(0, 0%, 10%)`;
+        c.arc((leftX - 0.02) * cScale, (simHeight - this.y) * cScale + 1, 4.0, 0, 2 * Math.PI);
+        c.fill();
+        c.beginPath();
+        c.arc((rightX + 0.02) * cScale, (simHeight - this.y) * cScale + 1, 4.0, 0, 2 * Math.PI);
+        c.fill();
+        
+        // Draw string wraps around perch ends
+        this.drawStringWraps(leftX, this.y, 'left');
+        this.drawStringWraps(rightX, this.y, 'right');
+    }
+    
+    drawStringWraps(x, y, side) {
+        const wraps = 4; // Number of wraps
+        const spacing = 0.008; // Spacing between wraps along perch axis
+        const wrapHeight = 0.012; // Height of each wrap segment
+        
+        c.strokeStyle = 'hsl(0, 0%, 80%)';
+        c.lineWidth = 2.0;
+        
+        for (let i = 0; i < wraps; i++) {
+            const offsetX = i * spacing;
+            let x1, x2;
+            
+            if (side === 'left') {
+                // Wraps extend to the right from left edge
+                x1 = x + offsetX;
+                x2 = x + offsetX + spacing * 0.6;
+            } else {
+                // Wraps extend to the left from right edge
+                x1 = x - offsetX - spacing * 0.6;
+                x2 = x - offsetX;
+            }
+            
+            const y1 = y - wrapHeight / 2;
+            const y2 = y + wrapHeight / 2;
+            
+            c.beginPath();
+            c.moveTo(cX({x: x1, y: y1}), cY({x: x1, y: y1}));
+            c.lineTo(cX({x: x2, y: y2}), cY({x: x2, y: y2}));
+            c.stroke();
+        }
+    }
+    
+    drawString(fromX, fromY, toX, toY, balloonRadius, side, stringPhase, baseAmplitude) {
+        c.strokeStyle = 'hsl(0, 0%, 80%)';
+        c.lineWidth = 1.5;
+        c.beginPath();
+        
+        const segments = 20;
+        const radScale = balloonRadius * cScale;
+        // String connects at angle on the wrap arc (side=-1 for left, side=1 for right)
+        // Wrap center: startY (0.6 * radScale) + 0.02 * radScale = 0.62 * radScale
+        // Wrap radius: 0.15 * radScale
+        // Connect at angle slightly off-center (±0.25 radians from bottom)
+        const angle = Math.PI / 2 + side * 0.25; // Bottom is π/2
+        const wrapCenterY = 0.62 * balloonRadius;
+        const wrapRadius = 0.15 * balloonRadius;
+        const knotOffset = wrapCenterY + wrapRadius * Math.sin(angle); // Y offset from balloon center
+        const stringEndXOffset = wrapRadius * Math.cos(angle); // X offset in sim space
+        const stringLength = (toY - fromY) - knotOffset;
+        
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const y = fromY + stringLength * t;
+            // Wave amplitude: less near perch (t=0), zero at balloon (t=1)
+            const amplitude = radScale * baseAmplitude * t * t * (1 - t) * 3;
+            // Interpolate x from fromX to toX+stringEndXOffset with wave
+            const targetX = toX + stringEndXOffset;
+            const baseX = fromX + (targetX - fromX) * t;
+            const x = baseX + Math.sin(stringPhase + t * Math.PI * 2) * amplitude / cScale;
+            
+            if (i === 0) {
+                c.moveTo(cX({x: x, y: y}), cY({x: x, y: y}));
+            } else {
+                c.lineTo(cX({x: x, y: y}), cY({x: x, y: y}));
+            }
+        }
+        c.stroke();
+    }
+    
+    drawBalloon(x, y, radius, hue, saturation, lightness) {
+        const radScale = radius * cScale;
+        
+        c.save();
+        c.translate(cX({x: x, y: y}), cY({x: x, y: y}));
+        
+        // Draw knot at bottom of balloon
+        const startY = 0.6 * radScale;
+        c.fillStyle = `hsl(${hue}, 40%, 30%)`;
+        c.beginPath();
+        c.ellipse(
+            0, 
+            startY + radScale * 0.15,
+            radScale * 0.08,
+            radScale * 0.12,
+            0, 
+            0, 
+            2 * Math.PI);
+        c.fill();
+        
+        c.fillStyle = `hsl(${hue}, 40%, 20%)`;
+        c.beginPath();
+        c.ellipse(
+            0, 
+            startY + radScale * 0.22,
+            radScale * 0.12,
+            radScale * 0.06,
+            0, 
+            0, 
+            2 * Math.PI);
+        c.fill();
+        
+        // Draw arced string around knot
+        c.beginPath();
+        const squeeze = 0.3 * Math.PI;
+        c.arc(0, startY + radScale * 0.02, radScale * 0.15, 0 + squeeze, Math.PI - squeeze, false);
+        c.strokeStyle = 'hsl(0, 0%, 80%)';
+        c.lineWidth = 2.0;
+        c.stroke();
+        
+        // Draw balloon body
+        const gradient = c.createRadialGradient(
+            -radScale * 0.25,
+            -radScale * 0.7, 
+            0, 
+            0, 
+            -radScale * 0.3, 
+            1.2 * radScale);
+        gradient.addColorStop(0, `hsla(${hue}, ${saturation}%, ${lightness}%, 0.7)`);
+        gradient.addColorStop(1, `hsla(${hue}, ${saturation * 0.75}%, 10%, 0.9)`);
+        c.fillStyle = gradient;
+        c.beginPath();
+        c.ellipse(
+            0, 
+            -radScale * 0.3, 
+            radScale * 0.8, 
+            radScale * 0.9, 
+            0, 
+            0, 
+            2 * Math.PI);
+        c.fill();
+        c.strokeStyle = `hsl(${hue}, 50%, 30%)`;
+        c.lineWidth = 2;
+        c.stroke();
+        
+        c.restore();
+    }
+}
+
+// DEFINE PERCHES -------------
+function makePerches() {
+    Perches = [];
+        const x = 0.7 * simWidth;
+        const y = 0.7 * simHeight;
+        Perches.push(new PERCH(x, y));
+}
+
+
 //  HANDLE CLOUDS -------------
 function handleClouds(boid) {
     // CLOUD AVOIDANCE - loop through all Clouds
@@ -8927,7 +9640,8 @@ function handleBoidRules(boid) {
     // Use traditional for loop for better performance
     for (let i = 0; i < nearbyBoids.length; i++) {
         const otherBoid = nearbyBoids[i];
-        if (otherBoid !== boid) {
+        // Skip self, perched boids, and boids approaching perch
+        if (otherBoid !== boid && !otherBoid.perched && !otherBoid.approachingPerch) {
             const dx = boid.pos.x - otherBoid.pos.x;
             const dy = boid.pos.y - otherBoid.pos.y;
             const distSq = dx * dx + dy * dy;
@@ -9275,91 +9989,6 @@ function drawSkyMenu() {
         c.fillStyle = `hsla(0, 80%, 50%, ${skyMenuOpacity})`; // Red when inactive
     }
     c.fill();
-    
-    // Object visibility toggle buttons - 2x2 grid centered below azimuth knob (column 0)
-    const buttonRowY = buttonY;
-    const buttonSpacing = knobRadius * 1.5;
-    const gridCenterX = knobSpacing * 0.0; // Column 0 (azimuth)
-    const buttonRowSpacing = knobRadius * 1.2;
-    
-    // Clouds toggle (top-left)
-    const cloudsX = gridCenterX - 0.5 * buttonSpacing;
-    const cloudsY = buttonRowY - 0.5 * buttonRowSpacing;
-    c.beginPath();
-    c.arc(cloudsX, cloudsY, checkboxRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
-    c.fill();
-    c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.003 * menuScale;
-    c.stroke();
-    if (showClouds) {
-        c.beginPath();
-        c.arc(cloudsX, cloudsY, checkboxRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-        c.fill();
-    }
-    c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-    c.font = `${0.028 * menuScale}px sans-serif`;
-    c.fillText('Clouds', cloudsX, cloudsY + knobRadius * 0.5);
-    
-    // Plane toggle (top-right)
-    const planeX = gridCenterX + 0.5 * buttonSpacing;
-    const planeY = buttonRowY - 0.5 * buttonRowSpacing;
-    c.beginPath();
-    c.arc(planeX, planeY, checkboxRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
-    c.fill();
-    c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.003 * menuScale;
-    c.stroke();
-    if (showPlane) {
-        c.beginPath();
-        c.arc(planeX, planeY, checkboxRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-        c.fill();
-    }
-    c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-    c.fillText('Airplane', planeX, planeY + knobRadius * 0.5);
-    
-    // Balloons toggle (bottom-left)
-    const balloonsX = gridCenterX - 0.5 * buttonSpacing;
-    const balloonsY = buttonRowY + 0.5 * buttonRowSpacing;
-    c.beginPath();
-    c.arc(balloonsX, balloonsY, checkboxRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
-    c.fill();
-    c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.003 * menuScale;
-    c.stroke();
-    if (showBalloons) {
-        c.beginPath();
-        c.arc(balloonsX, balloonsY, checkboxRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-        c.fill();
-    }
-    c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-    c.fillText('Party', balloonsX, balloonsY + knobRadius * 0.50);
-    c.fillText('Balloons', balloonsX, balloonsY + knobRadius * 0.80);
-    
-    // Hot Air Balloon toggle (bottom-right)
-    const hotAirBalloonX = gridCenterX + 0.5 * buttonSpacing;
-    const hotAirBalloonY = buttonRowY + 0.5 * buttonRowSpacing;
-    c.beginPath();
-    c.arc(hotAirBalloonX, hotAirBalloonY, checkboxRadius, 0, 2 * Math.PI);
-    c.fillStyle = `hsla(30, 40%, 15%, ${0.3 * skyMenuOpacity})`;
-    c.fill();
-    c.strokeStyle = `hsla(30, 60%, 40%, ${skyMenuOpacity})`;
-    c.lineWidth = 0.003 * menuScale;
-    c.stroke();
-    if (showHotAirBalloon) {
-        c.beginPath();
-        c.arc(hotAirBalloonX, hotAirBalloonY, checkboxRadius * 0.5, 0, 2 * Math.PI);
-        c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-        c.fill();
-    }
-    c.fillStyle = `hsla(0, 0%, 80%, ${skyMenuOpacity})`;
-    c.fillText('Hot Air', hotAirBalloonX, hotAirBalloonY + knobRadius * 0.50);
-    c.fillText('Balloon', hotAirBalloonX, hotAirBalloonY + knobRadius * 0.80);
     
     // Draw camera icon (in column 2, row 2)
     const camX = knobSpacing * 2.0;
@@ -10222,6 +10851,13 @@ function simulateEverything() {
         stylingMenuOpacity = Math.max(0, stylingMenuOpacity - menuFadeSpeed * deltaT);
     }
     
+    // Update props menu opacity for fade in/out
+    if (propsMenuVisible && propsMenuOpacity < 1) {
+        propsMenuOpacity = Math.min(1, propsMenuOpacity + menuFadeSpeed * deltaT);
+    } else if (!propsMenuVisible && propsMenuOpacity > 0) {
+        propsMenuOpacity = Math.max(0, propsMenuOpacity - menuFadeSpeed * deltaT);
+    }
+    
     // Update auto elevation if enabled
     if (autoElevation && window.skyRenderer) {
         autoElevationPhase += deltaT * autoElevationRate;
@@ -10336,13 +10972,197 @@ function simulateEverything() {
     // Update boids
     for (var i = 0; i < Boids.length; i++) {
         var boid = Boids[i];
-        handleFlashing(boid);
-        handleBoidRules(boid);
-        handleClouds(boid);
-        handleMagnet(boid);
-        handleBounds(boid);
+        
+        // If perch is disabled, reset any perching states
+        if (!showPerch) {
+            if (boid.perched || boid.approachingPerch) {
+                boid.perched = false;
+                boid.approachingPerch = false;
+                boid.perchTarget = null;
+                // Give boid velocity if it was perched
+                if (boid.vel.x === 0 && boid.vel.y === 0) {
+                    boid.vel.x = (Math.random() - 0.5) * 0.3;
+                    boid.vel.y = 0.2 + Math.random() * 0.2;
+                }
+                if (boidsPerched > 0) {
+                    boidsPerched--;
+                }
+            }
+        }
+        
+        // Skip flocking behaviors for perched boids and approaching boids
+        if (!boid.perched && !boid.approachingPerch) {
+            handleFlashing(boid);
+            handleBoidRules(boid);
+            handleClouds(boid);
+            handleMagnet(boid);
+            handleBounds(boid);
+        }
+        
         boid.simulate();
 
+        // Handle perching status
+        if (!boid.perched && !boid.approachingPerch && boidsPerched < boidProps.maxPerchedBoid && showPerch) {
+            // Check if boid wants to perch (small random chance per frame)
+            if (Math.random() < 0.1 * deltaT && Perches.length > 0) {
+                // Find nearest perch
+                let nearestPerch = null;
+                let nearestDist = Infinity;
+                
+                for (let perch of Perches) {
+                    const dx = boid.pos.x - perch.x;
+                    const dy = boid.pos.y - perch.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestPerch = perch;
+                    }
+                }
+                
+                // Only approach perch if boid is close enough (within visual range * 2)
+                const maxPerchDistance = boidProps.visualRange * 2;
+                if (nearestPerch && nearestDist < maxPerchDistance) {
+                    boid.approachingPerch = true;
+                    boid.perchTarget = nearestPerch;
+                    boid.perchPosition = Math.random(); // Random position along perch
+                    boid.perchApproachStartTime = Date.now(); // Track when approach started
+                    // Don't increment boidsPerched yet - only when actually landed
+                }
+            }
+        } else if (boid.approachingPerch && !boid.perched) {
+            // Clean up if perch was toggled off
+            if (!showPerch) {
+                boid.approachingPerch = false;
+                boid.perchTarget = null;
+                boid.perchApproachStartTime = null;
+            } else {
+                // Safety check: if no approach start time, give up immediately
+                if (!boid.perchApproachStartTime) {
+                    boid.approachingPerch = false;
+                    boid.perchTarget = null;
+                } else {
+                    // Check if approach has timed out (8 seconds)
+                    const approachTimeout = 8000; // 8 seconds
+                    if (Date.now() - boid.perchApproachStartTime > approachTimeout) {
+                        // Give up on perching and rejoin the flock
+                        boid.approachingPerch = false;
+                        boid.perchTarget = null;
+                        boid.perchApproachStartTime = null;
+                    } else {
+            // Boid wants to perch - steer toward the perch and slow down when near
+            if (boid.perchTarget) {
+                const perchLeft = boid.perchTarget.x - 0.5 * boid.perchTarget.length;
+                const perchRight = boid.perchTarget.x + 0.5 * boid.perchTarget.length;
+                const perchY = boid.perchTarget.y;
+                
+                // Steer toward the target perch position
+                const targetX = perchLeft + boid.perchPosition * boid.perchTarget.length;
+                const targetY = perchY;
+                const dx = targetX - boid.pos.x;
+                const dy = targetY - boid.pos.y;
+                const distToTarget = Math.sqrt(dx * dx + dy * dy);
+                
+                // Apply very strong steering force toward perch
+                if (distToTarget > 0) {
+                    const steeringStrength = 5.0; // Very strong steering
+                    boid.vel.x += (dx / distToTarget) * steeringStrength * deltaT;
+                    boid.vel.y += (dy / distToTarget) * steeringStrength * deltaT;
+                }
+                
+                // Only dampen velocity when VERY close to prevent overshooting
+                if (distToTarget < boid.radius * 5) {
+                    boid.vel.x *= 0.9;
+                    boid.vel.y *= 0.9;
+                }
+                
+                // Check if boid is near the perch - land immediately
+                const distToPerchY = boid.pos.y - perchY;
+                const distToPerchX = Math.abs(boid.pos.x - targetX);
+                
+                // Land when close (8 radius tolerance)
+                if (distToPerchX < boid.radius * 8 && Math.abs(distToPerchY) < boid.radius * 8) {
+                    // Check if there's already a boid too close to this landing spot
+                    const minSpacing = boidRadius * (4 + Math.random() * 3); // Random spacing 4-7 boid radii
+                    let spotAvailable = true;
+                    
+                    for (let otherBoid of Boids) {
+                        if (otherBoid !== boid && otherBoid.perched && otherBoid.perchTarget === boid.perchTarget) {
+                            const otherX = perchLeft + otherBoid.perchPosition * boid.perchTarget.length;
+                            const distToOther = Math.abs(targetX - otherX);
+                            
+                            if (distToOther < minSpacing) {
+                                spotAvailable = false;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // If spot is available, land. Otherwise give up and rejoin flock
+                    if (spotAvailable) {
+                        // Land at the target position (already assigned in perchPosition)
+                        // Clamp perch position to valid bounds
+                        boid.perchPosition = Math.max(0.05, Math.min(0.95, boid.perchPosition));
+                        
+                        // Set random perch angle (smaller range for more upright posture)
+                        boid.perchAngle = (Math.random() - 0.5) * (Math.PI / 6) * 2; // ±π/6 radians = ±30 degrees
+                        
+                        boid.perched = true;
+                        boid.approachingPerch = false;
+                        boidsPerched++; // Increment only when actually landing
+                        // Don't teleport - boid is already very close, just stop velocity
+                        boid.vel.x = 0;
+                        boid.vel.y = 0;
+                        boid.perchStartTime = Date.now();
+                        boid.perchTimeAllowed = 5 + Math.random() * 10; // Perch for 5-15 seconds
+                    } else {
+                        // No spot available - give up and rejoin flock
+                        boid.approachingPerch = false;
+                        boid.perchTarget = null;
+                        boid.perchApproachStartTime = null;
+                    }
+                }
+            }
+                    }
+                }
+            }
+        } else if (boid.perched && showPerch) {
+            // Keep boid positioned on perch with subtle movements to appear alive
+            if (boid.perchTarget) {
+                const perchLeft = boid.perchTarget.x - 0.5 * boid.perchTarget.length;
+                const perchRight = boid.perchTarget.x + 0.5 * boid.perchTarget.length;
+                
+                // Add rotation variation (wobble)
+                const timeElapsed = (Date.now() - boid.perchStartTime) / 1000;
+                const rotationWobble = Math.sin(timeElapsed * 1.5 + boid.hue) * 0.3; // ±0.3 radians wobble
+                boid.perchAngle += rotationWobble * deltaT;
+                // Clamp perch angle to reasonable range
+                boid.perchAngle = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, boid.perchAngle));
+                
+                // Add lateral movement (shuffle)
+                const lateralShift = Math.sin(timeElapsed * 2.0 + boid.hue * 0.5) * 0.008; // Lateral shift
+                boid.perchPosition += lateralShift * deltaT;
+                // Keep within perch bounds with small margin
+                boid.perchPosition = Math.max(0.05, Math.min(0.95, boid.perchPosition));
+                
+                // Update position
+                boid.pos.x = perchLeft + boid.perchPosition * boid.perchTarget.length;
+                boid.pos.y = boid.perchTarget.y;
+            }
+            
+            // Check if it's time to take flight
+            if (Date.now() - boid.perchStartTime >= boid.perchTimeAllowed * 1000) {
+                boid.perched = false;
+                boid.perchTarget = null;
+                
+                // Give boid initial velocity to take flight (small upward and random horizontal)
+                boid.vel.x = (Math.random() - 0.5) * 0.3;
+                boid.vel.y = 0.2 + Math.random() * 0.2; // Upward velocity
+                
+                boidsPerched--;
+            }
+        }
+            
         // Draw spray particles emanating from dyed boid
         if (boid.dyedBoid) {
             // Spawn particles more frequently for better visibility
@@ -10816,6 +11636,8 @@ function drawEverything() {
         }
     }
 
+    
+
     // Draw boids --------
     for (var b = 0; b < Boids.length; b++) {
         boid = Boids[b];
@@ -10836,6 +11658,18 @@ function drawEverything() {
             c.stroke();
         }
 
+        // Animate visual scale for perched boids
+        if (!boid.visualScale || !isFinite(boid.visualScale)) {
+            boid.visualScale = 1.0; // Reset to default if invalid
+        }
+        const targetScale = boid.perched ? 1.5 : 1.0;
+        const scaleSpeed = 3.0 * deltaT; // Scale change per second
+        if (boid.visualScale < targetScale) {
+            boid.visualScale = Math.min(targetScale, boid.visualScale + scaleSpeed);
+        } else if (boid.visualScale > targetScale) {
+            boid.visualScale = Math.max(targetScale, boid.visualScale - scaleSpeed);
+        }
+
         boid.draw();
 
         // Draw visual range circle for white and black boids when menu is active
@@ -10847,6 +11681,13 @@ function drawEverything() {
             c.setLineDash([5, 5]);
             c.stroke();
             c.setLineDash([]);
+        }
+    }
+
+    // Draw perches --------
+    if (showPerch) {
+        for (let perch of Perches) {
+            perch.draw();
         }
     }
     
@@ -10928,7 +11769,8 @@ function drawEverything() {
         {draw: drawColorMenu, z: colorMenuZOrder},
         {draw: drawSimMenu, z: menuZOrder},
         {draw: drawDrawMenu, z: drawMenuZOrder},
-        {draw: drawStylingMenu, z: stylingMenuZOrder}
+        {draw: drawStylingMenu, z: stylingMenuZOrder},
+        {draw: drawPropsMenu, z: propsMenuZOrder}
     ];
     menus.sort((a, b) => a.z - b.z);
     for (let menu of menus) {
@@ -11585,9 +12427,10 @@ function setupScene() {
     preRenderHotAirBalloon();
     // make hot air balloon ----------
     makeHotAirBalloon()
-    
     // Make magnet ----------
     makeMagnet(); 
+    // Make Perch ----------
+    makePerches();
     // make spatial grid ----------
     makeSpatialGrid();
     SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
