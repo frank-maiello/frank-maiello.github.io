@@ -1,0 +1,566 @@
+<!--
+Copyright 2026 :: Frank Maiello 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="en">
+	<head>
+		<title>3D Spheres</title>
+		
+	</head>
+	
+	<body>
+	<body style = "background-color: hsl(0, 0%, 10%); margin: 0px; padding: 0px; overflow: hidden;">
+	<div id="container"></div>
+	
+	<script src="https://unpkg.com/three@0.139.2/build/three.min.js"></script>
+	<script src="https://unpkg.com/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
+	<script>
+			
+		var gThreeScene;
+		var gRenderer;
+		var gCamera;
+		var gCameraControl;
+		var gGrabber;
+		var gMouseDown = false;
+		var gCameraAngle = 0;
+		var gCameraRotationSpeed = 0.2; // Degrees per frame
+		var gAutoRotate = true; // Enable/disable auto-rotation
+		var gOverlayCanvas;
+		var gOverlayCtx;
+		var gButtons = {
+			run: { x: 25, y: 25, radius: 8, color: '#ff4444', hovered: false },
+			restart: { x: 50, y: 25, radius: 8, color: '#ffcc00', hovered: false }
+		};
+
+		var gPhysicsScene = {
+			gravity : new THREE.Vector3(0.0, -10.0, 0.0),
+			dt : 1.0 / 300.0,
+			worldSize : {x: 10, y: 20, z: 10},
+			paused: true,
+			objects: [],				
+		};
+
+		var restitution = {
+			//ball: 0.1,
+			//boundary: 0.5,
+			//floor: 0.35,
+			ball: 0,
+			boundary: 0.9,
+			floor: 0.9,
+		};
+
+		// ------------------------------------------------------------------
+		class Ball {
+			constructor(pos, radius, vel, hue) {
+				this.pos = pos;
+				this.radius = radius;
+				this.vel = vel;
+				this.hue = hue;
+				this.grabbed = false;
+				
+				// visual mesh
+				var geometry = new THREE.SphereGeometry(radius, 32, 32);
+				//var geometry = new THREE.ConeGeometry( radius, 2 * radius, 32 );
+				var material = new THREE.MeshPhongMaterial({color: new THREE.Color("hsl(" + hue + ", 100%, 50%)")});
+				this.visMesh = new THREE.Mesh(geometry, material);
+				this.visMesh.position.copy(pos);
+				this.visMesh.userData = this; // for raycasting
+				this.visMesh.layers.enable(1);			this.visMesh.castShadow = true;
+			this.visMesh.receiveShadow = true;				gThreeScene.add(this.visMesh);
+			}
+			simulate() {
+				if (this.grabbed)
+					return;
+
+				// Only apply gravity if not resting on ground
+				const onGround = this.pos.y <= this.radius + 0.01;
+				const restingThreshold = 0.1;
+				
+				if (!onGround || Math.abs(this.vel.y) > restingThreshold) {
+					this.vel.addScaledVector(gPhysicsScene.gravity, gPhysicsScene.dt);
+				} else {
+					// Ball is resting on ground - zero out vertical velocity
+					this.vel.y = 0;
+					// Apply friction damping to horizontal velocity
+					const frictionDamping = 0.95; // Damping factor per frame
+					this.vel.x *= frictionDamping;
+					this.vel.z *= frictionDamping;
+				}
+				
+				// Zero out very small velocities to prevent jitter
+				const minVel = 0.01;
+				if (Math.abs(this.vel.x) < minVel) this.vel.x = 0;
+				if (Math.abs(this.vel.y) < minVel) this.vel.y = 0;
+				if (Math.abs(this.vel.z) < minVel) this.vel.z = 0;
+				
+				this.pos.addScaledVector(this.vel, gPhysicsScene.dt);
+				var size = gPhysicsScene.worldSize;
+
+				if (this.pos.x < -size.x + this.radius) {
+					this.pos.x = -size.x + this.radius;
+					this.vel.x = -this.vel.x * restitution.boundary;
+				}
+				if (this.pos.x > size.x - this.radius) {
+					this.pos.x = size.x - this.radius; 
+					this.vel.x = -this.vel.x * restitution.boundary;
+				}
+				if (this.pos.z < -size.z + this.radius) {
+					this.pos.z = -size.z + this.radius; 
+					this.vel.z = -this.vel.z * restitution.boundary;
+				}
+				if (this.pos.z > size.z - this.radius) {
+					this.pos.z = size.z - this.radius; 
+					this.vel.z = -this.vel.z * restitution.boundary;
+				}
+				if (this.pos.y < this.radius) {
+					this.pos.y = this.radius; 
+					this.vel.y = -this.vel.y * restitution.floor;
+					// If velocity is very small after bounce, just stop it
+					if (Math.abs(this.vel.y) < 0.05) {
+						this.vel.y = 0;
+					}
+				}
+				if (this.pos.y > size.y) {
+					this.pos.y = size.y; 
+					this.vel.y = -this.vel.y * restitution.floor;
+				}
+				this.visMesh.position.copy(this.pos);
+				this.visMesh.geometry.computeBoundingSphere();
+			}
+			startGrab(pos) {
+				this.grabbed = true;
+				this.pos.copy(pos);
+				this.visMesh.position.copy(pos);
+			}
+			moveGrabbed(pos, vel) {
+				this.pos.copy(pos);
+				this.visMesh.position.copy(pos);
+			}
+			endGrab(pos, vel) {
+				this.grabbed = false;
+				this.vel.copy(vel);
+			}
+		}
+
+		// ------------------------------------------------------------------
+		function makeBalls() {
+			const radius = 0.16;
+			const nBalls = 1000;
+			let pos, vel, hue
+			const spawnRadius = 3.5; // Radius of spherical spawn volume
+			const minMargin = 0.2; // Minimum margin as multiple of radius
+			const minDistance = 2 * radius * (1 + minMargin); // Minimum center-to-center distance
+			const maxAttempts = 100; // Max attempts per ball to find valid position
+			
+			for (var i = 0; i < nBalls; i++) {
+				let validPosition = false;
+				let attempts = 0;
+				while (!validPosition && attempts < maxAttempts) {
+					// Generate random position within a sphere
+					let theta = Math.random() * Math.PI * 2; // Azimuthal angle
+					let phi = Math.acos(2 * Math.random() - 1); // Polar angle
+					let r = Math.cbrt(Math.random()) * spawnRadius; // Cube root for uniform distribution
+					pos = new THREE.Vector3(
+						r * Math.sin(phi) * Math.cos(theta),
+						4 * spawnRadius + r * Math.cos(phi), // Offset upward
+						r * Math.sin(phi) * Math.sin(theta)
+					);
+					// Check if position overlaps with existing balls
+					validPosition = true;
+					for (let j = 0; j < gPhysicsScene.objects.length; j++) {
+						const existingBall = gPhysicsScene.objects[j];
+						const distSquared = pos.distanceToSquared(existingBall.pos);
+						if (distSquared < minDistance * minDistance) {
+							validPosition = false;
+							break;
+						}
+					}
+					attempts++;
+				}
+				// Only add ball if valid position found
+				if (validPosition) {
+					//vel = new THREE.Vector3(-5 +Math.random() * 10, -5 +Math.random() * 10, -5 +Math.random() * 10);
+					vel = new THREE.Vector3(-1 + Math.random() * 2, -1 + Math.random() * 2, -1 + Math.random() * 2);
+					hue = 340 + Math.random() * 40;
+					gPhysicsScene.objects.push(new Ball(pos, radius, vel, hue));
+				}
+			}
+			console.log("Successfully spawned " + gPhysicsScene.objects.length + " balls out of " + nBalls + " requested");
+		}
+
+		// ------------------------------------------------------------------
+		function handleBallCollisions() {
+			for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+				for (var j = i + 1; j < gPhysicsScene.objects.length; j++) {
+					var ball1 = gPhysicsScene.objects[i];
+					var ball2 = gPhysicsScene.objects[j];
+					
+					// Skip if either ball is grabbed
+					if (ball1.grabbed || ball2.grabbed)
+						continue;
+					
+					// Calculate distance between centers
+					var dx = ball2.pos.x - ball1.pos.x;
+					var dy = ball2.pos.y - ball1.pos.y;
+					var dz = ball2.pos.z - ball1.pos.z;
+					var distSq = dx * dx + dy * dy + dz * dz;
+					var minDist = ball1.radius + ball2.radius;
+					
+					// Check for collision
+					if (distSq < minDist * minDist && distSq > 0) {
+						var dist = Math.sqrt(distSq);
+						
+						// Collision normal (from ball1 to ball2)
+						var nx = dx / dist;
+						var ny = dy / dist;
+						var nz = dz / dist;
+						
+						// Separate balls to prevent overlap
+						var overlap = minDist - dist;
+						var separationX = nx * overlap * 0.5;
+						var separationY = ny * overlap * 0.5;
+						var separationZ = nz * overlap * 0.5;
+						
+						ball1.pos.x -= separationX;
+						ball1.pos.y -= separationY;
+						ball1.pos.z -= separationZ;
+						ball2.pos.x += separationX;
+						ball2.pos.y += separationY;
+						ball2.pos.z += separationZ;
+						
+						// Relative velocity
+						var dvx = ball2.vel.x - ball1.vel.x;
+						var dvy = ball2.vel.y - ball1.vel.y;
+						var dvz = ball2.vel.z - ball1.vel.z;
+						
+						// Relative velocity along collision normal
+						var dvn = dvx * nx + dvy * ny + dvz * nz;
+						
+						// Only resolve if balls are moving toward each other
+						if (dvn < 0) {
+							// Impulse scalar (assuming equal mass)
+							var impulse = -(1 + restitution.ball) * dvn;
+							
+							// Apply impulse
+							ball1.vel.x -= impulse * nx;
+							ball1.vel.y -= impulse * ny;
+							ball1.vel.z -= impulse * nz;
+							ball2.vel.x += impulse * nx;
+							ball2.vel.y += impulse * ny;
+							ball2.vel.z += impulse * nz;
+						}
+					}
+				}
+			}
+		}
+
+		// ------------------------------------------------------------------
+		function simulate() 
+		{
+			if (gPhysicsScene.paused)
+				return;
+			for (var i = 0; i < gPhysicsScene.objects.length; i++)
+				gPhysicsScene.objects[i].simulate();
+
+			handleBallCollisions();
+			gGrabber.increaseTime(gPhysicsScene.dt);
+		}
+
+		let res = 1024
+		// ------------------------------------------		
+		function initThreeScene() {
+			gThreeScene = new THREE.Scene();
+			
+			// Lights
+			gThreeScene.add( new THREE.AmbientLight( 0x505050 ) );	
+			//gThreeScene.fog = new THREE.Fog( 0x000000, 0, 100 );				
+
+			var spotLight = new THREE.SpotLight( 0xffffff );
+			spotLight.angle = Math.PI / 8;
+			spotLight.penumbra = 0.2;
+			spotLight.position.set( 10, 12, 10 );
+			spotLight.castShadow = true;
+			spotLight.shadow.camera.near = 0.5;
+			spotLight.shadow.camera.far = 50;
+			spotLight.shadow.mapSize.width = res;
+			spotLight.shadow.mapSize.height = res;
+			gThreeScene.add( spotLight );
+
+			var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
+			dirLight.position.set( 0, 20, 0 );
+			dirLight.castShadow = true;
+			dirLight.shadow.camera.near = 0.5;
+			dirLight.shadow.camera.far = 50;
+
+			dirLight.shadow.camera.right = 15;
+			dirLight.shadow.camera.left = -15;
+			dirLight.shadow.camera.top	= 15;
+			dirLight.shadow.camera.bottom = -15;
+
+			dirLight.shadow.mapSize.width = res;
+			dirLight.shadow.mapSize.height = res;
+			gThreeScene.add( dirLight );
+			
+			// Geometry
+			var ground = new THREE.Mesh(
+				new THREE.PlaneBufferGeometry( 20, 20, 100, 100 ),
+				new THREE.MeshPhongMaterial( { color: 0x2b2b2b, shininess: 150 } )
+			);				
+
+			ground.rotation.x = - Math.PI / 2; // rotates X/Y to X/Z
+			ground.receiveShadow = true;
+			gThreeScene.add( ground );
+			
+			var helper = new THREE.GridHelper( 20, 20 );
+			helper.material.opacity = 1.0;
+			helper.material.transparent = true;
+			helper.position.set(0, 0.002, 0);
+			gThreeScene.add( helper );				
+			
+			// Renderer
+			gRenderer = new THREE.WebGLRenderer();
+			gRenderer.shadowMap.enabled = true;
+			gRenderer.setPixelRatio( window.devicePixelRatio );
+			gRenderer.setSize( 0.8 * window.innerWidth, 0.8 * window.innerHeight );
+			window.addEventListener( 'resize', onWindowResize, false );
+			container.appendChild( gRenderer.domElement );
+			
+			// Camera	
+			gCamera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 100);
+			gCamera.position.set(-10, 4, 8);
+			gCamera.updateMatrixWorld();	
+
+			gThreeScene.add(gCamera);
+
+			gCameraControl = new THREE.OrbitControls(gCamera, gRenderer.domElement);
+			gCameraControl.zoomSpeed = 2.0;
+			gCameraControl.panSpeed = 0.4;
+
+			// Create overlay canvas for buttons programmatically
+			gOverlayCanvas = document.createElement('canvas');
+			gOverlayCanvas.style.position = 'absolute';
+			gOverlayCanvas.style.top = '0';
+			gOverlayCanvas.style.left = '0';
+			gOverlayCanvas.style.pointerEvents = 'none';
+			gOverlayCanvas.style.zIndex = '100';
+			gOverlayCanvas.width = window.innerWidth;
+			gOverlayCanvas.height = window.innerHeight;
+			gOverlayCtx = gOverlayCanvas.getContext('2d');
+			document.body.appendChild(gOverlayCanvas);
+			
+			// grabber
+			gGrabber = new Grabber();
+			container.addEventListener( 'pointerdown', onPointer, false );
+			container.addEventListener( 'pointermove', onPointer, false );
+			container.addEventListener( 'pointerup', onPointer, false );
+		}
+		
+		// ------ Button Functions -----------------------------------------------
+		function drawButtons() {
+			gOverlayCtx.clearRect(0, 0, gOverlayCanvas.width, gOverlayCanvas.height);
+			
+			// Draw run button
+			var runBtn = gButtons.run;
+			gOverlayCtx.beginPath();
+			gOverlayCtx.arc(runBtn.x, runBtn.y, runBtn.radius, 0, Math.PI * 2);
+			gOverlayCtx.fillStyle = gPhysicsScene.paused ? '#ff4444' : '#44ff44';
+			gOverlayCtx.fill();
+			
+			// Draw restart button
+			var restartBtn = gButtons.restart;
+			gOverlayCtx.beginPath();
+			gOverlayCtx.arc(restartBtn.x, restartBtn.y, restartBtn.radius, 0, Math.PI * 2);
+			gOverlayCtx.fillStyle = restartBtn.color;
+			gOverlayCtx.fill();
+		}
+		
+		function checkButtonHover(x, y) {
+			var hoverChanged = false;
+			for (var key in gButtons) {
+				var btn = gButtons[key];
+				var dx = x - btn.x;
+				var dy = y - btn.y;
+				var dist = Math.sqrt(dx * dx + dy * dy);
+				var wasHovered = btn.hovered;
+				btn.hovered = dist <= btn.radius;
+				if (wasHovered !== btn.hovered) hoverChanged = true;
+			}
+			if (hoverChanged) drawButtons();
+		}
+		
+		function checkButtonClick(x, y) {
+			var dx = x - gButtons.run.x;
+			var dy = y - gButtons.run.y;
+			if (Math.sqrt(dx * dx + dy * dy) <= gButtons.run.radius) {
+				run();
+				return true;
+			}
+			
+			dx = x - gButtons.restart.x;
+			dy = y - gButtons.restart.y;
+			if (Math.sqrt(dx * dx + dy * dy) <= gButtons.restart.radius) {
+				restart();
+				return true;
+			}
+			return false;
+		}
+
+		// ------- grabber -----------------------------------------------------------
+		class Grabber {
+			constructor() {
+				this.raycaster = new THREE.Raycaster();
+				this.raycaster.layers.set(1);
+				this.raycaster.params.Line.threshold = 0.1;
+				this.physicsObject = null;
+				this.distance = 0.0;
+				this.prevPos = new THREE.Vector3();
+				this.vel = new THREE.Vector3();
+				this.time = 0.0;
+			}
+			increaseTime(dt) {
+				this.time += dt;
+			}
+			updateRaycaster(x, y) {
+				var rect = gRenderer.domElement.getBoundingClientRect();
+				this.mousePos = new THREE.Vector2();
+				this.mousePos.x = ((x - rect.left) / rect.width ) * 2 - 1;
+				this.mousePos.y = -((y - rect.top) / rect.height ) * 2 + 1;
+				this.raycaster.setFromCamera( this.mousePos, gCamera );
+			}
+			start(x, y) {
+				this.physicsObject = null;
+				this.updateRaycaster(x, y);
+				var intersects = this.raycaster.intersectObjects( gThreeScene.children );
+				if (intersects.length > 0) {
+					var obj = intersects[0].object.userData;
+					if (obj) {
+						this.physicsObject = obj;
+						this.distance = intersects[0].distance;
+						var pos = this.raycaster.ray.origin.clone();
+						pos.addScaledVector(this.raycaster.ray.direction, this.distance);
+						this.physicsObject.startGrab(pos);
+						this.prevPos.copy(pos);
+						this.vel.set(0.0, 0.0, 0.0);
+						this.time = 0.0;
+						if (gPhysicsScene.paused)
+							run();
+					}
+				}
+			}
+			move(x, y) {
+				if (this.physicsObject) {
+					this.updateRaycaster(x, y);
+					var pos = this.raycaster.ray.origin.clone();
+					pos.addScaledVector(this.raycaster.ray.direction, this.distance);
+
+					this.vel.copy(pos);
+					this.vel.sub(this.prevPos);
+					if (this.time > 0.0)
+						this.vel.divideScalar(this.time);
+					else
+						vel.set(0.0, 0.0, 0.0);
+					this.prevPos.copy(pos);
+					this.time = 0.0;
+
+					this.physicsObject.moveGrabbed(pos, this.vel);
+				}
+			}
+			end(x, y) {
+				if (this.physicsObject) { 
+					this.physicsObject.endGrab(this.prevPos, this.vel);
+					this.physicsObject = null;
+				}
+			}
+		}			
+
+		function onPointer(evt) {
+			event.preventDefault();
+			if (evt.type == "pointerdown") {
+				// Check if clicking on a button
+				if (checkButtonClick(evt.clientX, evt.clientY)) {
+					return;
+				}
+				gGrabber.start(evt.clientX, evt.clientY);
+				gMouseDown = true;
+				if (gGrabber.physicsObject) {
+					gCameraControl.saveState();
+					gCameraControl.enabled = false;
+				}
+			}
+			else if (evt.type == "pointermove") {
+				checkButtonHover(evt.clientX, evt.clientY);
+				if (gMouseDown) {
+					gGrabber.move(evt.clientX, evt.clientY);
+				}
+			}
+			else if (evt.type == "pointerup") {
+				if (gGrabber.physicsObject) {
+					gGrabber.end();
+					gCameraControl.reset();
+				}
+				gMouseDown = false;
+				gCameraControl.enabled = true;
+			}
+		}	
+			
+		// ------------------------------------------------------
+		function onWindowResize() {
+			gCamera.aspect = window.innerWidth / window.innerHeight;
+			gCamera.updateProjectionMatrix();
+			gRenderer.setSize( window.innerWidth, window.innerHeight );
+			if (gOverlayCanvas) {
+				gOverlayCanvas.width = window.innerWidth;
+				gOverlayCanvas.height = window.innerHeight;
+				drawButtons();
+			}
+		}
+
+		function run() {
+			gPhysicsScene.paused = !gPhysicsScene.paused;
+			drawButtons();
+		}
+
+		function restart() {
+			// Remove all existing balls from scene
+			for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+				gThreeScene.remove(gPhysicsScene.objects[i].visMesh);
+			}
+			// Clear the physics objects array
+			gPhysicsScene.objects = [];
+			// Create new balls
+			makeBalls();
+		}
+		
+		//  RUN -----------------------------------
+		function update() {
+			simulate();
+			
+			// Rotate camera around the target
+			gCameraAngle += gCameraRotationSpeed;
+			const radius = 13; // Distance from center
+			const height = 4; // Camera height
+			const angleRad = gCameraAngle * Math.PI / 180;
+			
+			gCamera.position.x = Math.cos(angleRad) * radius;
+			gCamera.position.y = height;
+			gCamera.position.z = Math.sin(angleRad) * radius;
+			gCamera.lookAt(0, 5, 0); // Look at point slightly above ground
+			
+			gRenderer.render(gThreeScene, gCamera);
+			requestAnimationFrame(update);
+		}
+		
+		initThreeScene();
+		onWindowResize();
+		makeBalls();
+		drawButtons();
+		update();
+			
+		</script>
+	</body>
+</html>
