@@ -433,19 +433,97 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         // Lights
         gThreeScene.add( new THREE.AmbientLight( 0x505050 ) );	
+        
         //gThreeScene.fog = new THREE.Fog( 0x000000, 0, 100 );				
 
+        // SPOTLIGHT CONFIGURATION - Change these values to reposition entire lamp assembly
+        var lightPosition = new THREE.Vector3(13, 10, 13);
+        var lightTarget = new THREE.Vector3(4, 0, 4);
+        
         var spotLight = new THREE.SpotLight( 0xffffff );
-        spotLight.angle = Math.PI / 8;
-        spotLight.penumbra = 0.2;
-        spotLight.position.set( 10, 12, 10 );
+        spotLight.angle = Math.PI / 6;
+        spotLight.penumbra = 0.1;
+        spotLight.position.copy(lightPosition);
         spotLight.castShadow = true;
         spotLight.shadow.camera.near = 0.5;
         spotLight.shadow.camera.far = 50;
         spotLight.shadow.mapSize.width = res;
         spotLight.shadow.mapSize.height = res;
+        spotLight.target.position.copy(lightTarget);
+        gThreeScene.add(spotLight.target);
         gThreeScene.add( spotLight );
+        
+        // Calculate direction away from target (toward rear of cone) - used for pole offset
+        var towardRear = new THREE.Vector3().subVectors(lightPosition, lightTarget).normalize();
+        var rearOffset = towardRear.multiplyScalar(0.6); // Move 0.6 units toward rear
+        var poleBasePosition = new THREE.Vector3(
+            lightPosition.x + rearOffset.x,
+            0,
+            lightPosition.z + rearOffset.z
+        );
+        
+        // Add hollow cone visual at spotlight source (lamp shield)
+        var coneHeight = 1.5;
+        var coneRadius = Math.tan(spotLight.angle) * coneHeight;
+        var coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 32, 1, true);
+        var coneMaterial = new THREE.MeshPhongMaterial({
+            color: 0xffff00,
+            side: THREE.DoubleSide,
+            shininess: 30
+        });
+        var spotlightCone = new THREE.Mesh(coneGeometry, coneMaterial);
+        spotlightCone.position.copy(lightPosition);
+        // Orient cone to point away from spotlight target (backwards like a lamp shield)
+        var direction = lightPosition.clone().sub(lightTarget).normalize();
+        var up = new THREE.Vector3(0, 1, 0);
+        spotlightCone.quaternion.setFromUnitVectors(up, direction);
+        // Offset cone backward so light bulb fits inside (narrow end near bulb, wide end away)
+        spotlightCone.translateY(coneHeight * 0.15);
+        gThreeScene.add(spotlightCone);
+        
+        // Add bright white sphere to represent light source
+        var lightBulbGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+        var lightBulbMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
+        var lightBulb = new THREE.Mesh(lightBulbGeometry, lightBulbMaterial);
+        lightBulb.position.copy(lightPosition);
+        gThreeScene.add(lightBulb);
+        
+        // Add lamp pole (tall slender cylinder from light to ground)
+        var poleHeight = lightPosition.y;
+        var poleRadius = 0.08;
+        var poleGeometry = new THREE.CylinderGeometry(poleRadius, poleRadius, poleHeight, 16);
+        var poleMaterial = new THREE.MeshPhongMaterial({color: 0x333333, shininess: 50});
+        var pole = new THREE.Mesh(poleGeometry, poleMaterial);
+        pole.position.set(poleBasePosition.x, poleHeight / 2, poleBasePosition.z);
+        pole.castShadow = true;
+        pole.receiveShadow = true;
+        gThreeScene.add(pole);
+        
+        // Add yellow sleeve where pole connects to lamp shade
+        var sleeveHeight = 1.2;
+        var sleeveRadius = poleRadius * 1.8;
+        var sleeveGeometry = new THREE.CylinderGeometry(sleeveRadius, sleeveRadius, sleeveHeight, 16);
+        var sleeveMaterial = new THREE.MeshPhongMaterial({color: 0xcc9900, shininess: 30});
+        var sleeve = new THREE.Mesh(sleeveGeometry, sleeveMaterial);
+        sleeve.position.set(poleBasePosition.x, lightPosition.y - sleeveHeight / 2 + 0.4, poleBasePosition.z);
+        sleeve.castShadow = true;
+        sleeve.receiveShadow = true;
+        gThreeScene.add(sleeve);
+        
+        // Add pedestal base (circular disc on ground, off-center for balance)
+        var pedestalRadius = 1.5;
+        var pedestalHeight = 0.15;
+        var pedestalGeometry = new THREE.CylinderGeometry(pedestalRadius, pedestalRadius, pedestalHeight, 32);
+        var pedestalMaterial = new THREE.MeshPhongMaterial({color: 0x444444, shininess: 30});
+        var pedestal = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
+        // Position pedestal off-center so pole connects at edge, bringing center of gravity inward
+        var offsetDistance = pedestalRadius * 0.3;
+        pedestal.position.set(poleBasePosition.x - offsetDistance, pedestalHeight / 2, poleBasePosition.z - offsetDistance);
+        pedestal.castShadow = true;
+        pedestal.receiveShadow = true;
+        gThreeScene.add(pedestal);
 
+        // Directional Light
         var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
         dirLight.position.set( 0, 20, 0 );
         dirLight.castShadow = true;
@@ -488,7 +566,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         
         // Camera	
         gCamera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 100);
-        gCamera.position.set(-10, 4, 8);
+        gCamera.position.set(28, 10, 12);
         gCamera.updateMatrixWorld();	
 
         gThreeScene.add(gCamera);
@@ -640,14 +718,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             // Check if clicking on a button
             if (checkButtonClick(evt.clientX, evt.clientY)) {
                 return;
-            }
+            }/*
             gGrabber.start(evt.clientX, evt.clientY);
             gMouseDown = true;
             if (gGrabber.physicsObject) {
                 gCameraControl.saveState();
                 gCameraControl.enabled = false;
-            }
-        }
+            }*/
+        } /*
         else if (evt.type == "pointermove") {
             checkButtonHover(evt.clientX, evt.clientY);
             if (gMouseDown) {
@@ -661,7 +739,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
             gMouseDown = false;
             gCameraControl.enabled = true;
-        }
+        } */
     }	
         
     // ------------------------------------------------------
