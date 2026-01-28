@@ -23,7 +23,7 @@ frostyImage.src = 'frosty.png';
 let currentRotation = 0;
 let targetRotation = 0;
 let targetBladeIndex = 0;
-const totalBlades = 5;
+const totalBlades = 6;
 const bladeAngleSpacing = -20;
 let scrollAccumulator = 0;
 const scrollSensitivity = 0.08;
@@ -35,13 +35,34 @@ const smoothingFactor = 0.15;
 function updateFanRotation() {
     const blades = document.querySelectorAll('.fan-blade');
     
+    // First pass: find which blade is closest to horizontal
+    let closestToHorizontal = null;
+    let smallestDistance = Infinity;
+    
+    blades.forEach((blade, index) => {
+        const relativeRotation = currentRotation / bladeAngleSpacing;
+        const relativeIndex = index + relativeRotation;
+        const distanceFromCenter = Math.abs(relativeIndex);
+        
+        if (distanceFromCenter < smallestDistance) {
+            smallestDistance = distanceFromCenter;
+            closestToHorizontal = blade;
+        }
+    });
+    
     blades.forEach((blade, index) => {
         const relativeRotation = currentRotation / bladeAngleSpacing;
         const relativeIndex = index + relativeRotation;
         const angle = relativeIndex * bladeAngleSpacing;
         
         const distanceFromCenter = Math.abs(relativeIndex);
-        const zIndex = 100 - Math.floor(distanceFromCenter);
+        let zIndex = 100 - Math.floor(distanceFromCenter);
+        
+        // Give the blade closest to horizontal position the highest z-index
+        if (blade === closestToHorizontal) {
+            zIndex = 110; // Ensure it's always on top
+        }
+        
         blade.style.zIndex = zIndex;
         
         const scale = Math.max(0.8, 1 - distanceFromCenter * 0.05);
