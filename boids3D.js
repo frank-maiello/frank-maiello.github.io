@@ -1,0 +1,792 @@
+/*
+BOIDS 3D :: Copyright 2026 :: Frank Maiello 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+        
+var gThreeScene;
+var gRenderer;
+var gCamera;
+var gCameraControl;
+var gGrabber;
+var gMouseDown = false;
+var gCameraAngle = 0;
+var gCameraRotationSpeed = 0.0; // Degrees per frame
+var gAutoRotate = true; // Enable/disable auto-rotation
+var gOverlayCanvas;
+var gOverlayCtx;
+var gButtons = {
+    run: { x: 25, y: 25, radius: 8, color: '#ff4444', hovered: false },
+    restart: { x: 50, y: 25, radius: 8, color: '#ffcc00', hovered: false }
+};
+var deltaT = 1.0 / 60.0;
+
+var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all separation
+var SpatialGrid; // Global spatial grid instance
+
+var gPhysicsScene = {
+    gravity : new THREE.Vector3(0.0, 0.0, 0.0),
+    dt : 1.0 / 60.0,
+    worldSize : {x: 15, y: 20, z: 15},
+    paused: false,
+    objects: [],				
+};
+
+var restitution = {
+    ball: 0,
+    boundary: 1,
+    floor: 0.7,
+};
+
+var boidRadius = 0.1;
+var boidProps = {
+    minDistance: 5.0 * boidRadius, // Rule #1 - The distance to stay away from other Boids
+    avoidFactor: 0.05, // Rule #1 -Adjust velocity by this %
+    matchingFactor: 0.05, // Rule #2 - Adjust velocity by this %
+    visualRange: 7.0 * boidRadius, // How far Boids can see each other
+    centeringFactor: 0.0005, // Rule #3 - Adjust velocity by this %
+    minSpeed: 2.0, // minimum speed to maintain
+    maxSpeed: 8.0, // maximum speed limit
+    turnFactor: 0.05, // How strongly Boids turn back when near edge
+    margin: 2.0, // Distance from boundary to start turning
+};
+
+class BOID {
+    constructor(pos, rad, vel, hue) {
+        this.pos = pos.clone();
+        this.rad = rad;
+        this.vel = vel.clone();
+        this.hue = hue;
+        this.saturation = 90;
+        this.lightness = 50;
+        this.grabbed = false;
+        
+        // Create visual mesh
+        var geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
+        var material = new THREE.MeshPhongMaterial({color: new THREE.Color("hsl(" + hue + ", 100%, 50%)")});
+        this.visMesh = new THREE.Mesh(geometry, material);
+        this.visMesh.position.copy(pos);
+        this.visMesh.userData = this;
+        this.visMesh.layers.enable(1);
+        this.visMesh.castShadow = true;
+        this.visMesh.receiveShadow = true;
+        gThreeScene.add(this.visMesh);
+    }
+    
+    simulate() {
+        if (this.grabbed) return;
+        
+        // Apply boundary turning forces
+        var size = gPhysicsScene.worldSize;
+        var margin = boidProps.margin;
+        var turnFactor = boidProps.turnFactor;
+        
+        if (this.pos.x < -size.x + margin) {
+            this.vel.x += turnFactor;
+        }
+        if (this.pos.x > size.x - margin) {
+            this.vel.x -= turnFactor;
+        }
+        if (this.pos.z < -size.z + margin) {
+            this.vel.z += turnFactor;
+        }
+        if (this.pos.z > size.z - margin) {
+            this.vel.z -= turnFactor;
+        }
+        if (this.pos.y < margin) {
+            this.vel.y += turnFactor;
+        }
+        if (this.pos.y > size.y - margin) {
+            this.vel.y -= turnFactor;
+        }
+        
+        // Enforce speed limits (both min and max)
+        var speed = Math.sqrt(this.vel.x * this.vel.x + this.vel.y * this.vel.y + this.vel.z * this.vel.z);
+        
+        if (speed < boidProps.minSpeed && speed > 0) {
+            // Speed up to minimum
+            const scale = boidProps.minSpeed / speed;
+            this.vel.x *= scale;
+            this.vel.y *= scale;
+            this.vel.z *= scale;
+        } else if (speed > boidProps.maxSpeed) {
+            // Slow down to maximum
+            const scale = boidProps.maxSpeed / speed;
+            this.vel.x *= scale;
+            this.vel.y *= scale;
+            this.vel.z *= scale;
+        } else if (speed === 0) {
+            // Give stopped boids a random initial velocity
+            this.vel.x = (Math.random() - 0.5) * boidProps.minSpeed;
+            this.vel.y = (Math.random() - 0.5) * boidProps.minSpeed;
+            this.vel.z = (Math.random() - 0.5) * boidProps.minSpeed;
+        }
+        
+        // Update position
+        this.pos.x += this.vel.x * deltaT;
+        this.pos.y += this.vel.y * deltaT;
+        this.pos.z += this.vel.z * deltaT;
+        
+        // Update visual mesh position
+        this.visMesh.position.copy(this.pos);
+        
+        // Orient cone to point in direction of movement
+        speed = Math.sqrt(this.vel.x * this.vel.x + this.vel.y * this.vel.y + this.vel.z * this.vel.z);
+        if (speed > 0.01) { // Only update orientation if moving
+            const direction = new THREE.Vector3(this.vel.x, this.vel.y, this.vel.z).normalize();
+            const up = new THREE.Vector3(0, 1, 0);
+            
+            // Create target point in direction of velocity
+            const target = new THREE.Vector3(
+                this.pos.x + direction.x,
+                this.pos.y + direction.y,
+                this.pos.z + direction.z
+            );
+            
+            // Make cone look at target (cone points along Y axis by default)
+            this.visMesh.lookAt(target);
+            // Adjust for cone's default upward orientation
+            this.visMesh.rotateX(Math.PI / 2);
+        }
+    }
+    
+    startGrab(pos) {
+        this.grabbed = true;
+        this.pos.copy(pos);
+        this.visMesh.position.copy(pos);
+    }
+    
+    moveGrabbed(pos, vel) {
+        this.pos.copy(pos);
+        this.visMesh.position.copy(pos);
+    }
+    
+    endGrab(pos, vel) {
+        this.grabbed = false;
+        this.vel.copy(vel);
+    }
+}
+
+//  SPATIAL HASH GRID CLASS ---------------------------------------------------------------------
+class SpatialHashGrid {
+    constructor(cellSize) {
+        this.cellSize = cellSize;
+        this.grid = new Map();
+    }
+    // Convert position to grid key
+    getKey(x, y, z) {
+        const gridX = Math.floor(x / this.cellSize);
+        const gridY = Math.floor(y / this.cellSize);
+        const gridZ = Math.floor(z / this.cellSize);
+        return `${gridX},${gridY},${gridZ}`;
+    }
+    // Clear the grid
+    clear() {
+        this.grid.clear();
+    }
+    // Add boid to grid (initial insertion)
+    insert(boid) {
+        const key = this.getKey(boid.pos.x, boid.pos.y, boid.pos.z);
+        if (!this.grid.has(key)) {
+            this.grid.set(key, []);
+        }
+        this.grid.get(key).push(boid);
+        boid.gridKey = key; // Store current grid key on boid
+    }
+    // Update boid position in grid (incremental update)
+    updateBoid(boid) {
+        const newKey = this.getKey(boid.pos.x, boid.pos.y, boid.pos.z);
+        // Only update if boid moved to a different cell
+        if (boid.gridKey !== newKey) {
+            // Remove from old cell
+            if (boid.gridKey && this.grid.has(boid.gridKey)) {
+                const oldCell = this.grid.get(boid.gridKey);
+                const index = oldCell.indexOf(boid);
+                if (index !== -1) {
+                    // Use swap-and-pop for O(1) removal
+                    oldCell[index] = oldCell[oldCell.length - 1];
+                    oldCell.pop();
+                    // Clean up empty cells to prevent memory bloat
+                    if (oldCell.length === 0) {
+                        this.grid.delete(boid.gridKey);
+                    }
+                }
+            }
+            // Add to new cell
+            if (!this.grid.has(newKey)) {
+                this.grid.set(newKey, []);
+            }
+            this.grid.get(newKey).push(boid);
+            boid.gridKey = newKey;
+        }
+    }
+    
+    // Get nearby boids within range
+    getNearby(boid, range) {
+        const nearby = [];
+        const gridX = Math.floor(boid.pos.x / this.cellSize);
+        const gridY = Math.floor(boid.pos.y / this.cellSize);
+        const gridZ = Math.floor(boid.pos.z / this.cellSize);
+        const cellRange = Math.ceil(range / this.cellSize);
+        
+        // Check all cells within range
+        for (let x = gridX - cellRange; x <= gridX + cellRange; x++) {
+            for (let y = gridY - cellRange; y <= gridY + cellRange; y++) {
+                for (let z = gridZ - cellRange; z <= gridZ + cellRange; z++) {
+                    const key = `${x},${y},${z}`;
+                    if (this.grid.has(key)) {
+                        nearby.push(...this.grid.get(key));
+                    }
+                }
+            }
+        }
+        return nearby;
+    }
+}
+
+// ------------------------------------------------------------------
+function makeBoids() {
+    const radius = boidRadius;
+    const nBoids = 2000;
+    let pos, vel, hue
+    const spawnRadius = 3.5; // Radius of spherical spawn volume
+    const minMargin = 0.2; // Minimum margin as multiple of radius
+    const minDistance = 2 * radius * (1 + minMargin); // Minimum center-to-center distance
+    const maxAttempts = 100; // Max attempts per boid to find valid position
+    
+    for (var i = 0; i < nBoids; i++) {
+        let validPosition = false;
+        let attempts = 0;
+        while (!validPosition && attempts < maxAttempts) {
+            // Generate random position within a sphere
+            let theta = Math.random() * Math.PI * 2; // Azimuthal angle
+            let phi = Math.acos(2 * Math.random() - 1); // Polar angle
+            let r = Math.cbrt(Math.random()) * spawnRadius; // Cube root for uniform distribution
+            pos = new THREE.Vector3(
+                r * Math.sin(phi) * Math.cos(theta),
+                4 * spawnRadius + r * Math.cos(phi), // Offset upward
+                r * Math.sin(phi) * Math.sin(theta)
+            );
+            // Check if position overlaps with existing balls
+            validPosition = true;
+            for (let j = 0; j < gPhysicsScene.objects.length; j++) {
+                const existingBall = gPhysicsScene.objects[j];
+                const distSquared = pos.distanceToSquared(existingBall.pos);
+                if (distSquared < minDistance * minDistance) {
+                    validPosition = false;
+                    break;
+                }
+            }
+            attempts++;
+        }
+        // random number helper
+        function rando() {
+            const max = 10;
+            return Math.floor(-max + 2 * Math.random() * max);
+        }
+        // Only add boid if valid position found
+        if (validPosition) {
+            //vel = new THREE.Vector3(-5 +Math.random() * 10, -5 +Math.random() * 10, -5 +Math.random() * 10);
+            vel = new THREE.Vector3(rando(), rando(), rando());
+            if (i < 10) {
+                hue = 100 + Math.random() * 40;
+            } else {
+                hue = 340 + Math.random() * 40;
+            }
+            gPhysicsScene.objects.push(new BOID(pos, radius, vel, hue));
+        }
+    }
+    console.log("Successfully spawned " + gPhysicsScene.objects.length + " boids out of " + nBoids + " requested");
+}
+
+
+//  HANDLE BOID RULES -------------
+function handleBoidRules(boid) {
+    let separationX = 0;
+    let separationY = 0;
+    let separationZ = 0;
+    let avgVelX = 0;
+    let avgVelY = 0;
+    let avgVelZ = 0;
+    let centerX = 0;
+    let centerY = 0;
+    let centerZ = 0;
+    let neighborCount = 0;
+    
+    // Get nearby boids from spatial hash
+    const nearbyBoids = SpatialGrid.getNearby(boid, boidProps.visualRange);
+    const visualRangeSq = boidProps.visualRange * boidProps.visualRange;
+    const minDistSq = boidProps.minDistance * boidProps.minDistance;
+    const avoidFactor = boidProps.avoidFactor;
+    
+    // Use traditional for loop for better performance
+    for (let i = 0; i < nearbyBoids.length; i++) {
+        const otherBoid = nearbyBoids[i];
+        if (otherBoid !== boid) {
+            const dx = boid.pos.x - otherBoid.pos.x;
+            const dy = boid.pos.y - otherBoid.pos.y;
+            const dz = boid.pos.z - otherBoid.pos.z;
+            const distSq = dx * dx + dy * dy + dz * dz;
+            
+            if (distSq < visualRangeSq && distSq > 0) {
+                // Check if hues match (within threshold)
+                const hueMatch = segregationMode === 0 || Math.abs(boid.hue - otherBoid.hue) < 50;
+                
+                // RULE #1 - SEPARATION
+                if (distSq < minDistSq) {
+                    const dist = Math.sqrt(distSq);
+                    const strength = avoidFactor * (boidProps.minDistance - dist) / dist;
+                    separationX += dx * strength;
+                    separationY += dy * strength;
+                    separationZ += dz * strength;
+                }
+                
+                // RULE #2 - ALIGNMENT: accumulate velocities
+                if (hueMatch) {
+                    avgVelX += otherBoid.vel.x;
+                    avgVelY += otherBoid.vel.y;
+                    avgVelZ += otherBoid.vel.z;
+                }
+                
+                // RULE #3 - COHESION: accumulate positions
+                if (hueMatch) {
+                    centerX += otherBoid.pos.x;
+                    centerY += otherBoid.pos.y;
+                    centerZ += otherBoid.pos.z;
+                }
+
+                if (hueMatch) {
+                    neighborCount++;
+                }
+            }
+        }
+    }
+
+    // RULE #1 - SEPARATION
+    boid.vel.x += separationX;
+    boid.vel.y += separationY;
+    boid.vel.z += separationZ;
+    
+    if (neighborCount > 0) {
+        // RULE #2 - ALIGNMENT
+        const invNeighborCount = 1.0 / neighborCount;
+        avgVelX *= invNeighborCount;
+        avgVelY *= invNeighborCount;
+        avgVelZ *= invNeighborCount;
+        boid.vel.x += (avgVelX - boid.vel.x) * boidProps.matchingFactor;
+        boid.vel.y += (avgVelY - boid.vel.y) * boidProps.matchingFactor;
+        boid.vel.z += (avgVelZ - boid.vel.z) * boidProps.matchingFactor;
+        
+        // RULE #3 - COHESION
+        centerX *= invNeighborCount;
+        centerY *= invNeighborCount;
+        centerZ *= invNeighborCount;
+        boid.vel.x += (centerX - boid.pos.x) * boidProps.centeringFactor;
+        boid.vel.y += (centerY - boid.pos.y) * boidProps.centeringFactor;
+        boid.vel.z += (centerZ - boid.pos.z) * boidProps.centeringFactor;
+    }
+}
+
+
+// ------------------------------------------------------------------
+function simulate() {
+    if (gPhysicsScene.paused)
+        return;
+        
+    // Apply boid rules to all boids
+    for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+        var boid = gPhysicsScene.objects[i];
+        handleBoidRules(boid);
+    }
+    
+    // Update positions and spatial grid
+    for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+        var boid = gPhysicsScene.objects[i];
+        boid.simulate();
+        SpatialGrid.updateBoid(boid);
+    }
+    
+    gGrabber.increaseTime(deltaT);
+}
+
+let res = 1024
+// ------------------------------------------		
+function initThreeScene() {
+    gThreeScene = new THREE.Scene();
+    
+    // Lights
+    gThreeScene.add( new THREE.AmbientLight( 0x505050 ) );	
+    
+    //gThreeScene.fog = new THREE.Fog( 0x000000, 0, 100 );				
+
+    // SPOTLIGHT CONFIGURATION - Change these values to reposition entire lamp assembly
+    var lightPosition = new THREE.Vector3(13, 10, 13);
+    var lightTarget = new THREE.Vector3(4, 0, 4);
+    
+    var spotLight = new THREE.SpotLight( 0xffffff );
+    spotLight.angle = Math.PI / 6;
+    spotLight.penumbra = 0.1;
+    spotLight.position.copy(lightPosition);
+    spotLight.castShadow = true;
+    spotLight.shadow.camera.near = 0.5;
+    spotLight.shadow.camera.far = 50;
+    spotLight.shadow.mapSize.width = res;
+    spotLight.shadow.mapSize.height = res;
+    spotLight.target.position.copy(lightTarget);
+    gThreeScene.add(spotLight.target);
+    gThreeScene.add( spotLight );
+    
+    // Calculate direction away from target (toward rear of cone) - used for pole offset
+    var towardRear = new THREE.Vector3().subVectors(lightPosition, lightTarget).normalize();
+    var rearOffset = towardRear.multiplyScalar(0.6); // Move 0.6 units toward rear
+    var poleBasePosition = new THREE.Vector3(
+        lightPosition.x + rearOffset.x,
+        0,
+        lightPosition.z + rearOffset.z
+    );
+    
+    // Add hollow cone visual at spotlight source (lamp shield)
+    var coneHeight = 1.5;
+    var coneRadius = Math.tan(spotLight.angle) * coneHeight;
+    var coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 32, 1, true);
+    var coneMaterial = new THREE.MeshPhongMaterial({
+        color: 0xffff00,
+        side: THREE.DoubleSide,
+        shininess: 30
+    });
+    var spotlightCone = new THREE.Mesh(coneGeometry, coneMaterial);
+    spotlightCone.position.copy(lightPosition);
+    // Orient cone to point away from spotlight target (backwards like a lamp shield)
+    var direction = lightPosition.clone().sub(lightTarget).normalize();
+    var up = new THREE.Vector3(0, 1, 0);
+    spotlightCone.quaternion.setFromUnitVectors(up, direction);
+    // Offset cone backward so light bulb fits inside (narrow end near bulb, wide end away)
+    spotlightCone.translateY(coneHeight * 0.15);
+    gThreeScene.add(spotlightCone);
+    
+    // Add bright white sphere to represent light source
+    var lightBulbGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+    var lightBulbMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
+    var lightBulb = new THREE.Mesh(lightBulbGeometry, lightBulbMaterial);
+    lightBulb.position.copy(lightPosition);
+    gThreeScene.add(lightBulb);
+    
+    // Add lamp pole (tall slender cylinder from light to ground)
+    var poleHeight = lightPosition.y;
+    var poleRadius = 0.08;
+    var poleGeometry = new THREE.CylinderGeometry(poleRadius, poleRadius, poleHeight, 16);
+    var poleMaterial = new THREE.MeshPhongMaterial({color: 0x333333, shininess: 50});
+    var pole = new THREE.Mesh(poleGeometry, poleMaterial);
+    pole.position.set(poleBasePosition.x, poleHeight / 2, poleBasePosition.z);
+    pole.castShadow = true;
+    pole.receiveShadow = true;
+    gThreeScene.add(pole);
+    
+    // Add yellow sleeve where pole connects to lamp shade
+    var sleeveHeight = 1.2;
+    var sleeveRadius = poleRadius * 1.8;
+    var sleeveGeometry = new THREE.CylinderGeometry(sleeveRadius, sleeveRadius, sleeveHeight, 16);
+    var sleeveMaterial = new THREE.MeshPhongMaterial({color: 0xcc9900, shininess: 30});
+    var sleeve = new THREE.Mesh(sleeveGeometry, sleeveMaterial);
+    sleeve.position.set(poleBasePosition.x, lightPosition.y - sleeveHeight / 2 + 0.4, poleBasePosition.z);
+    sleeve.castShadow = true;
+    sleeve.receiveShadow = true;
+    gThreeScene.add(sleeve);
+    
+    // Add pedestal base (circular disc on ground, off-center for balance)
+    var pedestalRadius = 1.5;
+    var pedestalHeight = 0.15;
+    var pedestalGeometry = new THREE.CylinderGeometry(pedestalRadius, pedestalRadius, pedestalHeight, 32);
+    var pedestalMaterial = new THREE.MeshPhongMaterial({color: 0x444444, shininess: 30});
+    var pedestal = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
+    // Position pedestal off-center so pole connects at edge, bringing center of gravity inward
+    var offsetDistance = pedestalRadius * 0.3;
+    pedestal.position.set(poleBasePosition.x - offsetDistance, pedestalHeight / 2, poleBasePosition.z - offsetDistance);
+    pedestal.castShadow = true;
+    pedestal.receiveShadow = true;
+    gThreeScene.add(pedestal);
+
+    // Directional Light
+    var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
+    dirLight.position.set( 0, 20, 0 );
+    dirLight.castShadow = true;
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 50;
+
+    dirLight.shadow.camera.right = 15;
+    dirLight.shadow.camera.left = -15;
+    dirLight.shadow.camera.top	= 15;
+    dirLight.shadow.camera.bottom = -15;
+
+    dirLight.shadow.mapSize.width = res;
+    dirLight.shadow.mapSize.height = res;
+    gThreeScene.add( dirLight );
+    
+    // Geometry
+    var ground = new THREE.Mesh(
+        new THREE.PlaneGeometry( 30, 30, 1, 1),
+        new THREE.MeshPhongMaterial( { color: 0x2b2b2b, shininess: 150 } )
+    );				
+
+    ground.rotation.x = - Math.PI / 2; // rotates X/Y to X/Z
+    ground.receiveShadow = true;
+    ground.position.set(0, 0, 0);
+    gThreeScene.add( ground );
+    
+    var gridHelper = new THREE.GridHelper( 20, 20 );
+    gridHelper.material.opacity = 1.0;
+    gridHelper.material.transparent = true;
+    gridHelper.position.set(0, 0.01, 0);
+    //gThreeScene.add( gridHelper );	
+    
+    // Renderer
+    gRenderer = new THREE.WebGLRenderer();
+    gRenderer.shadowMap.enabled = true;
+    gRenderer.setPixelRatio( window.devicePixelRatio );
+    gRenderer.setSize( 0.8 * window.innerWidth, 0.8 * window.innerHeight );
+    window.addEventListener( 'resize', onWindowResize, false );
+    container.appendChild( gRenderer.domElement );
+    
+    // Camera	
+    gCamera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 100);
+    gCamera.position.set(28, 10, 12);
+    gCamera.updateMatrixWorld();	
+
+    gThreeScene.add(gCamera);
+
+    gCameraControl = new THREE.OrbitControls(gCamera, gRenderer.domElement);
+    gCameraControl.zoomSpeed = 2.0;
+    gCameraControl.panSpeed = 0.4;
+
+    // Create overlay canvas for buttons programmatically
+    gOverlayCanvas = document.createElement('canvas');
+    gOverlayCanvas.style.position = 'absolute';
+    gOverlayCanvas.style.top = '0';
+    gOverlayCanvas.style.left = '0';
+    gOverlayCanvas.style.pointerEvents = 'none';
+    gOverlayCanvas.style.zIndex = '100';
+    gOverlayCanvas.width = window.innerWidth;
+    gOverlayCanvas.height = window.innerHeight;
+    gOverlayCtx = gOverlayCanvas.getContext('2d');
+    document.body.appendChild(gOverlayCanvas);
+    
+    // grabber
+    gGrabber = new Grabber();
+    container.addEventListener( 'pointerdown', onPointer, false );
+    container.addEventListener( 'pointermove', onPointer, false );
+    container.addEventListener( 'pointerup', onPointer, false );
+}
+
+// ------ Button Functions -----------------------------------------------
+function drawButtons() {
+    gOverlayCtx.clearRect(0, 0, gOverlayCanvas.width, gOverlayCanvas.height);
+    
+    // Draw run button
+    var runBtn = gButtons.run;
+    gOverlayCtx.beginPath();
+    gOverlayCtx.arc(runBtn.x, runBtn.y, runBtn.radius, 0, Math.PI * 2);
+    gOverlayCtx.fillStyle = gPhysicsScene.paused ? '#ff4444' : '#44ff44';
+    gOverlayCtx.fill();
+    
+    // Draw restart button
+    var restartBtn = gButtons.restart;
+    gOverlayCtx.beginPath();
+    gOverlayCtx.arc(restartBtn.x, restartBtn.y, restartBtn.radius, 0, Math.PI * 2);
+    gOverlayCtx.fillStyle = restartBtn.color;
+    gOverlayCtx.fill();
+}
+
+function checkButtonHover(x, y) {
+    var hoverChanged = false;
+    for (var key in gButtons) {
+        var btn = gButtons[key];
+        var dx = x - btn.x;
+        var dy = y - btn.y;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        var wasHovered = btn.hovered;
+        btn.hovered = dist <= btn.radius;
+        if (wasHovered !== btn.hovered) hoverChanged = true;
+    }
+    if (hoverChanged) drawButtons();
+}
+
+function checkButtonClick(x, y) {
+    var dx = x - gButtons.run.x;
+    var dy = y - gButtons.run.y;
+    if (Math.sqrt(dx * dx + dy * dy) <= gButtons.run.radius) {
+        run();
+        return true;
+    }
+    
+    dx = x - gButtons.restart.x;
+    dy = y - gButtons.restart.y;
+    if (Math.sqrt(dx * dx + dy * dy) <= gButtons.restart.radius) {
+        restart();
+        return true;
+    }
+    return false;
+}
+
+// ------- grabber -----------------------------------------------------------
+class Grabber {
+    constructor() {
+        this.raycaster = new THREE.Raycaster();
+        this.raycaster.layers.set(1);
+        this.raycaster.params.Line.threshold = 0.1;
+        this.physicsObject = null;
+        this.distance = 0.0;
+        this.prevPos = new THREE.Vector3();
+        this.vel = new THREE.Vector3();
+        this.time = 0.0;
+    }
+    increaseTime(dt) {
+        this.time += dt;
+    }
+    updateRaycaster(x, y) {
+        var rect = gRenderer.domElement.getBoundingClientRect();
+        this.mousePos = new THREE.Vector2();
+        this.mousePos.x = ((x - rect.left) / rect.width ) * 2 - 1;
+        this.mousePos.y = -((y - rect.top) / rect.height ) * 2 + 1;
+        this.raycaster.setFromCamera( this.mousePos, gCamera );
+    }
+    start(x, y) {
+        this.physicsObject = null;
+        this.updateRaycaster(x, y);
+        var intersects = this.raycaster.intersectObjects( gThreeScene.children );
+        if (intersects.length > 0) {
+            var obj = intersects[0].object.userData;
+            if (obj) {
+                this.physicsObject = obj;
+                this.distance = intersects[0].distance;
+                var pos = this.raycaster.ray.origin.clone();
+                pos.addScaledVector(this.raycaster.ray.direction, this.distance);
+                this.physicsObject.startGrab(pos);
+                this.prevPos.copy(pos);
+                this.vel.set(0.0, 0.0, 0.0);
+                this.time = 0.0;
+                if (gPhysicsScene.paused)
+                    run();
+            }
+        }
+    }
+    move(x, y) {
+        if (this.physicsObject) {
+            this.updateRaycaster(x, y);
+            var pos = this.raycaster.ray.origin.clone();
+            pos.addScaledVector(this.raycaster.ray.direction, this.distance);
+
+            this.vel.copy(pos);
+            this.vel.sub(this.prevPos);
+            if (this.time > 0.0)
+                this.vel.divideScalar(this.time);
+            else
+                vel.set(0.0, 0.0, 0.0);
+            this.prevPos.copy(pos);
+            this.time = 0.0;
+
+            this.physicsObject.moveGrabbed(pos, this.vel);
+        }
+    }
+    end(x, y) {
+        if (this.physicsObject) { 
+            this.physicsObject.endGrab(this.prevPos, this.vel);
+            this.physicsObject = null;
+        }
+    }
+}			
+
+function onPointer(evt) {
+    event.preventDefault();
+    if (evt.type == "pointerdown") {
+        // Check if clicking on a button
+        if (checkButtonClick(evt.clientX, evt.clientY)) {
+            return;
+        }/*
+        gGrabber.start(evt.clientX, evt.clientY);
+        gMouseDown = true;
+        if (gGrabber.physicsObject) {
+            gCameraControl.saveState();
+            gCameraControl.enabled = false;
+        }*/
+    } /*
+    else if (evt.type == "pointermove") {
+        checkButtonHover(evt.clientX, evt.clientY);
+        if (gMouseDown) {
+            gGrabber.move(evt.clientX, evt.clientY);
+        }
+    }
+    else if (evt.type == "pointerup") {
+        if (gGrabber.physicsObject) {
+            gGrabber.end();
+            gCameraControl.reset();
+        }
+        gMouseDown = false;
+        gCameraControl.enabled = true;
+    } */
+}	
+    
+// ------------------------------------------------------
+function onWindowResize() {
+    gCamera.aspect = window.innerWidth / window.innerHeight;
+    gCamera.updateProjectionMatrix();
+    gRenderer.setSize( window.innerWidth, window.innerHeight );
+    if (gOverlayCanvas) {
+        gOverlayCanvas.width = window.innerWidth;
+        gOverlayCanvas.height = window.innerHeight;
+        drawButtons();
+    }
+}
+
+function run() {
+    gPhysicsScene.paused = !gPhysicsScene.paused;
+    drawButtons();
+}
+
+function restart() {
+    // Remove all existing boids from scene
+    for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+        gThreeScene.remove(gPhysicsScene.objects[i].visMesh);
+    }
+    // Clear the physics objects array
+    gPhysicsScene.objects = [];
+    // Create new boids
+    makeBoids();
+    // Rebuild spatial grid
+    SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+    for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+        SpatialGrid.insert(gPhysicsScene.objects[i]);
+    }
+}
+
+//  RUN -----------------------------------
+function update() {
+    simulate();
+    
+    /*// Rotate camera around the target
+    gCameraAngle += gCameraRotationSpeed;
+    const radius = 13; // Distance from center
+    const height = 4; // Camera height
+    const angleRad = gCameraAngle * Math.PI / 180;
+    
+    gCamera.position.x = Math.cos(angleRad) * radius;
+    gCamera.position.y = height;
+    gCamera.position.z = Math.sin(angleRad) * radius;
+    */
+    gCamera.lookAt(0, 5, 0); // Look at point slightly above ground
+    
+    gRenderer.render(gThreeScene, gCamera);
+    requestAnimationFrame(update);
+}
+
+// RUN -----------------------------------
+initThreeScene();
+onWindowResize();
+makeBoids();
+// Initialize spatial grid and populate it
+SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+    SpatialGrid.insert(gPhysicsScene.objects[i]);
+}
+drawButtons();
+update();
