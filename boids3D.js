@@ -14,6 +14,31 @@ var gMouseDown = false;
 var gCameraAngle = 0;
 var gCameraRotationSpeed = 0.0; // Degrees per frame
 var gAutoRotate = true; // Enable/disable auto-rotation
+var gCameraMode = 0; // Camera mode: 0=normal, 1=behind boid, 2=in front of boid
+var gCameraManualControl = false; // Track if user is manually controlling camera
+var gCameraSpringStrength = 0.08; // Spring interpolation strength (lower = smoother)
+var gCameraOffset = new THREE.Vector3(0, 0, 0); // Manual camera offset in first-person mode
+var gCameraRotationOffset = { theta: 0, phi: 0 }; // Manual rotation offset
+var gSavedCameraPosition = null; // Saved camera position from third-person mode
+var gSavedCameraTarget = null; // Saved camera target from third-person mode
+var gPointerLastX = 0;
+var gPointerLastY = 0;
+var gLampPivot = null; // Pivot point for lamp rotation (pin center)
+var gLampRotatableGroup = null; // Group containing lamp parts that rotate
+var gSpotLight = null; // Reference to spotlight
+var gDraggingLamp = false; // Track if dragging the lamp
+var gDraggingLampHeight = false; // Track if adjusting lamp height
+var gDraggingLampRotation = false; // Track if rotating lamp assembly
+var gDraggingLampBase = false; // Track if dragging the base to move assembly
+var gLampAngle = 0; // Current lamp angle in radians
+var gLampAssemblyRotation = 0; // Current lamp assembly rotation around Y axis
+var gLampBaseCenter = null; // Center point of lamp base for rotation
+var gLampBasePlate = null; // Reference to the base pedestal
+var gLampPole = null; // Reference to lamp pole
+var gLampSleeve = null; // Reference to lamp sleeve
+var gLampDiscs = []; // References to discs
+var gLampPin = null; // Reference to pin
+var gInitialLampHeight = 0; // Initial lamp height
 var gOverlayCanvas;
 var gOverlayCtx;
 var gButtons = {
@@ -21,6 +46,32 @@ var gButtons = {
     restart: { x: 50, y: 25, radius: 8, color: '#ffcc00', hovered: false }
 };
 var deltaT = 1.0 / 60.0;
+
+// Boid rendering options
+var renderHemispheres = false; // Set to false to disable rear hemispheres
+
+// Menu system variables
+var mainMenuVisible = false;
+var mainMenuOpacity = 0;
+var mainMenuXOffset = -1.0;
+var mainMenuAnimSpeed = 5.0;
+var mainMenuFadeSpeed = 3.0;
+var menuVisible = false; // Simulation submenu visibility
+var menuOpacity = 0;
+var menuFadeSpeed = 3.0;
+var menuScale = 300; // Master menu size control (increased 50%)
+var menuX = 0.3; // Menu position in world coordinates
+var menuY = 0.3;
+var draggedKnob = null; // Currently dragged knob index
+var dragStartMouseX = 0;
+var dragStartMouseY = 0;
+var dragStartValue = 0;
+var isDraggingMenu = false;
+var menuDragStartX = 0;
+var menuDragStartY = 0;
+var menuStartX = 0;
+var menuStartY = 0;
+var mouseAttached = false;
 
 var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all separation
 var SpatialGrid; // Global spatial grid instance
@@ -62,7 +113,7 @@ class BOID {
         this.lightness = 50;
         this.grabbed = false;
         
-        // Create visual mesh
+        // Create front cone mesh
         var geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
         var material = new THREE.MeshPhongMaterial({color: new THREE.Color("hsl(" + hue + ", 100%, 50%)")});
         this.visMesh = new THREE.Mesh(geometry, material);
@@ -72,6 +123,21 @@ class BOID {
         this.visMesh.castShadow = true;
         this.visMesh.receiveShadow = true;
         gThreeScene.add(this.visMesh);
+
+        // Create hemisphere at rear - using top half of sphere
+        if (renderHemispheres) {
+            var geometry2 = new THREE.SphereGeometry(rad, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+            var material2 = new THREE.MeshPhongMaterial({color: new THREE.Color("hsl(" + hue + ", 100%, 50%)")});
+            this.visMesh2 = new THREE.Mesh(geometry2, material2);
+            this.visMesh2.position.copy(pos);
+            this.visMesh2.userData = this;
+            this.visMesh2.layers.enable(1);
+            this.visMesh2.castShadow = true;
+            this.visMesh2.receiveShadow = true;
+            gThreeScene.add(this.visMesh2);
+        } else {
+            this.visMesh2 = null;
+        }
     }
     
     simulate() {
@@ -144,10 +210,26 @@ class BOID {
                 this.pos.z + direction.z
             );
             
-            // Make cone look at target (cone points along Y axis by default)
+            // Make front cone look at target (cone points along Y axis by default)
             this.visMesh.lookAt(target);
             // Adjust for cone's default upward orientation
             this.visMesh.rotateX(Math.PI / 2);
+            
+            // Position hemisphere at the flat base of the cone (back end)
+            if (this.visMesh2) {
+                // Cone base is at pos - direction * 1.5 * rad
+                const hemisphereOffset = direction.clone().multiplyScalar(-1.5 * this.rad);
+                this.visMesh2.position.copy(this.pos).add(hemisphereOffset);
+                
+                // Orient hemisphere to look backward (opposite of cone direction)
+                const backwardTarget = new THREE.Vector3(
+                    this.visMesh2.position.x - direction.x,
+                    this.visMesh2.position.y - direction.y,
+                    this.visMesh2.position.z - direction.z
+                );
+                this.visMesh2.lookAt(backwardTarget);
+                this.visMesh2.rotateX(Math.PI / 2);
+            }
         }
     }
     
@@ -155,16 +237,26 @@ class BOID {
         this.grabbed = true;
         this.pos.copy(pos);
         this.visMesh.position.copy(pos);
+        if (this.visMesh2) {
+            this.visMesh2.position.copy(pos);
+        }
     }
     
     moveGrabbed(pos, vel) {
         this.pos.copy(pos);
         this.visMesh.position.copy(pos);
+        if (this.visMesh2) {
+            this.visMesh2.position.copy(pos);
+        }
     }
     
     endGrab(pos, vel) {
         this.grabbed = false;
         this.vel.copy(vel);
+        this.visMesh.position.copy(this.pos);
+        if (this.visMesh2) {
+            this.visMesh2.position.copy(this.pos);
+        }
     }
 }
 
@@ -245,7 +337,7 @@ class SpatialHashGrid {
     }
 }
 
-// ------------------------------------------------------------------
+//  MAKE BOIDS------------------------------------------------------------------
 function makeBoids() {
     const radius = boidRadius;
     const nBoids = 2000;
@@ -289,7 +381,10 @@ function makeBoids() {
         if (validPosition) {
             //vel = new THREE.Vector3(-5 +Math.random() * 10, -5 +Math.random() * 10, -5 +Math.random() * 10);
             vel = new THREE.Vector3(rando(), rando(), rando());
-            if (i < 10) {
+            if (i == 0) {
+                hue = 220;
+            }
+            else if (i < 51) {
                 hue = 100 + Math.random() * 40;
             } else {
                 hue = 340 + Math.random() * 40;
@@ -411,6 +506,271 @@ function simulate() {
 }
 
 let res = 1024
+
+// MENU DRAWING FUNCTIONS -------------------------------------------------------
+function drawMainMenu() {
+    const ctx = gOverlayCtx;
+    
+    // Use scaling similar to boids.js
+    const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+    const ellipsisWorldX = 0.05;
+    const ellipsisWorldY = 0.05;
+    const ellipsisX = ellipsisWorldX * cScale;
+    const ellipsisY = ellipsisWorldY * cScale;
+    const dotRadius = 0.006 * cScale;
+    const dotSpacing = 0.016 * cScale;
+    
+    // Always draw three dots for ellipsis (matching boids.js style)
+    const ellipsisOpacity = mainMenuVisible ? 1.0 : 0.8;
+    ctx.fillStyle = `hsla(210, 60%, 80%, ${ellipsisOpacity})`;
+    for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(ellipsisX + i * dotSpacing, ellipsisY, dotRadius, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+    
+    if (mainMenuOpacity <= 0) return;
+    
+    // Menu dimensions
+    const itemHeight = 0.12 * menuScale;
+    const itemWidth = 0.24 * menuScale;
+    const padding = 0.02 * menuScale;
+    const menuHeight = itemHeight + (padding * 2);
+    const menuWidth = itemWidth + (padding * 2);
+    
+    const menuBaseX = ellipsisX + 0.08 * menuScale;
+    const menuX = menuBaseX + mainMenuXOffset * menuScale;
+    const menuY = ellipsisY - 0.04 * menuScale;
+    
+    ctx.save();
+    ctx.globalAlpha = mainMenuOpacity;
+    
+    // Draw menu background
+    const cornerRadius = 0.02 * menuScale;
+    ctx.beginPath();
+    ctx.roundRect(menuX, menuY, menuWidth, menuHeight, cornerRadius);
+    const menuGradient = ctx.createLinearGradient(menuX, menuY, menuX, menuY + menuHeight);
+    menuGradient.addColorStop(0, 'rgba(26, 26, 26, 0.9)');
+    menuGradient.addColorStop(1, 'rgba(51, 51, 51, 0.9)');
+    ctx.fillStyle = menuGradient;
+    ctx.fill();
+    
+    // Draw Simulation menu item
+    const itemX = menuX + padding;
+    const itemY = menuY + padding;
+    const iconSize = 0.06 * menuScale;
+    
+    ctx.beginPath();
+    ctx.roundRect(itemX, itemY, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.fillStyle = menuVisible ? 'rgba(100, 150, 220, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fill();
+    
+    // Draw icon
+    const iconX = itemX + itemWidth / 2;
+    const iconY = itemY + itemHeight / 2 - padding;
+    const iconColor = menuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+    ctx.strokeStyle = iconColor;
+    ctx.fillStyle = iconColor;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    
+    // Draw gear icon
+    const gearRadius = iconSize * 0.6;
+    ctx.save();
+    ctx.translate(iconX, iconY);
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const outerR = gearRadius;
+        const innerR = gearRadius * 0.7;
+        const x1 = Math.cos(angle - 0.1) * innerR;
+        const y1 = Math.sin(angle - 0.1) * innerR;
+        const x2 = Math.cos(angle - 0.1) * outerR;
+        const y2 = Math.sin(angle - 0.1) * outerR;
+        const x3 = Math.cos(angle + 0.1) * outerR;
+        const y3 = Math.sin(angle + 0.1) * outerR;
+        const x4 = Math.cos(angle + 0.1) * innerR;
+        const y4 = Math.sin(angle + 0.1) * innerR;
+        if (i === 0) ctx.moveTo(x1, y1);
+        ctx.lineTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.lineTo(x3, y3);
+        ctx.lineTo(x4, y4);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, gearRadius * 0.3, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.restore();
+    
+    // Draw label
+    ctx.font = `${0.025 * menuScale}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = iconColor;
+    ctx.fillText('Simulation', iconX, itemY + itemHeight - padding);
+    
+    ctx.restore();
+}
+
+function drawSimMenu() {
+    if (menuOpacity <= 0) return;
+    
+    const ctx = gOverlayCtx;
+    const menuItems = [
+        gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
+        boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
+        boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin
+    ];
+    
+    const ranges = [
+        {min: 100, max: 5000},      // numBoids
+        {min: 0.05, max: 0.5},      // boidRadius
+        {min: 0.5, max: 10},        // visualRange
+        {min: 0, max: 0.2},         // avoidFactor
+        {min: 0, max: 0.2},         // matchingFactor
+        {min: 0, max: 0.005},       // centeringFactor
+        {min: 1.0, max: 15.0},      // maxSpeed
+        {min: 0, max: 0.2},         // turnFactor
+        {min: 0.5, max: 5.0}        // margin
+    ];
+    
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuTopMargin = 0.2 * knobRadius;
+    const menuWidth = knobSpacing * 2;
+    const menuHeight = knobSpacing * 2 + knobRadius * 2.0;
+    const padding = 1.7 * knobRadius;
+    
+    // Convert world coordinates to screen coordinates
+    const menuUpperLeftX = menuX * window.innerWidth;
+    const menuUpperLeftY = menuY * window.innerHeight;
+    
+    ctx.save();
+    ctx.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
+    
+    // Draw menu background
+    const cornerRadius = 8;
+    ctx.beginPath();
+    ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+    const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `rgba(51, 85, 128, ${0.95 * menuOpacity})`);
+    menuGradient.addColorStop(1, `rgba(13, 26, 38, ${0.95 * menuOpacity})`);
+    ctx.fillStyle = menuGradient;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(100, 150, 200, ${menuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw title
+    ctx.fillStyle = `rgba(200, 220, 240, ${menuOpacity})`;
+    ctx.font = `bold ${0.05 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.fillText('SIMULATION', menuWidth / 2, -padding + 0.05 * menuScale);
+    
+    // Draw close button
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+    ctx.beginPath();
+    ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(180, 40, 40, ${menuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(0, 0, 0, ${menuOpacity})`;
+    ctx.lineWidth = 2;
+    const xSize = closeIconRadius * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+    ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+    ctx.stroke();
+    
+    // Draw knobs
+    const fullMeterSweep = 1.6 * Math.PI;
+    const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+    
+    for (let knob = 0; knob < menuItems.length; knob++) {
+        const row = Math.floor(knob / 3);
+        const col = knob % 3;
+        const knobX = col * knobSpacing;
+        const knobY = row * knobSpacing + menuTopMargin;
+        
+        // Draw knob background
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, 1.05 * knobRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = `rgba(38, 51, 64, ${0.9 * menuOpacity})`;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(77, 102, 128, ${menuOpacity})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Calculate normalized value
+        let knobValue = menuItems[knob];
+        let normalizedValue = (knobValue - ranges[knob].min) / (ranges[knob].max - ranges[knob].min);
+        normalizedValue = Math.max(0, Math.min(1, normalizedValue));
+        
+        // Draw meter arc
+        const gradient = ctx.createLinearGradient(
+            knobX + Math.cos(meterStart) * knobRadius,
+            knobY + Math.sin(meterStart) * knobRadius,
+            knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+            knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+        );
+        gradient.addColorStop(0, `rgba(77, 153, 179, ${menuOpacity})`);
+        gradient.addColorStop(0.5, `rgba(77, 179, 153, ${menuOpacity})`);
+        ctx.strokeStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        
+        // Draw needle
+        const pointerAngle = meterStart + fullMeterSweep * normalizedValue;
+        const pointerLength = knobRadius * 0.6;
+        const pointerEndX = knobX + Math.cos(pointerAngle) * pointerLength;
+        const pointerEndY = knobY + Math.sin(pointerAngle) * pointerLength;
+        ctx.beginPath();
+        ctx.moveTo(knobX, knobY);
+        ctx.lineTo(pointerEndX, pointerEndY);
+        ctx.strokeStyle = `rgba(200, 220, 240, ${menuOpacity})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw label
+        const labels = [
+            'Number', 'Size', 'Visual Range',
+            'Separation', 'Alignment', 'Cohesion',
+            'Speed Limit', 'Corralling Force', 'Corral Margin'
+        ];
+        ctx.font = `${0.35 * knobRadius}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = `rgba(230, 240, 250, ${menuOpacity})`;
+        ctx.fillText(labels[knob], knobX, knobY + 1.35 * knobRadius);
+        
+        // Draw value
+        let valueText = '';
+        switch (knob) {
+            case 0: valueText = gPhysicsScene.objects.length; break;
+            case 1: valueText = boidRadius.toFixed(2); break;
+            case 2: valueText = boidProps.visualRange.toFixed(1); break;
+            case 3: valueText = boidProps.avoidFactor.toFixed(3); break;
+            case 4: valueText = boidProps.matchingFactor.toFixed(3); break;
+            case 5: valueText = boidProps.centeringFactor.toFixed(4); break;
+            case 6: valueText = boidProps.maxSpeed.toFixed(1); break;
+            case 7: valueText = boidProps.turnFactor.toFixed(3); break;
+            case 8: valueText = boidProps.margin.toFixed(1); break;
+        }
+        ctx.font = `${0.25 * knobRadius}px Arial`;
+        ctx.fillStyle = `rgba(128, 230, 200, ${menuOpacity})`;
+        ctx.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
+    }
+    
+    ctx.restore();
+}
+
 // ------------------------------------------		
 function initThreeScene() {
     gThreeScene = new THREE.Scene();
@@ -424,9 +784,12 @@ function initThreeScene() {
     var lightPosition = new THREE.Vector3(13, 10, 13);
     var lightTarget = new THREE.Vector3(4, 0, 4);
     
+    // Create lamp rotatable group
+    gLampRotatableGroup = new THREE.Group();
+    
     var spotLight = new THREE.SpotLight( 0xffffff );
     spotLight.angle = Math.PI / 6;
-    spotLight.penumbra = 0.1;
+    spotLight.penumbra = 0.2;
     spotLight.position.copy(lightPosition);
     spotLight.castShadow = true;
     spotLight.shadow.camera.near = 0.5;
@@ -436,44 +799,83 @@ function initThreeScene() {
     spotLight.target.position.copy(lightTarget);
     gThreeScene.add(spotLight.target);
     gThreeScene.add( spotLight );
+    gSpotLight = spotLight; // Store globally
     
     // Calculate direction away from target (toward rear of cone) - used for pole offset
     var towardRear = new THREE.Vector3().subVectors(lightPosition, lightTarget).normalize();
-    var rearOffset = towardRear.multiplyScalar(0.6); // Move 0.6 units toward rear
+    var rearOffset = towardRear.multiplyScalar(0.8); // Move 0.6 units toward rear
     var poleBasePosition = new THREE.Vector3(
         lightPosition.x + rearOffset.x,
         0,
         lightPosition.z + rearOffset.z
     );
     
+    // Store pivot point (pin center)
+    var poleHeight = lightPosition.y - 0.3;
+    var discRadius = 0.25;
+    gLampPivot = new THREE.Vector3(poleBasePosition.x, poleHeight + 0.9 * discRadius, poleBasePosition.z);
+    
     // Add hollow cone visual at spotlight source (lamp shield)
     var coneHeight = 1.5;
     var coneRadius = Math.tan(spotLight.angle) * coneHeight;
     var coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 32, 1, true);
-    var coneMaterial = new THREE.MeshPhongMaterial({
+    
+    // Outer cone - normal yellow
+    var outerConeMaterial = new THREE.MeshPhongMaterial({
         color: 0xffff00,
-        side: THREE.DoubleSide,
+        side: THREE.FrontSide,
         shininess: 30
     });
-    var spotlightCone = new THREE.Mesh(coneGeometry, coneMaterial);
+    var spotlightCone = new THREE.Mesh(coneGeometry, outerConeMaterial);
     spotlightCone.position.copy(lightPosition);
+    spotlightCone.userData.isLampCone = true; // Mark for detection
     // Orient cone to point away from spotlight target (backwards like a lamp shield)
     var direction = lightPosition.clone().sub(lightTarget).normalize();
     var up = new THREE.Vector3(0, 1, 0);
     spotlightCone.quaternion.setFromUnitVectors(up, direction);
     // Offset cone backward so light bulb fits inside (narrow end near bulb, wide end away)
     spotlightCone.translateY(coneHeight * 0.15);
-    gThreeScene.add(spotlightCone);
+    gLampRotatableGroup.add(spotlightCone);
+    
+    // Store initial position and orientation for absolute rotation calculations
+    spotlightCone.userData.initialPosition = spotlightCone.position.clone();
+    spotlightCone.userData.initialQuaternion = spotlightCone.quaternion.clone();
+    
+    // Inner cone - bright white
+    var innerConeMaterial = new THREE.MeshPhongMaterial({
+        color: 0xffff00,
+        side: THREE.BackSide,
+        shininess: 30,
+        emissive: 0xffffee,
+        emissiveIntensity: 0.8
+    });
+    var innerCone = new THREE.Mesh(coneGeometry, innerConeMaterial);
+    innerCone.position.copy(lightPosition);
+    innerCone.userData.isLampCone = true; // Mark for detection
+    innerCone.quaternion.setFromUnitVectors(up, direction);
+    innerCone.translateY(coneHeight * 0.15);
+    gLampRotatableGroup.add(innerCone);
+    
+    // Store initial position and orientation
+    innerCone.userData.initialPosition = innerCone.position.clone();
+    innerCone.userData.initialQuaternion = innerCone.quaternion.clone();
     
     // Add bright white sphere to represent light source
     var lightBulbGeometry = new THREE.SphereGeometry(0.2, 16, 16);
     var lightBulbMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
     var lightBulb = new THREE.Mesh(lightBulbGeometry, lightBulbMaterial);
     lightBulb.position.copy(lightPosition);
-    gThreeScene.add(lightBulb);
+    gLampRotatableGroup.add(lightBulb);
+    
+    // Store initial position
+    lightBulb.userData.initialPosition = lightBulb.position.clone();
+    lightBulb.userData.initialQuaternion = new THREE.Quaternion();
+    
+    // Add the rotatable group to scene
+    gThreeScene.add(gLampRotatableGroup);
     
     // Add lamp pole (tall slender cylinder from light to ground)
-    var poleHeight = lightPosition.y;
+    var poleHeight = lightPosition.y - 0.3;
     var poleRadius = 0.08;
     var poleGeometry = new THREE.CylinderGeometry(poleRadius, poleRadius, poleHeight, 16);
     var poleMaterial = new THREE.MeshPhongMaterial({color: 0x333333, shininess: 50});
@@ -481,19 +883,85 @@ function initThreeScene() {
     pole.position.set(poleBasePosition.x, poleHeight / 2, poleBasePosition.z);
     pole.castShadow = true;
     pole.receiveShadow = true;
+    pole.userData.isLampRotation = true; // Mark for rotation control
     gThreeScene.add(pole);
+    gLampPole = pole; // Store reference
+    gInitialLampHeight = poleHeight;
+    
+    // Add invisible larger cylinder around pole for easier clicking
+    var poleHitAreaRadius = poleRadius * 4; // 4x larger hit area
+    var poleHitGeometry = new THREE.CylinderGeometry(poleHitAreaRadius, poleHitAreaRadius, poleHeight, 8);
+    var poleHitMaterial = new THREE.MeshBasicMaterial({visible: false});
+    var poleHitArea = new THREE.Mesh(poleHitGeometry, poleHitMaterial);
+    poleHitArea.position.set(poleBasePosition.x, poleHeight / 2, poleBasePosition.z);
+    poleHitArea.userData.isLampRotation = true; // Mark for rotation control
+    gThreeScene.add(poleHitArea);
     
     // Add yellow sleeve where pole connects to lamp shade
-    var sleeveHeight = 1.2;
+    var sleeveHeight = 1.0;
     var sleeveRadius = poleRadius * 1.8;
     var sleeveGeometry = new THREE.CylinderGeometry(sleeveRadius, sleeveRadius, sleeveHeight, 16);
     var sleeveMaterial = new THREE.MeshPhongMaterial({color: 0xcc9900, shininess: 30});
     var sleeve = new THREE.Mesh(sleeveGeometry, sleeveMaterial);
-    sleeve.position.set(poleBasePosition.x, lightPosition.y - sleeveHeight / 2 + 0.4, poleBasePosition.z);
+    sleeve.position.set(poleBasePosition.x, poleHeight - 0.5 * sleeveHeight, poleBasePosition.z);
     sleeve.castShadow = true;
     sleeve.receiveShadow = true;
+    sleeve.userData.isLampHeight = true; // Mark for height adjustment
     gThreeScene.add(sleeve);
+    gLampSleeve = sleeve; // Store reference
+
+    // Add discs at top of pole for lamp angle adjustment
+    var discThickness = 0.12;
+    var discRadius = 0.25;
+    var discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discThickness, 16);
+    var discMaterial = new THREE.MeshPhongMaterial({color: 0xcc9900, shininess: 30});
+    var disc = new THREE.Mesh(discGeometry, discMaterial);
+    disc.position.set(poleBasePosition.x + 0.05, poleHeight + 0.9 * discRadius, poleBasePosition.z - 0.05);
+    //rotate disc to be vertical
+    disc.rotation.y = Math.PI * 1.25;
+    disc.rotation.z = Math.PI / 2;
+    disc.castShadow = true;
+    disc.receiveShadow = true;
+    gThreeScene.add(disc);
+    gLampDiscs.push(disc); // Store reference
+
+    // Add second disc at top of pole for lamp angle adjustment
+    var discThickness = 0.12;
+    var discRadius = 0.25;
+    var discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discThickness, 16);
+    var discMaterial = new THREE.MeshPhongMaterial({color: 0xcc9900, shininess: 30});
+    var disc = new THREE.Mesh(discGeometry, discMaterial);
+    disc.position.set(poleBasePosition.x - 0.05, poleHeight + 0.9 * discRadius, poleBasePosition.z + 0.05);
+    //rotate disc to be vertical
+    disc.rotation.y = Math.PI * 1.25;
+    disc.rotation.z = Math.PI / 2;
+    disc.castShadow = true;
+    disc.receiveShadow = true;
+    gThreeScene.add(disc);
+    gLampDiscs.push(disc); // Store reference
+
+    // Add pin through center discs
+    var pinHeight = 0.3;
+    var pinRadius = 0.05;
+    var pinGeometry = new THREE.CylinderGeometry(pinRadius, pinRadius, pinHeight, 16);
+    var pinMaterial = new THREE.MeshPhongMaterial({color: 0x888888, shininess: 80});
+    var pin = new THREE.Mesh(pinGeometry, pinMaterial);
+    pin.position.set(poleBasePosition.x, poleHeight + 0.9 * discRadius, poleBasePosition.z);
+    pin.rotation.x = Math.PI * 1.5;
+    pin.rotation.z = Math.PI * 0.75;
+    pin.castShadow = true;
+    pin.receiveShadow = true;
+    gThreeScene.add(pin);
+    gLampPin = pin; // Store reference
     
+    // Calculate pin axis for lamp rotation
+    var pinAxis = new THREE.Vector3(0, 1, 0); // Pin starts along Y
+    var pinRotationMatrix = new THREE.Matrix4();
+    pinRotationMatrix.makeRotationFromEuler(new THREE.Euler(pin.rotation.x, pin.rotation.y, pin.rotation.z, 'XYZ'));
+    pinAxis.applyMatrix4(pinRotationMatrix);
+    pinAxis.normalize();
+    window.gPinRotationAxis = pinAxis; // Store globally for lamp rotation
+   
     // Add pedestal base (circular disc on ground, off-center for balance)
     var pedestalRadius = 1.5;
     var pedestalHeight = 0.15;
@@ -501,11 +969,16 @@ function initThreeScene() {
     var pedestalMaterial = new THREE.MeshPhongMaterial({color: 0x444444, shininess: 30});
     var pedestal = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
     // Position pedestal off-center so pole connects at edge, bringing center of gravity inward
-    var offsetDistance = pedestalRadius * 0.3;
+    var offsetDistance = pedestalRadius * 0.4;
     pedestal.position.set(poleBasePosition.x - offsetDistance, pedestalHeight / 2, poleBasePosition.z - offsetDistance);
     pedestal.castShadow = true;
     pedestal.receiveShadow = true;
+    pedestal.userData.isLampBase = true; // Mark for base dragging
     gThreeScene.add(pedestal);
+    gLampBasePlate = pedestal; // Store reference
+    
+    // Store base center for lamp assembly rotation
+    gLampBaseCenter = new THREE.Vector3(poleBasePosition.x - offsetDistance, 0, poleBasePosition.z - offsetDistance);
 
     // Directional Light
     var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
@@ -523,7 +996,7 @@ function initThreeScene() {
     dirLight.shadow.mapSize.height = res;
     gThreeScene.add( dirLight );
     
-    // Geometry
+    // Floor ground
     var ground = new THREE.Mesh(
         new THREE.PlaneGeometry( 30, 30, 1, 1),
         new THREE.MeshPhongMaterial( { color: 0x2b2b2b, shininess: 150 } )
@@ -534,11 +1007,126 @@ function initThreeScene() {
     ground.position.set(0, 0, 0);
     gThreeScene.add( ground );
     
-    var gridHelper = new THREE.GridHelper( 20, 20 );
+    var gridHelper = new THREE.GridHelper( 30, 30, 0x888888, 0x888888 );
     gridHelper.material.opacity = 1.0;
     gridHelper.material.transparent = true;
     gridHelper.position.set(0, 0.01, 0);
-    //gThreeScene.add( gridHelper );	
+    gThreeScene.add( gridHelper );	
+    
+    // Add transparent boundary walls
+    var boxSize = gPhysicsScene.worldSize;
+    var wallOpacity = 0.05;
+    
+    // Front wall (positive Z) - pastel pink
+    var frontWall = new THREE.Mesh(
+        new THREE.PlaneGeometry(boxSize.x * 2, boxSize.y),
+        new THREE.MeshPhongMaterial({ 
+            color: 0xBAE1FF, 
+            //color: 0xFFB3BA, 
+            transparent: true, 
+            opacity: wallOpacity,
+            side: THREE.DoubleSide
+        })
+    );
+    frontWall.position.set(0, boxSize.y / 2, boxSize.z);
+    frontWall.receiveShadow = true;
+    gThreeScene.add(frontWall);
+    
+    // Back wall (negative Z) - pastel blue
+    var backWall = new THREE.Mesh(
+        new THREE.PlaneGeometry(boxSize.x * 2, boxSize.y),
+        new THREE.MeshPhongMaterial({ 
+            color: 0xBAE1FF, 
+            transparent: true, 
+            opacity: wallOpacity,
+            side: THREE.DoubleSide
+        })
+    );
+    backWall.position.set(0, boxSize.y / 2, -boxSize.z);
+    backWall.receiveShadow = true;
+    gThreeScene.add(backWall);
+    
+    // Left wall (negative X) - pastel yellow
+    var leftWall = new THREE.Mesh(
+        new THREE.PlaneGeometry(boxSize.z * 2, boxSize.y),
+        new THREE.MeshPhongMaterial({
+            color: 0xBAE1FF,  
+            //color: 0xFFFFBA, 
+            transparent: true, 
+            opacity: wallOpacity,
+            side: THREE.DoubleSide
+        })
+    );
+    leftWall.rotation.y = Math.PI / 2;
+    leftWall.position.set(-boxSize.x, boxSize.y / 2, 0);
+    leftWall.receiveShadow = true;
+    gThreeScene.add(leftWall);
+    
+    // Right wall (positive X) - pastel green
+    var rightWall = new THREE.Mesh(
+        new THREE.PlaneGeometry(boxSize.z * 2, boxSize.y),
+        new THREE.MeshPhongMaterial({ 
+            color: 0xBAE1FF, 
+            //color: 0xBAFFC9, 
+            transparent: true, 
+            opacity: wallOpacity,
+            side: THREE.DoubleSide
+        })
+    );
+    rightWall.rotation.y = Math.PI / 2;
+    rightWall.position.set(boxSize.x, boxSize.y / 2, 0);
+    rightWall.receiveShadow = true;
+    gThreeScene.add(rightWall);
+    
+    /*// Top wall - pastel lavender
+    var topWall = new THREE.Mesh(
+        new THREE.PlaneGeometry(boxSize.x * 2, boxSize.z * 2),
+        new THREE.MeshPhongMaterial({ 
+            color: 0xE0BBE4, 
+            transparent: true, 
+            opacity: wallOpacity,
+            side: THREE.DoubleSide
+        })
+    );
+    topWall.rotation.x = Math.PI / 2;
+    topWall.position.set(0, boxSize.y, 0);
+    gThreeScene.add(topWall);*/
+    
+    // Add white edge lines
+    var edgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1 });
+    
+    // Bottom edges - slightly above ground to avoid z-fighting with grid
+    var edgeOffset = 0.04;
+    var bottomEdges = [
+        [new THREE.Vector3(-boxSize.x, edgeOffset, -boxSize.z), new THREE.Vector3(boxSize.x, edgeOffset, -boxSize.z)],
+        [new THREE.Vector3(boxSize.x, edgeOffset, -boxSize.z), new THREE.Vector3(boxSize.x, edgeOffset, boxSize.z)],
+        [new THREE.Vector3(boxSize.x, edgeOffset, boxSize.z), new THREE.Vector3(-boxSize.x, edgeOffset, boxSize.z)],
+        [new THREE.Vector3(-boxSize.x, edgeOffset, boxSize.z), new THREE.Vector3(-boxSize.x, edgeOffset, -boxSize.z)]
+    ];
+    
+    // Top edges
+    var topEdges = [
+        [new THREE.Vector3(-boxSize.x, boxSize.y, -boxSize.z), new THREE.Vector3(boxSize.x, boxSize.y, -boxSize.z)],
+        [new THREE.Vector3(boxSize.x, boxSize.y, -boxSize.z), new THREE.Vector3(boxSize.x, boxSize.y, boxSize.z)],
+        [new THREE.Vector3(boxSize.x, boxSize.y, boxSize.z), new THREE.Vector3(-boxSize.x, boxSize.y, boxSize.z)],
+        [new THREE.Vector3(-boxSize.x, boxSize.y, boxSize.z), new THREE.Vector3(-boxSize.x, boxSize.y, -boxSize.z)]
+    ];
+    
+    // Vertical edges - start from edgeOffset instead of 0
+    var verticalEdges = [
+        [new THREE.Vector3(-boxSize.x, edgeOffset, -boxSize.z), new THREE.Vector3(-boxSize.x, boxSize.y, -boxSize.z)],
+        [new THREE.Vector3(boxSize.x, edgeOffset, -boxSize.z), new THREE.Vector3(boxSize.x, boxSize.y, -boxSize.z)],
+        [new THREE.Vector3(boxSize.x, edgeOffset, boxSize.z), new THREE.Vector3(boxSize.x, boxSize.y, boxSize.z)],
+        [new THREE.Vector3(-boxSize.x, edgeOffset, boxSize.z), new THREE.Vector3(-boxSize.x, boxSize.y, boxSize.z)]
+    ];
+    
+    // Create and add all edge lines
+    var allEdges = bottomEdges.concat(topEdges, verticalEdges);
+    for (var i = 0; i < allEdges.length; i++) {
+        var geometry = new THREE.BufferGeometry().setFromPoints(allEdges[i]);
+        var line = new THREE.Line(geometry, edgeMaterial);
+        gThreeScene.add(line);
+    }
     
     // Renderer
     gRenderer = new THREE.WebGLRenderer();
@@ -549,14 +1137,14 @@ function initThreeScene() {
     container.appendChild( gRenderer.domElement );
     
     // Camera	
-    gCamera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 100);
-    gCamera.position.set(28, 10, 12);
+    gCamera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 1000);
+    gCamera.position.set(28, 20, 12);
     gCamera.updateMatrixWorld();	
 
     gThreeScene.add(gCamera);
 
     gCameraControl = new THREE.OrbitControls(gCamera, gRenderer.domElement);
-    gCameraControl.zoomSpeed = 2.0;
+    gCameraControl.zoomSpeed = 0.5;
     gCameraControl.panSpeed = 0.4;
 
     // Create overlay canvas for buttons programmatically
@@ -571,16 +1159,72 @@ function initThreeScene() {
     gOverlayCtx = gOverlayCanvas.getContext('2d');
     document.body.appendChild(gOverlayCanvas);
     
+    // Add keyboard listener for camera mode cycling
+    window.addEventListener('keydown', function(evt) {
+        if (evt.key === 'f' || evt.key === 'F') {
+            var previousMode = gCameraMode;
+            gCameraMode = (gCameraMode + 1) % 3; // Cycle through 0, 1, 2
+            gCameraManualControl = false;
+            gCameraOffset.set(0, 0, 0);
+            gCameraRotationOffset.theta = 0;
+            gCameraRotationOffset.phi = 0;
+            
+            if (gCameraMode === 0) {
+                // Returning to normal mode - restore saved camera state
+                if (gSavedCameraPosition && gSavedCameraTarget) {
+                    gCamera.position.copy(gSavedCameraPosition);
+                    gCameraControl.target.copy(gSavedCameraTarget);
+                    gCameraControl.update();
+                }
+                gCameraControl.enabled = true; // Normal mode - enable orbit controls
+                console.log('Camera mode: NORMAL');
+            } else {
+                // Entering first-person mode - save current camera state
+                if (previousMode === 0) {
+                    gSavedCameraPosition = gCamera.position.clone();
+                    gSavedCameraTarget = gCameraControl.target.clone();
+                }
+                gCameraControl.enabled = false; // Follow modes - disable orbit controls
+                console.log('Camera mode: ' + (gCameraMode === 1 ? 'BEHIND BOID' : 'IN FRONT OF BOID'));
+            }
+        }
+        
+        if (evt.key === 'm' || evt.key === 'M') {
+            mainMenuVisible = !mainMenuVisible;
+        }
+    });
+    
     // grabber
     gGrabber = new Grabber();
     container.addEventListener( 'pointerdown', onPointer, false );
     container.addEventListener( 'pointermove', onPointer, false );
     container.addEventListener( 'pointerup', onPointer, false );
+    
+    // Prevent context menu on right-click
+    container.addEventListener('contextmenu', function(evt) {
+        evt.preventDefault();
+    }, false);
 }
 
 // ------ Button Functions -----------------------------------------------
 function drawButtons() {
-    gOverlayCtx.clearRect(0, 0, gOverlayCanvas.width, gOverlayCanvas.height);
+    // Position buttons relative to main menu at top-left
+    const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+    const ellipsisX = 0.05 * cScale;
+    const ellipsisY = 0.05 * cScale;
+    const itemWidth = 0.24 * menuScale;
+    const padding = 0.02 * menuScale;
+    const menuWidth = itemWidth + (padding * 2);
+    const menuBaseX = ellipsisX + 0.08 * menuScale;
+    const buttonSpacing = 25;
+    const buttonY = ellipsisY;
+    
+    // Update button positions
+    const buttonStartX = menuBaseX + menuWidth + 20;
+    gButtons.run.x = buttonStartX;
+    gButtons.run.y = buttonY;
+    gButtons.restart.x = buttonStartX + buttonSpacing;
+    gButtons.restart.y = buttonY;
     
     // Draw run button
     var runBtn = gButtons.run;
@@ -598,6 +1242,7 @@ function drawButtons() {
 }
 
 function checkButtonHover(x, y) {
+    // Button positions are updated in drawButtons, so this still works
     var hoverChanged = false;
     for (var key in gButtons) {
         var btn = gButtons[key];
@@ -608,7 +1253,9 @@ function checkButtonHover(x, y) {
         btn.hovered = dist <= btn.radius;
         if (wasHovered !== btn.hovered) hoverChanged = true;
     }
-    if (hoverChanged) drawButtons();
+    if (hoverChanged) {
+        // Redraw will happen in main update loop
+    }
 }
 
 function checkButtonClick(x, y) {
@@ -696,20 +1343,20 @@ class Grabber {
     }
 }			
 
-function onPointer(evt) {
+/*function onPointer(evt) {
     event.preventDefault();
     if (evt.type == "pointerdown") {
         // Check if clicking on a button
         if (checkButtonClick(evt.clientX, evt.clientY)) {
             return;
-        }/*
+        }
         gGrabber.start(evt.clientX, evt.clientY);
         gMouseDown = true;
         if (gGrabber.physicsObject) {
             gCameraControl.saveState();
             gCameraControl.enabled = false;
-        }*/
-    } /*
+        }
+    } 
     else if (evt.type == "pointermove") {
         checkButtonHover(evt.clientX, evt.clientY);
         if (gMouseDown) {
@@ -723,7 +1370,711 @@ function onPointer(evt) {
         }
         gMouseDown = false;
         gCameraControl.enabled = true;
-    } */
+    } 
+}*/
+
+function onPointer(evt) {
+    event.preventDefault();
+    
+    if (evt.type == "pointerdown") {
+        // Check if clicking on a button
+        if (checkButtonClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
+        // Check main menu clicks
+        if (mainMenuOpacity > 0.5 || !mainMenuVisible) {
+            const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+            const ellipsisX = 0.05 * cScale;
+            const ellipsisY = 0.05 * cScale;
+            const dotSpacing = 0.016 * cScale;
+            const clickRadius = 20; // Generous click area
+            const dx = evt.clientX - (ellipsisX + dotSpacing);
+            const dy = evt.clientY - ellipsisY;
+            if (dx * dx + dy * dy < clickRadius * clickRadius) {
+                mainMenuVisible = !mainMenuVisible;
+                return;
+            }
+            
+            // Check simulation menu item click
+            if (mainMenuVisible) {
+                const itemHeight = 0.12 * menuScale;
+                const itemWidth = 0.24 * menuScale;
+                const padding = 0.02 * menuScale;
+                const menuHeight = itemHeight + (padding * 2);
+                const menuBaseX = ellipsisX + 0.08 * menuScale;
+                const menuX = menuBaseX + mainMenuXOffset * menuScale;
+                const menuY = ellipsisY - 0.04 * menuScale;
+                const itemX = menuX + padding;
+                const itemY = menuY + padding;
+                
+                if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+                    evt.clientY >= itemY && evt.clientY <= itemY + itemHeight) {
+                    menuVisible = !menuVisible;
+                    return;
+                }
+            }
+        }
+        
+        // Check simulation submenu clicks
+        if (checkSimMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
+        // Check if clicking on lamp cone
+        var rect = gRenderer.domElement.getBoundingClientRect();
+        var mousePos = new THREE.Vector2();
+        mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+        mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+        
+        var raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mousePos, gCamera);
+        var intersects = raycaster.intersectObjects(gThreeScene.children, true);
+        
+        // Check if we hit a lamp component
+        var hitLampCone = false;
+        var hitLampHeight = false;
+        var hitLampRotation = false;
+        var hitLampBase = false;
+        for (var i = 0; i < intersects.length; i++) {
+            if (intersects[i].object.userData.isLampCone) {
+                hitLampCone = true;
+                break;
+            }
+            if (intersects[i].object.userData.isLampHeight) {
+                hitLampHeight = true;
+            }
+            if (intersects[i].object.userData.isLampRotation) {
+                hitLampRotation = true;
+            }
+            if (intersects[i].object.userData.isLampBase) {
+                hitLampBase = true;
+            }
+        }
+        
+        if (hitLampHeight) {
+            gDraggingLampHeight = true;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging lamp
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
+        if (hitLampBase) {
+            gDraggingLampBase = true;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging base
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
+        if (hitLampRotation && !hitLampHeight) {
+            gDraggingLampRotation = true;
+            gPointerLastX = evt.clientX;
+            // Disable orbit controls while rotating lamp
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
+        if (hitLampCone) {
+            gDraggingLamp = true;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging lamp
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
+        // Handle camera control in follow modes
+        if (gCameraMode > 0) {
+            gCameraManualControl = true;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            return;
+        }
+    } 
+    else if (evt.type == "pointermove") {
+        // Handle menu dragging
+        if (isDraggingMenu) {
+            const deltaX = evt.clientX - menuDragStartX;
+            const deltaY = evt.clientY - menuDragStartY;
+            menuX = menuStartX + deltaX / window.innerWidth;
+            menuY = menuStartY + deltaY / window.innerHeight;
+            return;
+        }
+        
+        // Handle knob dragging
+        if (draggedKnob !== null) {
+            const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+            const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+            const dragDelta = deltaX + deltaY;
+            
+            const ranges = [
+                {min: 100, max: 5000},
+                {min: 0.05, max: 0.5},
+                {min: 0.5, max: 10},
+                {min: 0, max: 0.2},
+                {min: 0, max: 0.2},
+                {min: 0, max: 0.005},
+                {min: 1.0, max: 15.0},
+                {min: 0, max: 0.2},
+                {min: 0.5, max: 5.0}
+            ];
+            
+            const dragSensitivity = 0.5;
+            const normalizedDelta = dragDelta / dragSensitivity;
+            const range = ranges[draggedKnob];
+            const rangeSize = range.max - range.min;
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            newValue = Math.max(range.min, Math.min(range.max, newValue));
+            
+            switch (draggedKnob) {
+                case 0: // Number of boids
+                    const targetCount = Math.round(newValue);
+                    const currentCount = gPhysicsScene.objects.length;
+                    
+                    if (currentCount > targetCount) {
+                        // Remove excess boids
+                        const removeCount = currentCount - targetCount;
+                        for (let i = 0; i < removeCount; i++) {
+                            const boid = gPhysicsScene.objects.pop();
+                            gThreeScene.remove(boid.visMesh);
+                            if (boid.visMesh2) {
+                                gThreeScene.remove(boid.visMesh2);
+                            }
+                            SpatialGrid.updateBoid(boid); // Remove from grid
+                        }
+                    } else if (currentCount < targetCount) {
+                        // Add new boids
+                        const addCount = targetCount - currentCount;
+                        const size = gPhysicsScene.worldSize;
+                        
+                        for (let i = 0; i < addCount; i++) {
+                            // Random position within simulation area
+                            const pos = new THREE.Vector3(
+                                (Math.random() - 0.5) * 2 * size.x,
+                                Math.random() * size.y,
+                                (Math.random() - 0.5) * 2 * size.z
+                            );
+                            
+                            // Random velocity
+                            const vel = new THREE.Vector3(
+                                (Math.random() - 0.5) * 10,
+                                (Math.random() - 0.5) * 10,
+                                (Math.random() - 0.5) * 10
+                            );
+                            
+                            // Random hue (but not 220 which is reserved for first boid)
+                            const hue = Math.random() < 0.5 ? 
+                                100 + Math.random() * 40 : 
+                                340 + Math.random() * 40;
+                            
+                            const newBoid = new BOID(pos, boidRadius, vel, hue);
+                            gPhysicsScene.objects.push(newBoid);
+                            SpatialGrid.insert(newBoid);
+                        }
+                    }
+                    break;
+                case 1: 
+                    boidRadius = newValue;
+                    boidProps.minDistance = 5.0 * boidRadius;
+                    // Update all existing boid sizes
+                    for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+                        var boid = gPhysicsScene.objects[i];
+                        boid.rad = boidRadius;
+                        boid.visMesh.scale.set(newValue / 0.1, newValue / 0.1, newValue / 0.1);
+                    }
+                    break;
+                case 2:
+                    boidProps.visualRange = newValue;
+                    // Rebuild spatial grid with new range
+                    SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+                    for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+                        SpatialGrid.insert(gPhysicsScene.objects[i]);
+                    }
+                    break;
+                case 3: boidProps.avoidFactor = newValue; break;
+                case 4: boidProps.matchingFactor = newValue; break;
+                case 5: boidProps.centeringFactor = newValue; break;
+                case 6: 
+                    boidProps.maxSpeed = newValue;
+                    // Also adjust minSpeed proportionally if needed
+                    boidProps.minSpeed = Math.min(boidProps.minSpeed, newValue * 0.25);
+                    break;
+                case 7: boidProps.turnFactor = newValue; break;
+                case 8: boidProps.margin = newValue; break;
+            }
+            return;
+        }
+        
+        // Handle lamp base dragging (translation)
+        if (gDraggingLampBase) {
+            // Raycast to find where cursor intersects ground plane
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Intersect with ground plane (y=0)
+            var groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(groundPlane, intersectionPoint);
+            
+            if (intersectionPoint && gLampBaseCenter) {
+                // Calculate translation needed to move base center to cursor position
+                const deltaX = intersectionPoint.x - gLampBaseCenter.x;
+                const deltaZ = intersectionPoint.z - gLampBaseCenter.z;
+                translateLampAssembly(deltaX, deltaZ);
+            }
+            return;
+        }
+        
+        // Handle lamp height adjustment
+        if (gDraggingLampHeight) {
+            const deltaY = evt.clientY - gPointerLastY;
+            
+            // Adjust lamp height based on vertical mouse movement (inverted)
+            updateLampHeight(-deltaY * 0.02);
+            
+            gPointerLastY = evt.clientY;
+            return;
+        }
+        
+        // Handle lamp assembly rotation
+        if (gDraggingLampRotation) {
+            const deltaX = evt.clientX - gPointerLastX;
+            
+            // Rotate lamp assembly based on horizontal mouse movement
+            rotateLampAssembly(deltaX * 0.01);
+            
+            gPointerLastX = evt.clientX;
+            return;
+        }
+        
+        // Handle lamp rotation
+        if (gDraggingLamp) {
+            const deltaY = evt.clientY - gPointerLastY;
+            
+            // Adjust lamp angle based on vertical mouse movement
+            gLampAngle += deltaY * 0.01;
+            // Clamp angle to reasonable range
+            gLampAngle = Math.max(-Math.PI / 2, Math.min(Math.PI / 10, gLampAngle));
+            
+            // Rotate lamp group around pivot
+            rotateLamp();
+            
+            gPointerLastY = evt.clientY;
+            return;
+        }
+        
+        // Handle camera rotation in follow modes
+        if (gCameraMode > 0 && gCameraManualControl) {
+            const deltaX = evt.clientX - gPointerLastX;
+            const deltaY = evt.clientY - gPointerLastY;
+            
+            gCameraRotationOffset.theta += deltaX * 0.005;
+            gCameraRotationOffset.phi -= deltaY * 0.005;
+            
+            gCameraRotationOffset.phi = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gCameraRotationOffset.phi));
+            
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            return;
+        }
+    }
+    else if (evt.type == "pointerup") {
+        if (isDraggingMenu) {
+            isDraggingMenu = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode === 0 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (draggedKnob !== null) {
+            draggedKnob = null;
+            if (gCameraMode === 0 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingLampBase) {
+            gDraggingLampBase = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode === 0 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingLampHeight) {
+            gDraggingLampHeight = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode === 0 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingLampRotation) {
+            gDraggingLampRotation = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode === 0 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingLamp) {
+            gDraggingLamp = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode === 0 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gCameraMode > 0 && gCameraManualControl) {
+            gCameraManualControl = false;
+            return;
+        }
+    }
+}
+
+// Check if click is on simulation menu
+function checkSimMenuClick(clientX, clientY) {
+    if (!menuVisible || menuOpacity <= 0.5) return false;
+    
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuTopMargin = 0.2 * knobRadius;
+    const menuWidth = knobSpacing * 2;
+    const menuHeight = knobSpacing * 2 + knobRadius * 2.0;
+    const padding = 1.7 * knobRadius;
+    
+    const menuUpperLeftX = menuX * window.innerWidth;
+    const menuUpperLeftY = menuY * window.innerHeight;
+    const menuOriginX = menuUpperLeftX + knobSpacing;
+    const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+    
+    // Check close button
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = menuOriginX - padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = menuOriginY - padding + closeIconRadius + 0.2 * knobRadius;
+    const cdx = clientX - closeIconX;
+    const cdy = clientY - closeIconY;
+    
+    if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+        menuVisible = false;
+        return true;
+    }
+    
+    // Check knobs
+    for (let knob = 0; knob < 9; knob++) {
+        const row = Math.floor(knob / 3);
+        const col = knob % 3;
+        const knobX = menuOriginX + col * knobSpacing;
+        const knobY = menuOriginY + row * knobSpacing + menuTopMargin;
+        
+        const kdx = clientX - knobX;
+        const kdy = clientY - knobY;
+        if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
+            draggedKnob = knob;
+            dragStartMouseX = clientX;
+            dragStartMouseY = clientY;
+            
+            const menuItems = [
+                gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
+                boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
+                boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin
+            ];
+            dragStartValue = menuItems[knob];
+            
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        }
+    }
+    
+    // Check if menu background clicked (for dragging)
+    if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
+        clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
+        isDraggingMenu = true;
+        menuDragStartX = clientX;
+        menuDragStartY = clientY;
+        menuStartX = menuX;
+        menuStartY = menuY;
+        
+        // Disable orbit controls while dragging menu
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    return false;
+}
+
+// Function to rotate lamp around pivot point
+function rotateLamp() {
+    if (!gLampRotatableGroup || !gLampPivot || !gSpotLight || !window.gPinRotationAxis) return;
+    
+    // Use the pin's axis for rotation
+    const rotationAxis = window.gPinRotationAxis.clone();
+    
+    // Apply absolute rotation from initial state based on current lamp angle
+    gLampRotatableGroup.children.forEach(child => {
+        if (!child.userData.initialPosition || !child.userData.initialQuaternion) return;
+        
+        // Reset to initial position and orientation
+        child.position.copy(child.userData.initialPosition);
+        child.quaternion.copy(child.userData.initialQuaternion);
+        
+        // Apply rotation around pivot using current lamp angle
+        child.position.sub(gLampPivot);
+        child.position.applyAxisAngle(rotationAxis, gLampAngle);
+        child.position.add(gLampPivot);
+        
+        // Rotate orientation
+        child.rotateOnWorldAxis(rotationAxis, gLampAngle);
+    });
+    
+    // Update spotlight position and target
+    const bulbWorldPos = new THREE.Vector3();
+    gLampRotatableGroup.children[2].getWorldPosition(bulbWorldPos); // Light bulb is 3rd child
+    gSpotLight.position.copy(bulbWorldPos);
+    
+    // Get the cone's actual direction from its world quaternion
+    const coneWorldQuaternion = new THREE.Quaternion();
+    gLampRotatableGroup.children[0].getWorldQuaternion(coneWorldQuaternion);
+    
+    // The cone points along negative Y axis in local space (tip down)
+    const coneDirection = new THREE.Vector3(0, -1, 0);
+    coneDirection.applyQuaternion(coneWorldQuaternion);
+    
+    // Set spotlight target based on cone direction
+    gSpotLight.target.position.copy(bulbWorldPos).add(coneDirection.multiplyScalar(10));
+}
+
+// Function to translate entire lamp assembly along ground plane
+function translateLampAssembly(deltaX, deltaZ) {
+    const translation = new THREE.Vector3(deltaX, 0, deltaZ);
+    
+    // Translate base plate
+    if (gLampBasePlate) {
+        gLampBasePlate.position.add(translation);
+    }
+    
+    // Translate base center
+    if (gLampBaseCenter) {
+        gLampBaseCenter.add(translation);
+    }
+    
+    // Translate pole
+    if (gLampPole) {
+        gLampPole.position.add(translation);
+    }
+    
+    // Translate sleeve
+    if (gLampSleeve) {
+        gLampSleeve.position.add(translation);
+    }
+    
+    // Translate discs
+    gLampDiscs.forEach(disc => {
+        disc.position.add(translation);
+    });
+    
+    // Translate pin
+    if (gLampPin) {
+        gLampPin.position.add(translation);
+    }
+    
+    // Translate pivot
+    if (gLampPivot) {
+        gLampPivot.add(translation);
+    }
+    
+    // Translate lamp group children
+    if (gLampRotatableGroup) {
+        gLampRotatableGroup.children.forEach(child => {
+            child.position.add(translation);
+            // Update stored initial position for rotation calculations
+            if (child.userData.initialPosition) {
+                child.userData.initialPosition.add(translation);
+            }
+        });
+    }
+    
+    // Translate spotlight and target
+    if (gSpotLight) {
+        gSpotLight.position.add(translation);
+        gSpotLight.target.position.add(translation);
+    }
+}
+
+// Function to rotate entire lamp assembly around base center
+function rotateLampAssembly(deltaAngle) {
+    if (!gLampBaseCenter || !gLampPole || !gLampSleeve) return;
+    
+    gLampAssemblyRotation += deltaAngle;
+    
+    // Rotate all lamp components around base center on Y axis
+    const axis = new THREE.Vector3(0, 1, 0);
+    const center = gLampBaseCenter;
+    
+    // Rotate pole
+    const polePos = gLampPole.position.clone().sub(center);
+    polePos.applyAxisAngle(axis, deltaAngle);
+    gLampPole.position.copy(polePos.add(center));
+    
+    // Rotate sleeve
+    const sleevePos = gLampSleeve.position.clone().sub(center);
+    sleevePos.applyAxisAngle(axis, deltaAngle);
+    gLampSleeve.position.copy(sleevePos.add(center));
+    
+    // Rotate discs
+    gLampDiscs.forEach(disc => {
+        const discPos = disc.position.clone().sub(center);
+        discPos.applyAxisAngle(axis, deltaAngle);
+        disc.position.copy(discPos.add(center));
+        disc.rotateOnWorldAxis(axis, deltaAngle);
+    });
+    
+    // Rotate pin
+    if (gLampPin) {
+        const pinPos = gLampPin.position.clone().sub(center);
+        pinPos.applyAxisAngle(axis, deltaAngle);
+        gLampPin.position.copy(pinPos.add(center));
+        gLampPin.rotateOnWorldAxis(axis, deltaAngle);
+    }
+    
+    // Rotate pivot point
+    if (gLampPivot) {
+        const pivotPos = gLampPivot.clone().sub(center);
+        pivotPos.applyAxisAngle(axis, deltaAngle);
+        gLampPivot.copy(pivotPos.add(center));
+    }
+    
+    // Rotate lamp group children around base center
+    if (gLampRotatableGroup && gLampPivot) {
+        gLampRotatableGroup.children.forEach(child => {
+            // Rotate initial positions and orientations around base center
+            if (child.userData.initialPosition) {
+                const initPos = child.userData.initialPosition.clone().sub(center);
+                initPos.applyAxisAngle(axis, deltaAngle);
+                child.userData.initialPosition.copy(initPos.add(center));
+            }
+            
+            if (child.userData.initialQuaternion) {
+                const rotQuat = new THREE.Quaternion().setFromAxisAngle(axis, deltaAngle);
+                child.userData.initialQuaternion.premultiply(rotQuat);
+            }
+        });
+        
+        // Reapply lamp angle rotation from new base orientations
+        rotateLamp();
+    }
+    
+    // Rotate spotlight
+    if (gSpotLight) {
+        const lightPos = gSpotLight.position.clone().sub(center);
+        lightPos.applyAxisAngle(axis, deltaAngle);
+        gSpotLight.position.copy(lightPos.add(center));
+        
+        // Rotate spotlight target
+        const targetPos = gSpotLight.target.position.clone().sub(center);
+        targetPos.applyAxisAngle(axis, deltaAngle);
+        gSpotLight.target.position.copy(targetPos.add(center));
+    }
+    
+    // Update pin rotation axis
+    if (window.gPinRotationAxis) {
+        window.gPinRotationAxis.applyAxisAngle(axis, deltaAngle);
+        window.gPinRotationAxis.normalize();
+    }
+    
+    // Update spotlight position based on current bulb position
+    if (gSpotLight && gLampRotatableGroup) {
+        const bulbWorldPos = new THREE.Vector3();
+        gLampRotatableGroup.children[2].getWorldPosition(bulbWorldPos);
+        gSpotLight.position.copy(bulbWorldPos);
+        
+        // Get the cone's actual direction from its world quaternion
+        const coneWorldQuaternion = new THREE.Quaternion();
+        gLampRotatableGroup.children[0].getWorldQuaternion(coneWorldQuaternion);
+        
+        // The cone points along negative Y axis in local space (tip down)
+        const coneDirection = new THREE.Vector3(0, -1, 0);
+        coneDirection.applyQuaternion(coneWorldQuaternion);
+        
+        // Set spotlight target based on cone direction
+        gSpotLight.target.position.copy(bulbWorldPos).add(coneDirection.multiplyScalar(10));
+    }
+}
+
+// Function to update lamp height
+function updateLampHeight(deltaHeight) {
+    if (!gLampPole || !gLampSleeve || !gLampRotatableGroup || !gLampPivot) return;
+    
+    // Calculate new height
+    const currentHeight = gLampPole.geometry.parameters.height;
+    const newHeight = Math.max(2, Math.min(25, currentHeight + deltaHeight));
+    const actualDelta = newHeight - currentHeight;
+    
+    if (Math.abs(actualDelta) < 0.001) return;
+    
+    // Update pole
+    const poleRadius = gLampPole.geometry.parameters.radiusTop;
+    gLampPole.geometry.dispose();
+    gLampPole.geometry = new THREE.CylinderGeometry(poleRadius, poleRadius, newHeight, 16);
+    gLampPole.position.y += actualDelta / 2;
+    
+    // Update sleeve
+    gLampSleeve.position.y += actualDelta;
+    
+    // Update discs
+    gLampDiscs.forEach(disc => {
+        disc.position.y += actualDelta;
+    });
+    
+    // Update pin
+    if (gLampPin) {
+        gLampPin.position.y += actualDelta;
+    }
+    
+    // Update pivot point
+    gLampPivot.y += actualDelta;
+    
+    // Update lamp rotatable group
+    gLampRotatableGroup.children.forEach(child => {
+        child.position.y += actualDelta;
+        // Update stored initial position for rotation calculations
+        if (child.userData.initialPosition) {
+            child.userData.initialPosition.y += actualDelta;
+        }
+    });
+    
+    // Update spotlight
+    gSpotLight.position.y += actualDelta;
+    
+    // Update spotlight target
+    gSpotLight.target.position.y += actualDelta;
 }	
     
 // ------------------------------------------------------
@@ -763,19 +2114,102 @@ function restart() {
 function update() {
     simulate();
     
-    /*// Rotate camera around the target
-    gCameraAngle += gCameraRotationSpeed;
-    const radius = 13; // Distance from center
-    const height = 4; // Camera height
-    const angleRad = gCameraAngle * Math.PI / 180;
+    // Update menu animations
+    if (mainMenuVisible) {
+        mainMenuOpacity = Math.min(1, mainMenuOpacity + mainMenuFadeSpeed * deltaT);
+        mainMenuXOffset = Math.min(0, mainMenuXOffset + mainMenuAnimSpeed * deltaT);
+    } else {
+        mainMenuOpacity = Math.max(0, mainMenuOpacity - mainMenuFadeSpeed * deltaT);
+        mainMenuXOffset = Math.max(-1.0, mainMenuXOffset - mainMenuAnimSpeed * deltaT);
+    }
     
-    gCamera.position.x = Math.cos(angleRad) * radius;
-    gCamera.position.y = height;
-    gCamera.position.z = Math.sin(angleRad) * radius;
-    */
-    gCamera.lookAt(0, 5, 0); // Look at point slightly above ground
+    if (menuVisible) {
+        menuOpacity = Math.min(1, menuOpacity + menuFadeSpeed * deltaT);
+    } else {
+        menuOpacity = Math.max(0, menuOpacity - menuFadeSpeed * deltaT);
+    }
+    
+    // Camera follow modes - follow first boid
+    if (gCameraMode > 0 && gPhysicsScene.objects.length > 0) {
+        const firstBoid = gPhysicsScene.objects[0];
+        
+        // Calculate target camera position
+        const speed = firstBoid.vel.length();
+        if (speed > 0.01) {
+            const direction = firstBoid.vel.clone().normalize();
+            
+            // Calculate target position based on camera mode
+            const targetPos = firstBoid.pos.clone();
+            let lookDirection;
+            
+            if (gCameraMode === 1) {
+                // Behind boid, looking forward
+                const backwardOffset = direction.clone().multiplyScalar(-1.5);
+                targetPos.add(backwardOffset);
+                targetPos.y += 0.3;
+                lookDirection = direction.clone();
+            } else {
+                // In front of boid, looking backward
+                const forwardOffset = direction.clone().multiplyScalar(1.5);
+                targetPos.add(forwardOffset);
+                targetPos.y += 0.3;
+                lookDirection = direction.clone().multiplyScalar(-1); // Reverse direction
+            }
+            
+            // Smoothly move camera to target position
+            gCamera.position.lerp(targetPos, gCameraSpringStrength);
+            
+            // Spring back rotation offset when not dragging
+            if (!gCameraManualControl) {
+                gCameraRotationOffset.theta *= 0.95;
+                gCameraRotationOffset.phi *= 0.95;
+            }
+            
+            // Calculate look-at point with manual rotation offset
+            const lookAtPoint = firstBoid.pos.clone();
+            const forwardDistance = 3;
+            
+            // Apply manual rotation offset to the look direction
+            const rotatedForward = lookDirection.clone();
+            
+            // Rotate around vertical axis (theta)
+            const cosTheta = Math.cos(gCameraRotationOffset.theta);
+            const sinTheta = Math.sin(gCameraRotationOffset.theta);
+            const tempX = rotatedForward.x * cosTheta - rotatedForward.z * sinTheta;
+            const tempZ = rotatedForward.x * sinTheta + rotatedForward.z * cosTheta;
+            rotatedForward.x = tempX;
+            rotatedForward.z = tempZ;
+            
+            // Apply pitch offset (phi)
+            rotatedForward.y += Math.sin(gCameraRotationOffset.phi);
+            rotatedForward.normalize();
+            
+            // Set look-at point
+            lookAtPoint.add(rotatedForward.multiplyScalar(forwardDistance));
+            gCamera.lookAt(lookAtPoint);
+        }
+    } else {
+        /*// Rotate camera around the target
+        gCameraAngle += gCameraRotationSpeed;
+        const radius = 13; // Distance from center
+        const height = 4; // Camera height
+        const angleRad = gCameraAngle * Math.PI / 180;
+        
+        gCamera.position.x = Math.cos(angleRad) * radius;
+        gCamera.position.y = height;
+        gCamera.position.z = Math.sin(angleRad) * radius;
+        */
+        gCamera.lookAt(0, 5, 0); // Look at point slightly above ground
+    }
     
     gRenderer.render(gThreeScene, gCamera);
+    
+    // Draw menus on overlay canvas
+    gOverlayCtx.clearRect(0, 0, gOverlayCanvas.width, gOverlayCanvas.height);
+    drawButtons();
+    drawMainMenu();
+    drawSimMenu();
+    
     requestAnimationFrame(update);
 }
 
