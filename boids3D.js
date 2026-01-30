@@ -99,9 +99,8 @@ var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all
 var SpatialGrid; // Global spatial grid instance
 
 // Master world size constants
-//var WORLD_WIDTH = 69.5 * 0.5;   // X dimension
-//var WORLD_HEIGHT = 20;  // Y dimension  
-//var WORLD_DEPTH = 31 * 0.5;   // Z dimension
+//var WORLD_WIDTH = 69.5 * 0.5; // X dimension Parthenon
+//var WORLD_DEPTH = 31 * 0.5;   // Z dimension Parthenon
 var WORLD_WIDTH = 24;   // X dimension
 var WORLD_HEIGHT = 20;  // Y dimension  
 var WORLD_DEPTH = 20;   // Z dimension
@@ -825,7 +824,7 @@ function initThreeScene() {
     // Lights
     gThreeScene.add( new THREE.AmbientLight( 0x505050 ) );	
     
-    //gThreeScene.fog = new THREE.Fog( 0x000000, 0, 100 );				
+    //gThreeScene.fog = new THREE.Fog( 0xaaaaaa, 10, 100 );				
 
     // ===== LAMP 1 =====
     // Function to create a lamp assembly
@@ -1346,7 +1345,7 @@ function initThreeScene() {
 
     gCameraControl = new THREE.OrbitControls(gCamera, gRenderer.domElement);
     gCameraControl.target.set(0.14, 4.59, -0.14);
-    gCameraControl.zoomSpeed = 0.1;
+    gCameraControl.zoomSpeed = 0.3;
     gCameraControl.panSpeed = 0.5;
     gCameraControl.update(); // Initialize OrbitControls state
 
