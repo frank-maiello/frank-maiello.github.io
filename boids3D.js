@@ -32,29 +32,34 @@ var gDraggingLampHeight = false; // Track if adjusting lamp height
 var gDraggingLampRotation = false; // Track if rotating lamp assembly
 var gDraggingLampBase = false; // Track if dragging the base to move assembly
 var gActiveLampId = 1; // Track which lamp is currently being interacted with (1 or 2)
-var gLampAngle = 0; // Current lamp angle in radians
-var gLampAssemblyRotation = 0; // Current lamp assembly rotation around Y axis
+var gLampAngle = -0.0435; // Current lamp angle in radians (-2.49 degrees)
+var gLampAssemblyRotation = 0.0; // Current lamp assembly rotation around Y axis
 var gLampBaseCenter = null; // Center point of lamp base for rotation
 var gLampBasePlate = null; // Reference to the base pedestal
 var gLampPole = null; // Reference to lamp pole
 var gLampSleeve = null; // Reference to lamp sleeve
 var gLampDiscs = []; // References to discs
 var gLampPin = null; // Reference to pin
+var gLampBulb = null; // Reference to light bulb
+var gLampInnerCone = null; // Reference to inner cone
 
 // Second lamp globals
 var gLampPivot2 = null;
 var gLampRotatableGroup2 = null;
 var gSpotLight2 = null;
-var gLampAngle2 = 0;
-var gLampAssemblyRotation2 = 0;
+var gLampAngle2 = -1.0469; // Current lamp 2 angle in radians (-59.98 degrees)
+var gLampAssemblyRotation2 = 2.2692; // Current lamp 2 assembly rotation (130.01 degrees)
 var gLampBaseCenter2 = null;
 var gLampBasePlate2 = null;
 var gLampPole2 = null;
 var gLampSleeve2 = null;
 var gLampDiscs2 = [];
 var gLampPin2 = null;
+var gLampBulb2 = null; // Reference to light bulb 2
+var gLampInnerCone2 = null; // Reference to inner cone 2
 var gPinRotationAxis2 = null;
 var gInitialLampHeight = 0; // Initial lamp height
+var gLastLampBaseClickTime = { 1: 0, 2: 0 }; // Track last click time for double-click detection
 var gOverlayCanvas;
 var gOverlayCtx;
 var gButtons = {
@@ -93,9 +98,12 @@ var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all
 var SpatialGrid; // Global spatial grid instance
 
 // Master world size constants
-var WORLD_WIDTH = 69.5 * 0.5;   // X dimension
+//var WORLD_WIDTH = 69.5 * 0.5;   // X dimension
+//var WORLD_HEIGHT = 20;  // Y dimension  
+//var WORLD_DEPTH = 31 * 0.5;   // Z dimension
+var WORLD_WIDTH = 30;   // X dimension
 var WORLD_HEIGHT = 20;  // Y dimension  
-var WORLD_DEPTH = 31 * 0.5;   // Z dimension
+var WORLD_DEPTH = 20;   // Z dimension
 
 var gPhysicsScene = {
     gravity : new THREE.Vector3(0.0, 0.0, 0.0),
@@ -111,7 +119,7 @@ var restitution = {
     floor: 0.7,
 };
 
-var boidRadius = 0.1;
+var boidRadius = 0.14;
 var boidProps = {
     minDistance: 5.0 * boidRadius, // Rule #1 - The distance to stay away from other Boids
     avoidFactor: 0.05, // Rule #1 -Adjust velocity by this %
@@ -361,7 +369,7 @@ class SpatialHashGrid {
 //  MAKE BOIDS------------------------------------------------------------------
 function makeBoids() {
     const radius = boidRadius;
-    const nBoids = 2000;
+    const nBoids = 1500;
     let pos, vel, hue
     const spawnRadius = 3.5; // Radius of spherical spawn volume
     const minMargin = 0.2; // Minimum margin as multiple of radius
@@ -810,8 +818,8 @@ function initThreeScene() {
     //gThreeScene.fog = new THREE.Fog( 0x000000, 0, 100 );				
 
     // SPOTLIGHT CONFIGURATION - Change these values to reposition entire lamp assembly
-    var lightPosition = new THREE.Vector3(13, 10, 13);
-    var lightTarget = new THREE.Vector3(4, 0, 4);
+    var lightPosition = new THREE.Vector3(29.53, 23.19, 22.47);
+    var lightTarget = new THREE.Vector3(23.78, 17.36, 16.72);
     
     // Create lamp rotatable group
     gLampRotatableGroup = new THREE.Group();
@@ -822,7 +830,7 @@ function initThreeScene() {
     spotLight.position.copy(lightPosition);
     spotLight.castShadow = true;
     spotLight.shadow.camera.near = 0.5;
-    spotLight.shadow.camera.far = 50;
+    spotLight.shadow.camera.far = 100;
     spotLight.shadow.mapSize.width = res;
     spotLight.shadow.mapSize.height = res;
     spotLight.target.position.copy(lightTarget);
@@ -886,6 +894,7 @@ function initThreeScene() {
     innerCone.quaternion.setFromUnitVectors(up, direction);
     innerCone.translateY(coneHeight * 0.15);
     gLampRotatableGroup.add(innerCone);
+    gLampInnerCone = innerCone; // Store reference
     
     // Store initial position and orientation
     innerCone.userData.initialPosition = innerCone.position.clone();
@@ -897,6 +906,7 @@ function initThreeScene() {
     var lightBulb = new THREE.Mesh(lightBulbGeometry, lightBulbMaterial);
     lightBulb.position.copy(lightPosition);
     gLampRotatableGroup.add(lightBulb);
+    gLampBulb = lightBulb; // Store reference
     
     // Store initial position
     lightBulb.userData.initialPosition = lightBulb.position.clone();
@@ -1016,8 +1026,8 @@ function initThreeScene() {
     gLampBaseCenter = new THREE.Vector3(poleBasePosition.x - offsetDistance, 0, poleBasePosition.z - offsetDistance);
 
     // SECOND LAMP - Different position (EXACT COPY OF FIRST LAMP)
-    var lightPosition2 = new THREE.Vector3(-15, 12, -8);
-    var lightTarget2 = new THREE.Vector3(-22, 0, -12); // Point away from center, matching pole geometry
+    var lightPosition2 = new THREE.Vector3(-17.12, 9.82, -23.15);
+    var lightTarget2 = new THREE.Vector3(-16.52, 10.32, -13.18);
     
     // Create lamp rotatable group
     gLampRotatableGroup2 = new THREE.Group();
@@ -1092,6 +1102,7 @@ function initThreeScene() {
     innerCone2.quaternion.setFromUnitVectors(up2, direction2);
     innerCone2.translateY(coneHeight2 * 0.15);
     gLampRotatableGroup2.add(innerCone2);
+    gLampInnerCone2 = innerCone2; // Store reference
     
     // Store initial position and orientation
     innerCone2.userData.initialPosition = innerCone2.position.clone();
@@ -1103,6 +1114,7 @@ function initThreeScene() {
     var lightBulb2 = new THREE.Mesh(lightBulbGeometry2, lightBulbMaterial2);
     lightBulb2.position.copy(lightPosition2);
     gLampRotatableGroup2.add(lightBulb2);
+    gLampBulb2 = lightBulb2; // Store reference
     
     // Store initial position
     lightBulb2.userData.initialPosition = lightBulb2.position.clone();
@@ -1453,12 +1465,13 @@ function initThreeScene() {
     
     // Camera	
     gCamera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 1000);
-    gCamera.position.set(28, 20, 12);
+    gCamera.position.set(29.93, 13.50, -13.55);
     gCamera.updateMatrixWorld();	
 
     gThreeScene.add(gCamera);
 
     gCameraControl = new THREE.OrbitControls(gCamera, gRenderer.domElement);
+    gCameraControl.target.set(0.00, 0.00, 0.00);
     gCameraControl.zoomSpeed = 0.5;
     gCameraControl.panSpeed = 0.4;
 
@@ -1507,6 +1520,68 @@ function initThreeScene() {
         if (evt.key === 'm' || evt.key === 'M') {
             mainMenuVisible = !mainMenuVisible;
         }
+        
+        if (evt.key === 'c' || evt.key === 'C') {
+            // Log current camera configuration
+            console.log('=== CAMERA CONFIGURATION DATA ===');
+            console.log('');
+            console.log('CAMERA:');
+            console.log('  position: gCamera.position.set(' + 
+                gCamera.position.x.toFixed(2) + ', ' + 
+                gCamera.position.y.toFixed(2) + ', ' + 
+                gCamera.position.z.toFixed(2) + ')');
+            console.log('  target: gCameraControl.target.set(' + 
+                gCameraControl.target.x.toFixed(2) + ', ' + 
+                gCameraControl.target.y.toFixed(2) + ', ' + 
+                gCameraControl.target.z.toFixed(2) + ')');
+            console.log('');
+            console.log('=================================');
+        }
+        
+        if (evt.key === 'l' || evt.key === 'L') {
+            // Log current lamp configurations
+            console.log('=== LAMP CONFIGURATION DATA ===');
+            console.log('');
+            console.log('LAMP 1:');
+            console.log('  lightPosition: new THREE.Vector3(' + 
+                gSpotLight.position.x.toFixed(2) + ', ' + 
+                gSpotLight.position.y.toFixed(2) + ', ' + 
+                gSpotLight.position.z.toFixed(2) + ')');
+            console.log('  lightTarget: new THREE.Vector3(' + 
+                gSpotLight.target.position.x.toFixed(2) + ', ' + 
+                gSpotLight.target.position.y.toFixed(2) + ', ' + 
+                gSpotLight.target.position.z.toFixed(2) + ')');
+            console.log('  lampAngle: ' + gLampAngle.toFixed(4) + ' radians (' + 
+                (gLampAngle * 180 / Math.PI).toFixed(2) + ' degrees)');
+            console.log('  assemblyRotation: ' + gLampAssemblyRotation.toFixed(4) + ' radians (' + 
+                (gLampAssemblyRotation * 180 / Math.PI).toFixed(2) + ' degrees)');
+            console.log('  basePosition: (' + 
+                gLampBasePlate.position.x.toFixed(2) + ', ' + 
+                gLampBasePlate.position.y.toFixed(2) + ', ' + 
+                gLampBasePlate.position.z.toFixed(2) + ')');
+            console.log('  poleHeight: ' + (gLampPole.position.y * 2).toFixed(2));
+            console.log('');
+            console.log('LAMP 2:');
+            console.log('  lightPosition2: new THREE.Vector3(' + 
+                gSpotLight2.position.x.toFixed(2) + ', ' + 
+                gSpotLight2.position.y.toFixed(2) + ', ' + 
+                gSpotLight2.position.z.toFixed(2) + ')');
+            console.log('  lightTarget2: new THREE.Vector3(' + 
+                gSpotLight2.target.position.x.toFixed(2) + ', ' + 
+                gSpotLight2.target.position.y.toFixed(2) + ', ' + 
+                gSpotLight2.target.position.z.toFixed(2) + ')');
+            console.log('  lampAngle2: ' + gLampAngle2.toFixed(4) + ' radians (' + 
+                (gLampAngle2 * 180 / Math.PI).toFixed(2) + ' degrees)');
+            console.log('  assemblyRotation2: ' + gLampAssemblyRotation2.toFixed(4) + ' radians (' + 
+                (gLampAssemblyRotation2 * 180 / Math.PI).toFixed(2) + ' degrees)');
+            console.log('  basePosition2: (' + 
+                gLampBasePlate2.position.x.toFixed(2) + ', ' + 
+                gLampBasePlate2.position.y.toFixed(2) + ', ' + 
+                gLampBasePlate2.position.z.toFixed(2) + ')');
+            console.log('  poleHeight2: ' + (gLampPole2.position.y * 2).toFixed(2));
+            console.log('');
+            console.log('===============================');
+        }
     });
     
     // grabber
@@ -1534,26 +1609,34 @@ function drawButtons() {
     const buttonSpacing = 25;
     const buttonY = ellipsisY;
     
-    // Update button positions
-    const buttonStartX = menuBaseX + menuWidth + 20;
+    // Update button positions with animation offset
+    const buttonStartX = menuBaseX + menuWidth + 20 + (mainMenuXOffset * menuScale);
     gButtons.run.x = buttonStartX;
     gButtons.run.y = buttonY;
     gButtons.restart.x = buttonStartX + buttonSpacing;
     gButtons.restart.y = buttonY;
     
-    // Draw run button
-    var runBtn = gButtons.run;
-    gOverlayCtx.beginPath();
-    gOverlayCtx.arc(runBtn.x, runBtn.y, runBtn.radius, 0, Math.PI * 2);
-    gOverlayCtx.fillStyle = gPhysicsScene.paused ? '#ff4444' : '#44ff44';
-    gOverlayCtx.fill();
-    
-    // Draw restart button
-    var restartBtn = gButtons.restart;
-    gOverlayCtx.beginPath();
-    gOverlayCtx.arc(restartBtn.x, restartBtn.y, restartBtn.radius, 0, Math.PI * 2);
-    gOverlayCtx.fillStyle = restartBtn.color;
-    gOverlayCtx.fill();
+    // Only draw buttons if menu has any opacity
+    if (mainMenuOpacity > 0) {
+        gOverlayCtx.save();
+        gOverlayCtx.globalAlpha = mainMenuOpacity;
+        
+        // Draw run button
+        var runBtn = gButtons.run;
+        gOverlayCtx.beginPath();
+        gOverlayCtx.arc(runBtn.x, runBtn.y, runBtn.radius, 0, Math.PI * 2);
+        gOverlayCtx.fillStyle = gPhysicsScene.paused ? '#ff4444' : '#44ff44';
+        gOverlayCtx.fill();
+        
+        // Draw restart button
+        var restartBtn = gButtons.restart;
+        gOverlayCtx.beginPath();
+        gOverlayCtx.arc(restartBtn.x, restartBtn.y, restartBtn.radius, 0, Math.PI * 2);
+        gOverlayCtx.fillStyle = restartBtn.color;
+        gOverlayCtx.fill();
+        
+        gOverlayCtx.restore();
+    }
 }
 
 function checkButtonHover(x, y) {
@@ -1784,6 +1867,37 @@ function onPointer(evt) {
         }
         
         if (hitLampBase) {
+            // Check for double-click on lamp base to toggle light
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastLampBaseClickTime[hitLampId];
+            
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - toggle the lamp on/off
+                var spotlight = hitLampId === 1 ? gSpotLight : gSpotLight2;
+                var bulb = hitLampId === 1 ? gLampBulb : gLampBulb2;
+                var innerCone = hitLampId === 1 ? gLampInnerCone : gLampInnerCone2;
+                
+                if (spotlight) {
+                    spotlight.visible = !spotlight.visible;
+                    var isOn = spotlight.visible;
+                    
+                    // Update bulb appearance
+                    if (bulb) {
+                        bulb.material.color.setHex(isOn ? 0xffffff : 0x333333);
+                    }
+                    
+                    // Update inner cone appearance
+                    if (innerCone) {
+                        innerCone.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
+                        innerCone.material.emissiveIntensity = isOn ? 0.8 : 0;
+                        innerCone.material.color.setHex(isOn ? 0xffff00 : 0x222222);
+                    }
+                }
+                gLastLampBaseClickTime[hitLampId] = 0; // Reset to prevent triple-click
+                return;
+            }
+            
+            gLastLampBaseClickTime[hitLampId] = currentTime;
             gActiveLampId = hitLampId;
             gDraggingLampBase = true;
             gPointerLastX = evt.clientX;
