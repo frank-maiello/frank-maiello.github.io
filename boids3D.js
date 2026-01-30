@@ -1281,13 +1281,13 @@ function initThreeScene() {
     
     // Camera	
     gCamera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 1000);
-    gCamera.position.set(37, 14, -13);
+    gCamera.position.set(9.59, 13.64, 33.23);
     gCamera.updateMatrixWorld();	
 
     gThreeScene.add(gCamera);
 
     gCameraControl = new THREE.OrbitControls(gCamera, gRenderer.domElement);
-    gCameraControl.target.set(-0.50, 1.98, 0.88);
+    gCameraControl.target.set(-0.46, 3.55, 0.38);
     gCameraControl.zoomSpeed = 0.5;
     gCameraControl.panSpeed = 0.4;
     gCameraControl.update(); // Initialize OrbitControls state
