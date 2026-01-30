@@ -12,9 +12,9 @@ var gCameraControl;
 var gGrabber;
 var gMouseDown = false;
 var gCameraAngle = 0;
-var gCameraRotationSpeed = 0.0; // Rotation state: 0 = stopped, 0.5 = forward, -0.5 = backward
+var gCameraRotationSpeed = 0.1; // Rotation state: 0 = stopped, 0.5 = forward, -0.5 = backward
 var gAutoRotate = true; // Enable/disable auto-rotation
-var gCameraMode = 0; // Camera mode: 0=static, 1=rotate CCW, 2=rotate CW, 3=behind boid, 4=in front of boid
+var gCameraMode = 1; // Camera mode: 0=static, 1=rotate CCW, 2=rotate CW, 3=behind boid, 4=in front of boid
 var gCameraManualControl = false; // Track if user is manually controlling camera
 var gCameraSpringStrength = 0.08; // Spring interpolation strength (lower = smoother)
 var gCameraOffset = new THREE.Vector3(0, 0, 0); // Manual camera offset in first-person mode
