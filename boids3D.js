@@ -102,7 +102,7 @@ var SpatialGrid; // Global spatial grid instance
 //var WORLD_WIDTH = 69.5 * 0.5;   // X dimension
 //var WORLD_HEIGHT = 20;  // Y dimension  
 //var WORLD_DEPTH = 31 * 0.5;   // Z dimension
-var WORLD_WIDTH = 25;   // X dimension
+var WORLD_WIDTH = 24;   // X dimension
 var WORLD_HEIGHT = 20;  // Y dimension  
 var WORLD_DEPTH = 20;   // Z dimension
 
@@ -1029,8 +1029,8 @@ function initThreeScene() {
     
     // Create lamp 1
     var lamp1 = createLamp(
-        new THREE.Vector3(29.53, 23.19, 22.47),
-        new THREE.Vector3(23.78, 17.36, 16.72),
+        new THREE.Vector3(22.61, 14.14, 18.58),
+        new THREE.Vector3(16.16, 10.07, 12.13),
         1
     );
     gLampRotatableGroup = lamp1.rotatableGroup;
@@ -1109,64 +1109,122 @@ function initThreeScene() {
     var boxSize = gPhysicsScene.worldSize;
     var wallOpacity = 0.5;
     
-    // Front wall (positive Z) - pastel pink
+    // Front wall (positive Z) - pastel pink checkerboard
+    var frontWallCanvas = document.createElement('canvas');
+    frontWallCanvas.width = 1024;
+    frontWallCanvas.height = 1024;
+    var frontWallCtx = frontWallCanvas.getContext('2d');
+    var wallTileSize = 512;
+    for (var i = 0; i < 2; i++) {
+        for (var j = 0; j < 2; j++) {
+            frontWallCtx.fillStyle = (i + j) % 2 === 0 ? '#FF8A94' : '#FFE8EB';
+            frontWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+        }
+    }
+    var frontWallTexture = new THREE.CanvasTexture(frontWallCanvas);
+    frontWallTexture.wrapS = THREE.RepeatWrapping;
+    frontWallTexture.wrapT = THREE.RepeatWrapping;
+    frontWallTexture.repeat.set((boxSize.x * 2) / (4 * 5), boxSize.y / (4 * 5));
+    
     var frontWall = new THREE.Mesh(
         new THREE.PlaneGeometry(boxSize.x * 2, boxSize.y),
         new THREE.MeshPhongMaterial({ 
-            color: 0xBAE1FF, 
-            //color: 0xFFB3BA, 
+            map: frontWallTexture,
             transparent: true, 
-            opacity: wallOpacity,
-            side: THREE.BackSide  // Only visible from inside
+            opacity: 0.3,
+            side: THREE.BackSide
         })
     );
     frontWall.position.set(0, boxSize.y / 2, boxSize.z);
     frontWall.receiveShadow = true;
     gThreeScene.add(frontWall);
     
-    // Back wall (negative Z) - pastel blue
+    // Back wall (negative Z) - pastel blue checkerboard
+    var backWallCanvas = document.createElement('canvas');
+    backWallCanvas.width = 1024;
+    backWallCanvas.height = 1024;
+    var backWallCtx = backWallCanvas.getContext('2d');
+    for (var i = 0; i < 2; i++) {
+        for (var j = 0; j < 2; j++) {
+            backWallCtx.fillStyle = (i + j) % 2 === 0 ? '#8AC8FF' : '#E8F4FF';
+            backWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+        }
+    }
+    var backWallTexture = new THREE.CanvasTexture(backWallCanvas);
+    backWallTexture.wrapS = THREE.RepeatWrapping;
+    backWallTexture.wrapT = THREE.RepeatWrapping;
+    backWallTexture.repeat.set((boxSize.x * 2) / (4 * 5), boxSize.y / (4 * 5));
+    
     var backWall = new THREE.Mesh(
         new THREE.PlaneGeometry(boxSize.x * 2, boxSize.y),
         new THREE.MeshPhongMaterial({ 
-            color: 0xBAE1FF, 
+            map: backWallTexture,
             transparent: true, 
-            opacity: wallOpacity,
-            side: THREE.BackSide  // Only visible from inside
+            opacity: 0.3,
+            side: THREE.BackSide
         })
     );
-    backWall.rotation.y = Math.PI;  // Rotate 180 to face inward
+    backWall.rotation.y = Math.PI;
     backWall.position.set(0, boxSize.y / 2, -boxSize.z);
     backWall.receiveShadow = true;
     gThreeScene.add(backWall);
     
-    // Left wall (negative X) - pastel yellow
+    // Left wall (negative X) - pastel yellow checkerboard
+    var leftWallCanvas = document.createElement('canvas');
+    leftWallCanvas.width = 1024;
+    leftWallCanvas.height = 1024;
+    var leftWallCtx = leftWallCanvas.getContext('2d');
+    for (var i = 0; i < 2; i++) {
+        for (var j = 0; j < 2; j++) {
+            leftWallCtx.fillStyle = (i + j) % 2 === 0 ? '#FFFF8A' : '#FFFFE8';
+            leftWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+        }
+    }
+    var leftWallTexture = new THREE.CanvasTexture(leftWallCanvas);
+    leftWallTexture.wrapS = THREE.RepeatWrapping;
+    leftWallTexture.wrapT = THREE.RepeatWrapping;
+    leftWallTexture.repeat.set((boxSize.z * 2) / (4 * 5), boxSize.y / (4 * 5));
+    
     var leftWall = new THREE.Mesh(
         new THREE.PlaneGeometry(boxSize.z * 2, boxSize.y),
         new THREE.MeshPhongMaterial({
-            color: 0xBAE1FF,  
-            //color: 0xFFFFBA, 
+            map: leftWallTexture,
             transparent: true, 
-            opacity: wallOpacity,
-            side: THREE.BackSide  // Only visible from inside
+            opacity: 0.3,
+            side: THREE.BackSide
         })
     );
-    leftWall.rotation.y = -Math.PI / 2;  // Face inward (toward +X)
+    leftWall.rotation.y = -Math.PI / 2;
     leftWall.position.set(-boxSize.x, boxSize.y / 2, 0);
     leftWall.receiveShadow = true;
     gThreeScene.add(leftWall);
     
-    // Right wall (positive X) - pastel green
+    // Right wall (positive X) - pastel green checkerboard
+    var rightWallCanvas = document.createElement('canvas');
+    rightWallCanvas.width = 1024;
+    rightWallCanvas.height = 1024;
+    var rightWallCtx = rightWallCanvas.getContext('2d');
+    for (var i = 0; i < 2; i++) {
+        for (var j = 0; j < 2; j++) {
+            rightWallCtx.fillStyle = (i + j) % 2 === 0 ? '#8AFFAD' : '#E8FFE8';
+            rightWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+        }
+    }
+    var rightWallTexture = new THREE.CanvasTexture(rightWallCanvas);
+    rightWallTexture.wrapS = THREE.RepeatWrapping;
+    rightWallTexture.wrapT = THREE.RepeatWrapping;
+    rightWallTexture.repeat.set((boxSize.z * 2) / (4 * 5), boxSize.y / (4 * 5));
+    
     var rightWall = new THREE.Mesh(
         new THREE.PlaneGeometry(boxSize.z * 2, boxSize.y),
         new THREE.MeshPhongMaterial({ 
-            color: 0xBAE1FF, 
-            //color: 0xBAFFC9, 
+            map: rightWallTexture,
             transparent: true, 
-            opacity: wallOpacity,
-            side: THREE.BackSide  // Only visible from inside
+            opacity: 0.3,
+            side: THREE.BackSide
         })
     );
-    rightWall.rotation.y = Math.PI / 2;  // Face inward (toward -X)
+    rightWall.rotation.y = Math.PI / 2;
     rightWall.position.set(boxSize.x, boxSize.y / 2, 0);
     rightWall.receiveShadow = true;
     gThreeScene.add(rightWall);
@@ -1281,15 +1339,15 @@ function initThreeScene() {
     
     // Camera	
     gCamera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 1000);
-    gCamera.position.set(9.59, 13.64, 33.23);
+    gCamera.position.set(14.33, 22.67, 47.17);
     gCamera.updateMatrixWorld();	
 
     gThreeScene.add(gCamera);
 
     gCameraControl = new THREE.OrbitControls(gCamera, gRenderer.domElement);
-    gCameraControl.target.set(-0.46, 3.55, 0.38);
-    gCameraControl.zoomSpeed = 0.5;
-    gCameraControl.panSpeed = 0.4;
+    gCameraControl.target.set(0.14, 4.59, -0.14);
+    gCameraControl.zoomSpeed = 0.1;
+    gCameraControl.panSpeed = 0.5;
     gCameraControl.update(); // Initialize OrbitControls state
 
     // Create overlay canvas for buttons programmatically
