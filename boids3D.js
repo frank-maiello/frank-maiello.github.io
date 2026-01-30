@@ -31,6 +31,7 @@ var gDraggingLamp = false; // Track if dragging the lamp
 var gDraggingLampHeight = false; // Track if adjusting lamp height
 var gDraggingLampRotation = false; // Track if rotating lamp assembly
 var gDraggingLampBase = false; // Track if dragging the base to move assembly
+var gDraggingCylinder = false; // Track if dragging the cylinder obstacle
 var gActiveLampId = 1; // Track which lamp is currently being interacted with (1 or 2)
 var gLampAngle = -0.0435; // Current lamp angle in radians (-2.49 degrees)
 var gLampAssemblyRotation = 0.0; // Current lamp assembly rotation around Y axis
@@ -131,6 +132,361 @@ var boidProps = {
     turnFactor: 0.05, // How strongly Boids turn back when near edge
     margin: 2.0, // Distance from boundary to start turning
 };
+
+// OBSTACLE CLASSES ---------------------------------------------------------------------
+
+class TorusObstacle {
+    constructor(majorRadius, minorRadius, position, rotation) {
+        this.majorRadius = majorRadius;
+        this.minorRadius = minorRadius;
+        this.position = position.clone();
+        this.rotation = rotation || { x: 0, y: 0, z: 0 };
+        this.mesh = null;
+        
+        // Create the torus mesh
+        this.createMesh();
+    }
+    
+    createMesh() {
+        var geometry = new THREE.TorusGeometry(this.majorRadius, this.minorRadius, 16, 100);
+        var material = new THREE.MeshPhongMaterial({color: 0x00ff00, shininess: 100});
+        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh.position.copy(this.position);
+        this.mesh.rotation.x = this.rotation.x;
+        this.mesh.rotation.y = this.rotation.y;
+        this.mesh.rotation.z = this.rotation.z;
+        this.mesh.castShadow = true;
+        this.mesh.receiveShadow = true;
+        gThreeScene.add(this.mesh);
+    }
+    
+    // Check if a point is inside the solid part of the torus
+    // Returns distance to surface (negative if inside solid)
+    getDistanceToSurface(point) {
+        // Transform point to torus local space
+        const localPoint = point.clone().sub(this.position);
+        
+        // Apply inverse rotation (assuming rotation around Y axis for now)
+        const cosY = Math.cos(-this.rotation.y);
+        const sinY = Math.sin(-this.rotation.y);
+        const rotatedX = localPoint.x * cosY - localPoint.z * sinY;
+        const rotatedZ = localPoint.x * sinY + localPoint.z * cosY;
+        localPoint.x = rotatedX;
+        localPoint.z = rotatedZ;
+        
+        // Signed distance to torus
+        // First, find distance from point to the major circle in the XZ plane
+        const distToCenter = Math.sqrt(localPoint.x * localPoint.x + localPoint.z * localPoint.z);
+        
+        // Vector from major circle to point (in the tube cross-section)
+        const qx = distToCenter - this.majorRadius;
+        const qy = localPoint.y;
+        
+        // Distance in the tube cross-section plane
+        const tubeDistance = Math.sqrt(qx * qx + qy * qy);
+        
+        // Return signed distance (negative if inside the solid tube)
+        return tubeDistance - this.minorRadius;
+    }
+    
+    // Apply avoidance force to a boid
+    applyAvoidance(boid, avoidanceStrength = 1.5) {
+        const distance = this.getDistanceToSurface(boid.pos);
+        const threshold = 5.0; // Start avoiding when within this distance
+        
+        if (distance < threshold) {
+            // Transform point to torus local space for gradient calculation
+            const localPoint = boid.pos.clone().sub(this.position);
+            
+            // Apply inverse rotation (around Y axis)
+            const cosY = Math.cos(-this.rotation.y);
+            const sinY = Math.sin(-this.rotation.y);
+            const rotatedX = localPoint.x * cosY - localPoint.z * sinY;
+            const rotatedZ = localPoint.x * sinY + localPoint.z * cosY;
+            
+            // Calculate analytical gradient in local space
+            const distToCenter = Math.sqrt(rotatedX * rotatedX + rotatedZ * rotatedZ);
+            
+            if (distToCenter < 0.001) {
+                // Special case: near the center axis - push radially outward
+                const gradient = new THREE.Vector3(1, 0, 0);
+                boid.vel.x += gradient.x * avoidanceStrength * 5.0;
+                boid.vel.y += gradient.y * avoidanceStrength * 5.0;
+                boid.vel.z += gradient.z * avoidanceStrength * 5.0;
+                return;
+            }
+            
+            const qx = distToCenter - this.majorRadius;
+            const qy = localPoint.y;
+            const tubeDistance = Math.sqrt(qx * qx + qy * qy);
+            
+            if (tubeDistance < 0.001) {
+                // Special case: exactly on major circle - push radially
+                const gradient = new THREE.Vector3(rotatedX / distToCenter, 0, rotatedZ / distToCenter);
+                const gradWorldX = gradient.x * cosY + gradient.z * sinY;
+                const gradWorldZ = -gradient.x * sinY + gradient.z * cosY;
+                boid.vel.x += gradWorldX * avoidanceStrength * 5.0;
+                boid.vel.z += gradWorldZ * avoidanceStrength * 5.0;
+                return;
+            }
+            
+            // Analytical gradient in local space
+            const factor = qx / (distToCenter * tubeDistance);
+            const gradLocalX = rotatedX * factor;
+            const gradLocalZ = rotatedZ * factor;
+            const gradLocalY = qy / tubeDistance;
+            
+            // Rotate gradient back to world space
+            const gradWorldX = gradLocalX * cosY + gradLocalZ * sinY;
+            const gradWorldZ = -gradLocalX * sinY + gradLocalZ * cosY;
+            const gradWorldY = gradLocalY;
+            
+            const gradient = new THREE.Vector3(gradWorldX, gradWorldY, gradWorldZ);
+            const gradLen = gradient.length();
+            if (gradLen > 0.001) {
+                gradient.normalize();
+            } else {
+                return;
+            }
+            
+            // Much stronger avoidance when closer, especially when inside (distance < 0)
+            let strength;
+            if (distance < 0) {
+                // Inside the solid - EMERGENCY EJECTION with exponential force
+                const penetrationDepth = -distance;
+                strength = avoidanceStrength * 10.0 * (1.0 + penetrationDepth * 2.0);
+            } else if (distance < 1.0) {
+                // Very close - strong repulsion
+                strength = avoidanceStrength * 5.0 * (1.0 - distance);
+            } else {
+                // Outside but within detection range - gentle avoidance
+                strength = avoidanceStrength * (threshold - distance) / threshold;
+            }
+            
+            boid.vel.x += gradient.x * strength;
+            boid.vel.y += gradient.y * strength;
+            boid.vel.z += gradient.z * strength;
+        }
+    }
+}
+
+class CylinderObstacle {
+    constructor(radius, height, position, rotation) {
+        this.radius = radius;
+        this.height = height;
+        this.position = position.clone();
+        this.rotation = rotation || { x: 0, y: 0, z: 0 };
+        this.mesh = null;
+        
+        // Create the cylinder mesh
+        this.createMesh();
+    }
+    
+    createMesh() {
+        // Create fluted column with true semicircular half-pipe grooves carved INTO surface
+        const numFlutes = 16; // Number of vertical grooves
+        const fluteDepth = 0.3; // Maximum depth to carve (not full radius)
+        const fluteWidthFraction = 0.65; // Fraction of section to carve (leaves ridges between)
+        const radialSegments = numFlutes * 16; // Very high segment count for smooth semicircles
+        const heightSegments = 64; // Vertical segments for smooth fluting
+        
+        // Create custom geometry with flutes
+        const geometry = new THREE.CylinderGeometry(
+            this.radius, 
+            this.radius, 
+            this.height, 
+            radialSegments, 
+            heightSegments
+        );
+        
+        // Modify vertices to carve perfect semicircular half-pipe grooves INTO the surface
+        const positionAttribute = geometry.attributes.position;
+        for (let i = 0; i < positionAttribute.count; i++) {
+            const x = positionAttribute.getX(i);
+            const y = positionAttribute.getY(i);
+            const z = positionAttribute.getZ(i);
+            
+            // Calculate angle around cylinder
+            let angle = Math.atan2(z, x);
+            if (angle < 0) angle += Math.PI * 2; // Normalize to 0-2π
+            const distFromCenter = Math.sqrt(x * x + z * z);
+            
+            // Only modify side vertices (not top/bottom caps)
+            if (Math.abs(distFromCenter) > 0.01) {
+                // Calculate position within flute array
+                const flutePosition = (angle / (Math.PI * 2)) * numFlutes;
+                const fluteFraction = flutePosition % 1.0; // 0-1 within current flute section
+                
+                let fluteOffset = 0;
+                
+                // Only carve in the center portion, leaving ridges at edges
+                const ridgeWidth = (1.0 - fluteWidthFraction) / 2.0;
+                
+                if (fluteFraction >= ridgeWidth && fluteFraction <= (1.0 - ridgeWidth)) {
+                    // We're in the groove area - create truly circular semicircular carved profile
+                    // Normalize position within groove from 0 to 1
+                    const normalizedGroovePos = (fluteFraction - ridgeWidth) / fluteWidthFraction;
+                    
+                    // Calculate arc length position on cylinder surface for this groove
+                    const sectionArcAngle = (Math.PI * 2) / numFlutes; // Total angle per section
+                    const grooveArcAngle = sectionArcAngle * fluteWidthFraction; // Angle just for groove
+                    const arcPos = (normalizedGroovePos - 0.5) * grooveArcAngle; // -half to +half
+                    
+                    // Convert arc position to chord (straight-line) distance for circle equation
+                    const chordDistance = distFromCenter * Math.sin(arcPos);
+                    
+                    // Calculate the width of the groove opening at the surface
+                    const grooveOpeningWidth = distFromCenter * grooveArcAngle;
+                    
+                    // Now apply perfect circle equation with this chord distance
+                    const x_pos = chordDistance / (grooveOpeningWidth / 2.0); // Normalize by half-width
+                    
+                    // Perfect semicircular profile: y = sqrt(1 - x²)
+                    if (Math.abs(x_pos) <= 1.0) {
+                        const y_circle = Math.sqrt(1.0 - x_pos * x_pos);
+                        
+                        // Carve depth: maximum at center, zero at edges
+                        const carveDepth = y_circle * fluteDepth;
+                        
+                        // Apply NEGATIVE offset to carve INTO the surface
+                        fluteOffset = -carveDepth;
+                    }
+                }
+                // else: in ridge area, no carving (fluteOffset = 0)
+                
+                const newRadius = distFromCenter + fluteOffset;
+                
+                // Update position
+                const normalizedX = x / distFromCenter;
+                const normalizedZ = z / distFromCenter;
+                positionAttribute.setX(i, normalizedX * newRadius);
+                positionAttribute.setZ(i, normalizedZ * newRadius);
+            }
+        }
+        
+        // Recompute normals for proper lighting
+        geometry.computeVertexNormals();
+        
+        var material = new THREE.MeshPhongMaterial({
+            color: 0x5000ff, 
+            shininess: 0, 
+            transparent: false, 
+            opacity: 1.0,
+            flatShading: false // Smooth shading for better flute appearance
+        });
+        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh.position.copy(this.position);
+        this.mesh.rotation.x = this.rotation.x;
+        this.mesh.rotation.y = this.rotation.y;
+        this.mesh.rotation.z = this.rotation.z;
+        this.mesh.castShadow = true;
+        this.mesh.receiveShadow = true;
+        this.mesh.userData.isDraggableCylinder = true; // Mark for mouse interaction
+        this.mesh.userData.cylinderObstacle = this; // Reference back to this object
+        gThreeScene.add(this.mesh);
+    }
+    
+    // Check if a point is inside the cylinder
+    // Returns distance to surface (negative if inside solid)
+    getDistanceToSurface(point) {
+        // Transform point to cylinder local space
+        const localPoint = point.clone().sub(this.position);
+        
+        // Distance from cylinder axis (Y axis)
+        const radialDist = Math.sqrt(localPoint.x * localPoint.x + localPoint.z * localPoint.z);
+        
+        // Distance from cylinder caps
+        const halfHeight = this.height / 2;
+        const verticalDist = Math.abs(localPoint.y) - halfHeight;
+        
+        // If inside the cylinder volume
+        if (radialDist < this.radius && Math.abs(localPoint.y) < halfHeight) {
+            // Distance to nearest surface (negative, inside)
+            const distToWall = radialDist - this.radius;
+            const distToCap = verticalDist;
+            return Math.max(distToWall, distToCap); // Most negative = deepest inside
+        }
+        
+        // Outside cylinder
+        if (radialDist >= this.radius && Math.abs(localPoint.y) < halfHeight) {
+            // Outside the sides
+            return radialDist - this.radius;
+        }
+        
+        if (radialDist < this.radius && Math.abs(localPoint.y) >= halfHeight) {
+            // Outside the caps
+            return verticalDist;
+        }
+        
+        // Outside corner (diagonal distance)
+        const edgeDist = radialDist - this.radius;
+        return Math.sqrt(edgeDist * edgeDist + verticalDist * verticalDist);
+    }
+    
+    // Apply avoidance force to a boid
+    applyAvoidance(boid, avoidanceStrength = 1.5) {
+        const distance = this.getDistanceToSurface(boid.pos);
+        const threshold = 5.0; // Start avoiding when within this distance
+        
+        if (distance < threshold) {
+            // Calculate avoidance direction
+            const localPoint = boid.pos.clone().sub(this.position);
+            const radialDist = Math.sqrt(localPoint.x * localPoint.x + localPoint.z * localPoint.z);
+            const halfHeight = this.height / 2;
+            
+            const gradient = new THREE.Vector3(0, 0, 0);
+            
+            // Radial component (away from axis)
+            if (radialDist > 0.001) {
+                gradient.x = localPoint.x / radialDist;
+                gradient.z = localPoint.z / radialDist;
+            } else {
+                // On the axis, push in any radial direction
+                gradient.x = 1;
+            }
+            
+            // Vertical component (away from caps)
+            if (Math.abs(localPoint.y) > halfHeight - 1.0) {
+                gradient.y = localPoint.y > 0 ? 1 : -1;
+            }
+            
+            const gradLen = gradient.length();
+            if (gradLen > 0.001) {
+                gradient.normalize();
+            } else {
+                return;
+            }
+            
+            // Much stronger avoidance when closer, especially when inside (distance < 0)
+            let strength;
+            if (distance < 0) {
+                // Inside the solid - EMERGENCY EJECTION with exponential force
+                const penetrationDepth = -distance;
+                strength = avoidanceStrength * 10.0 * (1.0 + penetrationDepth * 2.0);
+            } else if (distance < 1.0) {
+                // Very close - strong repulsion
+                strength = avoidanceStrength * 5.0 * (1.0 - distance);
+            } else {
+                // Outside but within detection range - gentle avoidance
+                strength = avoidanceStrength * (threshold - distance) / threshold;
+            }
+            
+            boid.vel.x += gradient.x * strength;
+            boid.vel.y += gradient.y * strength;
+            boid.vel.z += gradient.z * strength;
+        }
+    }
+    
+    // Update cylinder position
+    updatePosition(newPosition) {
+        this.position.copy(newPosition);
+        if (this.mesh) {
+            this.mesh.position.copy(newPosition);
+        }
+    }
+}
+
+var gObstacles = []; // Global array to hold all obstacles
 
 class BOID {
     constructor(pos, rad, vel, hue, sat) {
@@ -489,6 +845,11 @@ function handleBoidRules(boid) {
         }
     }
 
+    // OBSTACLE AVOIDANCE - Apply before other rules
+    for (let i = 0; i < gObstacles.length; i++) {
+        gObstacles[i].applyAvoidance(boid);
+    }
+    
     // RULE #1 - SEPARATION
     boid.vel.x += separationX;
     boid.vel.y += separationY;
@@ -1327,6 +1688,24 @@ function initThreeScene() {
         var line = new THREE.Line(geometry, edgeMaterial);
         gThreeScene.add(line);
     }
+
+    /*// Create torus obstacle
+    var torusObstacle = new TorusObstacle(
+        5,  // major radius
+        1,  // minor radius (tube radius)
+        new THREE.Vector3(10, 10, 0),  // position
+        { x: 0, y: 0.5 * Math.PI, z: 0 }  // rotation
+    );
+    gObstacles.push(torusObstacle);*/
+
+    // Create cylinder obstacle
+    var cylinderObstacle = new CylinderObstacle(
+        3,  // radius
+        20,  // height
+        new THREE.Vector3(10, 10, -10),  // position
+        { x: 0, y: 0, z: 0 }  // rotation
+    );
+    gObstacles.push(cylinderObstacle);
     
     // Renderer
     gRenderer = new THREE.WebGLRenderer();
@@ -1338,7 +1717,7 @@ function initThreeScene() {
     
     // Camera	
     gCamera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 1000);
-    gCamera.position.set(14.33, 22.67, 47.17);
+    gCamera.position.set(9.72, 18.59, 38.02);
     gCamera.updateMatrixWorld();	
 
     gThreeScene.add(gCamera);
@@ -1732,13 +2111,20 @@ function onPointer(evt) {
         raycaster.setFromCamera(mousePos, gCamera);
         var intersects = raycaster.intersectObjects(gThreeScene.children, true);
         
-        // Check if we hit a lamp component
+        // Check if we hit a lamp component or cylinder
         var hitLampCone = false;
         var hitLampHeight = false;
         var hitLampRotation = false;
         var hitLampBase = false;
+        var hitCylinder = false;
+        var hitCylinderObstacle = null;
         var hitLampId = 1; // Default to lamp 1
         for (var i = 0; i < intersects.length; i++) {
+            if (intersects[i].object.userData.isDraggableCylinder) {
+                hitCylinder = true;
+                hitCylinderObstacle = intersects[i].object.userData.cylinderObstacle;
+                break;
+            }
             if (intersects[i].object.userData.isLampCone) {
                 hitLampCone = true;
                 hitLampId = intersects[i].object.userData.lampId || 1;
@@ -1756,6 +2142,18 @@ function onPointer(evt) {
                 hitLampBase = true;
                 hitLampId = intersects[i].object.userData.lampId || 1;
             }
+        }
+        
+        if (hitCylinder && hitCylinderObstacle) {
+            gDraggingCylinder = true;
+            window.draggingCylinderObstacle = hitCylinderObstacle; // Store reference globally
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging cylinder
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
         }
         
         if (hitLampHeight) {
@@ -1959,6 +2357,35 @@ function onPointer(evt) {
             return;
         }
         
+        // Handle cylinder dragging (translation along ground)
+        if (gDraggingCylinder && window.draggingCylinderObstacle) {
+            // Raycast to find where cursor intersects ground plane
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Define ground plane at Y=0
+            var groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(groundPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                // Keep the cylinder's Y position (height above ground) constant
+                var cylinderObstacle = window.draggingCylinderObstacle;
+                var newPosition = new THREE.Vector3(
+                    intersectionPoint.x,
+                    cylinderObstacle.position.y, // Keep original height
+                    intersectionPoint.z
+                );
+                cylinderObstacle.updatePosition(newPosition);
+            }
+            return;
+        }
+        
         // Handle lamp base dragging (translation)
         if (gDraggingLampBase) {
             // Raycast to find where cursor intersects ground plane
@@ -2054,6 +2481,16 @@ function onPointer(evt) {
         
         if (draggedKnob !== null) {
             draggedKnob = null;
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingCylinder) {
+            gDraggingCylinder = false;
+            window.draggingCylinderObstacle = null;
+            // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
             }
