@@ -12,7 +12,7 @@ var gCameraControl;
 var gGrabber;
 var gMouseDown = false;
 var gCameraAngle = 0;
-var gCameraRotationSpeed = 0.1; // Rotation state: 0 = stopped, 0.5 = forward, -0.5 = backward
+var gCameraRotationSpeed = 3.0; // Rotation state: 0 = stopped, 0.5 = forward, -0.5 = backward
 var gAutoRotate = true; // Enable/disable auto-rotation
 var gCameraMode = 1; // Camera mode: 0=static, 1=rotate CCW, 2=rotate CW, 3=behind boid, 4=in front of boid
 var gCameraManualControl = false; // Track if user is manually controlling camera
@@ -2508,13 +2508,82 @@ function restart() {
     }
     // Clear the physics objects array
     gPhysicsScene.objects = [];
-    // Create new boids
-    makeBoids();
-    // Rebuild spatial grid
-    SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
-    for (var i = 0; i < gPhysicsScene.objects.length; i++) {
-        SpatialGrid.insert(gPhysicsScene.objects[i]);
+    
+    // Create boids in batches over multiple frames to prevent stutter
+    const batchSize = 150; // Create 150 boids per frame
+    const totalBoids = 1500;
+    let boidsCreated = 0;
+    
+    function createBatch() {
+        const radius = boidRadius;
+        const spawnRadius = 3.5;
+        const minMargin = 0.2;
+        const minDistance = 2 * radius * (1 + minMargin);
+        const maxAttempts = 100;
+        const spawnCenter = new THREE.Vector3(0, 4 * spawnRadius, 0);
+        
+        const endIndex = Math.min(boidsCreated + batchSize, totalBoids);
+        
+        for (let i = boidsCreated; i < endIndex; i++) {
+            let validPosition = false;
+            let attempts = 0;
+            let pos, vel, hue, sat;
+            
+            while (!validPosition && attempts < maxAttempts) {
+                let theta = Math.random() * Math.PI * 2;
+                let phi = Math.acos(2 * Math.random() - 1);
+                let r = Math.cbrt(Math.random()) * spawnRadius;
+                pos = new THREE.Vector3(
+                    r * Math.sin(phi) * Math.cos(theta),
+                    4 * spawnRadius + r * Math.cos(phi),
+                    r * Math.sin(phi) * Math.sin(theta)
+                );
+                
+                validPosition = true;
+                for (let j = 0; j < gPhysicsScene.objects.length; j++) {
+                    const existingBall = gPhysicsScene.objects[j];
+                    const distSquared = pos.distanceToSquared(existingBall.pos);
+                    if (distSquared < minDistance * minDistance) {
+                        validPosition = false;
+                        break;
+                    }
+                }
+                attempts++;
+            }
+            
+            if (validPosition) {
+                vel = pos.clone().sub(spawnCenter).normalize();
+                const speed = 1 + Math.random() * 4;
+                vel.multiplyScalar(speed);
+                
+                if (i == 0) {
+                    hue = 220;
+                    sat = 90;
+                } else if (i < 51) {
+                    hue = Math.round(100 + Math.random() * 40);
+                    sat = 90;
+                } else {
+                    hue = Math.round(340 + Math.random() * 40);
+                    sat = Math.round(30 + Math.random() * 70);
+                }
+                gPhysicsScene.objects.push(new BOID(pos, radius, vel, hue, sat));
+            }
+        }
+        
+        boidsCreated = endIndex;
+        
+        if (boidsCreated < totalBoids) {
+            requestAnimationFrame(createBatch);
+        } else {
+            // Rebuild spatial grid after all boids are created
+            SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
+            for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+                SpatialGrid.insert(gPhysicsScene.objects[i]);
+            }
+        }
     }
+    
+    requestAnimationFrame(createBatch);
 }
 
 //  RUN -----------------------------------
@@ -2604,14 +2673,17 @@ function update() {
             const offset = gCamera.position.clone().sub(target);
             const radius = offset.length();
             
-            // Rotate around vertical axis (Y)
-            const rotationAngle = gCameraRotationSpeed * Math.PI / 180; // Convert to radians
+            // Rotate around vertical axis (Y) - time-based for smooth independent motion
+            const rotationAngle = gCameraRotationSpeed * deltaT * Math.PI / 180; // Convert to radians, scale by deltaT
             const axis = new THREE.Vector3(0, 1, 0);
             offset.applyAxisAngle(axis, rotationAngle);
             
             // Update camera position
             gCamera.position.copy(target).add(offset);
             gCamera.lookAt(target);
+            
+            // Sync OrbitControls to prevent stuttering
+            gCameraControl.update();
         }
     }
     
