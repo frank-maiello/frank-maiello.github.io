@@ -866,11 +866,14 @@ function initThreeScene() {
         var outerConeMaterial = new THREE.MeshPhongMaterial({
             color: 0xffff00,
             side: THREE.FrontSide,
-            shininess: 30
+            shininess: 30,
+            colorWrite: true,
+            depthWrite: true
         });
         var spotlightCone = new THREE.Mesh(coneGeometry, outerConeMaterial);
         spotlightCone.userData.isLampCone = true;
         spotlightCone.userData.lampId = lampId;
+        spotlightCone.renderOrder = 1; // Render cone after discs to use depth buffer
         // Orient cone to point away from spotlight target (backwards like a lamp shield)
         var direction = lightPosition.clone().sub(lightTarget).normalize();
         var up = new THREE.Vector3(0, 1, 0);
@@ -890,11 +893,14 @@ function initThreeScene() {
             side: THREE.BackSide,
             shininess: 30,
             emissive: 0xffffee,
-            emissiveIntensity: 0.8
+            emissiveIntensity: 0.8,
+            colorWrite: true,
+            depthWrite: true
         });
         lamp.innerCone = new THREE.Mesh(coneGeometry, innerConeMaterial);
         lamp.innerCone.userData.isLampCone = true;
         lamp.innerCone.userData.lampId = lampId;
+        lamp.innerCone.renderOrder = 1; // Render cone after discs to use depth buffer
         lamp.innerCone.quaternion.setFromUnitVectors(up, direction);
         // Position cone offset from light so pivot discs/pin remain visible
         lamp.innerCone.position.copy(lightPosition).sub(coneOffset);
@@ -929,6 +935,7 @@ function initThreeScene() {
         lamp.pole.receiveShadow = true;
         lamp.pole.userData.isLampRotation = true;
         lamp.pole.userData.lampId = lampId;
+        lamp.pole.renderOrder = 0; // Render before cone so cone can occlude it
         gThreeScene.add(lamp.pole);
         
         // Add invisible larger cylinder around pole for easier clicking
@@ -952,6 +959,7 @@ function initThreeScene() {
         lamp.sleeve.receiveShadow = true;
         lamp.sleeve.userData.isLampHeight = true;
         lamp.sleeve.userData.lampId = lampId;
+        lamp.sleeve.renderOrder = 0; // Render before cone so cone can occlude it
         gThreeScene.add(lamp.sleeve);
 
         // Add discs at top of pole for lamp angle adjustment
