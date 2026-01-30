@@ -376,6 +376,7 @@ function makeBoids() {
     const minMargin = 0.2; // Minimum margin as multiple of radius
     const minDistance = 2 * radius * (1 + minMargin); // Minimum center-to-center distance
     const maxAttempts = 100; // Max attempts per boid to find valid position
+    const spawnCenter = new THREE.Vector3(0, 4 * spawnRadius, 0); // Center of spawn sphere
     
     for (var i = 0; i < numBoids; i++) {
         let validPosition = false;
@@ -402,15 +403,13 @@ function makeBoids() {
             }
             attempts++;
         }
-        // random number helper
-        function rando() {
-            const max = 10;
-            return Math.floor(-max + 2 * Math.random() * max);
-        }
         // Only add boid if valid position found
         if (validPosition) {
-            //vel = new THREE.Vector3(-5 +Math.random() * 10, -5 +Math.random() * 10, -5 +Math.random() * 10);
-            vel = new THREE.Vector3(rando(), rando(), rando());
+            // Set velocity to point outward from spawn center
+            vel = pos.clone().sub(spawnCenter).normalize();
+            const speed = 1 + Math.random() * 4; // Random speed between 1 and 5
+            vel.multiplyScalar(speed);
+            
             if (i == 0) {
                 hue = 220;
                 sat = 90;
