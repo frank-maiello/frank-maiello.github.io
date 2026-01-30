@@ -72,7 +72,7 @@ var deltaT = 1.0 / 60.0;
 var renderHemispheres = false; // Set to false to disable rear hemispheres
 
 // Menu system variables
-var mainMenuVisible = false;
+var mainMenuVisible = true;
 var mainMenuOpacity = 0;
 var mainMenuXOffset = -1.0;
 var mainMenuAnimSpeed = 5.0;
@@ -599,7 +599,7 @@ function drawMainMenu() {
     
     // Draw icon
     const iconX = itemX + itemWidth / 2;
-    const iconY = itemY + itemHeight / 2 - padding;
+    const iconY = itemY + itemHeight / 2;
     const iconColor = menuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
     ctx.strokeStyle = iconColor;
     ctx.fillStyle = iconColor;
@@ -636,13 +636,13 @@ function drawMainMenu() {
     ctx.stroke();
     ctx.restore();
     
-    // Draw label
+    /*// Draw label
     ctx.font = `${0.025 * menuScale}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = iconColor;
-    ctx.fillText('Simulation', iconX, itemY + itemHeight - padding);
-    
+    ctx.fillText('Simulation', iconX, itemY + itemHeight - padding);*/
+
     ctx.restore();
 }
 
@@ -804,7 +804,8 @@ function drawSimMenu() {
     ctx.font = `italic ${0.035 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.fillStyle = `rgba(180, 200, 220, ${menuOpacity})`;
-    ctx.fillText('Spacebar to cycle camera.', menuWidth / 2, menuHeight + padding * 0.7);
+    ctx.fillText('Spacebar to cycle camera', menuWidth / 2, menuHeight + padding * 0.4);
+    ctx.fillText('Mouse to move and rotate', menuWidth / 2, menuHeight + padding * 0.7);
     
     ctx.restore();
 }
