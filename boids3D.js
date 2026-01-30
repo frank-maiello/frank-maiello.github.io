@@ -1621,44 +1621,42 @@ function onPointer(evt) {
             return;
         }
         
-        // Check main menu clicks
-        if (mainMenuOpacity > 0.5 || !mainMenuVisible) {
-            const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
-            const ellipsisX = 0.05 * cScale;
-            const ellipsisY = 0.05 * cScale;
-            const dotSpacing = 0.016 * cScale;
-            const clickRadius = 20; // Generous click area
-            const dx = evt.clientX - (ellipsisX + dotSpacing);
-            const dy = evt.clientY - ellipsisY;
-            if (dx * dx + dy * dy < clickRadius * clickRadius) {
-                mainMenuVisible = !mainMenuVisible;
-                // Hide submenu when main menu is hidden, restore when shown
-                if (!mainMenuVisible) {
-                    menuVisibleBeforeHide = menuVisible;
-                    menuVisible = false;
-                } else {
-                    menuVisible = menuVisibleBeforeHide;
-                }
-                return;
+        // Check ellipsis button click (always active to toggle menu)
+        const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+        const ellipsisX = 0.05 * cScale;
+        const ellipsisY = 0.05 * cScale;
+        const dotSpacing = 0.016 * cScale;
+        const clickRadius = 20; // Generous click area
+        const dx = evt.clientX - (ellipsisX + dotSpacing);
+        const dy = evt.clientY - ellipsisY;
+        if (dx * dx + dy * dy < clickRadius * clickRadius) {
+            mainMenuVisible = !mainMenuVisible;
+            // Hide submenu when main menu is hidden, restore when shown
+            if (!mainMenuVisible) {
+                menuVisibleBeforeHide = menuVisible;
+                menuVisible = false;
+            } else {
+                menuVisible = menuVisibleBeforeHide;
             }
+            return;
+        }
+        
+        // Check main menu item clicks (only when menu is visible)
+        if (mainMenuVisible && mainMenuOpacity > 0.5) {
+            const itemHeight = 0.12 * menuScale;
+            const itemWidth = 0.24 * menuScale;
+            const padding = 0.02 * menuScale;
+            const menuHeight = itemHeight + (padding * 2);
+            const menuBaseX = ellipsisX + 0.08 * menuScale;
+            const menuX = menuBaseX + mainMenuXOffset * menuScale;
+            const menuY = ellipsisY - 0.04 * menuScale;
+            const itemX = menuX + padding;
+            const itemY = menuY + padding;
             
-            // Check simulation menu item click
-            if (mainMenuVisible) {
-                const itemHeight = 0.12 * menuScale;
-                const itemWidth = 0.24 * menuScale;
-                const padding = 0.02 * menuScale;
-                const menuHeight = itemHeight + (padding * 2);
-                const menuBaseX = ellipsisX + 0.08 * menuScale;
-                const menuX = menuBaseX + mainMenuXOffset * menuScale;
-                const menuY = ellipsisY - 0.04 * menuScale;
-                const itemX = menuX + padding;
-                const itemY = menuY + padding;
-                
-                if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
-                    evt.clientY >= itemY && evt.clientY <= itemY + itemHeight) {
-                    menuVisible = !menuVisible;
-                    return;
-                }
+            if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+                evt.clientY >= itemY && evt.clientY <= itemY + itemHeight) {
+                menuVisible = !menuVisible;
+                return;
             }
         }
         
