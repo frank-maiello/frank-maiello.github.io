@@ -397,7 +397,7 @@ class CylinderObstacle {
         const discHeight = 0.4;
         const discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discHeight, 32);
         const discMaterial = new THREE.MeshStandardMaterial({
-            color:`hsl(331, 65%, 40%)`,
+            color: `hsl(25, 10%, 60%)`,
             roughness: 0.5
         });
         this.discMesh = new THREE.Mesh(discGeometry, discMaterial);
@@ -415,7 +415,7 @@ class CylinderObstacle {
         const conicalPedestalHeight = 4; 
         const conicalPedestalGeometry = new THREE.ConeGeometry(conicalPedestalRadius, conicalPedestalHeight, 32);
         const conicalPedestalMaterial = new THREE.MeshStandardMaterial({
-            color: `hsl(331, 65%, 53%)`,
+            color: `hsl(25, 10%, 40%)`,
             roughness: 0.5
         });
         this.conicalPedestalMesh = new THREE.Mesh(conicalPedestalGeometry, conicalPedestalMaterial);
@@ -433,7 +433,7 @@ class CylinderObstacle {
         const pedestalHeight = 0.3; 
         const pedestalGeometry = new THREE.CylinderGeometry(pedestalSize, pedestalSize, pedestalHeight, 32);
         const pedestalMaterial = new THREE.MeshStandardMaterial({
-            color: `hsl(331, 65%, 40%)`,
+            color: `hsl(25, 10%, 60%)`,
             roughness: 0.5
         });
         this.pedestalMesh = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
@@ -629,7 +629,7 @@ class Lamp {
         this.outerCone.userData.initialQuaternion = this.outerCone.quaternion.clone();
         
         // Add disc to close the truncated tip - inner side (bright yellow)
-        var tipDiscGeometry = new THREE.CircleGeometry(tipRadius, 32);
+        var tipDiscGeometry = new THREE.CircleGeometry(tipRadius * 1.1, 64);
         var tipDiscInnerMaterial = new THREE.MeshPhongMaterial({
             color: 0xffff00,
             side: THREE.BackSide,
@@ -656,9 +656,8 @@ class Lamp {
         
         // Add outer disc (brass colored to match hardware discs)
         var tipDiscOuterMaterial = new THREE.MeshPhongMaterial({
-            color: 0xcc9900,
+            color: 0xffff00,
             side: THREE.FrontSide,
-            shininess: 30
         });
         this.coneTipDiscOuter = new THREE.Mesh(tipDiscGeometry.clone(), tipDiscOuterMaterial);
         this.coneTipDiscOuter.quaternion.copy(this.coneTipDisc.quaternion);
@@ -790,7 +789,7 @@ class Lamp {
         // Add yellow sleeve where pole connects to lamp shade
         var sleeveHeight = 1.05;
         var sleeveRadius = 0.9 * baseRadius ;
-        var sleeveGeometry = new THREE.CylinderGeometry(sleeveRadius, sleeveRadius, sleeveHeight, 16);
+        var sleeveGeometry = new THREE.CylinderGeometry(sleeveRadius, sleeveRadius, sleeveHeight, 32);
         var sleeveMaterial = new THREE.MeshPhongMaterial({color: 0xcc9900, shininess: 30});
         this.sleeve = new THREE.Mesh(sleeveGeometry, sleeveMaterial);
         this.sleeve.position.set(poleBasePosition.x, poleHeight - 0.5 * sleeveHeight, poleBasePosition.z);
@@ -805,7 +804,7 @@ class Lamp {
         // Add outer discs at top of pole for lamp angle adjustment
         this.discs = [];
         var discThickness = 0.10;
-        var discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discThickness, 16);
+        var discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discThickness, 32);
         var discMaterial = new THREE.MeshPhongMaterial({color: 0xcc9900, shininess: 30});
         var disc = new THREE.Mesh(discGeometry, discMaterial);
         disc.position.set(poleBasePosition.x + 0.07, poleHeight + 0.9 * discRadius, poleBasePosition.z - 0.05);
@@ -827,8 +826,8 @@ class Lamp {
         this.discs.push(disc2);
 
         // Add inner disc
-        var innerDiscRadius = discRadius * 1.2;
-        var innerDiscGeometry = new THREE.CylinderGeometry(innerDiscRadius, innerDiscRadius, discThickness * 0.8, 16);
+        var innerDiscRadius = discRadius * 1.1;
+        var innerDiscGeometry = new THREE.CylinderGeometry(innerDiscRadius, innerDiscRadius, discThickness * 0.8, 32);
         var innerDiscMaterial = new THREE.MeshPhongMaterial({color: 0xffc71e, shininess: 30});
         var innerDisc = new THREE.Mesh(innerDiscGeometry, innerDiscMaterial);
         innerDisc.position.set(poleBasePosition.x, poleHeight + 0.9 * discRadius, poleBasePosition.z);
