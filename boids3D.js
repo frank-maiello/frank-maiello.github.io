@@ -384,6 +384,42 @@ class CylinderObstacle {
         this.mesh.userData.isDraggableCylinder = true; // Mark for mouse interaction
         this.mesh.userData.cylinderObstacle = this; // Reference back to this object
         gThreeScene.add(this.mesh);
+        
+        // Create round disc baseplate (between column and pedestal)
+        const discRadius = this.radius * 0.98; // Larger than column, smaller than pedestal
+        const discHeight = 0.3;
+        const discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discHeight, 32);
+        const discMaterial = new THREE.MeshPhongMaterial({
+            color: 0x4a00d9,
+            shininess: 30
+        });
+        this.discMesh = new THREE.Mesh(discGeometry, discMaterial);
+        this.discMesh.position.copy(this.position);
+        this.discMesh.position.y = (this.position.y - this.height / 2) + 1.2 + (discHeight / 2); // On top of pedestal
+        this.discMesh.rotation.copy(this.mesh.rotation);
+        this.discMesh.castShadow = true;
+        this.discMesh.receiveShadow = true;
+        this.discMesh.userData.isDraggableCylinder = true;
+        this.discMesh.userData.cylinderObstacle = this;
+        gThreeScene.add(this.discMesh);
+        
+        // Create square pedestal (under the disc)
+        const pedestalSize = this.radius * 2.3; // Just a bit larger than column overall size
+        const pedestalHeight = 1.2; // 3x thicker
+        const pedestalGeometry = new THREE.BoxGeometry(pedestalSize, pedestalHeight, pedestalSize);
+        const pedestalMaterial = new THREE.MeshPhongMaterial({
+            color: 0x3a008a,
+            shininess: 20
+        });
+        this.pedestalMesh = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
+        this.pedestalMesh.position.copy(this.position);
+        this.pedestalMesh.position.y = (this.position.y - this.height / 2) + (pedestalHeight / 2); // Bottom at y=0
+        this.pedestalMesh.rotation.copy(this.mesh.rotation);
+        this.pedestalMesh.castShadow = true;
+        this.pedestalMesh.receiveShadow = true;
+        this.pedestalMesh.userData.isDraggableCylinder = true;
+        this.pedestalMesh.userData.cylinderObstacle = this;
+        gThreeScene.add(this.pedestalMesh);
     }
     
     // Check if a point is inside the cylinder
@@ -482,6 +518,14 @@ class CylinderObstacle {
         this.position.copy(newPosition);
         if (this.mesh) {
             this.mesh.position.copy(newPosition);
+        }
+        if (this.discMesh) {
+            this.discMesh.position.copy(newPosition);
+            this.discMesh.position.y = (newPosition.y - this.height / 2) + 1.2 + 0.15; // On top of pedestal
+        }
+        if (this.pedestalMesh) {
+            this.pedestalMesh.position.copy(newPosition);
+            this.pedestalMesh.position.y = (newPosition.y - this.height / 2) + 0.6; // Bottom at column bottom level
         }
     }
 }
@@ -1653,7 +1697,7 @@ function initThreeScene() {
     );
     */
     
-    // Add white edge lines
+    /*// Add white edge lines
     var edgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1 });
     
     // Bottom edges - slightly above ground to avoid z-fighting with grid
@@ -1687,7 +1731,7 @@ function initThreeScene() {
         var geometry = new THREE.BufferGeometry().setFromPoints(allEdges[i]);
         var line = new THREE.Line(geometry, edgeMaterial);
         gThreeScene.add(line);
-    }
+    }*/
 
     /*// Create torus obstacle
     var torusObstacle = new TorusObstacle(
