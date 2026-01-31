@@ -34,7 +34,9 @@ var gDraggingLamp = false; // Track if dragging the lamp
 var gDraggingLampAngle = false; // Track if adjusting spotlight angle
 var gDraggingLampHeight = false; // Track if adjusting lamp height
 var gDraggingLampRotation = false; // Track if rotating lamp assembly
+var gDraggingLampPoleOrSleeve = false; // Track if dragging pole/sleeve (direction not yet determined)
 var gDraggingLampBase = false; // Track if dragging the base to move assembly
+var gLampBaseDragOffset = null; // Store offset from click point to lamp base center
 var gDraggingCylinder = false; // Track if dragging the cylinder obstacle
 var gCylinderDragOffset = null; // Store offset from click point to cylinder center
 var gCylinderDragPlaneHeight = 0; // Store the Y height where the cylinder was grabbed
@@ -594,7 +596,10 @@ class Lamp {
         // Add hollow cone visual at spotlight source (lamp shield)
         this.coneHeight = 1.5;
         var coneRadius = Math.tan(this.spotlight.angle) * this.coneHeight;
-        var coneGeometry = new THREE.ConeGeometry(coneRadius, this.coneHeight, 32, 1, true);
+        
+        // Create truncated cone (frustum) by using cylinder with different radii
+        var tipRadius = coneRadius * 0.15; // Small opening at tip (15% of base)
+        var coneGeometry = new THREE.CylinderGeometry(tipRadius, coneRadius, this.coneHeight, 64, 1, true);
         
         // Outer cone - normal yellow
         var outerConeMaterial = new THREE.MeshPhongMaterial({
@@ -614,9 +619,60 @@ class Lamp {
         var up = new THREE.Vector3(0, 1, 0);
         this.outerCone.quaternion.setFromUnitVectors(up, direction);
         
-        // Position cone offset from light so pivot discs/pin remain visible
-        var coneOffset = direction.clone().multiplyScalar(this.coneHeight * 0.4);
+        // Position cone offset from light - move further away to avoid clipping hardware
+        var coneOffset = direction.clone().multiplyScalar(this.coneHeight * 0.7);
         this.outerCone.position.copy(lightPosition).sub(coneOffset);
+        this.rotatableGroup.add(this.outerCone);
+        
+        // Store initial position and orientation for absolute rotation calculations
+        this.outerCone.userData.initialPosition = this.outerCone.position.clone();
+        this.outerCone.userData.initialQuaternion = this.outerCone.quaternion.clone();
+        
+        // Add disc to close the truncated tip - inner side (bright yellow)
+        var tipDiscGeometry = new THREE.CircleGeometry(tipRadius, 32);
+        var tipDiscInnerMaterial = new THREE.MeshPhongMaterial({
+            color: 0xffff00,
+            side: THREE.BackSide,
+            shininess: 30,
+            emissive: 0xffffee,
+            emissiveIntensity: 0.8
+        });
+        this.coneTipDisc = new THREE.Mesh(tipDiscGeometry, tipDiscInnerMaterial);
+        
+        // Orient disc perpendicular to cone axis
+        // CircleGeometry default normal is along Z-axis, need to align with cone axis (direction)
+        var zAxis = new THREE.Vector3(0, 0, 1);
+        var directionNormalized = direction.clone().normalize();
+        this.coneTipDisc.quaternion.setFromUnitVectors(zAxis, directionNormalized);
+        
+        // Position disc at the narrow end of the frustum
+        // The cone (cylinder) center is at: lightPosition - coneOffset
+        // The narrow end (top of cylinder) is cone center + direction * (coneHeight/2)
+        var coneCenter = lightPosition.clone().sub(coneOffset);
+        this.coneTipDisc.position.copy(coneCenter).add(directionNormalized.clone().multiplyScalar(this.coneHeight / 2));
+        this.coneTipDisc.castShadow = true;
+        this.coneTipDisc.receiveShadow = true;
+        this.rotatableGroup.add(this.coneTipDisc);
+        
+        // Add outer disc (brass colored to match hardware discs)
+        var tipDiscOuterMaterial = new THREE.MeshPhongMaterial({
+            color: 0xcc9900,
+            side: THREE.FrontSide,
+            shininess: 30
+        });
+        this.coneTipDiscOuter = new THREE.Mesh(tipDiscGeometry.clone(), tipDiscOuterMaterial);
+        this.coneTipDiscOuter.quaternion.copy(this.coneTipDisc.quaternion);
+        this.coneTipDiscOuter.position.copy(this.coneTipDisc.position);
+        this.coneTipDiscOuter.castShadow = true;
+        this.coneTipDiscOuter.receiveShadow = true;
+        this.rotatableGroup.add(this.coneTipDiscOuter);
+        
+        // Store initial position and orientation for outer disc
+        this.coneTipDiscOuter.userData.initialPosition = this.coneTipDiscOuter.position.clone();
+        this.coneTipDiscOuter.userData.initialQuaternion = this.coneTipDiscOuter.quaternion.clone();
+        // Store initial position and orientation
+        this.coneTipDisc.userData.initialPosition = this.coneTipDisc.position.clone();
+        this.coneTipDisc.userData.initialQuaternion = this.coneTipDisc.quaternion.clone();
         this.rotatableGroup.add(this.outerCone);
         
         // Store initial position and orientation for absolute rotation calculations
@@ -649,7 +705,8 @@ class Lamp {
         var lightBulbGeometry = new THREE.SphereGeometry(0.2, 16, 16);
         var lightBulbMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
         this.bulb = new THREE.Mesh(lightBulbGeometry, lightBulbMaterial);
-        this.bulb.position.copy(lightPosition).sub(coneOffset.clone().multiplyScalar(0.5));
+        // Position bulb at center of cone (midpoint along cone height)
+        this.bulb.position.copy(lightPosition).sub(coneOffset);
         this.rotatableGroup.add(this.bulb);
         
         // Store initial position
@@ -716,19 +773,22 @@ class Lamp {
         // Store reference to topmost section as 'pole' for backward compatibility
         this.pole = this.poleSections[sectionCount - 1];
         
-        // Add invisible larger cylinder around entire pole for easier clicking
+        // Add invisible larger cylinder around pole for easier clicking
+        // Start hit area above base (at Y=0.5) to avoid interfering with base dragging
         var poleHitAreaRadius = baseRadius * 4;
-        var poleHitGeometry = new THREE.CylinderGeometry(poleHitAreaRadius, poleHitAreaRadius, poleHeight, 8);
+        var poleHitStartHeight = 0.5; // Start above the base
+        var poleHitHeight = poleHeight - poleHitStartHeight;
+        var poleHitGeometry = new THREE.CylinderGeometry(poleHitAreaRadius, poleHitAreaRadius, poleHitHeight, 8);
         var poleHitMaterial = new THREE.MeshBasicMaterial({visible: false});
         this.poleHitArea = new THREE.Mesh(poleHitGeometry, poleHitMaterial);
-        this.poleHitArea.position.set(poleBasePosition.x, poleHeight / 2, poleBasePosition.z);
+        this.poleHitArea.position.set(poleBasePosition.x, poleHitStartHeight + poleHitHeight / 2, poleBasePosition.z);
         this.poleHitArea.userData.isLampRotation = true;
         this.poleHitArea.userData.lampId = lampId;
         this.poleHitArea.userData.lampInstance = this;
         gThreeScene.add(this.poleHitArea);
         
         // Add yellow sleeve where pole connects to lamp shade
-        var sleeveHeight = 1.0;
+        var sleeveHeight = 1.05;
         var sleeveRadius = 0.9 * baseRadius ;
         var sleeveGeometry = new THREE.CylinderGeometry(sleeveRadius, sleeveRadius, sleeveHeight, 16);
         var sleeveMaterial = new THREE.MeshPhongMaterial({color: 0xcc9900, shininess: 30});
@@ -742,13 +802,13 @@ class Lamp {
         this.sleeve.renderOrder = 0;
         gThreeScene.add(this.sleeve);
 
-        // Add discs at top of pole for lamp angle adjustment
+        // Add outer discs at top of pole for lamp angle adjustment
         this.discs = [];
-        var discThickness = 0.12;
+        var discThickness = 0.10;
         var discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discThickness, 16);
         var discMaterial = new THREE.MeshPhongMaterial({color: 0xcc9900, shininess: 30});
         var disc = new THREE.Mesh(discGeometry, discMaterial);
-        disc.position.set(poleBasePosition.x + 0.05, poleHeight + 0.9 * discRadius, poleBasePosition.z - 0.05);
+        disc.position.set(poleBasePosition.x + 0.07, poleHeight + 0.9 * discRadius, poleBasePosition.z - 0.05);
         disc.rotation.y = Math.PI * 1.25;
         disc.rotation.z = Math.PI / 2;
         disc.castShadow = true;
@@ -756,15 +816,28 @@ class Lamp {
         gThreeScene.add(disc);
         this.discs.push(disc);
 
-        // Add second disc
+        // Add second outer disc
         var disc2 = new THREE.Mesh(discGeometry, discMaterial);
-        disc2.position.set(poleBasePosition.x - 0.05, poleHeight + 0.9 * discRadius, poleBasePosition.z + 0.05);
+        disc2.position.set(poleBasePosition.x - 0.07, poleHeight + 0.9 * discRadius, poleBasePosition.z + 0.05);
         disc2.rotation.y = Math.PI * 1.25;
         disc2.rotation.z = Math.PI / 2;
         disc2.castShadow = true;
         disc2.receiveShadow = true;
         gThreeScene.add(disc2);
         this.discs.push(disc2);
+
+        // Add inner disc
+        var innerDiscRadius = discRadius * 1.2;
+        var innerDiscGeometry = new THREE.CylinderGeometry(innerDiscRadius, innerDiscRadius, discThickness * 0.8, 16);
+        var innerDiscMaterial = new THREE.MeshPhongMaterial({color: 0xffc71e, shininess: 30});
+        var innerDisc = new THREE.Mesh(innerDiscGeometry, innerDiscMaterial);
+        innerDisc.position.set(poleBasePosition.x, poleHeight + 0.9 * discRadius, poleBasePosition.z);
+        innerDisc.rotation.y = Math.PI * 1.25;
+        innerDisc.rotation.z = Math.PI / 2;
+        innerDisc.castShadow = true;
+        innerDisc.receiveShadow = true;
+        gThreeScene.add(innerDisc);
+        this.discs.push(innerDisc);
 
         // Add pin through center discs
         var pinHeight = 0.3;
@@ -788,9 +861,9 @@ class Lamp {
        
         // Add pedestal base
         var pedestalRadius = 1.5;
-        var pedestalHeight = 0.15;
+        var pedestalHeight = 0.2;
         var pedestalGeometry = new THREE.CylinderGeometry(pedestalRadius, pedestalRadius, pedestalHeight, 32);
-        var pedestalMaterial = new THREE.MeshPhongMaterial({color: 0x444444, shininess: 30});
+        var pedestalMaterial = new THREE.MeshPhongMaterial({color: 0x88821d, shininess: 30});
         this.basePlate = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
         
         // Position pedestal off-center
@@ -830,14 +903,15 @@ class Lamp {
         
         // Update spotlight position and target
         const bulbWorldPos = new THREE.Vector3();
-        this.rotatableGroup.children[2].getWorldPosition(bulbWorldPos);
+        this.bulb.getWorldPosition(bulbWorldPos);
         this.spotlight.position.copy(bulbWorldPos);
         
         // Get the cone's actual direction from its world quaternion
         const coneWorldQuaternion = new THREE.Quaternion();
-        this.rotatableGroup.children[0].getWorldQuaternion(coneWorldQuaternion);
+        this.outerCone.getWorldQuaternion(coneWorldQuaternion);
         
-        // The cone points along negative Y axis in local space
+        // The cone points away from target (backward like a shield)
+        // So spotlight direction is opposite: use negative Y axis
         const coneDirection = new THREE.Vector3(0, -1, 0);
         coneDirection.applyQuaternion(coneWorldQuaternion);
         
@@ -1080,12 +1154,12 @@ class Lamp {
         this.poleSections.forEach(section => {
             newTotalHeight += section.geometry.parameters.height;
         });
-        const hitRadius = this.poleHitArea.geometry.parameters.radiusTop;
-        this.poleHitArea.geometry.dispose();
-        this.poleHitArea.geometry = new THREE.CylinderGeometry(hitRadius, hitRadius, newTotalHeight, 8);
-        this.poleHitArea.position.y = newTotalHeight / 2;
-        
-        // Update sleeve position
+    const poleHitStartHeight = 0.5;
+    const poleHitHeight = newTotalHeight - poleHitStartHeight;
+    const hitRadius = this.poleHitArea.geometry.parameters.radiusTop;
+    this.poleHitArea.geometry.dispose();
+    this.poleHitArea.geometry = new THREE.CylinderGeometry(hitRadius, hitRadius, poleHitHeight, 8);
+    this.poleHitArea.position.y = poleHitStartHeight + poleHitHeight / 2;
         this.sleeve.position.y += actualTotalDelta;
         
         // Update discs positions
@@ -1123,12 +1197,18 @@ class Lamp {
         this.innerCone.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
         this.innerCone.material.emissiveIntensity = isOn ? 0.8 : 0;
         this.innerCone.material.color.setHex(isOn ? 0xffff00 : 0x222222);
+        
+        // Update tip disc appearance
+        this.coneTipDisc.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
+        this.coneTipDisc.material.emissiveIntensity = isOn ? 0.8 : 0;
+        this.coneTipDisc.material.color.setHex(isOn ? 0xffff00 : 0x222222);
     }
     
     updateConeGeometry() {
         // Calculate new cone radius based on spotlight angle
         const newConeRadius = Math.tan(this.spotlight.angle) * this.coneHeight;
-        const newConeGeometry = new THREE.ConeGeometry(newConeRadius, this.coneHeight, 32, 1, true);
+        const newTipRadius = newConeRadius * 0.15; // Keep tip at 15% of base
+        const newConeGeometry = new THREE.CylinderGeometry(newTipRadius, newConeRadius, this.coneHeight, 32, 1, true);
         
         // Update outer cone
         this.outerCone.geometry.dispose();
@@ -1138,9 +1218,16 @@ class Lamp {
         this.innerCone.geometry.dispose();
         this.innerCone.geometry = newConeGeometry.clone();
         
+        // Update tip disc size
+        this.coneTipDisc.geometry.dispose();
+        this.coneTipDisc.geometry = new THREE.CircleGeometry(newTipRadius, 32);
+        
+        this.coneTipDiscOuter.geometry.dispose();
+        this.coneTipDiscOuter.geometry = new THREE.CircleGeometry(newTipRadius, 32);
+        
         // Scale bulb to fit inside cone when cone is narrow
-        // Bulb is positioned 0.2 * coneHeight back from the cone tip
-        const bulbDistanceFromTip = this.coneHeight * 0.2;
+        // Bulb is positioned at cone center (0.7 * coneHeight back from light, which is at tip + 0.5*height)
+        const bulbDistanceFromTip = this.coneHeight * 0.5;
         const coneRadiusAtBulb = Math.tan(this.spotlight.angle) * bulbDistanceFromTip;
         const maxBulbRadius = coneRadiusAtBulb * 0.85; // 85% of cone radius at that point for safety margin
         const desiredBulbRadius = Math.min(0.2, maxBulbRadius); // Cap at 0.2 (original size)
@@ -1160,7 +1247,7 @@ class BOID {
         this.grabbed = false;
         
         // Create front cone mesh
-        var geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
+        var geometry = new THREE.ConeGeometry(rad, 3 * rad, 32, 32);
         var material = new THREE.MeshPhongMaterial({color: new THREE.Color(`hsl(${hue}, ${sat}%, 50%)`)});
         this.visMesh = new THREE.Mesh(geometry, material);
         this.visMesh.position.copy(pos);
@@ -1844,7 +1931,7 @@ function initThreeScene() {
     }
     
     // Lights
-    gThreeScene.add( new THREE.AmbientLight( 0x505050 ) );	
+    gThreeScene.add( new THREE.AmbientLight( 0x4d4d4d ) );	
     
     //gThreeScene.fog = new THREE.Fog( 0xaaaaaa, 10, 100 );				
 
@@ -1857,7 +1944,8 @@ function initThreeScene() {
     );
 
     // Directional Overhead Light
-    var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
+    //var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
+    var dirLight = new THREE.DirectionalLight( 0x55505a, 2 );
     dirLight.position.set( 0, 20, 0 );
     dirLight.castShadow = true;
     dirLight.shadow.camera.near = 0.5;
@@ -2623,9 +2711,10 @@ function onPointer(evt) {
             return;
         }
         
-        if (hitLampHeight) {
+        if (hitLampHeight || hitLampRotation) {
             gActiveLampId = hitLampId;
-            gDraggingLampHeight = true;
+            gDraggingLampPoleOrSleeve = true;
+            gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             // Disable orbit controls while dragging lamp
             if (gCameraControl) {
@@ -2654,18 +2743,30 @@ function onPointer(evt) {
             gDraggingLampBase = true;
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
-            // Disable orbit controls while dragging base
-            if (gCameraControl) {
-                gCameraControl.enabled = false;
+            
+            // Calculate offset from click point to lamp base center
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            var groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            var clickPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(groundPlane, clickPoint);
+            
+            const lamp = gLamps[hitLampId];
+            if (clickPoint && lamp) {
+                gLampBaseDragOffset = new THREE.Vector3(
+                    lamp.baseCenter.x - clickPoint.x,
+                    0,
+                    lamp.baseCenter.z - clickPoint.z
+                );
             }
-            return;
-        }
-        
-        if (hitLampRotation && !hitLampHeight) {
-            gActiveLampId = hitLampId;
-            gDraggingLampRotation = true;
-            gPointerLastX = evt.clientX;
-            // Disable orbit controls while rotating lamp
+            
+            // Disable orbit controls while dragging base
             if (gCameraControl) {
                 gCameraControl.enabled = false;
             }
@@ -2862,10 +2963,14 @@ function onPointer(evt) {
             raycaster.ray.intersectPlane(groundPlane, intersectionPoint);
             
             const lamp = gLamps[gActiveLampId];
-            if (intersectionPoint && lamp) {
-                // Calculate translation needed to move base center to cursor position
-                const deltaX = intersectionPoint.x - lamp.baseCenter.x;
-                const deltaZ = intersectionPoint.z - lamp.baseCenter.z;
+            if (intersectionPoint && lamp && gLampBaseDragOffset) {
+                // Apply offset so lamp doesn't jump
+                const targetX = intersectionPoint.x + gLampBaseDragOffset.x;
+                const targetZ = intersectionPoint.z + gLampBaseDragOffset.z;
+                
+                // Calculate translation needed
+                const deltaX = targetX - lamp.baseCenter.x;
+                const deltaZ = targetZ - lamp.baseCenter.z;
                 translateLampAssembly(deltaX, deltaZ, gActiveLampId);
             }
             return;
@@ -2878,6 +2983,26 @@ function onPointer(evt) {
             // Adjust lamp height based on vertical mouse movement (inverted)
             updateLampHeight(-deltaY * 0.02, gActiveLampId);
             
+            gPointerLastY = evt.clientY;
+            return;
+        }
+        
+        // Handle pole/sleeve dragging (both height and rotation simultaneously)
+        if (gDraggingLampPoleOrSleeve) {
+            const deltaX = evt.clientX - gPointerLastX;
+            const deltaY = evt.clientY - gPointerLastY;
+            
+            // Apply rotation based on horizontal movement
+            if (Math.abs(deltaX) > 0.5) {
+                rotateLampAssembly(deltaX * 0.01, gActiveLampId);
+            }
+            
+            // Apply height adjustment based on vertical movement
+            if (Math.abs(deltaY) > 0.5) {
+                updateLampHeight(-deltaY * 0.02, gActiveLampId);
+            }
+            
+            gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             return;
         }
@@ -2966,6 +3091,15 @@ function onPointer(evt) {
             gDraggingCylinder = false;
             gCylinderDragOffset = null;
             window.draggingCylinderObstacle = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingLampPoleOrSleeve) {
+            gDraggingLampPoleOrSleeve = false;
             // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
