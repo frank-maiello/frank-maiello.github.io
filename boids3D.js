@@ -131,7 +131,7 @@ var restitution = {
     floor: 0.7,
 };
 
-var boidRadius = 0.16;
+var boidRadius = 0.20;
 var boidProps = {
     minDistance: 5.0 * boidRadius, // Rule #1 - The distance to stay away from other Boids
     avoidFactor: 0.05, // Rule #1 -Adjust velocity by this %
@@ -143,6 +143,15 @@ var boidProps = {
     turnFactor: 0.05, // How strongly Boids turn back when near edge
     margin: 2.0, // Distance from boundary to start turning
 };
+
+// Boid trail tracking variables
+var gTrailEnabled = false; // Enable/disable trail tracking
+var gTrailLength = 1000; // Maximum number of trail points to store
+var gTrailBoidIndex = 1; // Index of boid to track (second boid in array)
+var gTrailPositions = []; // Array to store trail positions
+var gTrailMesh = null; // THREE.Mesh for the trail tube
+var gTrailUpdateCounter = 0; // Counter to limit trail updates
+var gTrailUpdateFrequency = 1; // Update trail every N frames
 
 // OBSTACLE CLASSES ---------------------------------------------------------------------
 
@@ -372,127 +381,162 @@ class CylinderObstacle {
         const fluteDepth = 0.15; // Maximum depth to carve (not full radius)
         const fluteWidthFraction = 0.9; // Fraction of section to carve (leaves ridges between)
         const radialSegments = numFlutes * 16; // Very high segment count for smooth semicircles
-        const heightSegments = 128; // Vertical segments for smooth fluting
+        const heightSegments = 25; // Vertical segments per section for smooth fluting
         
-        // Create custom geometry with flutes
-        const geometry = new THREE.CylinderGeometry(
-            this.radius, 
-            this.radius, 
-            this.height, 
-            radialSegments, 
-            heightSegments
-        );
+        // Create 3 sections stacked vertically
+        const numSections = 3;
+        const groutThickness = 0.08;
+        const totalGroutHeight = groutThickness * (numSections - 1);
+        const sectionHeight = (this.height - totalGroutHeight) / numSections;
         
-        // Modify vertices to carve perfect semicircular half-pipe grooves INTO the surface
-        const positionAttribute = geometry.attributes.position;
-        for (let i = 0; i < positionAttribute.count; i++) {
-            const x = positionAttribute.getX(i);
-            const y = positionAttribute.getY(i);
-            const z = positionAttribute.getZ(i);
-            
-            // Calculate angle around cylinder
-            let angle = Math.atan2(z, x);
-            if (angle < 0) angle += Math.PI * 2; // Normalize to 0-2π
-            const distFromCenter = Math.sqrt(x * x + z * z);
-            
-            // Only modify side vertices (not top/bottom caps)
-            if (Math.abs(distFromCenter) > 0.01) {
-                // Calculate position within flute array
-                const flutePosition = (angle / (Math.PI * 2)) * numFlutes;
-                const fluteFraction = flutePosition % 1.0; // 0-1 within current flute section
-                
-                let fluteOffset = 0;
-                
-                // Only carve in the center portion, leaving ridges at edges
-                const ridgeWidth = (1.0 - fluteWidthFraction) / 2.0;
-                
-                if (fluteFraction >= ridgeWidth && fluteFraction <= (1.0 - ridgeWidth)) {
-                    // We're in the groove area - create truly circular semicircular carved profile
-                    // Normalize position within groove from 0 to 1
-                    const normalizedGroovePos = (fluteFraction - ridgeWidth) / fluteWidthFraction;
-                    
-                    // Calculate arc length position on cylinder surface for this groove
-                    const sectionArcAngle = (Math.PI * 2) / numFlutes; // Total angle per section
-                    const grooveArcAngle = sectionArcAngle * fluteWidthFraction; // Angle just for groove
-                    const arcPos = (normalizedGroovePos - 0.5) * grooveArcAngle; // -half to +half
-                    
-                    // Convert arc position to chord (straight-line) distance for circle equation
-                    const chordDistance = distFromCenter * Math.sin(arcPos);
-                    
-                    // Calculate the width of the groove opening at the surface
-                    const grooveOpeningWidth = distFromCenter * grooveArcAngle;
-                    
-                    // Now apply perfect circle equation with this chord distance
-                    const x_pos = chordDistance / (grooveOpeningWidth / 2.0); // Normalize by half-width
-                    
-                    // Perfect semicircular profile: y = sqrt(1 - x²)
-                    if (Math.abs(x_pos) <= 1.0) {
-                        const y_circle = Math.sqrt(1.0 - x_pos * x_pos);
-                        
-                        // Carve depth: maximum at center, zero at edges
-                        const carveDepth = y_circle * fluteDepth;
-                        
-                        // Apply NEGATIVE offset to carve INTO the surface
-                        fluteOffset = -carveDepth;
-                    }
-                }
-                // else: in ridge area, no carving (fluteOffset = 0)
-                
-                const newRadius = distFromCenter + fluteOffset;
-                
-                // Update position
-                const normalizedX = x / distFromCenter;
-                const normalizedZ = z / distFromCenter;
-                positionAttribute.setX(i, normalizedX * newRadius);
-                positionAttribute.setZ(i, normalizedZ * newRadius);
-            }
-        }
+        this.columnSections = [];
+        this.groutLayers = [];
         
-        // Recompute normals for proper lighting
-        geometry.computeVertexNormals();
-        
-        var material = new THREE.MeshStandardMaterial({
+        // Material for column sections
+        var columnMaterial = new THREE.MeshStandardMaterial({
             color: `hsl(22, 8%, 74%)`,
             roughness: 1.0
         });
-        this.mesh = new THREE.Mesh(geometry, material);
-        this.mesh.position.copy(this.position);
-        this.mesh.position.y += 0.03; // Centered vertically
-        this.mesh.rotation.x = this.rotation.x;
-        this.mesh.rotation.y = this.rotation.y;
-        this.mesh.rotation.z = this.rotation.z;
-        this.mesh.castShadow = true;
-        this.mesh.receiveShadow = true;
-        this.mesh.flatShading = false;
-        this.mesh.userData.isDraggableCylinder = true; // Mark for mouse interaction
-        this.mesh.userData.cylinderObstacle = this; // Reference back to this object
-        gThreeScene.add(this.mesh);
         
-        // Create round disc baseplate between column and pedestal
-        const discRadius = this.radius * 1.02; // Larger than column, smaller than pedestal
-        const discHeight = 0.4;
-        const discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discHeight, 64);
-        const discMaterial = new THREE.MeshStandardMaterial({
-            color: `hsl(25, 10%, 60%)`,
-            roughness: 0.5
+        // Material for grout layers
+        var groutMaterial = new THREE.MeshStandardMaterial({
+            color: `hsl(0, 0%, 35%)`,
+            roughness: 0.8
         });
-        this.discMesh = new THREE.Mesh(discGeometry, discMaterial);
-        this.discMesh.position.copy(this.position);
-        this.discMesh.position.y = (this.position.y - this.height / 2) + 1.3; // On top of pedestal
-        this.discMesh.rotation.copy(this.mesh.rotation);
-        this.discMesh.castShadow = true;
-        this.discMesh.receiveShadow = true;
-        this.discMesh.userData.isDraggableCylinder = true;
-        this.discMesh.userData.cylinderObstacle = this;
-        gThreeScene.add(this.discMesh);
+        
+        for (let section = 0; section < numSections; section++) {
+            // Create custom geometry with flutes for this section
+            const geometry = new THREE.CylinderGeometry(
+                this.radius, 
+                this.radius, 
+                sectionHeight, 
+                radialSegments, 
+                heightSegments
+            );
+            
+            // Modify vertices to carve perfect semicircular half-pipe grooves INTO the surface
+            const positionAttribute = geometry.attributes.position;
+            for (let i = 0; i < positionAttribute.count; i++) {
+                const x = positionAttribute.getX(i);
+                const y = positionAttribute.getY(i);
+                const z = positionAttribute.getZ(i);
+                
+                // Calculate angle around cylinder
+                let angle = Math.atan2(z, x);
+                if (angle < 0) angle += Math.PI * 2; // Normalize to 0-2π
+                const distFromCenter = Math.sqrt(x * x + z * z);
+                
+                // Only modify side vertices (not top/bottom caps)
+                if (Math.abs(distFromCenter) > 0.01) {
+                    // Calculate position within flute array
+                    const flutePosition = (angle / (Math.PI * 2)) * numFlutes;
+                    const fluteFraction = flutePosition % 1.0; // 0-1 within current flute section
+                    
+                    let fluteOffset = 0;
+                    
+                    // Only carve in the center portion, leaving ridges at edges
+                    const ridgeWidth = (1.0 - fluteWidthFraction) / 2.0;
+                    
+                    if (fluteFraction >= ridgeWidth && fluteFraction <= (1.0 - ridgeWidth)) {
+                        // We're in the groove area - create truly circular semicircular carved profile
+                        // Normalize position within groove from 0 to 1
+                        const normalizedGroovePos = (fluteFraction - ridgeWidth) / fluteWidthFraction;
+                        
+                        // Calculate arc length position on cylinder surface for this groove
+                        const sectionArcAngle = (Math.PI * 2) / numFlutes; // Total angle per section
+                        const grooveArcAngle = sectionArcAngle * fluteWidthFraction; // Angle just for groove
+                        const arcPos = (normalizedGroovePos - 0.5) * grooveArcAngle; // -half to +half
+                        
+                        // Convert arc position to chord (straight-line) distance for circle equation
+                        const chordDistance = distFromCenter * Math.sin(arcPos);
+                        
+                        // Calculate the width of the groove opening at the surface
+                        const grooveOpeningWidth = distFromCenter * grooveArcAngle;
+                        
+                        // Now apply perfect circle equation with this chord distance
+                        const x_pos = chordDistance / (grooveOpeningWidth / 2.0); // Normalize by half-width
+                        
+                        // Perfect semicircular profile: y = sqrt(1 - x²)
+                        if (Math.abs(x_pos) <= 1.0) {
+                            const y_circle = Math.sqrt(1.0 - x_pos * x_pos);
+                            
+                            // Carve depth: maximum at center, zero at edges
+                            const carveDepth = y_circle * fluteDepth;
+                            
+                            // Apply NEGATIVE offset to carve INTO the surface
+                            fluteOffset = -carveDepth;
+                        }
+                    }
+                    // else: in ridge area, no carving (fluteOffset = 0)
+                    
+                    const newRadius = distFromCenter + fluteOffset;
+                    
+                    // Update position
+                    const normalizedX = x / distFromCenter;
+                    const normalizedZ = z / distFromCenter;
+                    positionAttribute.setX(i, normalizedX * newRadius);
+                    positionAttribute.setZ(i, normalizedZ * newRadius);
+                }
+            }
+            
+            // Recompute normals for proper lighting
+            geometry.computeVertexNormals();
+            
+            const sectionMesh = new THREE.Mesh(geometry, columnMaterial);
+            
+            // Calculate Y position for this section (start on top of disc baseplate)
+            const bottomY = this.position.y - this.height / 2;
+            const columnBaseY = bottomY + 1.4; // Top of disc baseplate (disc at bottomY + 1.3, disc height 0.2)
+            const sectionY = columnBaseY + (section * (sectionHeight + groutThickness)) + sectionHeight / 2;
+            
+            sectionMesh.position.set(this.position.x, sectionY + 0.03, this.position.z);
+            sectionMesh.rotation.x = this.rotation.x;
+            sectionMesh.rotation.y = this.rotation.y;
+            sectionMesh.rotation.z = this.rotation.z;
+            sectionMesh.castShadow = true;
+            sectionMesh.receiveShadow = true;
+            sectionMesh.flatShading = false;
+            sectionMesh.userData.isDraggableCylinder = true;
+            sectionMesh.userData.cylinderObstacle = this;
+            gThreeScene.add(sectionMesh);
+            this.columnSections.push(sectionMesh);
+            
+            // Create grout layer between sections (except after last section)
+            if (section < numSections - 1) {
+                const groutGeometry = new THREE.CylinderGeometry(
+                    this.radius * 0.96,
+                    this.radius * 0.96,
+                    groutThickness,
+                    32
+                );
+                const groutMesh = new THREE.Mesh(groutGeometry, groutMaterial);
+                const columnBaseY = bottomY + 1.4; // Top of disc baseplate
+                const groutY = columnBaseY + ((section + 1) * sectionHeight) + (section * groutThickness) + groutThickness / 2;
+                groutMesh.position.set(this.position.x, groutY + 0.03, this.position.z);
+                groutMesh.rotation.copy(sectionMesh.rotation);
+                groutMesh.castShadow = true;
+                groutMesh.receiveShadow = true;
+                groutMesh.userData.isDraggableCylinder = true;
+                groutMesh.userData.cylinderObstacle = this;
+                gThreeScene.add(groutMesh);
+                this.groutLayers.push(groutMesh);
+            }
+        }
+        
+        // Store reference to first section as 'mesh' for backward compatibility
+        this.mesh = this.columnSections[0];
         
         // Create conical pedestal
-        const conicalPedestalRadius = this.radius * 1.3;
-        const conicalPedestalHeight = 4; 
+        const conicalPedestalRadius = this.radius * 1.5;
+        const conicalPedestalHeight = 3; 
         const conicalPedestalGeometry = new THREE.ConeGeometry(conicalPedestalRadius, conicalPedestalHeight, 64);
+        // Create clipping plane to cut off bottom portion of cone (y = 0.0 to 0.95)
+        const clippingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.95);
         const conicalPedestalMaterial = new THREE.MeshStandardMaterial({
-            color: `hsl(25, 10%, 40%)`,
-            roughness: 0.5
+            color: `hsl(25, 10%, 30%)`,
+            roughness: 0.5,
+            clippingPlanes: [clippingPlane],
+            clipShadows: true
         });
         this.conicalPedestalMesh = new THREE.Mesh(conicalPedestalGeometry, conicalPedestalMaterial);
         this.conicalPedestalMesh.position.copy(this.position);
@@ -504,12 +548,30 @@ class CylinderObstacle {
         this.conicalPedestalMesh.userData.cylinderObstacle = this;
         gThreeScene.add(this.conicalPedestalMesh);
 
-        // Create round pedestal (under the cone)
-        const pedestalSize = this.radius * 1.35;
-        const pedestalHeight = 0.3; 
-        const pedestalGeometry = new THREE.CylinderGeometry(pedestalSize, pedestalSize, pedestalHeight, 64);
+        // Create round disc baseplate between column and pedestal
+        const discRadius = this.radius * 1.02; // Larger than column, smaller than pedestal
+        const discHeight = 0.2;
+        const discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discHeight, 64);
+        const discMaterial = new THREE.MeshStandardMaterial({
+            color: `hsl(25, 10%, 30%)`,
+            roughness: 0.5
+        });
+        this.discMesh = new THREE.Mesh(discGeometry, discMaterial);
+        this.discMesh.position.copy(this.position);
+        this.discMesh.position.y = (this.position.y - this.height / 2) + 1.3; // On top of pedestal
+        this.discMesh.rotation.copy(this.mesh.rotation);
+        this.discMesh.castShadow = true;
+        this.discMesh.receiveShadow = true;
+        this.discMesh.userData.isDraggableCylinder = true;
+        this.discMesh.userData.cylinderObstacle = this;
+        gThreeScene.add(this.discMesh);
+
+        // add square pedestal
+        const pedestalSize = this.radius * 2.5;
+        const pedestalHeight = 1;
+        const pedestalGeometry = new THREE.BoxGeometry(pedestalSize, pedestalHeight, pedestalSize);
         const pedestalMaterial = new THREE.MeshStandardMaterial({
-            color: `hsl(25, 10%, 60%)`,
+            color: `hsl(25, 10%, 40%)`,
             roughness: 0.5
         });
         this.pedestalMesh = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
@@ -617,20 +679,36 @@ class CylinderObstacle {
     // Update cylinder position
     updatePosition(newPosition) {
         this.position.copy(newPosition);
-        if (this.mesh) {
-            this.mesh.position.copy(newPosition);
+        
+        // Update all column sections and grout layers
+        const numSections = this.columnSections.length;
+        const groutThickness = 0.08;
+        const totalGroutHeight = groutThickness * (numSections - 1);
+        const sectionHeight = (this.height - totalGroutHeight) / numSections;
+        const bottomY = newPosition.y - this.height / 2;
+        const columnBaseY = bottomY + 1.4; // Top of disc baseplate
+        
+        for (let section = 0; section < numSections; section++) {
+            const sectionY = columnBaseY + (section * (sectionHeight + groutThickness)) + sectionHeight / 2;
+            this.columnSections[section].position.set(newPosition.x, sectionY + 0.03, newPosition.z);
+            
+            // Update grout layer (except after last section)
+            if (section < numSections - 1) {
+                const groutY = columnBaseY + ((section + 1) * sectionHeight) + (section * groutThickness) + groutThickness / 2;
+                this.groutLayers[section].position.set(newPosition.x, groutY + 0.03, newPosition.z);
+            }
         }
+        
         if (this.discMesh) {
-            this.discMesh.position.copy(newPosition);
-            this.discMesh.position.y = (newPosition.y - this.height / 2) + 1.3; // On top of conical pedestal
+            this.discMesh.position.set(newPosition.x, bottomY + 1.3, newPosition.z);
         }
         if (this.conicalPedestalMesh) {
-            this.conicalPedestalMesh.position.copy(newPosition);
-            this.conicalPedestalMesh.position.y = (newPosition.y - this.height / 2) + 2.28; // Position cone (half height 2.0 + 0.28)
+            const conicalPedestalHeight = 3;
+            this.conicalPedestalMesh.position.set(newPosition.x, bottomY + 0.5 * conicalPedestalHeight + 0.28, newPosition.z);
         }
         if (this.pedestalMesh) {
-            this.pedestalMesh.position.copy(newPosition);
-            this.pedestalMesh.position.y = 0.15; // Bottom at y=0 (half of 0.3 height)
+            const pedestalHeight = 1;
+            this.pedestalMesh.position.set(newPosition.x, 0.5 * pedestalHeight, newPosition.z);
         }
     }
 }
@@ -1690,10 +1768,9 @@ function makeBoids() {
             if (i == 0) {
                 hue = 220;
                 sat = 90;
-            }
-            else if (i < 51) {
-                hue = Math.round(100 + Math.random() * 40);
-                sat = 90;
+            } else if (i < 101) {
+                hue = Math.round(Math.random() * 360);
+                sat = Math.round(30 + Math.random() * 70);
             } else {
                 hue = Math.round(340 + Math.random() * 40);
                 sat = Math.round(30 + Math.random() * 70); // 50% to 100% saturation
@@ -1816,10 +1893,82 @@ function simulate() {
         SpatialGrid.updateBoid(boid);
     }
     
+    // Update trail tracking
+    if (gTrailEnabled && gPhysicsScene.objects.length > gTrailBoidIndex) {
+        gTrailUpdateCounter++;
+        if (gTrailUpdateCounter >= gTrailUpdateFrequency) {
+            gTrailUpdateCounter = 0;
+            updateBoidTrail();
+        }
+    }
+    
     gGrabber.increaseTime(deltaT);
 }
 
 let res = 1024
+
+// TRAIL TRACKING FUNCTIONS -------------------------------------------------------
+function updateBoidTrail() {
+    const boid = gPhysicsScene.objects[gTrailBoidIndex];
+    if (!boid) return;
+    
+    // Add current position to trail
+    gTrailPositions.push(boid.pos.clone());
+    
+    // Remove old positions if trail exceeds max length
+    while (gTrailPositions.length > gTrailLength) {
+        gTrailPositions.shift();
+    }
+    
+    // Need at least 2 points to create a tube
+    if (gTrailPositions.length < 2) return;
+    
+    // Remove old trail mesh
+    if (gTrailMesh) {
+        gThreeScene.remove(gTrailMesh);
+        if (gTrailMesh.geometry) gTrailMesh.geometry.dispose();
+        if (gTrailMesh.material) gTrailMesh.material.dispose();
+    }
+    
+    // Create curve from trail positions
+    const curve = new THREE.CatmullRomCurve3(gTrailPositions);
+    
+    // Create tube geometry from curve
+    const tubeRadius = boidRadius * 0.5; 
+    const tubularSegments = Math.max(10, gTrailPositions.length * 2);
+    const radialSegments = 8;
+    const tubeGeometry = new THREE.TubeGeometry(
+        curve,
+        tubularSegments,
+        tubeRadius,
+        radialSegments,
+        false
+    );
+    
+    // Create material with gradient effect (fade out at the end)
+    const tubeMaterial = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        transparent: false,
+        //opacity: 0.7,
+        shininess: 30
+    });
+    
+    // Create mesh
+    gTrailMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
+    gTrailMesh.castShadow = false;
+    gTrailMesh.receiveShadow = false;
+    gThreeScene.add(gTrailMesh);
+}
+
+function clearBoidTrail() {
+    gTrailPositions = [];
+    if (gTrailMesh) {
+        gThreeScene.remove(gTrailMesh);
+        if (gTrailMesh.geometry) gTrailMesh.geometry.dispose();
+        if (gTrailMesh.material) gTrailMesh.material.dispose();
+        gTrailMesh = null;
+    }
+}
 
 // MENU DRAWING FUNCTIONS -------------------------------------------------------
 function drawMainMenu() {
@@ -2195,38 +2344,55 @@ function initThreeScene() {
     var boxSize = gPhysicsScene.worldSize;
     var wallOpacity = 1.0;
     
-    // Front wall (positive Z) - pastel pink checkerboard
-    var frontWallCanvas = document.createElement('canvas');
-    frontWallCanvas.width = 1024;
-    frontWallCanvas.height = 1024;
-    var frontWallCtx = frontWallCanvas.getContext('2d');
+    // Front wall (positive Z) - grafWall.jpg image
+    // var frontWallCanvas = document.createElement('canvas');
+    // frontWallCanvas.width = 1024;
+    // frontWallCanvas.height = 1024;
+    // var frontWallCtx = frontWallCanvas.getContext('2d');
     var wallTileSize = 512;
-    for (var i = 0; i < 2; i++) {
-        for (var j = 0; j < 2; j++) {
-            frontWallCtx.fillStyle = (i + j) % 2 === 0 ? '#FF8A94' : '#e6e6e6';
-            frontWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+    // for (var i = 0; i < 2; i++) {
+    //     for (var j = 0; j < 2; j++) {
+    //         frontWallCtx.fillStyle = (i + j) % 2 === 0 ? '#FF8A94' : '#e6e6e6';
+    //         frontWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+    //     }
+    // }
+    // frontWallCtx.strokeStyle = '#333333';
+    // frontWallCtx.lineWidth = 4;
+    // for (var i = 0; i < 2; i++) {
+    //     for (var j = 0; j < 2; j++) {
+    //         frontWallCtx.strokeRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+    //     }
+    // }
+    // var frontWallTexture = new THREE.CanvasTexture(frontWallCanvas);
+    // frontWallTexture.wrapS = THREE.RepeatWrapping;
+    // frontWallTexture.wrapT = THREE.RepeatWrapping;
+    // frontWallTexture.repeat.set((boxSize.x * 2) / (4 * 5), boxSize.y / (4 * 5));
+    
+    var frontWallTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/grafWall.jpg',
+        function(texture) {
+            console.log('grafWall.jpg loaded successfully on front wall');
+            console.log('Image dimensions:', texture.image.width, 'x', texture.image.height);
+            // Flip the texture horizontally
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.repeat.x = -1;
+            texture.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading grafWall.jpg:', err);
         }
-    }
-    frontWallCtx.strokeStyle = '#333333';
-    frontWallCtx.lineWidth = 4;
-    for (var i = 0; i < 2; i++) {
-        for (var j = 0; j < 2; j++) {
-            frontWallCtx.strokeRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
-        }
-    }
-    var frontWallTexture = new THREE.CanvasTexture(frontWallCanvas);
-    frontWallTexture.wrapS = THREE.RepeatWrapping;
-    frontWallTexture.wrapT = THREE.RepeatWrapping;
-    frontWallTexture.repeat.set((boxSize.x * 2) / (4 * 5), boxSize.y / (4 * 5));
+    );
+    
+    var frontWallMaterial = new THREE.MeshPhongMaterial({ 
+        map: frontWallTexture,
+        side: THREE.BackSide,
+        transparent: false
+    });
     
     var frontWall = new THREE.Mesh(
         new THREE.PlaneGeometry(boxSize.x * 2, boxSize.y),
-        new THREE.MeshPhongMaterial({ 
-            map: frontWallTexture,
-            transparent: true, 
-            opacity: wallOpacity,
-            side: THREE.BackSide
-        })
+        frontWallMaterial
     );
     frontWall.position.set(0, boxSize.y / 2, boxSize.z);
     frontWall.receiveShadow = true;
@@ -2474,8 +2640,8 @@ function initThreeScene() {
     // Create cylinder obstacle
     var cylinderObstacle = new CylinderObstacle(
         2.5,  // radius
-        14,  // height
-        new THREE.Vector3(10, 7.03, -10),  // position
+        12,  // height
+        new THREE.Vector3(10, 6.03, -10),  // position
         { x: 0, y: 0, z: 0 }  // rotation
     );
     gObstacles.push(cylinderObstacle);
@@ -2483,6 +2649,7 @@ function initThreeScene() {
     // Renderer
     gRenderer = new THREE.WebGLRenderer();
     gRenderer.shadowMap.enabled = true;
+    gRenderer.localClippingEnabled = true; // Enable clipping planes
     gRenderer.setPixelRatio( window.devicePixelRatio );
     gRenderer.setSize( 0.8 * window.innerWidth, 0.8 * window.innerHeight );
     window.addEventListener( 'resize', onWindowResize, false );
@@ -2512,9 +2679,7 @@ function initThreeScene() {
     gOverlayCanvas.height = window.innerHeight;
     gOverlayCtx = gOverlayCanvas.getContext('2d');
     document.body.appendChild(gOverlayCanvas);
-
-
-    
+  
     // Add keyboard listener for camera mode cycling
     window.addEventListener('keydown', function(evt) {
         if (evt.key === ' ') {
