@@ -40,6 +40,9 @@ var gLampBaseDragOffset = null; // Store offset from click point to lamp base ce
 var gDraggingCylinder = false; // Track if dragging the cylinder obstacle
 var gCylinderDragOffset = null; // Store offset from click point to cylinder center
 var gCylinderDragPlaneHeight = 0; // Store the Y height where the cylinder was grabbed
+var gDraggingSphere = false; // Track if dragging the sphere obstacle
+var gSphereDragOffset = null; // Store offset from click point to sphere center
+var gSphereDragPlaneHeight = 0; // Store the Y height where the sphere was grabbed
 var gActiveLampId = 1; // Track which lamp is currently being interacted with (1 or 2)
 var gLampAngle = -0.0435; // Current lamp angle in radians (-2.49 degrees)
 var gLampAssemblyRotation = 0.0; // Current lamp assembly rotation around Y axis
@@ -278,6 +281,79 @@ class TorusObstacle {
     }
 }
 
+class SphereObstacle {
+    constructor(radius, position) {
+        this.radius = radius;
+        this.position = position.clone();
+        this.mesh = null;
+        this.createMesh();
+    }
+    
+    createMesh() {
+        var geometry = new THREE.SphereGeometry(this.radius, 32, 32);
+        var material = new THREE.MeshPhongMaterial({color: 0x00ccbe, shininess: 100});
+        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh.position.copy(this.position);
+        this.mesh.castShadow = true;
+        this.mesh.receiveShadow = true;
+        this.mesh.userData.isDraggableSphere = true;
+        this.mesh.userData.sphereObstacle = this;
+        gThreeScene.add(this.mesh);
+    }
+    
+    // Check if a point is inside the sphere
+    // Returns distance to surface (negative if inside)
+    getDistanceToSurface(point) {
+        const distanceFromCenter = point.distanceTo(this.position);
+        return distanceFromCenter - this.radius;
+    }
+    
+    // Apply avoidance force to a boid
+    applyAvoidance(boid, avoidanceStrength = 1.5) {
+        const distance = this.getDistanceToSurface(boid.pos);
+        const threshold = 3.0; // Start avoiding when within this distance
+        
+        if (distance < threshold) {
+            // Calculate avoidance direction (away from sphere center)
+            const gradient = boid.pos.clone().sub(this.position);
+            const gradLen = gradient.length();
+            
+            if (gradLen > 0.001) {
+                gradient.normalize();
+            } else {
+                // At exact center, push in any direction
+                gradient.set(1, 0, 0);
+            }
+            
+            // Much stronger avoidance when closer, especially when inside (distance < 0)
+            let strength;
+            if (distance < 0) {
+                // Inside the solid - EMERGENCY EJECTION with exponential force
+                const penetrationDepth = -distance;
+                strength = avoidanceStrength * 10.0 * (1.0 + penetrationDepth * 2.0);
+            } else if (distance < 1.0) {
+                // Very close - strong repulsion
+                strength = avoidanceStrength * 5.0 * (1.0 - distance);
+            } else {
+                // Outside but within detection range - gentle avoidance
+                strength = avoidanceStrength * (threshold - distance) / threshold;
+            }
+            
+            boid.vel.x += gradient.x * strength;
+            boid.vel.y += gradient.y * strength;
+            boid.vel.z += gradient.z * strength;
+        }
+    }
+    
+    // Update sphere position
+    updatePosition(newPosition) {
+        this.position.copy(newPosition);
+        if (this.mesh) {
+            this.mesh.position.copy(newPosition);
+        }
+    }
+}
+
 class CylinderObstacle {
     constructor(radius, height, position, rotation) {
         this.radius = radius;
@@ -487,7 +563,7 @@ class CylinderObstacle {
     // Apply avoidance force to a boid
     applyAvoidance(boid, avoidanceStrength = 1.5) {
         const distance = this.getDistanceToSurface(boid.pos);
-        const threshold = 5.0; // Start avoiding when within this distance
+        const threshold = 3.0; // Start avoiding when within this distance
         
         if (distance < threshold) {
             // Calculate avoidance direction
@@ -564,7 +640,7 @@ var gObstacles = []; // Global array to hold all obstacles
 class Lamp {
     constructor(lightPosition, lightTarget, lampId) {
         this.lampId = lampId;
-        this.angle = -0.0435; // Initial lamp angle in radians
+        this.angle = 0.0; // Start at zero, cone is already oriented correctly
         this.assemblyRotation = 0.0; // Assembly rotation around Y axis
         
         // Create lamp rotatable group
@@ -886,9 +962,14 @@ class Lamp {
         var pedestalMaterial = new THREE.MeshPhongMaterial({color: 0x88821d, shininess: 30});
         this.basePlate = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
         
-        // Position pedestal off-center
+        // Position pedestal off-center toward room center
         var offsetDistance = pedestalRadius * 0.4;
-        this.basePlate.position.set(poleBasePosition.x - offsetDistance, pedestalHeight / 2, poleBasePosition.z - offsetDistance);
+        // Calculate direction toward room center (0,0) from pole position
+        var dirToCenter = new THREE.Vector3(-poleBasePosition.x, 0, -poleBasePosition.z).normalize();
+        var baseOffsetX = dirToCenter.x * offsetDistance;
+        var baseOffsetZ = dirToCenter.z * offsetDistance;
+        
+        this.basePlate.position.set(poleBasePosition.x + baseOffsetX, pedestalHeight / 2, poleBasePosition.z + baseOffsetZ);
         this.basePlate.castShadow = true;
         this.basePlate.receiveShadow = true;
         this.basePlate.userData.isLampBase = true;
@@ -896,8 +977,53 @@ class Lamp {
         this.basePlate.userData.lampInstance = this;
         gThreeScene.add(this.basePlate);
         
+        // Add status indicator light in center of base
+        var indicatorRadius = 0.15;
+        var indicatorHeight = 0.1;
+        var indicatorGeometry = new THREE.CylinderGeometry(indicatorRadius, indicatorRadius, indicatorHeight, 16);
+        var indicatorMaterial = new THREE.MeshPhongMaterial({
+            color: 0xff0000,
+            emissive: 0xff0000,
+            emissiveIntensity: 0.8,
+            shininess: 100
+        });
+        this.statusIndicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
+        this.statusIndicator.position.set(
+            poleBasePosition.x + baseOffsetX,
+            pedestalHeight + indicatorHeight / 2,
+            poleBasePosition.z + baseOffsetZ
+        );
+        this.statusIndicator.castShadow = false;
+        this.statusIndicator.receiveShadow = true;
+        this.statusIndicator.userData.isNonInteractive = true; // Skip in raycasting
+        gThreeScene.add(this.statusIndicator);
+        
+        // Add black collar around status indicator
+        var collarHeight = indicatorHeight * 0.7; // 70% of indicator height so light sticks out
+        var collarRadius = indicatorRadius * 1.4; // Slightly larger than indicator
+        var collarGeometry = new THREE.CylinderGeometry(collarRadius, collarRadius, collarHeight, 16);
+        var collarMaterial = new THREE.MeshPhongMaterial({
+            color: 0x000000,
+            shininess: 20
+        });
+        this.statusCollar = new THREE.Mesh(collarGeometry, collarMaterial);
+        this.statusCollar.position.set(
+            poleBasePosition.x + baseOffsetX,
+            pedestalHeight + collarHeight / 2,
+            poleBasePosition.z + baseOffsetZ
+        );
+        this.statusCollar.castShadow = false;
+        this.statusCollar.receiveShadow = true;
+        this.statusCollar.userData.isNonInteractive = true; // Skip in raycasting
+        gThreeScene.add(this.statusCollar);
+        
+        // Initialize status indicator to match spotlight state (green if on, red if off)
+        const isOn = this.spotlight.visible;
+        this.statusIndicator.material.color.setHex(isOn ? 0x00ff00 : 0xff0000);
+        this.statusIndicator.material.emissive.setHex(isOn ? 0x00ff00 : 0xff0000);
+        
         // Store base center for lamp assembly rotation
-        this.baseCenter = new THREE.Vector3(poleBasePosition.x - offsetDistance, 0, poleBasePosition.z - offsetDistance);
+        this.baseCenter = new THREE.Vector3(poleBasePosition.x + baseOffsetX, 0, poleBasePosition.z + baseOffsetZ);
     }
     
     rotateLamp() {
@@ -944,6 +1070,8 @@ class Lamp {
         
         // Translate all components
         this.basePlate.position.add(translation);
+        this.statusIndicator.position.add(translation);
+        this.statusCollar.position.add(translation);
         this.baseCenter.add(translation);
         
         // Translate all pole sections
@@ -1010,6 +1138,16 @@ class Lamp {
         const sleevePos = this.sleeve.position.clone().sub(center);
         sleevePos.applyAxisAngle(axis, deltaAngle);
         this.sleeve.position.copy(sleevePos.add(center));
+        
+        // Rotate status indicator
+        const indicatorPos = this.statusIndicator.position.clone().sub(center);
+        indicatorPos.applyAxisAngle(axis, deltaAngle);
+        this.statusIndicator.position.copy(indicatorPos.add(center));
+        
+        // Rotate status collar
+        const collarPos = this.statusCollar.position.clone().sub(center);
+        collarPos.applyAxisAngle(axis, deltaAngle);
+        this.statusCollar.position.copy(collarPos.add(center));
         
         // Rotate discs
         this.discs.forEach(disc => {
@@ -1216,14 +1354,21 @@ class Lamp {
         this.innerCone.material.emissiveIntensity = isOn ? 0.8 : 0;
         this.innerCone.material.color.setHex(isOn ? 0xffff00 : 0x222222);
         
-        // Update tip cap inner appearance (self-illuminating, uses MeshBasicMaterial)
-        this.coneTipCapInner.material.color.setHex(isOn ? 0xffffff : 0x222222);
+        // Update tip cap inner appearance (uses MeshPhongMaterial like inner cone)
+        this.coneTipCapInner.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
+        this.coneTipCapInner.material.emissiveIntensity = isOn ? 0.8 : 0;
+        this.coneTipCapInner.material.color.setHex(isOn ? 0xffff00 : 0x222222);
         
         // Update tip cap outer appearance (brass color)
         this.coneTipCapOuter.material.color.setHex(isOn ? 0xffc71e : 0x222222);
         
         // Toggle tip point light
         this.tipLight.visible = isOn;
+        
+        // Update status indicator (green when on, red when off)
+        this.statusIndicator.material.color.setHex(isOn ? 0x00ff00 : 0xff0000);
+        this.statusIndicator.material.emissive.setHex(isOn ? 0x00ff00 : 0xff0000);
+        this.statusIndicator.material.emissiveIntensity = 0.8;
     }
     
     updateConeGeometry() {
@@ -1505,7 +1650,7 @@ function makeBoids() {
     const spawnRadius = 3.5; // Radius of spherical spawn volume
     const minMargin = 0.2; // Minimum margin as multiple of radius
     const minDistance = 2 * radius * (1 + minMargin); // Minimum center-to-center distance
-    const maxAttempts = 100; // Max attempts per boid to find valid position
+    const maxAttempts = 100000; // Max attempts per boid to find valid position (temporarily unlimited)
     const spawnCenter = new THREE.Vector3(0, 4 * spawnRadius, 0); // Center of spawn sphere
     
     for (var i = 0; i < numBoids; i++) {
@@ -1521,8 +1666,9 @@ function makeBoids() {
                 4 * spawnRadius + r * Math.cos(phi), // Offset upward
                 r * Math.sin(phi) * Math.sin(theta)
             );
-            // Check if position overlaps with existing balls
-            validPosition = true;
+            // TEMPORARILY DISABLED: Check if position overlaps with existing balls
+            validPosition = true; // Always accept position (overlap check disabled)
+            /*
             for (let j = 0; j < gPhysicsScene.objects.length; j++) {
                 const existingBall = gPhysicsScene.objects[j];
                 const distSquared = pos.distanceToSquared(existingBall.pos);
@@ -1531,6 +1677,7 @@ function makeBoids() {
                     break;
                 }
             }
+            */
             attempts++;
         }
         // Only add boid if valid position found
@@ -1970,6 +2117,21 @@ function initThreeScene() {
         1
     );
 
+    // ===== LAMP 2 =====
+    // Spawn lamp 2 at same position as lamp 1
+    gLamps[2] = new Lamp(
+        new THREE.Vector3(22.61, 14.14, 18.58),
+        new THREE.Vector3(16.16, 10.07, 12.13),
+        2
+    );
+    // Then move it -7 units along X axis and -15 units along Z axis
+    translateLampAssembly(0, -35, 2);
+    // Then rotate it 90 degrees
+    rotateLampAssembly(Math.PI / 2, 2);
+    
+    // Turn off lamp 2
+    gLamps[2].toggleLight();
+
     // Directional Overhead Light
     //var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
     var dirLight = new THREE.DirectionalLight( 0x55505a, 2 );
@@ -2293,41 +2455,12 @@ function initThreeScene() {
     );
     */
     
-    /*// Add white edge lines
-    var edgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1 });
-    
-    // Bottom edges - slightly above ground to avoid z-fighting with grid
-    var edgeOffset = 0.04;
-    var bottomEdges = [
-        [new THREE.Vector3(-boxSize.x, edgeOffset, -boxSize.z), new THREE.Vector3(boxSize.x, edgeOffset, -boxSize.z)],
-        [new THREE.Vector3(boxSize.x, edgeOffset, -boxSize.z), new THREE.Vector3(boxSize.x, edgeOffset, boxSize.z)],
-        [new THREE.Vector3(boxSize.x, edgeOffset, boxSize.z), new THREE.Vector3(-boxSize.x, edgeOffset, boxSize.z)],
-        [new THREE.Vector3(-boxSize.x, edgeOffset, boxSize.z), new THREE.Vector3(-boxSize.x, edgeOffset, -boxSize.z)]
-    ];
-    
-    // Top edges
-    var topEdges = [
-        [new THREE.Vector3(-boxSize.x, boxSize.y, -boxSize.z), new THREE.Vector3(boxSize.x, boxSize.y, -boxSize.z)],
-        [new THREE.Vector3(boxSize.x, boxSize.y, -boxSize.z), new THREE.Vector3(boxSize.x, boxSize.y, boxSize.z)],
-        [new THREE.Vector3(boxSize.x, boxSize.y, boxSize.z), new THREE.Vector3(-boxSize.x, boxSize.y, boxSize.z)],
-        [new THREE.Vector3(-boxSize.x, boxSize.y, boxSize.z), new THREE.Vector3(-boxSize.x, boxSize.y, -boxSize.z)]
-    ];
-    
-    // Vertical edges - start from edgeOffset instead of 0
-    var verticalEdges = [
-        [new THREE.Vector3(-boxSize.x, edgeOffset, -boxSize.z), new THREE.Vector3(-boxSize.x, boxSize.y, -boxSize.z)],
-        [new THREE.Vector3(boxSize.x, edgeOffset, -boxSize.z), new THREE.Vector3(boxSize.x, boxSize.y, -boxSize.z)],
-        [new THREE.Vector3(boxSize.x, edgeOffset, boxSize.z), new THREE.Vector3(boxSize.x, boxSize.y, boxSize.z)],
-        [new THREE.Vector3(-boxSize.x, edgeOffset, boxSize.z), new THREE.Vector3(-boxSize.x, boxSize.y, boxSize.z)]
-    ];
-    
-    // Create and add all edge lines
-    var allEdges = bottomEdges.concat(topEdges, verticalEdges);
-    for (var i = 0; i < allEdges.length; i++) {
-        var geometry = new THREE.BufferGeometry().setFromPoints(allEdges[i]);
-        var line = new THREE.Line(geometry, edgeMaterial);
-        gThreeScene.add(line);
-    }*/
+    // Create sphere obstacle
+    var sphereObstacle = new SphereObstacle(
+        4,  // radius
+        new THREE.Vector3(-10, 10, 6),  // position
+    );
+    gObstacles.push(sphereObstacle);
 
     /*// Create torus obstacle
     var torusObstacle = new TorusObstacle(
@@ -2357,7 +2490,7 @@ function initThreeScene() {
     
     // Camera	
     gCamera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 1000);
-    gCamera.position.set(9.72, 18.59, 38.02);
+    gCamera.position.set(-10.72, 16.08, 31.37);
     gCamera.updateMatrixWorld();	
 
     gThreeScene.add(gCamera);
@@ -2379,6 +2512,8 @@ function initThreeScene() {
     gOverlayCanvas.height = window.innerHeight;
     gOverlayCtx = gOverlayCanvas.getContext('2d');
     document.body.appendChild(gOverlayCanvas);
+
+
     
     // Add keyboard listener for camera mode cycling
     window.addEventListener('keydown', function(evt) {
@@ -2401,7 +2536,7 @@ function initThreeScene() {
                 }
                 gCameraControl.enabled = true;
                 gCameraControl.update(); // Sync OrbitControls with current camera state
-                console.log('Camera mode: ROTATE CCW');
+                //console.log('Camera mode: ROTATE CCW');
             } else if (gCameraMode === 2) {
                 gCameraRotationSpeed = -3; // Rotate CW
                 // Save camera state when entering rotation from static mode
@@ -2411,7 +2546,7 @@ function initThreeScene() {
                 }
                 gCameraControl.enabled = true;
                 gCameraControl.update(); // Sync OrbitControls with current camera state
-                console.log('Camera mode: ROTATE CW');
+                //console.log('Camera mode: ROTATE CW');
             } else if (gCameraMode === 0) {
                 gCameraRotationSpeed = 0; // Static
                 // Restore camera state when returning to static mode
@@ -2421,7 +2556,7 @@ function initThreeScene() {
                 }
                 gCameraControl.enabled = true;
                 gCameraControl.update(); // Sync OrbitControls with current camera state
-                console.log('Camera mode: STATIC');
+                //console.log('Camera mode: STATIC');
             } else {
                 gCameraRotationSpeed = 0; // Stop rotation for first-person modes
                 // Entering first-person mode - save current camera state
@@ -2430,7 +2565,7 @@ function initThreeScene() {
                     gSavedCameraTarget = gCameraControl.target.clone();
                 }
                 gCameraControl.enabled = false; // Disable orbit controls in first-person
-                console.log('Camera mode: ' + (gCameraMode === 3 ? 'BEHIND BOID' : 'IN FRONT OF BOID'));
+                //console.log('Camera mode: ' + (gCameraMode === 3 ? 'BEHIND BOID' : 'IN FRONT OF BOID'));
             }
         }
         
@@ -2759,9 +2894,31 @@ function onPointer(evt) {
         var hitLampBase = false;
         var hitCylinder = false;
         var hitCylinderObstacle = null;
+        var hitSphere = false;
+        var hitSphereObstacle = null;
         var hitLampId = 1; // Default to lamp 1
         for (var i = 0; i < intersects.length; i++) {
-            if (intersects[i].object.userData.isDraggableCylinder) {
+            // Skip non-interactive objects (status indicators, etc.)
+            if (intersects[i].object.userData.isNonInteractive) {
+                continue;
+            }
+            if (intersects[i].object.userData.isDraggableSphere && !hitSphere) {
+                hitSphere = true;
+                hitSphereObstacle = intersects[i].object.userData.sphereObstacle;
+                
+                // Store the actual 3D point where the sphere was clicked
+                var actualClickPoint = intersects[i].point;
+                gSphereDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to sphere center
+                gSphereDragOffset = new THREE.Vector3(
+                    hitSphereObstacle.position.x - actualClickPoint.x,
+                    hitSphereObstacle.position.y - actualClickPoint.y,
+                    hitSphereObstacle.position.z - actualClickPoint.z
+                );
+                // Don't break - check if lamp components are also hit
+            }
+            if (intersects[i].object.userData.isDraggableCylinder && !hitCylinder) {
                 hitCylinder = true;
                 hitCylinderObstacle = intersects[i].object.userData.cylinderObstacle;
                 
@@ -2775,20 +2932,22 @@ function onPointer(evt) {
                     0,
                     hitCylinderObstacle.position.z - actualClickPoint.z
                 );
-                break;
+                // Don't break - check if lamp components are also hit
             }
             if (intersects[i].object.userData.isLampCone) {
                 hitLampCone = true;
                 hitLampId = intersects[i].object.userData.lampId || 1;
-                break;
+                break; // Lamp cone takes priority, stop checking
             }
             if (intersects[i].object.userData.isLampHeight) {
                 hitLampHeight = true;
                 hitLampId = intersects[i].object.userData.lampId || 1;
+                break; // Lamp pole takes priority, stop checking
             }
             if (intersects[i].object.userData.isLampRotation) {
                 hitLampRotation = true;
                 hitLampId = intersects[i].object.userData.lampId || 1;
+                break; // Lamp rotation sleeve takes priority, stop checking
             }
             if (intersects[i].object.userData.isLampBase) {
                 hitLampBase = true;
@@ -2800,6 +2959,26 @@ function onPointer(evt) {
         if (hitLampBase) {
             hitLampHeight = false;
             hitLampRotation = false;
+        }
+        
+        // Lamp components take priority over obstacles
+        if (hitLampCone || hitLampHeight || hitLampRotation || hitLampBase) {
+            // Clear obstacle hits if lamp was hit
+            hitSphere = false;
+            hitCylinder = false;
+        }
+        
+        if (hitSphere && hitSphereObstacle) {
+            gDraggingSphere = true;
+            window.draggingSphereObstacle = hitSphereObstacle; // Store reference globally
+            
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging sphere
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
         }
         
         if (hitCylinder && hitCylinderObstacle) {
@@ -3017,6 +3196,57 @@ function onPointer(evt) {
             return;
         }
         
+        // Handle sphere dragging (translation in 3D)
+        if (gDraggingSphere && window.draggingSphereObstacle) {
+            var sphereObstacle = window.draggingSphereObstacle;
+            
+            // Check if Shift key is held for vertical movement
+            if (evt.shiftKey) {
+                // Vertical drag: move sphere up/down based on mouse Y movement
+                const deltaY = evt.clientY - gPointerLastY;
+                const verticalSpeed = 0.02; // Adjust sensitivity
+                const newY = sphereObstacle.position.y - deltaY * verticalSpeed;
+                
+                // Clamp to reasonable bounds
+                const minY = sphereObstacle.radius; // Don't go below floor + radius
+                const maxY = gPhysicsScene.worldSize.y - sphereObstacle.radius;
+                const clampedY = Math.max(minY, Math.min(maxY, newY));
+                
+                sphereObstacle.updatePosition(new THREE.Vector3(
+                    sphereObstacle.position.x,
+                    clampedY,
+                    sphereObstacle.position.z
+                ));
+                
+                gPointerLastY = evt.clientY;
+            } else {
+                // Horizontal drag: move sphere along XZ plane
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+                
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                
+                // Define plane at the height where the sphere was grabbed
+                var spherePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gSphereDragPlaneHeight);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(spherePlane, intersectionPoint);
+                
+                if (intersectionPoint) {
+                    // Apply the offset to maintain grab point (keep Y at sphere's original height)
+                    var newPosition = new THREE.Vector3(
+                        intersectionPoint.x + (gSphereDragOffset ? gSphereDragOffset.x : 0),
+                        sphereObstacle.position.y, // Keep sphere at its original height
+                        intersectionPoint.z + (gSphereDragOffset ? gSphereDragOffset.z : 0)
+                    );
+                    sphereObstacle.updatePosition(newPosition);
+                }
+            }
+            return;
+        }
+        
         // Handle cylinder dragging (translation along ground)
         if (gDraggingCylinder && window.draggingCylinderObstacle) {
             // Raycast to find where cursor intersects a plane at cylinder's height
@@ -3172,6 +3402,17 @@ function onPointer(evt) {
         
         if (draggedKnob !== null) {
             draggedKnob = null;
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingSphere) {
+            gDraggingSphere = false;
+            gSphereDragOffset = null;
+            window.draggingSphereObstacle = null;
+            // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
             }
