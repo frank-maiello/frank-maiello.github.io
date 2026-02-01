@@ -296,7 +296,7 @@ class CylinderObstacle {
         const fluteDepth = 0.15; // Maximum depth to carve (not full radius)
         const fluteWidthFraction = 0.9; // Fraction of section to carve (leaves ridges between)
         const radialSegments = numFlutes * 16; // Very high segment count for smooth semicircles
-        const heightSegments = 64; // Vertical segments for smooth fluting
+        const heightSegments = 128; // Vertical segments for smooth fluting
         
         // Create custom geometry with flutes
         const geometry = new THREE.CylinderGeometry(
@@ -395,7 +395,7 @@ class CylinderObstacle {
         // Create round disc baseplate between column and pedestal
         const discRadius = this.radius * 1.02; // Larger than column, smaller than pedestal
         const discHeight = 0.4;
-        const discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discHeight, 32);
+        const discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discHeight, 64);
         const discMaterial = new THREE.MeshStandardMaterial({
             color: `hsl(25, 10%, 60%)`,
             roughness: 0.5
@@ -413,7 +413,7 @@ class CylinderObstacle {
         // Create conical pedestal
         const conicalPedestalRadius = this.radius * 1.3;
         const conicalPedestalHeight = 4; 
-        const conicalPedestalGeometry = new THREE.ConeGeometry(conicalPedestalRadius, conicalPedestalHeight, 32);
+        const conicalPedestalGeometry = new THREE.ConeGeometry(conicalPedestalRadius, conicalPedestalHeight, 64);
         const conicalPedestalMaterial = new THREE.MeshStandardMaterial({
             color: `hsl(25, 10%, 40%)`,
             roughness: 0.5
@@ -431,7 +431,7 @@ class CylinderObstacle {
         // Create round pedestal (under the cone)
         const pedestalSize = this.radius * 1.35;
         const pedestalHeight = 0.3; 
-        const pedestalGeometry = new THREE.CylinderGeometry(pedestalSize, pedestalSize, pedestalHeight, 32);
+        const pedestalGeometry = new THREE.CylinderGeometry(pedestalSize, pedestalSize, pedestalHeight, 64);
         const pedestalMaterial = new THREE.MeshStandardMaterial({
             color: `hsl(25, 10%, 60%)`,
             roughness: 0.5
@@ -628,50 +628,74 @@ class Lamp {
         this.outerCone.userData.initialPosition = this.outerCone.position.clone();
         this.outerCone.userData.initialQuaternion = this.outerCone.quaternion.clone();
         
-        // Add disc to close the truncated tip - inner side (bright yellow)
-        var tipDiscGeometry = new THREE.CircleGeometry(tipRadius * 1.1, 64);
-        var tipDiscInnerMaterial = new THREE.MeshPhongMaterial({
-            color: 0xffff00,
-            side: THREE.BackSide,
-            shininess: 30,
-            emissive: 0xffffee,
-            emissiveIntensity: 0.8
-        });
-        this.coneTipDisc = new THREE.Mesh(tipDiscGeometry, tipDiscInnerMaterial);
+        // Add cylindrical plug to close the truncated tip (with thickness)
+        // Use two cylinders: inner (bright white, FrontSide) and outer (brass, FrontSide)
+        var tipCapThickness = 0.05;
+        var outerCapThickness = 0.15; // Thicker to seal the gap better
+        var tipCapGeometry = new THREE.CylinderGeometry(tipRadius * 1.15, tipRadius * 1.15, tipCapThickness, 32);
+        var outerCapGeometry = new THREE.CylinderGeometry(tipRadius * 1.15, tipRadius * 1.15, outerCapThickness, 32);
         
-        // Orient disc perpendicular to cone axis
-        // CircleGeometry default normal is along Z-axis, need to align with cone axis (direction)
-        var zAxis = new THREE.Vector3(0, 0, 1);
-        var directionNormalized = direction.clone().normalize();
-        this.coneTipDisc.quaternion.setFromUnitVectors(zAxis, directionNormalized);
-        
-        // Position disc at the narrow end of the frustum
-        // The cone (cylinder) center is at: lightPosition - coneOffset
-        // The narrow end (top of cylinder) is cone center + direction * (coneHeight/2)
-        var coneCenter = lightPosition.clone().sub(coneOffset);
-        this.coneTipDisc.position.copy(coneCenter).add(directionNormalized.clone().multiplyScalar(this.coneHeight / 2));
-        this.coneTipDisc.castShadow = true;
-        this.coneTipDisc.receiveShadow = true;
-        this.rotatableGroup.add(this.coneTipDisc);
-        
-        // Add outer disc (brass colored to match hardware discs)
-        var tipDiscOuterMaterial = new THREE.MeshPhongMaterial({
+        // Inner cylinder: bright white, visible from inside (FrontSide)
+        // Use same material properties as inner cone for consistency
+        var tipCapInnerMaterial = new THREE.MeshPhongMaterial({
             color: 0xffff00,
             side: THREE.FrontSide,
+            shininess: 30,
+            emissive: 0xffffee,
+            emissiveIntensity: 0.8,
+            colorWrite: true,
+            depthWrite: true
         });
-        this.coneTipDiscOuter = new THREE.Mesh(tipDiscGeometry.clone(), tipDiscOuterMaterial);
-        this.coneTipDiscOuter.quaternion.copy(this.coneTipDisc.quaternion);
-        this.coneTipDiscOuter.position.copy(this.coneTipDisc.position);
-        this.coneTipDiscOuter.castShadow = true;
-        this.coneTipDiscOuter.receiveShadow = true;
-        this.rotatableGroup.add(this.coneTipDiscOuter);
+        this.coneTipCapInner = new THREE.Mesh(tipCapGeometry, tipCapInnerMaterial);
+        this.coneTipCapInner.renderOrder = 3;
+        this.coneTipCapInner.castShadow = false;
+        this.coneTipCapInner.receiveShadow = false;
         
-        // Store initial position and orientation for outer disc
-        this.coneTipDiscOuter.userData.initialPosition = this.coneTipDiscOuter.position.clone();
-        this.coneTipDiscOuter.userData.initialQuaternion = this.coneTipDiscOuter.quaternion.clone();
-        // Store initial position and orientation
-        this.coneTipDisc.userData.initialPosition = this.coneTipDisc.position.clone();
-        this.coneTipDisc.userData.initialQuaternion = this.coneTipDisc.quaternion.clone();
+        // Outer cylinder: brass, visible from outside (FrontSide)
+        var tipCapOuterMaterial = new THREE.MeshPhongMaterial({
+            color: 0xffc71e,
+            side: THREE.FrontSide,
+            shininess: 30
+        });
+        this.coneTipCapOuter = new THREE.Mesh(outerCapGeometry, tipCapOuterMaterial);
+        this.coneTipCapOuter.renderOrder = 1;
+        this.coneTipCapOuter.castShadow = true;
+        this.coneTipCapOuter.receiveShadow = true;
+        
+        // Orient both cylinders perpendicular to cone axis
+        // CylinderGeometry default axis is Y-axis, need to align with cone axis (direction)
+        var yAxis = new THREE.Vector3(0, 1, 0);
+        var directionNormalized = direction.clone().normalize();
+        this.coneTipCapInner.quaternion.setFromUnitVectors(yAxis, directionNormalized);
+        this.coneTipCapOuter.quaternion.copy(this.coneTipCapInner.quaternion);
+        
+        // Position both cylinders at the narrow end of the frustum
+        var coneCenter = lightPosition.clone().sub(coneOffset);
+        var capPosition = coneCenter.clone().add(directionNormalized.clone().multiplyScalar(this.coneHeight / 2));
+        
+        // Offset inner cylinder further inward (toward bulb) to avoid z-fighting with outer
+        var innerOffset = directionNormalized.clone().multiplyScalar(-0.08);
+        this.coneTipCapInner.position.copy(capPosition).add(innerOffset);
+        
+        // Offset outer cylinder slightly outward to seal gap and avoid intersecting with cone
+        var outerOffset = directionNormalized.clone().multiplyScalar(0.01);
+        this.coneTipCapOuter.position.copy(capPosition).add(outerOffset);
+        
+        this.rotatableGroup.add(this.coneTipCapInner);
+        this.rotatableGroup.add(this.coneTipCapOuter);
+        
+        // Store initial position and orientation for cap cylinders
+        this.coneTipCapInner.userData.initialPosition = this.coneTipCapInner.position.clone();
+        this.coneTipCapInner.userData.initialQuaternion = this.coneTipCapInner.quaternion.clone();
+        this.coneTipCapOuter.userData.initialPosition = this.coneTipCapOuter.position.clone();
+        this.coneTipCapOuter.userData.initialQuaternion = this.coneTipCapOuter.quaternion.clone();
+        
+        // Add small point light at tip to illuminate plug interior
+        this.tipLight = new THREE.PointLight(0xffffee, 2.0, 0.5);
+        this.tipLight.position.copy(this.coneTipCapInner.position);
+        this.rotatableGroup.add(this.tipLight);
+        this.tipLight.userData.initialPosition = this.tipLight.position.clone();
+        
         this.rotatableGroup.add(this.outerCone);
         
         // Store initial position and orientation for absolute rotation calculations
@@ -773,14 +797,11 @@ class Lamp {
         this.pole = this.poleSections[sectionCount - 1];
         
         // Add invisible larger cylinder around pole for easier clicking
-        // Start hit area above base (at Y=0.5) to avoid interfering with base dragging
         var poleHitAreaRadius = baseRadius * 4;
-        var poleHitStartHeight = 0.5; // Start above the base
-        var poleHitHeight = poleHeight - poleHitStartHeight;
-        var poleHitGeometry = new THREE.CylinderGeometry(poleHitAreaRadius, poleHitAreaRadius, poleHitHeight, 8);
+        var poleHitGeometry = new THREE.CylinderGeometry(poleHitAreaRadius, poleHitAreaRadius, poleHeight, 8);
         var poleHitMaterial = new THREE.MeshBasicMaterial({visible: false});
         this.poleHitArea = new THREE.Mesh(poleHitGeometry, poleHitMaterial);
-        this.poleHitArea.position.set(poleBasePosition.x, poleHitStartHeight + poleHitHeight / 2, poleBasePosition.z);
+        this.poleHitArea.position.set(poleBasePosition.x, poleHeight / 2, poleBasePosition.z);
         this.poleHitArea.userData.isLampRotation = true;
         this.poleHitArea.userData.lampId = lampId;
         this.poleHitArea.userData.lampInstance = this;
@@ -788,7 +809,7 @@ class Lamp {
         
         // Add yellow sleeve where pole connects to lamp shade
         var sleeveHeight = 1.05;
-        var sleeveRadius = 0.9 * baseRadius ;
+        var sleeveRadius = 0.7 * baseRadius ;
         var sleeveGeometry = new THREE.CylinderGeometry(sleeveRadius, sleeveRadius, sleeveHeight, 32);
         var sleeveMaterial = new THREE.MeshPhongMaterial({color: 0xcc9900, shininess: 30});
         this.sleeve = new THREE.Mesh(sleeveGeometry, sleeveMaterial);
@@ -1153,12 +1174,10 @@ class Lamp {
         this.poleSections.forEach(section => {
             newTotalHeight += section.geometry.parameters.height;
         });
-    const poleHitStartHeight = 0.5;
-    const poleHitHeight = newTotalHeight - poleHitStartHeight;
-    const hitRadius = this.poleHitArea.geometry.parameters.radiusTop;
-    this.poleHitArea.geometry.dispose();
-    this.poleHitArea.geometry = new THREE.CylinderGeometry(hitRadius, hitRadius, poleHitHeight, 8);
-    this.poleHitArea.position.y = poleHitStartHeight + poleHitHeight / 2;
+        const hitRadius = this.poleHitArea.geometry.parameters.radiusTop;
+        this.poleHitArea.geometry.dispose();
+        this.poleHitArea.geometry = new THREE.CylinderGeometry(hitRadius, hitRadius, newTotalHeight, 8);
+        this.poleHitArea.position.y = newTotalHeight / 2;
         this.sleeve.position.y += actualTotalDelta;
         
         // Update discs positions
@@ -1197,10 +1216,14 @@ class Lamp {
         this.innerCone.material.emissiveIntensity = isOn ? 0.8 : 0;
         this.innerCone.material.color.setHex(isOn ? 0xffff00 : 0x222222);
         
-        // Update tip disc appearance
-        this.coneTipDisc.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
-        this.coneTipDisc.material.emissiveIntensity = isOn ? 0.8 : 0;
-        this.coneTipDisc.material.color.setHex(isOn ? 0xffff00 : 0x222222);
+        // Update tip cap inner appearance (self-illuminating, uses MeshBasicMaterial)
+        this.coneTipCapInner.material.color.setHex(isOn ? 0xffffff : 0x222222);
+        
+        // Update tip cap outer appearance (brass color)
+        this.coneTipCapOuter.material.color.setHex(isOn ? 0xffc71e : 0x222222);
+        
+        // Toggle tip point light
+        this.tipLight.visible = isOn;
     }
     
     updateConeGeometry() {
@@ -1217,19 +1240,24 @@ class Lamp {
         this.innerCone.geometry.dispose();
         this.innerCone.geometry = newConeGeometry.clone();
         
-        // Update tip disc size
-        this.coneTipDisc.geometry.dispose();
-        this.coneTipDisc.geometry = new THREE.CircleGeometry(newTipRadius, 32);
+        // Update tip cap size for both cylinders
+        var tipCapThickness = 0.05;
+        var outerCapThickness = 0.15;
+        var newCapGeometry = new THREE.CylinderGeometry(newTipRadius * 1.15, newTipRadius * 1.15, tipCapThickness, 32);
+        var newOuterCapGeometry = new THREE.CylinderGeometry(newTipRadius * 1.15, newTipRadius * 1.15, outerCapThickness, 32);
         
-        this.coneTipDiscOuter.geometry.dispose();
-        this.coneTipDiscOuter.geometry = new THREE.CircleGeometry(newTipRadius, 32);
+        this.coneTipCapInner.geometry.dispose();
+        this.coneTipCapInner.geometry = newCapGeometry;
+        
+        this.coneTipCapOuter.geometry.dispose();
+        this.coneTipCapOuter.geometry = newOuterCapGeometry;
         
         // Scale bulb to fit inside cone when cone is narrow
         // Bulb is positioned at cone center (0.7 * coneHeight back from light, which is at tip + 0.5*height)
         const bulbDistanceFromTip = this.coneHeight * 0.5;
         const coneRadiusAtBulb = Math.tan(this.spotlight.angle) * bulbDistanceFromTip;
         const maxBulbRadius = coneRadiusAtBulb * 0.85; // 85% of cone radius at that point for safety margin
-        const desiredBulbRadius = Math.min(0.2, maxBulbRadius); // Cap at 0.2 (original size)
+        const desiredBulbRadius = Math.min(0.4, maxBulbRadius); // Cap at 0.4 (twice original size)
         
         this.bulb.scale.setScalar(desiredBulbRadius / 0.2); // Scale relative to original size
     }
@@ -1246,7 +1274,7 @@ class BOID {
         this.grabbed = false;
         
         // Create front cone mesh
-        var geometry = new THREE.ConeGeometry(rad, 3 * rad, 32, 32);
+        var geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
         var material = new THREE.MeshPhongMaterial({color: new THREE.Color(`hsl(${hue}, ${sat}%, 50%)`)});
         this.visMesh = new THREE.Mesh(geometry, material);
         this.visMesh.position.copy(pos);
@@ -2017,6 +2045,13 @@ function initThreeScene() {
             frontWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
         }
     }
+    frontWallCtx.strokeStyle = '#333333';
+    frontWallCtx.lineWidth = 4;
+    for (var i = 0; i < 2; i++) {
+        for (var j = 0; j < 2; j++) {
+            frontWallCtx.strokeRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+        }
+    }
     var frontWallTexture = new THREE.CanvasTexture(frontWallCanvas);
     frontWallTexture.wrapS = THREE.RepeatWrapping;
     frontWallTexture.wrapT = THREE.RepeatWrapping;
@@ -2044,6 +2079,13 @@ function initThreeScene() {
         for (var j = 0; j < 2; j++) {
             backWallCtx.fillStyle = (i + j) % 2 === 0 ? '#8AC8FF' : '#e6e6e6';
             backWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+        }
+    }
+    backWallCtx.strokeStyle = '#333333';
+    backWallCtx.lineWidth = 4;
+    for (var i = 0; i < 2; i++) {
+        for (var j = 0; j < 2; j++) {
+            backWallCtx.strokeRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
         }
     }
     var backWallTexture = new THREE.CanvasTexture(backWallCanvas);
@@ -2076,6 +2118,13 @@ function initThreeScene() {
             leftWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
         }
     }
+    leftWallCtx.strokeStyle = '#333333';
+    leftWallCtx.lineWidth = 4;
+    for (var i = 0; i < 2; i++) {
+        for (var j = 0; j < 2; j++) {
+            leftWallCtx.strokeRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+        }
+    }
     var leftWallTexture = new THREE.CanvasTexture(leftWallCanvas);
     leftWallTexture.wrapS = THREE.RepeatWrapping;
     leftWallTexture.wrapT = THREE.RepeatWrapping;
@@ -2106,6 +2155,13 @@ function initThreeScene() {
             rightWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
         }
     }
+    rightWallCtx.strokeStyle = '#333333';
+    rightWallCtx.lineWidth = 4;
+    for (var i = 0; i < 2; i++) {
+        for (var j = 0; j < 2; j++) {
+            rightWallCtx.strokeRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+        }
+    }
     var rightWallTexture = new THREE.CanvasTexture(rightWallCanvas);
     rightWallTexture.wrapS = THREE.RepeatWrapping;
     rightWallTexture.wrapT = THREE.RepeatWrapping;
@@ -2124,6 +2180,54 @@ function initThreeScene() {
     rightWall.position.set(boxSize.x, boxSize.y / 2, 0);
     rightWall.receiveShadow = true;
     gThreeScene.add(rightWall);
+    
+    // Add baseboard around perimeter walls
+    var baseboardHeight = 0.3;
+    var baseboardDepth = 0.1;
+    var baseboardMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xc4a574, // Dull tan
+        shininess: 10
+    });
+    
+    // Front baseboard
+    var frontBaseboard = new THREE.Mesh(
+        new THREE.BoxGeometry(boxSize.x * 2, baseboardHeight, baseboardDepth),
+        baseboardMaterial
+    );
+    frontBaseboard.position.set(0, baseboardHeight / 2, boxSize.z - baseboardDepth / 2);
+    frontBaseboard.receiveShadow = true;
+    frontBaseboard.castShadow = true;
+    gThreeScene.add(frontBaseboard);
+    
+    // Back baseboard
+    var backBaseboard = new THREE.Mesh(
+        new THREE.BoxGeometry(boxSize.x * 2, baseboardHeight, baseboardDepth),
+        baseboardMaterial
+    );
+    backBaseboard.position.set(0, baseboardHeight / 2, -boxSize.z + baseboardDepth / 2);
+    backBaseboard.receiveShadow = true;
+    backBaseboard.castShadow = true;
+    gThreeScene.add(backBaseboard);
+    
+    // Left baseboard
+    var leftBaseboard = new THREE.Mesh(
+        new THREE.BoxGeometry(baseboardDepth, baseboardHeight, boxSize.z * 2),
+        baseboardMaterial
+    );
+    leftBaseboard.position.set(-boxSize.x + baseboardDepth / 2, baseboardHeight / 2, 0);
+    leftBaseboard.receiveShadow = true;
+    leftBaseboard.castShadow = true;
+    gThreeScene.add(leftBaseboard);
+    
+    // Right baseboard
+    var rightBaseboard = new THREE.Mesh(
+        new THREE.BoxGeometry(baseboardDepth, baseboardHeight, boxSize.z * 2),
+        baseboardMaterial
+    );
+    rightBaseboard.position.set(boxSize.x - baseboardDepth / 2, baseboardHeight / 2, 0);
+    rightBaseboard.receiveShadow = true;
+    rightBaseboard.castShadow = true;
+    gThreeScene.add(rightBaseboard);
     
     /*// Top wall - pastel lavender
     var topWall = new THREE.Mesh(
@@ -2408,11 +2512,6 @@ function initThreeScene() {
     container.addEventListener( 'pointerdown', onPointer, false );
     container.addEventListener( 'pointermove', onPointer, false );
     container.addEventListener( 'pointerup', onPointer, false );
-    
-    // Prevent context menu on right-click
-    container.addEventListener('contextmenu', function(evt) {
-        evt.preventDefault();
-    }, false);
 }
 
 // ------ Button Functions -----------------------------------------------
@@ -2697,6 +2796,12 @@ function onPointer(evt) {
             }
         }
         
+        // Base hit takes precedence over pole/rotation hits in overlapping areas
+        if (hitLampBase) {
+            hitLampHeight = false;
+            hitLampRotation = false;
+        }
+        
         if (hitCylinder && hitCylinderObstacle) {
             gDraggingCylinder = true;
             window.draggingCylinderObstacle = hitCylinderObstacle; // Store reference globally
@@ -2775,13 +2880,9 @@ function onPointer(evt) {
         if (hitLampCone) {
             gActiveLampId = hitLampId;
             
-            // Right-click adjusts spotlight angle
-            if (evt.button === 2) {
-                gDraggingLampAngle = true;
-            } else {
-                // Left-click rotates lamp
-                gDraggingLamp = true;
-            }
+            // Left-click: vertical drag = lamp tilt, horizontal drag = spotlight angle
+            gDraggingLamp = true;
+            gDraggingLampAngle = true;
             
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
@@ -3017,39 +3118,30 @@ function onPointer(evt) {
             return;
         }
         
-        // Handle lamp rotation
-        if (gDraggingLamp) {
+        // Handle lamp cone dragging (vertical = tilt, horizontal = spotlight angle)
+        if (gDraggingLamp && gDraggingLampAngle) {
+            const deltaX = evt.clientX - gPointerLastX;
             const deltaY = evt.clientY - gPointerLastY;
             const lamp = gLamps[gActiveLampId];
             
             if (lamp) {
-                // Adjust lamp angle based on vertical mouse movement
-                lamp.angle += deltaY * 0.01;
-                lamp.angle = Math.max(-Math.PI / 2, Math.min(Math.PI / 10, lamp.angle));
+                // Vertical movement: adjust lamp tilt angle
+                if (Math.abs(deltaY) > 0.5) {
+                    lamp.angle += deltaY * 0.01;
+                    lamp.angle = Math.max(-Math.PI / 2, Math.min(Math.PI / 10, lamp.angle));
+                    rotateLamp(gActiveLampId);
+                }
                 
-                // Rotate lamp group around pivot
-                rotateLamp(gActiveLampId);
-            }
-            
-            gPointerLastY = evt.clientY;
-            return;
-        }
-        
-        // Handle spotlight angle adjustment
-        if (gDraggingLampAngle) {
-            const deltaX = evt.clientX - gPointerLastX;
-            const lamp = gLamps[gActiveLampId];
-            
-            if (lamp) {
-                // Adjust spotlight angle based on horizontal mouse movement
-                lamp.spotlight.angle += deltaX * 0.003;
-                lamp.spotlight.angle = Math.max(Math.PI / 12, Math.min(Math.PI / 3, lamp.spotlight.angle));
-                
-                // Update cone geometry to match new angle
-                lamp.updateConeGeometry();
+                // Horizontal movement: adjust spotlight cone angle
+                if (Math.abs(deltaX) > 0.5) {
+                    lamp.spotlight.angle += deltaX * 0.003;
+                    lamp.spotlight.angle = Math.max(Math.PI / 12, Math.min(Math.PI / 3, lamp.spotlight.angle));
+                    lamp.updateConeGeometry();
+                }
             }
             
             gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
             return;
         }
         
@@ -3133,16 +3225,8 @@ function onPointer(evt) {
             return;
         }
         
-        if (gDraggingLamp) {
+        if (gDraggingLamp || gDraggingLampAngle) {
             gDraggingLamp = false;
-            // Re-enable orbit controls if in normal camera mode
-            if (gCameraMode < 3 && gCameraControl) {
-                gCameraControl.enabled = true;
-            }
-            return;
-        }
-        
-        if (gDraggingLampAngle) {
             gDraggingLampAngle = false;
             // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
