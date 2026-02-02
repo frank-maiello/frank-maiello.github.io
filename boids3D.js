@@ -80,9 +80,6 @@ var gButtons = {
 };
 var deltaT = 1.0 / 60.0;
 
-// Boid rendering options
-var renderHemispheres = false; // Set to false to disable rear hemispheres
-
 // Menu system variables
 var mainMenuVisible = true;
 var mainMenuOpacity = 0;
@@ -93,6 +90,10 @@ var menuVisible = false; // Simulation submenu visibility
 var menuVisibleBeforeHide = false; // Remember submenu state when main menu is hidden
 var menuOpacity = 0;
 var menuFadeSpeed = 3.0;
+var stylingMenuVisible = false; // Styling submenu visibility
+var stylingMenuVisibleBeforeHide = false;
+var stylingMenuOpacity = 0;
+var stylingMenuFadeSpeed = 3.0;
 var menuScale = 300; // Master menu size control (increased 50%)
 var menuX = 0.02; // Menu position in world coordinates
 var menuY = 0.2;
@@ -146,12 +147,16 @@ var boidProps = {
 
 // Boid trail tracking variables
 var gTrailEnabled = false; // Enable/disable trail tracking
-var gTrailLength = 1000; // Maximum number of trail points to store
+var gTrailLength = 50; // Maximum number of trail points to store
+var gTrailRadius = 0.5; // Multiplier for trail tube radius (relative to boid radius)
 var gTrailBoidIndex = 1; // Index of boid to track (second boid in array)
 var gTrailPositions = []; // Array to store trail positions
 var gTrailMesh = null; // THREE.Mesh for the trail tube
 var gTrailUpdateCounter = 0; // Counter to limit trail updates
 var gTrailUpdateFrequency = 1; // Update trail every N frames
+
+// Boid geometry type
+var gBoidGeometryType = 1; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot
 
 // OBSTACLE CLASSES ---------------------------------------------------------------------
 
@@ -300,7 +305,7 @@ class SphereObstacle {
     
     createMesh() {
         var geometry = new THREE.SphereGeometry(this.radius, 32, 32);
-        var material = new THREE.MeshPhongMaterial({color: 0x00ccbe, shininess: 100});
+        var material = new THREE.MeshPhongMaterial({color: 0xc6b1aa, shininess: 100});
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.position.copy(this.position);
         this.mesh.castShadow = true;
@@ -1487,18 +1492,18 @@ class Lamp {
 }
 
 class BOID {
-    constructor(pos, rad, vel, hue, sat) {
+    constructor(pos, rad, vel, hue, sat, light) {
         this.pos = pos.clone();
         this.rad = rad;
         this.vel = vel.clone();
         this.hue = hue;
         this.sat = sat;
-        this.lightness = 50;
+        this.light = light;
         this.grabbed = false;
         
         // Create front cone mesh
         var geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
-        var material = new THREE.MeshPhongMaterial({color: new THREE.Color(`hsl(${hue}, ${sat}%, 50%)`)});
+        var material = new THREE.MeshPhongMaterial({color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`)});
         this.visMesh = new THREE.Mesh(geometry, material);
         this.visMesh.position.copy(pos);
         this.visMesh.userData = this;
@@ -1506,21 +1511,6 @@ class BOID {
         this.visMesh.castShadow = true;
         this.visMesh.receiveShadow = true;
         gThreeScene.add(this.visMesh);
-
-        // Create hemisphere at rear - using top half of sphere
-        if (renderHemispheres) {
-            var geometry2 = new THREE.SphereGeometry(rad, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-            var material2 = new THREE.MeshPhongMaterial({color: new THREE.Color("hsl(" + hue + ", " + sat + "%, 50%)")});
-            this.visMesh2 = new THREE.Mesh(geometry2, material2);
-            this.visMesh2.position.copy(pos);
-            this.visMesh2.userData = this;
-            this.visMesh2.layers.enable(1);
-            this.visMesh2.castShadow = true;
-            this.visMesh2.receiveShadow = true;
-            gThreeScene.add(this.visMesh2);
-        } else {
-            this.visMesh2 = null;
-        }
     }
     
     simulate() {
@@ -1593,10 +1583,26 @@ class BOID {
                 this.pos.z + direction.z
             );
             
-            // Make front cone look at target (cone points along Y axis by default)
+            // Make mesh look at target
             this.visMesh.lookAt(target);
-            // Adjust for cone's default upward orientation
-            this.visMesh.rotateX(Math.PI / 2);
+            // Adjust for default orientation based on geometry type
+            // Cone points along Y axis by default, needs rotation
+            if (gBoidGeometryType === 1 || gBoidGeometryType === 2 || gBoidGeometryType === 8) {
+                // Cone, Cylinder, Capsule - point along Y axis
+                this.visMesh.rotateX(Math.PI / 2);
+            } else if (gBoidGeometryType === 4) {
+                // Tetrahedron - try negative Z rotation
+                this.visMesh.rotateX(-Math.PI / 4);
+                this.visMesh.rotateY(-Math.PI / 4);
+                this.visMesh.rotateZ(-Math.PI / 2);
+                /*this.visMesh.rotateX(-Math.PI / 4);
+                this.visMesh.rotateY(-Math.PI / 4);
+                this.visMesh.rotateZ(+Math.PI / 2);*/
+            } else if (gBoidGeometryType === 5) {
+                // Octahedron - rotate 90 degrees about horizontal axis
+                this.visMesh.rotateX(Math.PI / 2);
+            }
+            // Torus and TorusKnot default orientation works correctly with lookAt (hole perpendicular to movement)
             
             // Position hemisphere at the flat base of the cone (back end)
             if (this.visMesh2) {
@@ -1724,7 +1730,7 @@ class SpatialHashGrid {
 function makeBoids() {
     const radius = boidRadius;
     const numBoids = 1500;
-    let pos, vel, hue, sat;
+    let pos, vel, hue, sat, light;
     const spawnRadius = 3.5; // Radius of spherical spawn volume
     const minMargin = 0.2; // Minimum margin as multiple of radius
     const minDistance = 2 * radius * (1 + minMargin); // Minimum center-to-center distance
@@ -1764,18 +1770,22 @@ function makeBoids() {
             vel = pos.clone().sub(spawnCenter).normalize();
             const speed = 1 + Math.random() * 4; // Random speed between 1 and 5
             vel.multiplyScalar(speed);
-            
+            light = 50;
             if (i == 0) {
                 hue = 220;
                 sat = 90;
-            } else if (i < 101) {
+            } else if (i == 1) {
+                hue = 0;
+                sat = 0;
+                light = 100;
+            } else if (i < 102) {
                 hue = Math.round(Math.random() * 360);
                 sat = Math.round(30 + Math.random() * 70);
             } else {
                 hue = Math.round(340 + Math.random() * 40);
                 sat = Math.round(30 + Math.random() * 70); // 50% to 100% saturation
             }
-            gPhysicsScene.objects.push(new BOID(pos, radius, vel, hue, sat) );
+            gPhysicsScene.objects.push(new BOID(pos, radius, vel, hue, sat, light) );
         }
     }
     console.log("Successfully spawned " + gPhysicsScene.objects.length + " boids out of " + numBoids + " requested");
@@ -1812,8 +1822,8 @@ function handleBoidRules(boid) {
             
             if (distSq < visualRangeSq && distSq > 0) {
                 // Check if hues match (within threshold)
-                const hueMatch = segregationMode === 0 || Math.abs(boid.hue - otherBoid.hue) < 50;
-                
+                //const hueMatch = segregationMode === 0 || Math.abs(boid.hue - otherBoid.hue) < 50;
+                const hueMatch = true;
                 // RULE #1 - SEPARATION
                 if (distSq < minDistSq) {
                     const dist = Math.sqrt(distSq);
@@ -1894,7 +1904,7 @@ function simulate() {
     }
     
     // Update trail tracking
-    if (gTrailEnabled && gPhysicsScene.objects.length > gTrailBoidIndex) {
+    if (gTrailLength > 50 && gPhysicsScene.objects.length > gTrailBoidIndex) {
         gTrailUpdateCounter++;
         if (gTrailUpdateCounter >= gTrailUpdateFrequency) {
             gTrailUpdateCounter = 0;
@@ -1934,7 +1944,7 @@ function updateBoidTrail() {
     const curve = new THREE.CatmullRomCurve3(gTrailPositions);
     
     // Create tube geometry from curve
-    const tubeRadius = boidRadius * 0.5; 
+    const tubeRadius = boidRadius * gTrailRadius; 
     const tubularSegments = Math.max(10, gTrailPositions.length * 2);
     const radialSegments = 8;
     const tubeGeometry = new THREE.TubeGeometry(
@@ -1955,7 +1965,7 @@ function updateBoidTrail() {
     
     // Create mesh
     gTrailMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
-    gTrailMesh.castShadow = false;
+    gTrailMesh.castShadow = true;
     gTrailMesh.receiveShadow = false;
     gThreeScene.add(gTrailMesh);
 }
@@ -1967,6 +1977,78 @@ function clearBoidTrail() {
         if (gTrailMesh.geometry) gTrailMesh.geometry.dispose();
         if (gTrailMesh.material) gTrailMesh.material.dispose();
         gTrailMesh = null;
+    }
+}
+
+function recreateBoidGeometries() {
+    // Recreate geometry for all boids
+    for (let i = 0; i < gPhysicsScene.objects.length; i++) {
+        const boid = gPhysicsScene.objects[i];
+        
+        // Remove old meshes
+        gThreeScene.remove(boid.visMesh);
+        if (boid.visMesh.geometry) boid.visMesh.geometry.dispose();
+        if (boid.visMesh.material) boid.visMesh.material.dispose();
+        
+        if (boid.visMesh2) {
+            gThreeScene.remove(boid.visMesh2);
+            if (boid.visMesh2.geometry) boid.visMesh2.geometry.dispose();
+            if (boid.visMesh2.material) boid.visMesh2.material.dispose();
+            boid.visMesh2 = null;
+        }
+        
+        // Create new geometry based on type
+        let geometry;
+        const rad = boid.rad;
+        
+        switch (gBoidGeometryType) {
+            case 0: // Sphere
+                geometry = new THREE.SphereGeometry(rad, 16, 16);
+                break;
+            case 1: // Cone (default)
+                geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
+                break;
+            case 2: // Cylinder
+                geometry = new THREE.CylinderGeometry(rad, rad, 3 * rad, 16);
+                break;
+            case 3: // Box
+                geometry = new THREE.BoxGeometry(2 * rad, 2 * rad, 2 * rad);
+                break;
+            case 4: // Tetrahedron
+                geometry = new THREE.TetrahedronGeometry(rad * 1.5);
+                break;
+            case 5: // Octahedron
+                geometry = new THREE.OctahedronGeometry(rad * 1.5);
+                break;
+            case 6: // Dodecahedron
+                geometry = new THREE.DodecahedronGeometry(rad * 1.5);
+                break;
+            case 7: // Icosahedron
+                geometry = new THREE.IcosahedronGeometry(rad * 1.5);
+                break;
+            case 8: // Capsule
+                geometry = new THREE.CapsuleGeometry(rad, 2.7 * rad, 8, 16);
+                break;
+            case 9: // Torus
+                geometry = new THREE.TorusGeometry(rad, rad * 0.4, 16, 32);
+                break;
+            case 10: // TorusKnot
+                geometry = new THREE.TorusKnotGeometry(rad, rad * 0.3, 64, 16);
+                break;
+            default:
+                geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
+        }
+        
+        const material = new THREE.MeshPhongMaterial({
+            color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, 50%)`)
+        });
+        boid.visMesh = new THREE.Mesh(geometry, material);
+        boid.visMesh.position.copy(boid.pos);
+        boid.visMesh.userData = boid;
+        boid.visMesh.layers.enable(1);
+        boid.visMesh.castShadow = true;
+        boid.visMesh.receiveShadow = true;
+        gThreeScene.add(boid.visMesh);
     }
 }
 
@@ -1998,12 +2080,13 @@ function drawMainMenu() {
     const itemHeight = 0.12 * menuScale;
     const itemWidth = 0.24 * menuScale;
     const padding = 0.02 * menuScale;
-    const menuHeight = itemHeight + (padding * 2);
+    const menuHeight = itemHeight * 2 + (padding * 3); // Two items now
     const menuWidth = itemWidth + (padding * 2);
     
-    const menuBaseX = ellipsisX + 0.08 * menuScale;
-    const menuX = menuBaseX + mainMenuXOffset * menuScale;
-    const menuY = ellipsisY - 0.04 * menuScale;
+    const menuBaseY = ellipsisY + 0.08 * menuScale;
+    const menuBaseX = ellipsisX - padding;
+    const menuX = menuBaseX + mainMenuXOffset * menuScale; // Slide from left
+    const menuY = menuBaseY;
     
     ctx.save();
     ctx.globalAlpha = mainMenuOpacity;
@@ -2074,6 +2157,54 @@ function drawMainMenu() {
     ctx.fillStyle = iconColor;
     ctx.fillText('Simulation', iconX, itemY + itemHeight - padding);*/
 
+    // Draw Styling menu item
+    const itemY2 = itemY + itemHeight + padding;
+    ctx.beginPath();
+    ctx.roundRect(itemX, itemY2, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.fillStyle = stylingMenuVisible ? 'rgba(164, 220, 100, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fill();
+
+    
+    
+    // Draw palette icon
+    const icon2X = itemX + itemWidth / 2;
+    const icon2Y = itemY2 + itemHeight / 2;
+    const icon2Color = stylingMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+    ctx.strokeStyle = icon2Color;
+    ctx.fillStyle = icon2Color;
+    ctx.lineWidth = 2;
+    
+    // Draw necktie icon
+    ctx.save();
+    ctx.translate(icon2X, icon2Y);
+    
+    const tieWidth = iconSize * 0.5;
+    const tieLength = iconSize * 1.3;
+    const gapSize = iconSize * 0.06;
+    
+    ctx.fillStyle = icon2Color;
+    
+    // Draw knot (4-sided polygon - trapezoid)
+    ctx.beginPath();
+    ctx.moveTo(-tieWidth * 0.55, -tieLength * 0.5);  // Top left
+    ctx.lineTo(tieWidth * 0.55, -tieLength * 0.5);   // Top right
+    ctx.lineTo(tieWidth * 0.22, -tieLength * 0.2);   // Bottom right
+    ctx.lineTo(-tieWidth * 0.22, -tieLength * 0.2);  // Bottom left
+    ctx.closePath();
+    ctx.fill();
+    
+    // Draw tie body (5-sided polygon - pentagon)
+    ctx.beginPath();
+    ctx.moveTo(-tieWidth * 0.27, -tieLength * 0.2 + gapSize);  // Top left
+    ctx.lineTo(tieWidth * 0.27, -tieLength * 0.2 + gapSize);   // Top right
+    ctx.lineTo(tieWidth * 0.5, tieLength * 0.48);              // Right side
+    ctx.lineTo(0, tieLength * 0.6);                            // Bottom point
+    ctx.lineTo(-tieWidth * 0.5, tieLength * 0.48);             // Left side
+    ctx.closePath();
+    ctx.fill();
+    
+    ctx.restore();
+
     ctx.restore();
 }
 
@@ -2118,8 +2249,8 @@ function drawSimMenu() {
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
     const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `rgba(51, 85, 128, ${0.95 * menuOpacity})`);
-    menuGradient.addColorStop(1, `rgba(13, 26, 38, ${0.95 * menuOpacity})`);
+    menuGradient.addColorStop(0, `rgba(51, 85, 128, ${menuOpacity})`);
+    menuGradient.addColorStop(1, `rgba(13, 26, 38, ${menuOpacity})`);
     ctx.fillStyle = menuGradient;
     ctx.fill();
     ctx.strokeStyle = `rgba(100, 150, 200, ${menuOpacity})`;
@@ -2237,6 +2368,199 @@ function drawSimMenu() {
     ctx.fillStyle = `rgba(180, 200, 220, ${menuOpacity})`;
     ctx.fillText('Spacebar to cycle camera', menuWidth / 2, menuHeight + padding * 0.4);
     ctx.fillText('Mouse to move and rotate', menuWidth / 2, menuHeight + padding * 0.7);
+    
+    ctx.restore();
+}
+
+function drawStylingMenu() {
+    if (stylingMenuOpacity <= 0) return;
+    
+    const ctx = gOverlayCtx;
+    const menuItems = [
+        gTrailEnabled ? 1 : 0, gTrailLength, gTrailBoidIndex
+    ];
+    
+    const ranges = [
+        {min: 0, max: 1},           // trail enabled (0 or 1)
+        {min: 50, max: 2000},       // trail length
+        {min: 0, max: Math.min(1499, gPhysicsScene.objects.length - 1)} // trail boid index
+    ];
+    
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuTopMargin = 0.2 * knobRadius;
+    const menuWidth = knobSpacing * 2;
+    const menuHeight = knobSpacing * 1 + knobRadius * 2.0 + knobSpacing * 0.9; // Reduced height for 3 knobs + buttons
+    const padding = 1.7 * knobRadius;
+    
+    // Position menu slightly below simulation menu
+    const menuUpperLeftX = menuX * window.innerWidth;
+    const menuUpperLeftY = (menuY + 0.2) * window.innerHeight;
+    
+    ctx.save();
+    ctx.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
+    
+    // Draw menu background
+    const cornerRadius = 8;
+    ctx.beginPath();
+    ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+    const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsl(100, 30%, 20%, ${stylingMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsl(120, 10%, 10%, ${stylingMenuOpacity})`);
+    ctx.fillStyle = menuGradient;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(150, 20%, 70%, ${stylingMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw title
+    ctx.fillStyle = `hsla(150, 10%, 80%, ${stylingMenuOpacity})`;
+    ctx.font = `bold ${0.05 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.fillText('STYLING', menuWidth / 2, -padding + 0.05 * menuScale);
+    
+    // Draw close button
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+    ctx.beginPath();
+    ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(180, 40, 40, ${stylingMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(0, 0, 0, ${stylingMenuOpacity})`;
+    ctx.lineWidth = 2;
+    const xSize = closeIconRadius * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+    ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+    ctx.stroke();
+    
+    // Draw trail control knobs
+    const fullMeterSweep = 1.6 * Math.PI;
+    const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+    
+    const trailMenuItems = [gTrailLength, gTrailRadius];
+    const trailRanges = [
+        {min: 50, max: 2000},
+        {min: 0.1, max: 2.0}
+    ];
+    
+    for (let knob = 0; knob < 2; knob++) {
+        const row = Math.floor(knob / 3);
+        const col = knob % 3;
+        const knobX = col * knobSpacing;
+        const knobY = row * knobSpacing + menuTopMargin;
+        
+        // Draw knob background
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, 1.05 * knobRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsla(150, 30%, 10%, ${0.9 * stylingMenuOpacity})`;
+        ctx.fill();
+        ctx.strokeStyle = `hsla(150, 20%, 50%, ${stylingMenuOpacity})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Calculate normalized value
+        let knobValue = trailMenuItems[knob];
+        let normalizedValue = (knobValue - trailRanges[knob].min) / (trailRanges[knob].max - trailRanges[knob].min);
+        normalizedValue = Math.max(0, Math.min(1, normalizedValue));
+        
+        // Draw meter arc
+        const gradient = ctx.createLinearGradient(
+            knobX + Math.cos(meterStart) * knobRadius,
+            knobY + Math.sin(meterStart) * knobRadius,
+            knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+            knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+        );
+        gradient.addColorStop(0, `hsla(150, 30%, 60%, ${stylingMenuOpacity})`);
+        gradient.addColorStop(0.5, `hsla(180, 30%, 60%, ${stylingMenuOpacity})`);
+        ctx.strokeStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        
+        // Draw needle
+        const pointerAngle = meterStart + fullMeterSweep * normalizedValue;
+        const pointerLength = knobRadius * 0.6;
+        const pointerEndX = knobX + Math.cos(pointerAngle) * pointerLength;
+        const pointerEndY = knobY + Math.sin(pointerAngle) * pointerLength;
+        ctx.beginPath();
+        ctx.moveTo(knobX, knobY);
+        ctx.lineTo(pointerEndX, pointerEndY);
+        ctx.strokeStyle = `hsla(150, 30%, 80%, ${stylingMenuOpacity})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw label
+        const labels = [
+            'Trail Length', 'Trail Radius'
+        ];
+        ctx.font = `${0.35 * knobRadius}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
+        ctx.fillText(labels[knob], knobX + 2, knobY + 1.35 * knobRadius + 1);
+        ctx.fillStyle = `hsla(150, 10%, 90%, ${stylingMenuOpacity})`;
+        ctx.fillText(labels[knob], knobX, knobY + 1.35 * knobRadius);
+        
+        // Draw value
+        let valueText = '';
+        switch (knob) {
+            case 0: valueText = gTrailLength === 50 ? 'OFF' : gTrailLength; break;
+            case 1: valueText = gTrailRadius.toFixed(2); break;
+        }
+        ctx.font = `${0.25 * knobRadius}px Arial`;
+        ctx.fillStyle = `hsla(150, 80%, 70%, ${stylingMenuOpacity})`;
+        ctx.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
+    }
+    
+    // Draw boid geometry selection buttons
+    const buttonY = menuTopMargin + knobRadius * 2.5;
+    const buttonWidth = (menuWidth + padding * 1.2) / 3;
+    const buttonHeight = knobRadius * 1.3;
+    const buttonSpacing = 4;
+    
+    ctx.font = `${0.035 * menuScale}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    const geometryNames = [
+        'Spheres', 'Cones', 'Cylinders', 'Cubes',
+        'Tetrahedrons', 'Octahedrons', 'Dodecahedrons', 'Icosahedrons',
+        'Capsules', 'Tori', 'Knots'
+    ];
+    
+    for (let i = 0; i < 11; i++) {
+        const row = Math.floor(i / 3);
+        const col = i % 3;
+        const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
+        const offsetX = (menuWidth - totalRowWidth) / 2;
+        const btnX = offsetX + col * (buttonWidth + buttonSpacing);
+        const btnY = buttonY + row * (buttonHeight + buttonSpacing);
+        
+        // Draw button
+        ctx.beginPath();
+        ctx.roundRect(btnX, btnY, buttonWidth, buttonHeight, 4);
+        if (gBoidGeometryType === i) {
+            ctx.fillStyle = `hsla(150, 30%, 50%, ${0.8 * stylingMenuOpacity})`;
+        } else {
+            ctx.fillStyle = `hsla(150, 30%, 20%, ${0.6 * stylingMenuOpacity})`;
+        }
+        ctx.fill();
+        ctx.strokeStyle = `hsla(150, 10%, 60%, ${stylingMenuOpacity})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Draw label
+        ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
+        ctx.fillText(geometryNames[i], btnX + buttonWidth / 2 + 2, btnY + buttonHeight / 2 + 1);
+        ctx.fillStyle = `hsla(150, 30%, 90%, ${stylingMenuOpacity})`;
+        ctx.fillText(geometryNames[i], btnX + buttonWidth / 2, btnY + buttonHeight / 2);
+        
+    }
     
     ctx.restore();
 }
@@ -2816,19 +3140,23 @@ function initThreeScene() {
 
 // ------ Button Functions -----------------------------------------------
 function drawButtons() {
-    // Position buttons relative to main menu at top-left
+    // Position buttons below main menu
     const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
     const ellipsisX = 0.05 * cScale;
     const ellipsisY = 0.05 * cScale;
+    const itemHeight = 0.12 * menuScale;
     const itemWidth = 0.24 * menuScale;
     const padding = 0.02 * menuScale;
-    const menuWidth = itemWidth + (padding * 2);
-    const menuBaseX = ellipsisX + 0.08 * menuScale;
+    const menuHeight = itemHeight * 2 + (padding * 3);
+    const menuBaseY = ellipsisY + 0.08 * menuScale;
+    const menuBaseX = ellipsisX - padding;
     const buttonSpacing = 25;
-    const buttonY = ellipsisY;
     
     // Update button positions with animation offset
-    const buttonStartX = menuBaseX + menuWidth + 20 + (mainMenuXOffset * menuScale);
+    const menuX = menuBaseX + mainMenuXOffset * menuScale;
+    const menuY = menuBaseY;
+    const buttonY = menuY + menuHeight + 20;
+    const buttonStartX = menuX + 15;
     gButtons.run.x = buttonStartX;
     gButtons.run.y = buttonY;
     gButtons.restart.x = buttonStartX + buttonSpacing;
@@ -2843,15 +3171,16 @@ function drawButtons() {
         var runBtn = gButtons.run;
         gOverlayCtx.beginPath();
         gOverlayCtx.arc(runBtn.x, runBtn.y, runBtn.radius, 0, Math.PI * 2);
-        gOverlayCtx.fillStyle = gPhysicsScene.paused ? '#ff4444' : '#44ff44';
-        gOverlayCtx.fill();
+        gOverlayCtx.strokeStyle = gPhysicsScene.paused ? '#ff4444' : '#44ff44';
+        gOverlayCtx.lineWidth = runBtn.hovered ? 6 : 4;
+        gOverlayCtx.stroke();
         
-        // Draw restart button
-        var restartBtn = gButtons.restart;
-        gOverlayCtx.beginPath();
-        gOverlayCtx.arc(restartBtn.x, restartBtn.y, restartBtn.radius, 0, Math.PI * 2);
-        gOverlayCtx.fillStyle = restartBtn.color;
-        gOverlayCtx.fill();
+        // Draw restart button (temporarily disabled)
+        // var restartBtn = gButtons.restart;
+        // gOverlayCtx.beginPath();
+        // gOverlayCtx.arc(restartBtn.x, restartBtn.y, restartBtn.radius, 0, Math.PI * 2);
+        // gOverlayCtx.fillStyle = restartBtn.color;
+        // gOverlayCtx.fill();
         
         gOverlayCtx.restore();
     }
@@ -2882,12 +3211,13 @@ function checkButtonClick(x, y) {
         return true;
     }
     
-    dx = x - gButtons.restart.x;
-    dy = y - gButtons.restart.y;
-    if (Math.sqrt(dx * dx + dy * dy) <= gButtons.restart.radius) {
-        restart();
-        return true;
-    }
+    // Restart button temporarily disabled
+    // dx = x - gButtons.restart.x;
+    // dy = y - gButtons.restart.y;
+    // if (Math.sqrt(dx * dx + dy * dy) <= gButtons.restart.radius) {
+    //     restart();
+    //     return true;
+    // }
     return false;
 }
 
@@ -3008,12 +3338,15 @@ function onPointer(evt) {
         const dy = evt.clientY - ellipsisY;
         if (dx * dx + dy * dy < clickRadius * clickRadius) {
             mainMenuVisible = !mainMenuVisible;
-            // Hide submenu when main menu is hidden, restore when shown
+            // Hide submenus when main menu is hidden, restore when shown
             if (!mainMenuVisible) {
                 menuVisibleBeforeHide = menuVisible;
                 menuVisible = false;
+                stylingMenuVisibleBeforeHide = stylingMenuVisible;
+                stylingMenuVisible = false;
             } else {
                 menuVisible = menuVisibleBeforeHide;
+                stylingMenuVisible = stylingMenuVisibleBeforeHide;
             }
             return;
         }
@@ -3023,22 +3356,39 @@ function onPointer(evt) {
             const itemHeight = 0.12 * menuScale;
             const itemWidth = 0.24 * menuScale;
             const padding = 0.02 * menuScale;
-            const menuHeight = itemHeight + (padding * 2);
-            const menuBaseX = ellipsisX + 0.08 * menuScale;
+            const menuHeight = itemHeight * 2 + (padding * 3);
+            const menuBaseY = ellipsisY + 0.08 * menuScale;
+            const menuBaseX = ellipsisX - padding;
             const menuX = menuBaseX + mainMenuXOffset * menuScale;
-            const menuY = ellipsisY - 0.04 * menuScale;
+            const menuY = menuBaseY;
             const itemX = menuX + padding;
             const itemY = menuY + padding;
             
+            // Check Simulation menu item
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
                 evt.clientY >= itemY && evt.clientY <= itemY + itemHeight) {
                 menuVisible = !menuVisible;
+                stylingMenuVisible = false; // Close styling menu when opening simulation
+                return;
+            }
+            
+            // Check Styling menu item
+            const itemY2 = itemY + itemHeight + padding;
+            if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+                evt.clientY >= itemY2 && evt.clientY <= itemY2 + itemHeight) {
+                stylingMenuVisible = !stylingMenuVisible;
+                menuVisible = false; // Close simulation menu when opening styling
                 return;
             }
         }
         
         // Check simulation submenu clicks
         if (checkSimMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
+        // Check styling submenu clicks
+        if (checkStylingMenuClick(evt.clientX, evt.clientY)) {
             return;
         }
         
@@ -3133,6 +3483,24 @@ function onPointer(evt) {
             hitCylinder = false;
         }
         
+        // Handle double-click on any lamp part to toggle light
+        if (hitLampCone || hitLampHeight || hitLampRotation || hitLampBase) {
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastLampBaseClickTime[hitLampId];
+            
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - toggle the lamp on/off
+                const lamp = gLamps[hitLampId];
+                if (lamp) {
+                    lamp.toggleLight();
+                }
+                gLastLampBaseClickTime[hitLampId] = 0; // Reset to prevent triple-click
+                return;
+            }
+            
+            gLastLampBaseClickTime[hitLampId] = currentTime;
+        }
+        
         if (hitSphere && hitSphereObstacle) {
             gDraggingSphere = true;
             window.draggingSphereObstacle = hitSphereObstacle; // Store reference globally
@@ -3172,21 +3540,6 @@ function onPointer(evt) {
         }
         
         if (hitLampBase) {
-            // Check for double-click on lamp base to toggle light
-            var currentTime = Date.now();
-            var timeSinceLastClick = currentTime - gLastLampBaseClickTime[hitLampId];
-            
-            if (timeSinceLastClick < 300) { // 300ms double-click threshold
-                // Double-click detected - toggle the lamp on/off
-                const lamp = gLamps[hitLampId];
-                if (lamp) {
-                    lamp.toggleLight();
-                }
-                gLastLampBaseClickTime[hitLampId] = 0; // Reset to prevent triple-click
-                return;
-            }
-            
-            gLastLampBaseClickTime[hitLampId] = currentTime;
             gActiveLampId = hitLampId;
             gDraggingLampBase = true;
             gPointerLastX = evt.clientX;
@@ -3261,6 +3614,36 @@ function onPointer(evt) {
             const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
             const dragDelta = deltaX + deltaY;
             
+            // Check if it's a styling menu knob (offset by 100)
+            if (draggedKnob >= 100) {
+                const stylingKnob = draggedKnob - 100;
+                const ranges = [
+                    {min: 50, max: 2000},       // trail length
+                    {min: 0.1, max: 2.0}        // trail radius
+                ];
+                
+                const dragSensitivity = 0.2;
+                const normalizedDelta = dragDelta / dragSensitivity;
+                const range = ranges[stylingKnob];
+                const rangeSize = range.max - range.min;
+                let newValue = dragStartValue + normalizedDelta * rangeSize;
+                newValue = Math.max(range.min, Math.min(range.max, newValue));
+                
+                switch (stylingKnob) {
+                    case 0: // Trail length
+                        gTrailLength = Math.round(newValue);
+                        if (gTrailLength === 50) {
+                            clearBoidTrail();
+                        }
+                        break;
+                    case 1: // Trail radius
+                        gTrailRadius = newValue;
+                        break;
+                }
+                return;
+            }
+            
+            // Simulation menu knobs
             const ranges = [
                 {min: 100, max: 5000},
                 {min: 0.05, max: 0.5},
@@ -3273,7 +3656,7 @@ function onPointer(evt) {
                 {min: 0.5, max: 5.0}
             ];
             
-            const dragSensitivity = 0.5;
+            const dragSensitivity = 0.2;
             const normalizedDelta = dragDelta / dragSensitivity;
             const range = ranges[draggedKnob];
             const rangeSize = range.max - range.min;
@@ -3401,10 +3784,22 @@ function onPointer(evt) {
                 
                 if (intersectionPoint) {
                     // Apply the offset to maintain grab point (keep Y at sphere's original height)
+                    var newX = intersectionPoint.x + (gSphereDragOffset ? gSphereDragOffset.x : 0);
+                    var newZ = intersectionPoint.z + (gSphereDragOffset ? gSphereDragOffset.z : 0);
+                    
+                    // Clamp to room boundaries (sphere center must stay within room)
+                    var minBoundX = -gPhysicsScene.worldSize.x + sphereObstacle.radius;
+                    var maxBoundX = gPhysicsScene.worldSize.x - sphereObstacle.radius;
+                    var minBoundZ = -gPhysicsScene.worldSize.z + sphereObstacle.radius;
+                    var maxBoundZ = gPhysicsScene.worldSize.z - sphereObstacle.radius;
+                    
+                    newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
+                    newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
+                    
                     var newPosition = new THREE.Vector3(
-                        intersectionPoint.x + (gSphereDragOffset ? gSphereDragOffset.x : 0),
+                        newX,
                         sphereObstacle.position.y, // Keep sphere at its original height
-                        intersectionPoint.z + (gSphereDragOffset ? gSphereDragOffset.z : 0)
+                        newZ
                     );
                     sphereObstacle.updatePosition(newPosition);
                 }
@@ -3431,10 +3826,24 @@ function onPointer(evt) {
             
             if (intersectionPoint) {
                 // Keep the cylinder's Y position (height above ground) constant
+                var newX = intersectionPoint.x + (gCylinderDragOffset ? gCylinderDragOffset.x : 0);
+                var newZ = intersectionPoint.z + (gCylinderDragOffset ? gCylinderDragOffset.z : 0);
+                
+                // Clamp to room boundaries - square pedestal base should not hit walls
+                // pedestalSize = radius * 2.5, so half-width = radius * 1.25
+                var halfPedestalSize = cylinderObstacle.radius * 1.25;
+                var minBoundX = -gPhysicsScene.worldSize.x + halfPedestalSize;
+                var maxBoundX = gPhysicsScene.worldSize.x - halfPedestalSize;
+                var minBoundZ = -gPhysicsScene.worldSize.z + halfPedestalSize;
+                var maxBoundZ = gPhysicsScene.worldSize.z - halfPedestalSize;
+                
+                newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
+                newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
+                
                 var newPosition = new THREE.Vector3(
-                    intersectionPoint.x + (gCylinderDragOffset ? gCylinderDragOffset.x : 0),
+                    newX,
                     cylinderObstacle.position.y, // Keep original height
-                    intersectionPoint.z + (gCylinderDragOffset ? gCylinderDragOffset.z : 0)
+                    newZ
                 );
                 cylinderObstacle.updatePosition(newPosition);
             }
@@ -3723,6 +4132,100 @@ function checkSimMenuClick(clientX, clientY) {
     return false;
 }
 
+function checkStylingMenuClick(clientX, clientY) {
+    if (!stylingMenuVisible || stylingMenuOpacity <= 0.5) return false;
+    
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuTopMargin = 0.2 * knobRadius;
+    const menuWidth = knobSpacing * 2;
+    const menuHeight = knobSpacing * 1 + knobRadius * 2.0 + knobSpacing * 0.9;
+    const padding = 1.7 * knobRadius;
+    
+    const menuUpperLeftX = menuX * window.innerWidth;
+    const menuUpperLeftY = (menuY + 0.2) * window.innerHeight;
+    const menuOriginX = menuUpperLeftX + knobSpacing;
+    const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+    
+    // Check close button
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = menuOriginX - padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = menuOriginY - padding + closeIconRadius + 0.2 * knobRadius;
+    const cdx = clientX - closeIconX;
+    const cdy = clientY - closeIconY;
+    
+    if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+        stylingMenuVisible = false;
+        return true;
+    }
+    
+    // Check geometry selection buttons
+    const buttonY = menuOriginY + menuTopMargin + knobRadius * 2.5;
+    const buttonWidth = (menuWidth + padding * 1.2) / 3;
+    const buttonHeight = knobRadius * 1.3;
+    const buttonSpacing = 4;
+    
+    for (let i = 0; i < 11; i++) {
+        const row = Math.floor(i / 3);
+        const col = i % 3;
+        const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
+        const offsetX = (menuWidth - totalRowWidth) / 2;
+        const btnX = menuOriginX + offsetX + col * (buttonWidth + buttonSpacing);
+        const btnY = buttonY + row * (buttonHeight + buttonSpacing);
+        
+        if (clientX >= btnX && clientX <= btnX + buttonWidth &&
+            clientY >= btnY && clientY <= btnY + buttonHeight) {
+            gBoidGeometryType = i;
+            // Recreate all boid geometries
+            recreateBoidGeometries();
+            return true;
+        }
+    }
+    
+    // Check knobs (trail controls)
+    for (let knob = 0; knob < 2; knob++) {
+        const row = Math.floor(knob / 3);
+        const col = knob % 3;
+        const knobX = menuOriginX + col * knobSpacing;
+        const knobY = menuOriginY + row * knobSpacing + menuTopMargin;
+        
+        const kdx = clientX - knobX;
+        const kdy = clientY - knobY;
+        if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
+            draggedKnob = 100 + knob; // Offset to distinguish from sim menu knobs
+            dragStartMouseX = clientX;
+            dragStartMouseY = clientY;
+            
+            const menuItems = [
+                gTrailLength, gTrailRadius
+            ];
+            dragStartValue = menuItems[knob];
+            
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        }
+    }
+    
+    // Check if menu background clicked (for dragging)
+    if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
+        clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
+        isDraggingMenu = true;
+        menuDragStartX = clientX;
+        menuDragStartY = clientY;
+        menuStartX = menuX;
+        menuStartY = menuY; // Don't add 0.2 offset here, it's already in menuOriginY
+        
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    return false;
+}
+
 // Function to rotate lamp around pivot point
 function rotateLamp(lampId) {
     lampId = lampId || 1;
@@ -3875,9 +4378,15 @@ function update() {
     }
     
     if (menuVisible) {
-        menuOpacity = Math.min(1, menuOpacity + menuFadeSpeed * deltaT);
+        menuOpacity = Math.min(0.9, menuOpacity + menuFadeSpeed * deltaT);
     } else {
         menuOpacity = Math.max(0, menuOpacity - menuFadeSpeed * deltaT);
+    }
+    
+    if (stylingMenuVisible) {
+        stylingMenuOpacity = Math.min(0.9, stylingMenuOpacity + stylingMenuFadeSpeed * deltaT);
+    } else {
+        stylingMenuOpacity = Math.max(0, stylingMenuOpacity - stylingMenuFadeSpeed * deltaT);
     }
     
     // Camera follow modes - follow first boid (modes 3 and 4)
@@ -3969,6 +4478,7 @@ function update() {
     drawButtons();
     drawMainMenu();
     drawSimMenu();
+    drawStylingMenu();
     
     requestAnimationFrame(update);
 }
