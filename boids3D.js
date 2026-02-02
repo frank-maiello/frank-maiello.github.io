@@ -2163,8 +2163,6 @@ function drawMainMenu() {
     ctx.roundRect(itemX, itemY2, itemWidth, itemHeight, cornerRadius * 0.5);
     ctx.fillStyle = stylingMenuVisible ? 'rgba(164, 220, 100, 0.3)' : 'rgba(38, 38, 38, 0.8)';
     ctx.fill();
-
-    
     
     // Draw palette icon
     const icon2X = itemX + itemWidth / 2;
@@ -2395,7 +2393,7 @@ function drawStylingMenu() {
     
     // Position menu slightly below simulation menu
     const menuUpperLeftX = menuX * window.innerWidth;
-    const menuUpperLeftY = (menuY + 0.2) * window.innerHeight;
+    const menuUpperLeftY = (menuY + 0.1) * window.innerHeight;
     
     ctx.save();
     ctx.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
