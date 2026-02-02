@@ -4141,7 +4141,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = menuX * window.innerWidth;
-    const menuUpperLeftY = (menuY + 0.2) * window.innerHeight;
+    const menuUpperLeftY = (menuY + 0.1) * window.innerHeight;
     const menuOriginX = menuUpperLeftX + knobSpacing;
     const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
     
