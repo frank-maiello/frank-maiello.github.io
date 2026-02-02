@@ -78,8 +78,10 @@ var gOverlayCanvas;
 var gOverlayCtx;
 var gButtons = {
     run: { x: 25, y: 25, radius: 8, color: '#ff4444', hovered: false },
-    restart: { x: 50, y: 25, radius: 8, color: '#ffcc00', hovered: false }
+    camera: { x: 50, y: 25, radius: 8, color: '#be44ff', hovered: false },
+    restart: { x: 75, y: 25, radius: 8, color: '#ffcc00', hovered: false }
 };
+var gButtonPulseTime = 0;
 var deltaT = 1.0 / 60.0;
 
 // Menu system variables
@@ -97,7 +99,7 @@ var stylingMenuVisibleBeforeHide = false;
 var stylingMenuOpacity = 0;
 var stylingMenuFadeSpeed = 3.0;
 var menuScale = 300; // Master menu size control (increased 50%)
-var menuX = 0.02; // Menu position in world coordinates
+var menuX = 0.1; // Menu position in world coordinates
 var menuY = 0.2;
 var draggedKnob = null; // Currently dragged knob index
 var dragStartMouseX = 0;
@@ -1504,7 +1506,7 @@ class BOID {
         this.grabbed = false;
         
         // Create front cone mesh
-        var geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
+        var geometry = new THREE.ConeGeometry(rad, 3 * rad, 32, 32);
         var material = new THREE.MeshPhongMaterial({color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`)});
         this.visMesh = new THREE.Mesh(geometry, material);
         this.visMesh.position.copy(pos);
@@ -2008,7 +2010,7 @@ function recreateBoidGeometries() {
                 geometry = new THREE.SphereGeometry(rad, 16, 16);
                 break;
             case 1: // Cone (default)
-                geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
+                geometry = new THREE.ConeGeometry(rad, 3 * rad, 24, 24);
                 break;
             case 2: // Cylinder
                 geometry = new THREE.CylinderGeometry(rad, rad, 3 * rad, 16);
@@ -2366,8 +2368,7 @@ function drawSimMenu() {
     ctx.font = `italic ${0.035 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.fillStyle = `rgba(180, 200, 220, ${menuOpacity})`;
-    ctx.fillText('Spacebar to cycle camera', menuWidth / 2, menuHeight + padding * 0.4);
-    ctx.fillText('Mouse to move and rotate', menuWidth / 2, menuHeight + padding * 0.7);
+    ctx.fillText('Mouse to move and rotate', menuWidth / 2, menuHeight + padding * 0.4);
     
     ctx.restore();
 }
@@ -3006,58 +3007,6 @@ function initThreeScene() {
   
     // Add keyboard listener for camera mode cycling
     window.addEventListener('keydown', function(evt) {
-        if (evt.key === ' ') {
-            evt.preventDefault(); // Prevent page scrolling
-            var previousMode = gCameraMode;
-            gCameraMode = (gCameraMode + 1) % 5; // Cycle through 0, 1, 2, 3, 4
-            gCameraManualControl = false;
-            gCameraOffset.set(0, 0, 0);
-            gCameraRotationOffset.theta = 0;
-            gCameraRotationOffset.phi = 0;
-            
-            // Reset rotation speed when entering/leaving rotation modes
-            if (gCameraMode === 1) {
-                gCameraRotationSpeed = 3; // Rotate CCW
-                // Save camera state when entering rotation from static mode
-                if (previousMode === 0) {
-                    gSavedCameraPosition = gCamera.position.clone();
-                    gSavedCameraTarget = gCameraControl.target.clone();
-                }
-                gCameraControl.enabled = true;
-                gCameraControl.update(); // Sync OrbitControls with current camera state
-                //console.log('Camera mode: ROTATE CCW');
-            } else if (gCameraMode === 2) {
-                gCameraRotationSpeed = -3; // Rotate CW
-                // Save camera state when entering rotation from static mode
-                if (previousMode === 0) {
-                    gSavedCameraPosition = gCamera.position.clone();
-                    gSavedCameraTarget = gCameraControl.target.clone();
-                }
-                gCameraControl.enabled = true;
-                gCameraControl.update(); // Sync OrbitControls with current camera state
-                //console.log('Camera mode: ROTATE CW');
-            } else if (gCameraMode === 0) {
-                gCameraRotationSpeed = 0; // Static
-                // Restore camera state when returning to static mode
-                if (gSavedCameraPosition && gSavedCameraTarget) {
-                    gCamera.position.copy(gSavedCameraPosition);
-                    gCameraControl.target.copy(gSavedCameraTarget);
-                }
-                gCameraControl.enabled = true;
-                gCameraControl.update(); // Sync OrbitControls with current camera state
-                //console.log('Camera mode: STATIC');
-            } else {
-                gCameraRotationSpeed = 0; // Stop rotation for first-person modes
-                // Entering first-person mode - save current camera state
-                if (previousMode < 3) {
-                    gSavedCameraPosition = gCamera.position.clone();
-                    gSavedCameraTarget = gCameraControl.target.clone();
-                }
-                gCameraControl.enabled = false; // Disable orbit controls in first-person
-                //console.log('Camera mode: ' + (gCameraMode === 3 ? 'BEHIND BOID' : 'IN FRONT OF BOID'));
-            }
-        }
-        
         if (evt.key === 'm' || evt.key === 'M') {
             mainMenuVisible = !mainMenuVisible;
         }
@@ -3150,15 +3099,17 @@ function drawButtons() {
     const menuHeight = itemHeight * 2 + (padding * 3);
     const menuBaseY = ellipsisY + 0.08 * menuScale;
     const menuBaseX = ellipsisX - padding;
-    const buttonSpacing = 25;
+    const buttonSpacing = 20;
     
     // Update button positions with animation offset
     const menuX = menuBaseX + mainMenuXOffset * menuScale;
     const menuY = menuBaseY;
     const buttonY = menuY + menuHeight + 20;
-    const buttonStartX = menuX + 15;
+    const buttonStartX = menuX + 17;
     gButtons.run.x = buttonStartX;
     gButtons.run.y = buttonY;
+    gButtons.camera.x = buttonStartX + buttonSpacing;
+    gButtons.camera.y = buttonY + 3;
     gButtons.restart.x = buttonStartX + buttonSpacing;
     gButtons.restart.y = buttonY;
     
@@ -3171,8 +3122,17 @@ function drawButtons() {
         var runBtn = gButtons.run;
         gOverlayCtx.beginPath();
         gOverlayCtx.arc(runBtn.x, runBtn.y, runBtn.radius, 0, Math.PI * 2);
-        gOverlayCtx.strokeStyle = gPhysicsScene.paused ? '#ff4444' : '#44ff44';
-        gOverlayCtx.lineWidth = runBtn.hovered ? 6 : 4;
+        // Add pulsation when paused
+        if (gPhysicsScene.paused) {
+            const pulse = Math.sin(gButtonPulseTime * 4) * 0.5 + 0.5; // 0 to 1
+            const pulseScale = 0.5 + 0.8 * pulse; // More dramatic size change
+            const pulseAlpha = 0.4 + 0.6 * pulse; // Brightness change
+            gOverlayCtx.strokeStyle = `rgba(255, 68, 68, ${pulseAlpha})`;
+            gOverlayCtx.lineWidth = (runBtn.hovered ? 7 : 5) * pulseScale;
+        } else {
+            gOverlayCtx.strokeStyle = '#44ff44';
+            gOverlayCtx.lineWidth = runBtn.hovered ? 6 : 4;
+        }
         gOverlayCtx.stroke();
         
         // Draw restart button (temporarily disabled)
@@ -3181,6 +3141,103 @@ function drawButtons() {
         // gOverlayCtx.arc(restartBtn.x, restartBtn.y, restartBtn.radius, 0, Math.PI * 2);
         // gOverlayCtx.fillStyle = restartBtn.color;
         // gOverlayCtx.fill();
+        
+
+        // Draw camera icon
+        var camBtn = gButtons.camera;
+        const camX = camBtn.x + buttonSpacing;
+        const camSize = 3.5 * camBtn.radius
+        
+        // Draw movie camera icon (no background box)
+        gOverlayCtx.fillStyle = `hsl(0, 0%, 42%)`;
+        gOverlayCtx.strokeStyle = `hsl(0, 0%, 70%)`;
+        gOverlayCtx.lineWidth = 0.04 * camSize;
+        gOverlayCtx.lineCap = 'round';
+        gOverlayCtx.lineJoin = 'round';
+
+        // Triangular lens on right side (pointing left, but wide at right)
+        const lensY = (gButtons.camera.y - camSize * 0.12) + (camSize * 0.35 / 2);
+        gOverlayCtx.beginPath();
+        gOverlayCtx.moveTo(camX + camSize * 0.45, lensY - camSize * 0.25);
+        gOverlayCtx.lineTo(camX - camSize * 0.10, lensY);
+        gOverlayCtx.lineTo(camX + camSize * 0.45, lensY + camSize * 0.25);
+        gOverlayCtx.closePath();
+        gOverlayCtx.fill();
+        gOverlayCtx.stroke();
+        
+        // Camera body (rectangle) - on the left
+        gOverlayCtx.beginPath();
+        gOverlayCtx.rect(
+            camX - camSize * 0.5, 
+            gButtons.camera.y - camSize * 0.12, 
+            camSize * 0.6, 
+            camSize * 0.35);
+        gOverlayCtx.fill();
+        gOverlayCtx.stroke();
+        
+        // Film reels on top (left smaller, right larger)
+        const leftReelX = camX - camSize * 0.4;
+        const leftReelY = gButtons.camera.y - camSize * 0.3;
+        const leftReelRadius = camSize * 0.16;
+        
+        const rightReelX = camX - camSize * 0.02;
+        const rightReelY = gButtons.camera.y - camSize * 0.36;
+        const rightReelRadius = camSize * 0.22;
+        
+        // Draw left reel (smaller)
+        gOverlayCtx.beginPath();
+        gOverlayCtx.arc(leftReelX, leftReelY, leftReelRadius, 0, 2 * Math.PI);
+        gOverlayCtx.fillStyle = `hsl(0, 0%, 62%)`;
+        gOverlayCtx.fill();
+        gOverlayCtx.stroke();
+        
+        // Draw rotating circles on left reel when active (faster rotation)
+        if (gCameraMode == 1) {
+            var time = Date.now() / 1000;
+            var rotationSign = 1; // Clockwise
+        } else if (gCameraMode == 2) {
+            var time = Date.now() / 1000;
+            var rotationSign = -1; // Counter-clockwise
+        } else {
+            var time = 0;
+            var rotationSign = 0; // No rotation
+        }
+        
+        const leftReelRotation = -time * 4; // 4 radians per second
+        const leftReelDots = 4;
+        const leftReelDotRadius = leftReelRadius * 0.7;
+        const leftReelDotSize = camSize * 0.03;
+        gOverlayCtx.fillStyle = `hsl(0, 0%, 10%)`;
+        for (let i = 0; i < leftReelDots; i++) {
+            const angle = rotationSign * leftReelRotation + (i * 2 * Math.PI / leftReelDots);
+            const dotX = leftReelX + Math.cos(angle) * leftReelDotRadius;
+            const dotY = leftReelY + Math.sin(angle) * leftReelDotRadius;
+            gOverlayCtx.beginPath();
+            gOverlayCtx.arc(dotX, dotY, leftReelDotSize, 0, 2 * Math.PI);
+            gOverlayCtx.fill();
+        }
+        
+        // Draw right reel (larger)
+        gOverlayCtx.fillStyle = `hsl(9, 0%, 60%)`;
+        gOverlayCtx.beginPath();
+        gOverlayCtx.arc(rightReelX, rightReelY, rightReelRadius, 0, 2 * Math.PI);
+        gOverlayCtx.fill();
+        gOverlayCtx.stroke();
+        
+        // Draw rotating circles on right reel when active (slower rotation, opposite direction)
+        const rightReelRotation = time * 2.5; // Negative for opposite rotation
+        const rightReelDots = 5;
+        const rightReelDotRadius = rightReelRadius * 0.7;
+        const rightReelDotSize = camSize * 0.04;
+        gOverlayCtx.fillStyle = `hsl(0, 0%, 10%)`;
+        for (let i = 0; i < rightReelDots; i++) {
+            const angle = rotationSign * rightReelRotation + (i * 2 * Math.PI / rightReelDots);
+            const dotX = rightReelX + Math.cos(angle) * rightReelDotRadius;
+            const dotY = rightReelY + Math.sin(angle) * rightReelDotRadius;
+            gOverlayCtx.beginPath();
+            gOverlayCtx.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
+            gOverlayCtx.fill();
+        }
         
         gOverlayCtx.restore();
     }
@@ -3208,6 +3265,40 @@ function checkButtonClick(x, y) {
     var dy = y - gButtons.run.y;
     if (Math.sqrt(dx * dx + dy * dy) <= gButtons.run.radius) {
         run();
+        return true;
+    }
+    
+    // Camera button (larger hit area due to icon size)
+    const buttonSpacing = 25;
+    const camBtn = gButtons.camera;
+    const camX = camBtn.x + buttonSpacing;
+    const camSize = 3.5 * camBtn.radius;
+    const camLeft = camX - camSize * 0.7;
+    const camRight = camX + camSize * 0.65;
+    const camTop = camBtn.y - camSize * 0.7; // Expanded top margin
+    const camBottom = camBtn.y + camSize * 0.5; // Expanded bottom margin
+    
+    if (x >= camLeft && x <= camRight && y >= camTop && y <= camBottom) {
+        // Cycle through camera modes
+        var previousMode = gCameraMode;
+        gCameraMode = (gCameraMode + 1) % 5; // Cycle through 0, 1, 2, 3, 4
+        
+        // Reset camera position when switching modes
+        if (previousMode >= 3 && gCameraMode < 3) {
+            // Switching from first-person back to third-person
+            if (gSavedCameraPosition && gSavedCameraTarget) {
+                gCamera.position.copy(gSavedCameraPosition);
+                gCameraControl.target.copy(gSavedCameraTarget);
+                gCameraControl.update();
+            }
+        } else if (previousMode < 3 && gCameraMode >= 3) {
+            // Switching from third-person to first-person
+            gSavedCameraPosition = gCamera.position.clone();
+            gSavedCameraTarget = gCameraControl.target.clone();
+        }
+        
+        gCameraManualControl = false;
+        gCameraRotationOffset = { theta: 0, phi: 0 };
         return true;
     }
     
@@ -3684,6 +3775,7 @@ function onPointer(evt) {
                         const addCount = targetCount - currentCount;
                         const size = gPhysicsScene.worldSize;
                         let hue, sat;
+                        const startIndex = currentCount;
                         for (let i = 0; i < addCount; i++) {
                             // Random position within simulation area
                             const pos = new THREE.Vector3(
@@ -3708,6 +3800,40 @@ function onPointer(evt) {
                             const newBoid = new BOID(pos, boidRadius, vel, hue, sat);
                             gPhysicsScene.objects.push(newBoid);
                             SpatialGrid.insert(newBoid);
+                        }
+                        // Apply the current geometry type from styling menu to newly created boids only
+                        for (let i = startIndex; i < gPhysicsScene.objects.length; i++) {
+                            const boid = gPhysicsScene.objects[i];
+                            gThreeScene.remove(boid.visMesh);
+                            if (boid.visMesh.geometry) boid.visMesh.geometry.dispose();
+                            if (boid.visMesh.material) boid.visMesh.material.dispose();
+                            
+                            let geometry;
+                            const rad = boid.rad;
+                            switch (gBoidGeometryType) {
+                                case 0: geometry = new THREE.SphereGeometry(rad, 16, 16); break;
+                                case 1: geometry = new THREE.ConeGeometry(rad, 3 * rad, 32, 32); break;
+                                case 2: geometry = new THREE.CylinderGeometry(rad, rad, 3 * rad, 16); break;
+                                case 3: geometry = new THREE.BoxGeometry(2 * rad, 2 * rad, 2 * rad); break;
+                                case 4: geometry = new THREE.TetrahedronGeometry(rad * 1.5); break;
+                                case 5: geometry = new THREE.OctahedronGeometry(rad * 1.5); break;
+                                case 6: geometry = new THREE.DodecahedronGeometry(rad * 1.5); break;
+                                case 7: geometry = new THREE.IcosahedronGeometry(rad * 1.5); break;
+                                case 8: geometry = new THREE.CapsuleGeometry(rad, 2.7 * rad, 8, 16); break;
+                                case 9: geometry = new THREE.TorusGeometry(rad, rad * 0.4, 16, 32); break;
+                                case 10: geometry = new THREE.TorusKnotGeometry(rad, rad * 0.3, 64, 16); break;
+                                default: geometry = new THREE.ConeGeometry(rad, 3 * rad, 32, 32);
+                            }
+                            const material = new THREE.MeshPhongMaterial({
+                                color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, 50%)`)
+                            });
+                            boid.visMesh = new THREE.Mesh(geometry, material);
+                            boid.visMesh.position.copy(boid.pos);
+                            boid.visMesh.userData = boid;
+                            boid.visMesh.layers.enable(1);
+                            boid.visMesh.castShadow = true;
+                            boid.visMesh.receiveShadow = true;
+                            gThreeScene.add(boid.visMesh);
                         }
                     }
                     break;
@@ -4368,6 +4494,9 @@ function restart() {
 function update() {
     simulate();
     
+    // Update button pulse animation
+    gButtonPulseTime += deltaT;
+    
     // Update menu animations
     if (mainMenuVisible) {
         mainMenuOpacity = Math.min(1, mainMenuOpacity + mainMenuFadeSpeed * deltaT);
@@ -4458,7 +4587,8 @@ function update() {
             const radius = offset.length();
             
             // Rotate around vertical axis (Y) - time-based for smooth independent motion
-            const rotationAngle = gCameraRotationSpeed * deltaT * Math.PI / 180; // Convert to radians, scale by deltaT
+            const direction = gCameraMode === 1 ? 1 : -1; // Mode 1 = CCW, Mode 2 = CW
+            const rotationAngle = direction * gCameraRotationSpeed * deltaT * Math.PI / 180; // Convert to radians, scale by deltaT
             const axis = new THREE.Vector3(0, 1, 0);
             offset.applyAxisAngle(axis, rotationAngle);
             
