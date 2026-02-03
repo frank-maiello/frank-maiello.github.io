@@ -2460,7 +2460,7 @@ function drawInstructionsMenu() {
     ctx.fillStyle = `hsla(45, 10%, 80%, ${instructionsMenuOpacity})`;
     ctx.font = `bold ${0.05 * menuScale}px verdana`;
     ctx.textAlign = 'center';
-    ctx.fillText('INSTRUCTIONS', menuWidth / 2, -padding + 0.05 * menuScale);
+    ctx.fillText('HUH?', menuWidth / 2, -padding + 0.05 * menuScale);
     
     // Draw close button
     const closeIconRadius = 0.1 * menuScale * 0.25;
@@ -2496,7 +2496,7 @@ function drawInstructionsMenu() {
         'His algorithm has each "boid" observing its close neighbors',
         'and applying three simple rules: Separation, Alignment,',
         'and Cohesion. The result is the apparent flocking/schooling',
-        'behavior seen in birds, fish, and other animals. ',
+        'behavior seen in birds, fish, and other animals. Cool, right?',
         '',
         'This program is my implementation of that algorithm',
         'using JavaScript, the surprising capabilities of a modern',
