@@ -98,6 +98,10 @@ var stylingMenuVisible = false; // Styling submenu visibility
 var stylingMenuVisibleBeforeHide = false;
 var stylingMenuOpacity = 0;
 var stylingMenuFadeSpeed = 3.0;
+var instructionsMenuVisible = false; // Instructions submenu visibility
+var instructionsMenuVisibleBeforeHide = false;
+var instructionsMenuOpacity = 0;
+var instructionsMenuFadeSpeed = 3.0;
 var menuScale = 300; // Master menu size control (increased 50%)
 var menuX = 0.1; // Menu position in world coordinates
 var menuY = 0.2;
@@ -136,7 +140,7 @@ var restitution = {
     floor: 0.7,
 };
 
-var boidRadius = 0.20;
+var boidRadius = 0.25; // Radius of each Boid
 var boidProps = {
     minDistance: 5.0 * boidRadius, // Rule #1 - The distance to stay away from other Boids
     avoidFactor: 0.05, // Rule #1 -Adjust velocity by this %
@@ -2096,7 +2100,7 @@ function drawMainMenu() {
     const itemHeight = 0.12 * menuScale;
     const itemWidth = 0.24 * menuScale;
     const padding = 0.02 * menuScale;
-    const menuHeight = itemHeight * 2 + (padding * 3); // Two items now
+    const menuHeight = itemHeight * 3 + (padding * 4); // Three items now
     const menuWidth = itemWidth + (padding * 2);
     
     const menuBaseY = ellipsisY + 0.08 * menuScale;
@@ -2215,6 +2219,43 @@ function drawMainMenu() {
     ctx.lineTo(0, tieLength * 0.6);                            // Bottom point
     ctx.lineTo(-tieWidth * 0.5, tieLength * 0.48);             // Left side
     ctx.closePath();
+    ctx.fill();
+    
+    ctx.restore();
+
+    // Draw Instructions menu item
+    const itemY3 = itemY2 + itemHeight + padding;
+    ctx.beginPath();
+    ctx.roundRect(itemX, itemY3, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.fillStyle = instructionsMenuVisible ? 'rgba(255, 204, 0, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fill();
+    
+    // Draw question mark icon
+    const icon3X = itemX + itemWidth / 2;
+    const icon3Y = itemY3 + 0.42 * itemHeight;
+    const icon3Color = instructionsMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+    ctx.strokeStyle = icon3Color;
+    ctx.fillStyle = icon3Color;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    
+    ctx.save();
+    ctx.translate(icon3X, icon3Y);
+    
+    // Draw question mark
+    const qmSize = iconSize * 0.9;
+    ctx.beginPath();
+    // Top curve of question mark
+    ctx.arc(0, -qmSize * 0.25, qmSize * 0.35, -Math.PI, 0);
+    // Stem going down
+    ctx.lineTo(qmSize * 0.35, qmSize * 0.15);
+    ctx.lineTo(0, qmSize * 0.10);
+    ctx.lineTo(0, qmSize * 0.4);
+    ctx.stroke();
+    
+    // Dot at bottom
+    ctx.beginPath();
+    ctx.arc(0, qmSize * 0.75, qmSize * 0.12, 0, 2 * Math.PI);
     ctx.fill();
     
     ctx.restore();
@@ -2348,7 +2389,7 @@ function drawSimMenu() {
         
         // Draw label
         const labels = [
-            'Number', 'Size', 'Visual Range',
+            'Quantity', 'Size', 'Visual Range',
             'Separation', 'Alignment', 'Cohesion',
             'Speed Limit', 'Corralling Force', 'Corral Margin'
         ];
@@ -2377,10 +2418,116 @@ function drawSimMenu() {
     }
     
     // Draw camera control note at the bottom
-    ctx.font = `italic ${0.035 * menuScale}px verdana`;
+    ctx.font = `italic ${0.032 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.fillStyle = `rgba(180, 200, 220, ${menuOpacity})`;
-    ctx.fillText('Mouse to move and rotate', menuWidth / 2, menuHeight + padding * 0.4);
+    ctx.fillText('Left-click and drag to rotate camera. Scroll to move.', menuWidth / 2, menuHeight + padding * 0.4);
+    ctx.fillText('Right-click and drag to move focus point.', menuWidth / 2, menuHeight + padding * 0.7);
+    ctx.restore();
+}
+
+function drawInstructionsMenu() {
+    if (instructionsMenuOpacity <= 0) return;
+    
+    const ctx = gOverlayCtx;
+
+    const menuTopMargin = 0.02 * menuScale;
+    const menuWidth = menuScale;
+    const menuHeight = 1.45 * menuScale;
+    const padding = 0.17 * menuScale;
+    
+    // Position menu slightly below simulation menu
+    const menuUpperLeftX = (menuX + 0.01) * window.innerWidth;
+    const menuUpperLeftY = (menuY + 0.0) * window.innerHeight;
+    
+    ctx.save();
+    ctx.translate(menuUpperLeftX, menuUpperLeftY);
+    
+    // Draw menu background
+    const cornerRadius = 8;
+    ctx.beginPath();
+    ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+    const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsl(45, 30%, 20%, ${instructionsMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsl(45, 10%, 10%, ${instructionsMenuOpacity})`);
+    ctx.fillStyle = menuGradient;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(45, 20%, 70%, ${instructionsMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw title
+    ctx.fillStyle = `hsla(45, 10%, 80%, ${instructionsMenuOpacity})`;
+    ctx.font = `bold ${0.05 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.fillText('INSTRUCTIONS', menuWidth / 2, -padding + 0.05 * menuScale);
+    
+    // Draw close button
+    const closeIconRadius = 0.1 * menuScale * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.02 * menuScale;
+    const closeIconY = -padding + closeIconRadius + 0.02 * menuScale;
+    ctx.beginPath();
+    ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(180, 40, 40, ${instructionsMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(0, 0, 0, ${instructionsMenuOpacity})`;
+    ctx.lineWidth = 2;
+    const xSize = closeIconRadius * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+    ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+    ctx.stroke();
+    
+    // Draw text lines
+    ctx.fillStyle = `hsla(45, 10%, 80%, ${instructionsMenuOpacity})`;
+    ctx.font = `bold ${0.04 * menuScale}px verdana`;
+    ctx.textAlign = 'left';
+    const textX = -padding + 0.05 * menuScale;
+    const textY = menuTopMargin;
+    const lineHeight = 0.06 * menuScale;
+    ctx.fillText('What is this?', textX, 0);
+    ctx.fillText('Camera Controls', textX, textY + 13 * lineHeight);
+    ctx.fillText('Lighting Controls', textX, textY + 19 * lineHeight);
+    const instructionText = [
+        'Boids is a computer simulation created in 1986 by',
+        'programmer and graphics researcher, Craig Reynolds.',
+        'His algorithm has each "boid" observing its close neighbors',
+        'and applying three simple rules: Separation, Alignment,',
+        'and Cohesion. The result is the apparent flocking/schooling',
+        'behavior seen in birds, fish, and other animals. ',
+        '',
+        'This program is my implementation of that algorithm',
+        'using JavaScript, the surprising capabilities of a modern',
+        'web browser, the supercharged 3D rendering library',
+        'created by ThreeJS.org. Enjoy the show!',
+        '',
+        '',
+        '- Left-click and drag to rotate camera',
+        '- Scroll wheel to move forward and backward',
+        '- Right-click and drag to move focus point',
+        '- Camera icon to change camera mode',
+        '',
+        '',
+        '- Lamps are interactive. Double-click to turn on/off',
+        '- Left-click and drag...',
+        '   BASE to move horizontally',
+        '   POLE to rotate and raise/lower',
+        '   CONE UP/DOWN to point upward/downward',
+        '   CONE LEFT/RIGHT to adjust light spread',
+        
+        
+    ]
+    ctx.font = `${0.04 * menuScale}px verdana`;
+    for (let i = 0; i < instructionText.length; i++) {
+        ctx.fillText(instructionText[i], textX, textY + (i + 1) * lineHeight);
+    }
+    
+    /*// Example of multiple lines of text
+    //
+    ctx.fillText('What is this?', textX, textY);
+    ctx.fillText('line 2', textX, textY + lineHeight);*/
     
     ctx.restore();
 }
@@ -3168,7 +3315,7 @@ function drawButtons() {
     const itemHeight = 0.12 * menuScale;
     const itemWidth = 0.24 * menuScale;
     const padding = 0.02 * menuScale;
-    const menuHeight = itemHeight * 2 + (padding * 3);
+    const menuHeight = itemHeight * 3 + (padding * 4);
     const menuBaseY = ellipsisY + 0.08 * menuScale;
     const menuBaseX = ellipsisX - padding;
     const buttonSpacing = 20;
@@ -3177,7 +3324,7 @@ function drawButtons() {
     const menuX = menuBaseX + mainMenuXOffset * menuScale;
     const menuY = menuBaseY;
     const buttonY = menuY + menuHeight + 20;
-    const buttonStartX = menuX + 17;
+    const buttonStartX = menuX + 19;
     gButtons.run.x = buttonStartX;
     gButtons.run.y = buttonY;
     gButtons.camera.x = buttonStartX + buttonSpacing;
@@ -3192,20 +3339,28 @@ function drawButtons() {
         
         // Draw run button
         var runBtn = gButtons.run;
-        gOverlayCtx.beginPath();
-        gOverlayCtx.arc(runBtn.x, runBtn.y, runBtn.radius, 0, Math.PI * 2);
+        
         // Add pulsation when paused
         if (gPhysicsScene.paused) {
+            gOverlayCtx.beginPath();
+            gOverlayCtx.arc(runBtn.x, runBtn.y, runBtn.radius, 0, Math.PI * 2);
             const pulse = Math.sin(gButtonPulseTime * 4) * 0.5 + 0.5; // 0 to 1
             const pulseScale = 0.5 + 0.8 * pulse; // More dramatic size change
             const pulseAlpha = 0.4 + 0.6 * pulse; // Brightness change
             gOverlayCtx.strokeStyle = `rgba(255, 68, 68, ${pulseAlpha})`;
             gOverlayCtx.lineWidth = (runBtn.hovered ? 7 : 5) * pulseScale;
+            gOverlayCtx.stroke();
         } else {
-            gOverlayCtx.strokeStyle = '#44ff44';
+            gOverlayCtx.fillStyle = 'hsla(120, 100%, 63%, 0.8)';
+            // draw triangle pointing to the right
+            gOverlayCtx.beginPath();
+            gOverlayCtx.moveTo(runBtn.x - runBtn.radius * 1.0, runBtn.y - runBtn.radius);
+            gOverlayCtx.lineTo(runBtn.x - runBtn.radius * 1.0, runBtn.y + runBtn.radius);
+            gOverlayCtx.lineTo(runBtn.x + runBtn.radius * 1.2, runBtn.y);
+            gOverlayCtx.closePath();
             gOverlayCtx.lineWidth = runBtn.hovered ? 6 : 4;
+            gOverlayCtx.fill();
         }
-        gOverlayCtx.stroke();
         
         // Draw restart button (temporarily disabled)
         // var restartBtn = gButtons.restart;
@@ -3214,102 +3369,137 @@ function drawButtons() {
         // gOverlayCtx.fillStyle = restartBtn.color;
         // gOverlayCtx.fill();
         
+        if (gCameraMode == 0 || gCameraMode == 1 || gCameraMode == 2) {
+            // Draw camera icon
+            var camBtn = gButtons.camera;
+            const camX = camBtn.x + buttonSpacing;
+            const camSize = 3.5 * camBtn.radius
+            
+            // Draw movie camera icon (no background box)
+            gOverlayCtx.fillStyle = `hsl(0, 0%, 42%)`;
+            gOverlayCtx.strokeStyle = `hsl(0, 0%, 70%)`;
+            gOverlayCtx.lineWidth = 0.04 * camSize;
+            gOverlayCtx.lineCap = 'round';
+            gOverlayCtx.lineJoin = 'round';
 
-        // Draw camera icon
-        var camBtn = gButtons.camera;
-        const camX = camBtn.x + buttonSpacing;
-        const camSize = 3.5 * camBtn.radius
-        
-        // Draw movie camera icon (no background box)
-        gOverlayCtx.fillStyle = `hsl(0, 0%, 42%)`;
-        gOverlayCtx.strokeStyle = `hsl(0, 0%, 70%)`;
-        gOverlayCtx.lineWidth = 0.04 * camSize;
-        gOverlayCtx.lineCap = 'round';
-        gOverlayCtx.lineJoin = 'round';
-
-        // Triangular lens on right side (pointing left, but wide at right)
-        const lensY = (gButtons.camera.y - camSize * 0.12) + (camSize * 0.35 / 2);
-        gOverlayCtx.beginPath();
-        gOverlayCtx.moveTo(camX + camSize * 0.45, lensY - camSize * 0.25);
-        gOverlayCtx.lineTo(camX - camSize * 0.10, lensY);
-        gOverlayCtx.lineTo(camX + camSize * 0.45, lensY + camSize * 0.25);
-        gOverlayCtx.closePath();
-        gOverlayCtx.fill();
-        gOverlayCtx.stroke();
-        
-        // Camera body (rectangle) - on the left
-        gOverlayCtx.beginPath();
-        gOverlayCtx.rect(
-            camX - camSize * 0.5, 
-            gButtons.camera.y - camSize * 0.12, 
-            camSize * 0.6, 
-            camSize * 0.35);
-        gOverlayCtx.fill();
-        gOverlayCtx.stroke();
-        
-        // Film reels on top (left smaller, right larger)
-        const leftReelX = camX - camSize * 0.4;
-        const leftReelY = gButtons.camera.y - camSize * 0.3;
-        const leftReelRadius = camSize * 0.16;
-        
-        const rightReelX = camX - camSize * 0.02;
-        const rightReelY = gButtons.camera.y - camSize * 0.36;
-        const rightReelRadius = camSize * 0.22;
-        
-        // Draw left reel (smaller)
-        gOverlayCtx.beginPath();
-        gOverlayCtx.arc(leftReelX, leftReelY, leftReelRadius, 0, 2 * Math.PI);
-        gOverlayCtx.fillStyle = `hsl(0, 0%, 62%)`;
-        gOverlayCtx.fill();
-        gOverlayCtx.stroke();
-        
-        // Draw rotating circles on left reel when active (faster rotation)
-        if (gCameraMode == 1) {
-            var time = Date.now() / 1000;
-            var rotationSign = 1; // Clockwise
-        } else if (gCameraMode == 2) {
-            var time = Date.now() / 1000;
-            var rotationSign = -1; // Counter-clockwise
+            // Triangular lens on right side (pointing left, but wide at right)
+            const lensY = (gButtons.camera.y - camSize * 0.12) + (camSize * 0.35 / 2);
+            gOverlayCtx.beginPath();
+            gOverlayCtx.moveTo(camX + camSize * 0.45, lensY - camSize * 0.25);
+            gOverlayCtx.lineTo(camX - camSize * 0.10, lensY);
+            gOverlayCtx.lineTo(camX + camSize * 0.45, lensY + camSize * 0.25);
+            gOverlayCtx.closePath();
+            gOverlayCtx.fill();
+            gOverlayCtx.stroke();
+            
+            // Camera body (rectangle) - on the left
+            gOverlayCtx.beginPath();
+            gOverlayCtx.rect(
+                camX - camSize * 0.5, 
+                gButtons.camera.y - camSize * 0.12, 
+                camSize * 0.6, 
+                camSize * 0.35);
+            gOverlayCtx.fill();
+            gOverlayCtx.stroke();
+            
+            // Film reels on top (left smaller, right larger)
+            const leftReelX = camX - camSize * 0.4;
+            const leftReelY = gButtons.camera.y - camSize * 0.3;
+            const leftReelRadius = camSize * 0.16;
+            
+            const rightReelX = camX - camSize * 0.02;
+            const rightReelY = gButtons.camera.y - camSize * 0.36;
+            const rightReelRadius = camSize * 0.22;
+            
+            // Draw left reel (smaller)
+            gOverlayCtx.beginPath();
+            gOverlayCtx.arc(leftReelX, leftReelY, leftReelRadius, 0, 2 * Math.PI);
+            gOverlayCtx.fillStyle = `hsl(0, 0%, 62%)`;
+            gOverlayCtx.fill();
+            gOverlayCtx.stroke();
+            
+            // Draw rotating circles on left reel when active (faster rotation)
+            if (gCameraMode == 1) {
+                var time = Date.now() / 1000;
+                var rotationSign = 1; // Clockwise
+            } else if (gCameraMode == 2) {
+                var time = Date.now() / 1000;
+                var rotationSign = -1; // Counter-clockwise
+            } else {
+                var time = 0;
+                var rotationSign = 0; // No rotation
+            }
+            
+            const leftReelRotation = -time * 4; // 4 radians per second
+            const leftReelDots = 4;
+            const leftReelDotRadius = leftReelRadius * 0.7;
+            const leftReelDotSize = camSize * 0.03;
+            gOverlayCtx.fillStyle = `hsl(0, 0%, 10%)`;
+            for (let i = 0; i < leftReelDots; i++) {
+                const angle = rotationSign * leftReelRotation + (i * 2 * Math.PI / leftReelDots);
+                const dotX = leftReelX + Math.cos(angle) * leftReelDotRadius;
+                const dotY = leftReelY + Math.sin(angle) * leftReelDotRadius;
+                gOverlayCtx.beginPath();
+                gOverlayCtx.arc(dotX, dotY, leftReelDotSize, 0, 2 * Math.PI);
+                gOverlayCtx.fill();
+            }
+            
+            // Draw right reel (larger)
+            gOverlayCtx.fillStyle = `hsl(9, 0%, 60%)`;
+            gOverlayCtx.beginPath();
+            gOverlayCtx.arc(rightReelX, rightReelY, rightReelRadius, 0, 2 * Math.PI);
+            gOverlayCtx.fill();
+            gOverlayCtx.stroke();
+            
+            // Draw rotating circles on right reel when active (slower rotation, opposite direction)
+            const rightReelRotation = time * 2.5; // Negative for opposite rotation
+            const rightReelDots = 5;
+            const rightReelDotRadius = rightReelRadius * 0.7;
+            const rightReelDotSize = camSize * 0.04;
+            gOverlayCtx.fillStyle = `hsl(0, 0%, 10%)`;
+            for (let i = 0; i < rightReelDots; i++) {
+                const angle = rotationSign * rightReelRotation + (i * 2 * Math.PI / rightReelDots);
+                const dotX = rightReelX + Math.cos(angle) * rightReelDotRadius;
+                const dotY = rightReelY + Math.sin(angle) * rightReelDotRadius;
+                gOverlayCtx.beginPath();
+                gOverlayCtx.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
+                gOverlayCtx.fill();
+            }
         } else {
-            var time = 0;
-            var rotationSign = 0; // No rotation
-        }
-        
-        const leftReelRotation = -time * 4; // 4 radians per second
-        const leftReelDots = 4;
-        const leftReelDotRadius = leftReelRadius * 0.7;
-        const leftReelDotSize = camSize * 0.03;
-        gOverlayCtx.fillStyle = `hsl(0, 0%, 10%)`;
-        for (let i = 0; i < leftReelDots; i++) {
-            const angle = rotationSign * leftReelRotation + (i * 2 * Math.PI / leftReelDots);
-            const dotX = leftReelX + Math.cos(angle) * leftReelDotRadius;
-            const dotY = leftReelY + Math.sin(angle) * leftReelDotRadius;
+            // Draw eye icon for first-person mode
+            var camBtn = gButtons.camera;
+            const eyeX = camBtn.x + buttonSpacing;
+            const eyeY = runBtn.y
+            const eyeWidth = 3.5 * camBtn.radius;
+            const eyeHeight = 2.5 * camBtn.radius;
+            
+            // Draw eye outline
+            gOverlayCtx.strokeStyle = `hsl(0, 0%, 90%)`;
+            gOverlayCtx.lineWidth = 0.2 * eyeHeight;
             gOverlayCtx.beginPath();
-            gOverlayCtx.arc(dotX, dotY, leftReelDotSize, 0, 2 * Math.PI);
+            gOverlayCtx.arc(eyeX, eyeY + 0.3 * eyeHeight, eyeWidth / 2, -0.4, Math.PI + 0.4, true);
+            gOverlayCtx.setlineCap = 'round';
+            gOverlayCtx.stroke();
+            gOverlayCtx.beginPath();
+            gOverlayCtx.arc(eyeX, eyeY - 0.3 * eyeHeight, eyeWidth / 2, 0.4, Math.PI - 0.4, false);
+            gOverlayCtx.stroke();
+            gOverlayCtx.setlineCap = 'butt';
+            
+            // Draw iris
+            const irisRadius = eyeHeight * 0.25;
+            gOverlayCtx.fillStyle = `hsl(200, 80%, 60%)`;
+            gOverlayCtx.beginPath();
+            gOverlayCtx.arc(eyeX, eyeY, irisRadius, 0, 2 * Math.PI);
+            gOverlayCtx.fill();
+            
+            // Draw pupil
+            const pupilRadius = irisRadius * 0.4;
+            gOverlayCtx.fillStyle = `hsl(0, 0%, 10%)`;
+            gOverlayCtx.beginPath();
+            gOverlayCtx.arc(eyeX, eyeY, pupilRadius, 0, 2 * Math.PI);
             gOverlayCtx.fill();
         }
-        
-        // Draw right reel (larger)
-        gOverlayCtx.fillStyle = `hsl(9, 0%, 60%)`;
-        gOverlayCtx.beginPath();
-        gOverlayCtx.arc(rightReelX, rightReelY, rightReelRadius, 0, 2 * Math.PI);
-        gOverlayCtx.fill();
-        gOverlayCtx.stroke();
-        
-        // Draw rotating circles on right reel when active (slower rotation, opposite direction)
-        const rightReelRotation = time * 2.5; // Negative for opposite rotation
-        const rightReelDots = 5;
-        const rightReelDotRadius = rightReelRadius * 0.7;
-        const rightReelDotSize = camSize * 0.04;
-        gOverlayCtx.fillStyle = `hsl(0, 0%, 10%)`;
-        for (let i = 0; i < rightReelDots; i++) {
-            const angle = rotationSign * rightReelRotation + (i * 2 * Math.PI / rightReelDots);
-            const dotX = rightReelX + Math.cos(angle) * rightReelDotRadius;
-            const dotY = rightReelY + Math.sin(angle) * rightReelDotRadius;
-            gOverlayCtx.beginPath();
-            gOverlayCtx.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
-            gOverlayCtx.fill();
-        }
+
         
         gOverlayCtx.restore();
     }
@@ -3507,9 +3697,12 @@ function onPointer(evt) {
                 menuVisible = false;
                 stylingMenuVisibleBeforeHide = stylingMenuVisible;
                 stylingMenuVisible = false;
+                instructionsMenuVisibleBeforeHide = instructionsMenuVisible;
+                instructionsMenuVisible = false;
             } else {
                 menuVisible = menuVisibleBeforeHide;
                 stylingMenuVisible = stylingMenuVisibleBeforeHide;
+                instructionsMenuVisible = instructionsMenuVisibleBeforeHide;
             }
             return;
         }
@@ -3532,6 +3725,7 @@ function onPointer(evt) {
                 evt.clientY >= itemY && evt.clientY <= itemY + itemHeight) {
                 menuVisible = !menuVisible;
                 stylingMenuVisible = false; // Close styling menu when opening simulation
+                instructionsMenuVisible = false; // Close instructions menu when opening simulation
                 return;
             }
             
@@ -3541,6 +3735,17 @@ function onPointer(evt) {
                 evt.clientY >= itemY2 && evt.clientY <= itemY2 + itemHeight) {
                 stylingMenuVisible = !stylingMenuVisible;
                 menuVisible = false; // Close simulation menu when opening styling
+                instructionsMenuVisible = false; // Close instructions menu when opening styling
+                return;
+            }
+            
+            // Check Instructions menu item
+            const itemY3 = itemY2 + itemHeight + padding;
+            if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+                evt.clientY >= itemY3 && evt.clientY <= itemY3 + itemHeight) {
+                instructionsMenuVisible = !instructionsMenuVisible;
+                menuVisible = false; // Close simulation menu when opening instructions
+                stylingMenuVisible = false; // Close styling menu when opening instructions
                 return;
             }
         }
@@ -3552,6 +3757,11 @@ function onPointer(evt) {
         
         // Check styling submenu clicks
         if (checkStylingMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
+        // Check instructions submenu clicks
+        if (checkInstructionsMenuClick(evt.clientX, evt.clientY)) {
             return;
         }
         
@@ -4424,6 +4634,49 @@ function checkStylingMenuClick(clientX, clientY) {
     return false;
 }
 
+function checkInstructionsMenuClick(clientX, clientY) {
+    if (!instructionsMenuVisible || instructionsMenuOpacity <= 0.5) return false;
+    
+    const menuTopMargin = 0.02 * menuScale;
+    const menuWidth = menuScale;
+    const menuHeight = 1.45 * menuScale;
+    const padding = 0.17 * menuScale;
+    
+    const menuUpperLeftX = (menuX + 0.01) * window.innerWidth;
+    const menuUpperLeftY = (menuY + 0.0) * window.innerHeight;
+    const menuOriginX = menuUpperLeftX;
+    const menuOriginY = menuUpperLeftY;
+    
+    // Check close button
+    const closeIconRadius = 0.1 * menuScale * 0.25;
+    const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
+    const closeIconY = menuOriginY - padding + closeIconRadius + 0.02 * menuScale;
+    const cdx = clientX - closeIconX;
+    const cdy = clientY - closeIconY;
+    
+    if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+        instructionsMenuVisible = false;
+        return true;
+    }
+    
+    // Check if menu background clicked (for dragging or to block clicks underneath)
+    if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
+        clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
+        isDraggingMenu = true;
+        menuDragStartX = clientX;
+        menuDragStartY = clientY;
+        menuStartX = menuX + 0.01;
+        menuStartY = menuY + 0.0;
+        
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    return false;
+}
+
 // Function to rotate lamp around pivot point
 function rotateLamp(lampId) {
     lampId = lampId || 1;
@@ -4590,6 +4843,12 @@ function update() {
         stylingMenuOpacity = Math.max(0, stylingMenuOpacity - stylingMenuFadeSpeed * deltaT);
     }
     
+    if (instructionsMenuVisible) {
+        instructionsMenuOpacity = Math.min(0.9, instructionsMenuOpacity + instructionsMenuFadeSpeed * deltaT);
+    } else {
+        instructionsMenuOpacity = Math.max(0, instructionsMenuOpacity - instructionsMenuFadeSpeed * deltaT);
+    }
+    
     // Camera follow modes - follow first boid (modes 3 and 4)
     if (gCameraMode >= 3 && gPhysicsScene.objects.length > 0) {
         const firstBoid = gPhysicsScene.objects[0];
@@ -4681,6 +4940,7 @@ function update() {
     drawMainMenu();
     drawSimMenu();
     drawStylingMenu();
+    drawInstructionsMenu();
     
     requestAnimationFrame(update);
 }
