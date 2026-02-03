@@ -734,7 +734,7 @@ class Lamp {
         this.rotatableGroup = new THREE.Group();
         
         // Create spotlight
-        this.spotlight = new THREE.SpotLight(0xffffff);
+        this.spotlight = new THREE.SpotLight(0xffffff, 0.8);
         this.spotlight.angle = Math.PI / 6;
         this.spotlight.penumbra = 0.2;
         this.spotlight.position.copy(lightPosition);
@@ -743,6 +743,8 @@ class Lamp {
         this.spotlight.shadow.camera.far = 70;
         this.spotlight.shadow.mapSize.width = 2048;
         this.spotlight.shadow.mapSize.height = 2048;
+        // Configure shadow camera to exclude layer 2 (lamp cones will be on layer 2)
+        this.spotlight.shadow.camera.layers.set(0); // Only see layer 0
         this.spotlight.target.position.copy(lightTarget);
         gThreeScene.add(this.spotlight.target);
         gThreeScene.add(this.spotlight);
@@ -776,6 +778,11 @@ class Lamp {
         this.outerCone.userData.isLampCone = true;
         this.outerCone.userData.lampId = lampId;
         this.outerCone.renderOrder = 1;
+        this.outerCone.castShadow = true;
+        this.outerCone.receiveShadow = false;
+        // Place on layers 0 and 2 - visible to camera but excluded from own spotlight shadow
+        this.outerCone.layers.enable(0);
+        this.outerCone.layers.enable(2);
         
         // Orient cone to point away from spotlight target (backwards like a lamp shield)
         var direction = lightPosition.clone().sub(lightTarget).normalize();
@@ -879,6 +886,11 @@ class Lamp {
         this.innerCone.userData.isLampCone = true;
         this.innerCone.userData.lampId = lampId;
         this.innerCone.renderOrder = 1;
+        this.innerCone.castShadow = false;
+        this.innerCone.receiveShadow = false;
+        // Place on layers 0 and 2
+        this.innerCone.layers.enable(0);
+        this.innerCone.layers.enable(2);
         this.innerCone.quaternion.setFromUnitVectors(up, direction);
         this.innerCone.position.copy(lightPosition).sub(coneOffset);
         this.rotatableGroup.add(this.innerCone);
@@ -1506,7 +1518,7 @@ class BOID {
         this.grabbed = false;
         
         // Create front cone mesh
-        var geometry = new THREE.ConeGeometry(rad, 3 * rad, 32, 32);
+        var geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
         var material = new THREE.MeshPhongMaterial({color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`)});
         this.visMesh = new THREE.Mesh(geometry, material);
         this.visMesh.position.copy(pos);
@@ -2010,7 +2022,7 @@ function recreateBoidGeometries() {
                 geometry = new THREE.SphereGeometry(rad, 16, 16);
                 break;
             case 1: // Cone (default)
-                geometry = new THREE.ConeGeometry(rad, 3 * rad, 24, 24);
+                geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
                 break;
             case 2: // Cylinder
                 geometry = new THREE.CylinderGeometry(rad, rad, 3 * rad, 16);
@@ -2599,20 +2611,17 @@ function initThreeScene() {
         2
     );
     // Then move it -7 units along X axis and -15 units along Z axis
-    translateLampAssembly(0, -35, 2);
+    translateLampAssembly(-26, -35, 2);
     // Then rotate it 90 degrees
-    rotateLampAssembly(Math.PI / 2, 2);
-    
-    // Turn off lamp 2
-    gLamps[2].toggleLight();
+    rotateLampAssembly(Math.PI * 0.9, 2);
 
     // Directional Overhead Light
     //var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
     var dirLight = new THREE.DirectionalLight( 0x55505a, 2 );
-    dirLight.position.set( 0, 20, 0 );
+    dirLight.position.set( 0, 30, 0 );
     dirLight.castShadow = true;
     dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 30;
+    dirLight.shadow.camera.far = 40;
 
     dirLight.shadow.camera.right = WORLD_WIDTH;  // Match room width
     dirLight.shadow.camera.left = -WORLD_WIDTH;
@@ -2709,7 +2718,7 @@ function initThreeScene() {
         }
     );
     
-    var frontWallMaterial = new THREE.MeshPhongMaterial({ 
+    var frontWallMaterial = new THREE.MeshStandardMaterial({ 
         map: frontWallTexture,
         side: THREE.BackSide,
         transparent: false
@@ -2730,8 +2739,29 @@ function initThreeScene() {
     var backWallCtx = backWallCanvas.getContext('2d');
     for (var i = 0; i < 2; i++) {
         for (var j = 0; j < 2; j++) {
-            backWallCtx.fillStyle = (i + j) % 2 === 0 ? '#8AC8FF' : '#e6e6e6';
-            backWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+            if ((i + j) % 2 === 0) {
+                // Colored panel - draw 5x5 array of smaller tiles with variation
+                var smallTileSize = wallTileSize / 5;
+                for (var ti = 0; ti < 5; ti++) {
+                    for (var tj = 0; tj < 5; tj++) {
+                        // Base color: pastel blue (hsl(200, 50%, 85%))
+                        var hue = 200;
+                        var sat = 50 + (Math.random() - 0.5) * 10; // 45-55%
+                        var light = 50 + (Math.random() - 0.5) * 40; // 30-70%
+                        backWallCtx.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
+                        backWallCtx.fillRect(
+                            i * wallTileSize + ti * smallTileSize,
+                            j * wallTileSize + tj * smallTileSize,
+                            smallTileSize,
+                            smallTileSize
+                        );
+                    }
+                }
+            } else {
+                // White panel - solid color
+                backWallCtx.fillStyle = '#e6e6e6';
+                backWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+            }
         }
     }
     backWallCtx.strokeStyle = '#333333';
@@ -2767,8 +2797,29 @@ function initThreeScene() {
     var leftWallCtx = leftWallCanvas.getContext('2d');
     for (var i = 0; i < 2; i++) {
         for (var j = 0; j < 2; j++) {
-            leftWallCtx.fillStyle = (i + j) % 2 === 0 ? '#FFFF8A' : '#e6e6e6';
-            leftWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+            if ((i + j) % 2 === 0) {
+                // Colored panel - draw 5x5 array of smaller tiles with variation
+                var smallTileSize = wallTileSize / 5;
+                for (var ti = 0; ti < 5; ti++) {
+                    for (var tj = 0; tj < 5; tj++) {
+                        // Base color: pastel yellow (hsl(55, 50%, 85%))
+                        var hue = 55;
+                        var sat = 50 + (Math.random() - 0.5) * 10; // 45-55%
+                        var light = 50 + (Math.random() - 0.5) * 40; // 30-70%
+                        leftWallCtx.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
+                        leftWallCtx.fillRect(
+                            i * wallTileSize + ti * smallTileSize,
+                            j * wallTileSize + tj * smallTileSize,
+                            smallTileSize,
+                            smallTileSize
+                        );
+                    }
+                }
+            } else {
+                // White panel - solid color
+                leftWallCtx.fillStyle = '#e6e6e6';
+                leftWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+            }
         }
     }
     leftWallCtx.strokeStyle = '#333333';
@@ -2804,8 +2855,29 @@ function initThreeScene() {
     var rightWallCtx = rightWallCanvas.getContext('2d');
     for (var i = 0; i < 2; i++) {
         for (var j = 0; j < 2; j++) {
-            rightWallCtx.fillStyle = (i + j) % 2 === 0 ? '#8AFFAD' : '#e6e6e6';
-            rightWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+            if ((i + j) % 2 === 0) {
+                // Colored panel - draw 5x5 array of smaller tiles with variation
+                var smallTileSize = wallTileSize / 5;
+                for (var ti = 0; ti < 5; ti++) {
+                    for (var tj = 0; tj < 5; tj++) {
+                        // Base color: pastel green (hsl(130, 50%, 85%))
+                        var hue = 130;
+                        var sat = 50 + (Math.random() - 0.5) * 10; // 45-55%
+                        var light = 50 + (Math.random() - 0.5) * 40; // 30-70%
+                        rightWallCtx.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
+                        rightWallCtx.fillRect(
+                            i * wallTileSize + ti * smallTileSize,
+                            j * wallTileSize + tj * smallTileSize,
+                            smallTileSize,
+                            smallTileSize
+                        );
+                    }
+                }
+            } else {
+                // White panel - solid color
+                rightWallCtx.fillStyle = '#e6e6e6';
+                rightWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+            }
         }
     }
     rightWallCtx.strokeStyle = '#333333';
