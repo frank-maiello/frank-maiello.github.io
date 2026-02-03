@@ -1,5 +1,5 @@
 /*
-BOIDS 3D : A 3D Boids Simulation with Interactive Lighting and Obstacles
+B0IDS 3D : A 3D Boids Simulation with Interactive Lighting and Obstacles
 copyright 2025 :: Frank Maiello :: maiello.frank@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -2289,7 +2289,7 @@ function drawSimMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 2 + knobRadius * 2.0;
+    const menuHeight = knobSpacing * 2.3;
     const padding = 1.7 * knobRadius;
     
     // Convert world coordinates to screen coordinates
@@ -2416,13 +2416,7 @@ function drawSimMenu() {
         ctx.fillStyle = `rgba(128, 230, 200, ${menuOpacity})`;
         ctx.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
     }
-    
-    // Draw camera control note at the bottom
-    ctx.font = `italic ${0.032 * menuScale}px verdana`;
-    ctx.textAlign = 'center';
-    ctx.fillStyle = `rgba(180, 200, 220, ${menuOpacity})`;
-    ctx.fillText('Left-click and drag to rotate camera. Scroll to move.', menuWidth / 2, menuHeight + padding * 0.4);
-    ctx.fillText('Right-click and drag to move focus point.', menuWidth / 2, menuHeight + padding * 0.7);
+
     ctx.restore();
 }
 
@@ -2500,7 +2494,7 @@ function drawInstructionsMenu() {
         '',
         'This program is my implementation of that algorithm',
         'using JavaScript, the surprising capabilities of a modern',
-        'web browser, the supercharged 3D rendering library',
+        'web browser, and the GPU-accelerated 3D rendering library',
         'created by ThreeJS.org. Enjoy the show!',
         '',
         '',
@@ -2764,10 +2758,11 @@ function initThreeScene() {
 
     // Directional Overhead Light
     //var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
-    var dirLight = new THREE.DirectionalLight( 0x55505a, 2 );
+    //var dirLight = new THREE.DirectionalLight( 0x55505a, 2 );
+    var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
     dirLight.position.set( 0, 30, 0 );
     dirLight.castShadow = true;
-    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.near = 0.1;
     dirLight.shadow.camera.far = 40;
 
     dirLight.shadow.camera.right = WORLD_WIDTH;  // Match room width
@@ -3474,7 +3469,7 @@ function drawButtons() {
             const eyeHeight = 2.5 * camBtn.radius;
             
             // Draw eye outline
-            gOverlayCtx.strokeStyle = `hsl(0, 0%, 90%)`;
+            gOverlayCtx.strokeStyle = `hsla(0, 0%, 60%, 0.8)`;
             gOverlayCtx.lineWidth = 0.2 * eyeHeight;
             gOverlayCtx.beginPath();
             gOverlayCtx.arc(eyeX, eyeY + 0.3 * eyeHeight, eyeWidth / 2, -0.4, Math.PI + 0.4, true);
@@ -4866,13 +4861,13 @@ function update() {
                 // Behind boid, looking forward
                 const backwardOffset = direction.clone().multiplyScalar(-1.5);
                 targetPos.add(backwardOffset);
-                targetPos.y += 0.3;
+                targetPos.y += 1.3;
                 lookDirection = direction.clone();
             } else {
                 // In front of boid, looking backward
-                const forwardOffset = direction.clone().multiplyScalar(1.5);
+                const forwardOffset = direction.clone().multiplyScalar(2.0);
                 targetPos.add(forwardOffset);
-                targetPos.y += 0.3;
+                targetPos.y += 0.5;
                 lookDirection = direction.clone().multiplyScalar(-1); // Reverse direction
             }
             
