@@ -120,6 +120,8 @@ var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all
 var SpatialGrid; // Global spatial grid instance
 var gTori = []; // Array to hold the two torus meshes
 var gToriRotation = 0; // Current rotation angle for tori animation
+var gFadeInTime = 0; // Track time for fade-in effect
+var gFadeInDuration = 1.0; // Fade in over 1 second
 
 // Master world size constants
 //var WORLD_WIDTH = 69.5 * 0.5; // X dimension Parthenon
@@ -3065,12 +3067,14 @@ function initThreeScene() {
     
     // Create painting plane with fallback color
     var painting2Material = new THREE.MeshStandardMaterial({ 
-        color: 0xffffff,
+        color: 0x000000,
         side: THREE.FrontSide,
-        emissive: 0xffffff,
-        emissiveIntensity: 0.3,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
         metalness: 0,
-        roughness: 1
+        roughness: 1,
+        transparent: true,
+        opacity: 1
     });
     
     // Load painting texture
@@ -3080,6 +3084,9 @@ function initThreeScene() {
             console.log('Marcel_Duchamp_Nude_Descending_Staircase.jpg loaded successfully');
             painting2Material.map = texture;
             painting2Material.emissiveMap = texture;
+            painting2Material.color.setHex(0xffffff);
+            painting2Material.emissive.setHex(0xffffff);
+            painting2Material.emissiveIntensity = 0.3;
             painting2Material.needsUpdate = true;
         },
         undefined,
@@ -3234,12 +3241,14 @@ function initThreeScene() {
     
     // Create painting plane with fallback color
     var paintingMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xffffff,
+        color: 0x000000,
         side: THREE.FrontSide,
-        emissive: 0xffffff,
-        emissiveIntensity: 0.3,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
         metalness: 0,
-        roughness: 1
+        roughness: 1,
+        transparent: true,
+        opacity: 1
     });
     
     // Load painting texture
@@ -3249,6 +3258,9 @@ function initThreeScene() {
             console.log('Joan_Miro_Untitled.webp loaded successfully');
             paintingMaterial.map = texture;
             paintingMaterial.emissiveMap = texture;
+            paintingMaterial.color.setHex(0xffffff);
+            paintingMaterial.emissive.setHex(0xffffff);
+            paintingMaterial.emissiveIntensity = 0.3;
             paintingMaterial.needsUpdate = true;
         },
         undefined,
@@ -5102,6 +5114,11 @@ function restart() {
 function update() {
     simulate();
     
+    // Update fade-in effect
+    if (gFadeInTime < gFadeInDuration) {
+        gFadeInTime += deltaT;
+    }
+    
     // Update button pulse animation
     gButtonPulseTime += deltaT;
     
@@ -5233,6 +5250,14 @@ function update() {
     drawSimMenu();
     drawStylingMenu();
     drawInstructionsMenu();
+    
+    // Draw fade-in effect (black overlay that fades out)
+    if (gFadeInTime < gFadeInDuration) {
+        const fadeProgress = gFadeInTime / gFadeInDuration; // 0 to 1
+        const opacity = 1 - fadeProgress; // 1 to 0
+        gOverlayCtx.fillStyle = `rgba(0, 0, 0, ${opacity})`;
+        gOverlayCtx.fillRect(0, 0, gOverlayCanvas.width, gOverlayCanvas.height);
+    }
     
     requestAnimationFrame(update);
 }
