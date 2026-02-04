@@ -118,6 +118,8 @@ var mouseAttached = false;
 
 var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all separation
 var SpatialGrid; // Global spatial grid instance
+var gTori = []; // Array to hold the two torus meshes
+var gToriRotation = 0; // Current rotation angle for tori animation
 
 // Master world size constants
 //var WORLD_WIDTH = 69.5 * 0.5; // X dimension Parthenon
@@ -539,6 +541,54 @@ class CylinderObstacle {
         // Store reference to first section as 'mesh' for backward compatibility
         this.mesh = this.columnSections[0];
         
+        // Create two tori on top of column
+        const torusRadius = this.radius * 0.7; // Major radius
+        const tubeRadius = 0.2; // Minor radius (tube thickness)
+        const tiltAngle = Math.PI / 6; // 30 degrees tilt from horizontal
+        
+        // Calculate top of column position
+        const columnTopY = this.position.y + 9.23;
+        
+        // Torus material
+        const torusMaterial = new THREE.MeshStandardMaterial({
+            color: 0xd4af37, // Gold color
+            metalness: 0.7,
+            roughness: 0.3
+        });
+        
+        const toriShiftY = Math.sin(tiltAngle) * (torusRadius - 1.6 * tubeRadius)
+        // Create first torus (tilted one way) with a parent group for Y rotation
+        const torusGroup1 = new THREE.Group();
+        torusGroup1.position.set(this.position.x, columnTopY - toriShiftY, this.position.z);
+        gThreeScene.add(torusGroup1);
+        
+        const torusGeometry1 = new THREE.TorusGeometry(torusRadius, tubeRadius, 32, 64);
+        const torus1 = new THREE.Mesh(torusGeometry1, torusMaterial);
+        torus1.rotation.x = 0.5 * Math.PI + tiltAngle;
+        torus1.castShadow = true;
+        torus1.receiveShadow = true;
+        torusGroup1.add(torus1);
+        gTori.push(torusGroup1);
+        
+        // Create second torus (tilted opposite way) with a parent group for Y rotation
+        const torusGroup2 = new THREE.Group();
+        torusGroup2.position.set(this.position.x, columnTopY + 2 * toriShiftY, this.position.z);
+        gThreeScene.add(torusGroup2);
+        
+        const torusGeometry2 = new THREE.TorusGeometry(torusRadius, tubeRadius, 32, 64);
+        const torus2 = new THREE.Mesh(torusGeometry2, torusMaterial);
+        torus2.rotation.x = 0.5 * Math.PI - tiltAngle;
+        torus2.castShadow = true;
+        torus2.receiveShadow = true;
+        torusGroup2.add(torus2);
+        gTori.push(torusGroup2);
+        
+        // Store references to tori groups for updating position
+        this.toriGroups = [torusGroup1, torusGroup2];
+        this.tiltAngle = tiltAngle;
+        this.torusRadius = torusRadius;
+        this.tubeRadius = tubeRadius;
+        
         // Create conical pedestal
         const conicalPedestalRadius = this.radius * 1.5;
         const conicalPedestalHeight = 3; 
@@ -722,6 +772,14 @@ class CylinderObstacle {
         if (this.pedestalMesh) {
             const pedestalHeight = 1;
             this.pedestalMesh.position.set(newPosition.x, 0.5 * pedestalHeight, newPosition.z);
+        }
+        
+        // Update tori positions
+        if (this.toriGroups && this.toriGroups.length === 2) {
+            const columnTopY = newPosition.y + 9.23;
+            const toriShiftY = Math.sin(this.tiltAngle) * (this.torusRadius - 1.6 * this.tubeRadius);
+            this.toriGroups[0].position.set(newPosition.x, columnTopY - toriShiftY, newPosition.z);
+            this.toriGroups[1].position.set(newPosition.x, columnTopY + 2 * toriShiftY, newPosition.z);
         }
     }
 }
@@ -2243,13 +2301,14 @@ function drawMainMenu() {
     ctx.translate(icon3X, icon3Y);
     
     // Draw question mark
-    const qmSize = iconSize * 0.9;
+    const qmSize = iconSize;
     ctx.beginPath();
     // Top curve of question mark
-    ctx.arc(0, -qmSize * 0.25, qmSize * 0.35, -Math.PI, 0);
+    ctx.arc(0, -qmSize * 0.1, qmSize * 0.4, -Math.PI, 0);
+    // line going across
+    ctx.lineTo(qmSize * 0.4, qmSize * 0.2);
     // Stem going down
-    ctx.lineTo(qmSize * 0.35, qmSize * 0.15);
-    ctx.lineTo(0, qmSize * 0.10);
+    ctx.lineTo(0, qmSize * 0.2);
     ctx.lineTo(0, qmSize * 0.4);
     ctx.stroke();
     
@@ -2289,7 +2348,7 @@ function drawSimMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 2.3;
+    const menuHeight = knobSpacing * 3;
     const padding = 1.7 * knobRadius;
     
     // Convert world coordinates to screen coordinates
@@ -2853,6 +2912,9 @@ function initThreeScene() {
             texture.wrapS = THREE.RepeatWrapping;
             texture.repeat.x = -1;
             texture.needsUpdate = true;
+            // Apply texture to emissive map
+            frontWallMaterial.emissiveMap = texture;
+            frontWallMaterial.needsUpdate = true;
         },
         undefined,
         function(err) {
@@ -2863,7 +2925,11 @@ function initThreeScene() {
     var frontWallMaterial = new THREE.MeshStandardMaterial({ 
         map: frontWallTexture,
         side: THREE.BackSide,
-        transparent: false
+        transparent: false,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.1,
+        metalness: 0,
+        roughness: 1
     });
     
     var frontWall = new THREE.Mesh(
@@ -2990,6 +3056,117 @@ function initThreeScene() {
     leftWall.receiveShadow = true;
     gThreeScene.add(leftWall);
     
+    // Add framed painting on left wall (Duchamp)
+    var painting2Width = 12 * 0.9;
+    var painting2Height = 16 * 0.9;
+    var painting2Y = boxSize.y / 2 + 1; // Vertical position
+    var frame2Thickness = 0.3;
+    var frame2Depth = 0.15;
+    
+    // Create painting plane with fallback color
+    var painting2Material = new THREE.MeshStandardMaterial({ 
+        color: 0xffffff,
+        side: THREE.FrontSide,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.3,
+        metalness: 0,
+        roughness: 1
+    });
+    
+    // Load painting texture
+    var painting2Texture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Marcel_Duchamp_Nude_Descending_Staircase.jpg',
+        function(texture) {
+            console.log('Marcel_Duchamp_Nude_Descending_Staircase.jpg loaded successfully');
+            painting2Material.map = texture;
+            painting2Material.emissiveMap = texture;
+            painting2Material.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading Marcel_Duchamp_Nude_Descending_Staircase.jpg:', err);
+            console.log('Using fallback color for painting 2');
+        }
+    );
+    
+    var painting2 = new THREE.Mesh(
+        new THREE.PlaneGeometry(painting2Width, painting2Height),
+        painting2Material
+    );
+    painting2.position.set(-boxSize.x + 0.3, painting2Y, 0);
+    painting2.rotation.y = Math.PI / 2;
+    painting2.receiveShadow = true;
+    painting2.castShadow = true;
+    gThreeScene.add(painting2);
+    
+    // Create frame material (wood-like)
+    var frame2Material = new THREE.MeshStandardMaterial({ 
+        color: 0x5a3a1a,
+        metalness: 0.1,
+        roughness: 0.7
+    });
+    
+    // Create frame pieces for painting 2
+    // Top frame
+    var frame2Top = new THREE.Mesh(
+        new THREE.BoxGeometry(painting2Width + frame2Thickness * 2, frame2Thickness, frame2Depth),
+        frame2Material
+    );
+    frame2Top.position.set(
+        -boxSize.x + 0.3 + frame2Depth / 2,
+        painting2Y + painting2Height / 2 + frame2Thickness / 2,
+        0
+    );
+    frame2Top.rotation.y = Math.PI / 2;
+    frame2Top.castShadow = true;
+    frame2Top.receiveShadow = true;
+    gThreeScene.add(frame2Top);
+    
+    // Bottom frame
+    var frame2Bottom = new THREE.Mesh(
+        new THREE.BoxGeometry(painting2Width + frame2Thickness * 2, frame2Thickness, frame2Depth),
+        frame2Material
+    );
+    frame2Bottom.position.set(
+        -boxSize.x + 0.3 + frame2Depth / 2,
+        painting2Y - painting2Height / 2 - frame2Thickness / 2,
+        0
+    );
+    frame2Bottom.rotation.y = Math.PI / 2;
+    frame2Bottom.castShadow = true;
+    frame2Bottom.receiveShadow = true;
+    gThreeScene.add(frame2Bottom);
+    
+    // Left frame
+    var frame2Left = new THREE.Mesh(
+        new THREE.BoxGeometry(frame2Thickness, painting2Height, frame2Depth),
+        frame2Material
+    );
+    frame2Left.position.set(
+        -boxSize.x + 0.3 + frame2Depth / 2,
+        painting2Y,
+        -painting2Width / 2 - frame2Thickness / 2
+    );
+    frame2Left.rotation.y = Math.PI / 2;
+    frame2Left.castShadow = true;
+    frame2Left.receiveShadow = true;
+    gThreeScene.add(frame2Left);
+    
+    // Right frame
+    var frame2Right = new THREE.Mesh(
+        new THREE.BoxGeometry(frame2Thickness, painting2Height, frame2Depth),
+        frame2Material
+    );
+    frame2Right.position.set(
+        -boxSize.x + 0.3 + frame2Depth / 2,
+        painting2Y,
+        painting2Width / 2 + frame2Thickness / 2
+    );
+    frame2Right.rotation.y = Math.PI / 2;
+    frame2Right.castShadow = true;
+    frame2Right.receiveShadow = true;
+    gThreeScene.add(frame2Right);
+    
     // Right wall (positive X) - pastel green checkerboard
     var rightWallCanvas = document.createElement('canvas');
     rightWallCanvas.width = 1024;
@@ -3047,6 +3224,117 @@ function initThreeScene() {
     rightWall.position.set(boxSize.x, boxSize.y / 2, 0);
     rightWall.receiveShadow = true;
     gThreeScene.add(rightWall);
+    
+    // Add framed painting on right wall
+    var paintingWidth = 16;
+    var paintingHeight = 12;
+    var paintingY = boxSize.y / 2 + 2; // Vertical position
+    var frameThickness = 0.3;
+    var frameDepth = 0.15;
+    
+    // Create painting plane with fallback color
+    var paintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xffffff,
+        side: THREE.FrontSide,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.3,
+        metalness: 0,
+        roughness: 1
+    });
+    
+    // Load painting texture
+    var paintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Joan_Miro_Untitled.webp',
+        function(texture) {
+            console.log('Joan_Miro_Untitled.webp loaded successfully');
+            paintingMaterial.map = texture;
+            paintingMaterial.emissiveMap = texture;
+            paintingMaterial.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading Joan_Miro_Untitled.webp:', err);
+            console.log('Using fallback color for painting');
+        }
+    );
+    
+    var painting = new THREE.Mesh(
+        new THREE.PlaneGeometry(paintingWidth, paintingHeight),
+        paintingMaterial
+    );
+    painting.position.set(boxSize.x - 0.3, paintingY, 0);
+    painting.rotation.y = -Math.PI / 2;
+    painting.receiveShadow = true;
+    painting.castShadow = true;
+    gThreeScene.add(painting);
+    
+    // Create frame material (wood-like)
+    var frameMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x5a3a1a,
+        metalness: 0.1,
+        roughness: 0.7
+    });
+    
+    // Create frame pieces
+    // Top frame
+    var frameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(paintingWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    frameTop.position.set(
+        boxSize.x - 0.3 - frameDepth / 2,
+        paintingY + paintingHeight / 2 + frameThickness / 2,
+        0
+    );
+    frameTop.rotation.y = -Math.PI / 2;
+    frameTop.castShadow = true;
+    frameTop.receiveShadow = true;
+    gThreeScene.add(frameTop);
+    
+    // Bottom frame
+    var frameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(paintingWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    frameBottom.position.set(
+        boxSize.x - 0.3 - frameDepth / 2,
+        paintingY - paintingHeight / 2 - frameThickness / 2,
+        0
+    );
+    frameBottom.rotation.y = -Math.PI / 2;
+    frameBottom.castShadow = true;
+    frameBottom.receiveShadow = true;
+    gThreeScene.add(frameBottom);
+    
+    // Left frame
+    var frameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, paintingHeight, frameDepth),
+        frameMaterial
+    );
+    frameLeft.position.set(
+        boxSize.x - 0.3 - frameDepth / 2,
+        paintingY,
+        -paintingWidth / 2 - frameThickness / 2
+    );
+    frameLeft.rotation.y = -Math.PI / 2;
+    frameLeft.castShadow = true;
+    frameLeft.receiveShadow = true;
+    gThreeScene.add(frameLeft);
+    
+    // Right frame
+    var frameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, paintingHeight, frameDepth),
+        frameMaterial
+    );
+    frameRight.position.set(
+        boxSize.x - 0.3 - frameDepth / 2,
+        paintingY,
+        paintingWidth / 2 + frameThickness / 2
+    );
+    frameRight.rotation.y = -Math.PI / 2;
+    frameRight.castShadow = true;
+    frameRight.receiveShadow = true;
+    gThreeScene.add(frameRight);
     
     // Add baseboard around perimeter walls
     var baseboardHeight = 0.3;
@@ -3180,7 +3468,7 @@ function initThreeScene() {
     var cylinderObstacle = new CylinderObstacle(
         2.5,  // radius
         12,  // height
-        new THREE.Vector3(10, 6.03, -10),  // position
+        new THREE.Vector3(10, 6.03, -5),  // position
         { x: 0, y: 0, z: 0 }  // rotation
     );
     gObstacles.push(cylinderObstacle);
@@ -4816,6 +5104,15 @@ function update() {
     
     // Update button pulse animation
     gButtonPulseTime += deltaT;
+    
+    // Animate tori rotation around Y axis
+    if (gTori.length === 2) {
+        gToriRotation += 4 * deltaT; // Rotation speed
+        
+        // Both tori rotate around the Y axis (vertical), preserving their X rotation (tilt)
+        gTori[0].rotation.y = gToriRotation;
+        gTori[1].rotation.y = gToriRotation;
+    }
     
     // Update menu animations
     if (mainMenuVisible) {
