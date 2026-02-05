@@ -3716,11 +3716,11 @@ function initThreeScene() {
     
     // Define the five Platonic solids with their colors
     var platonicConfig = [
-        { name: 'tetrahedron', geometry: new THREE.TetrahedronGeometry(solidSize), color: 0xff6b6b }, // Red
-        { name: 'cube', geometry: new THREE.BoxGeometry(solidSize * 1.4, solidSize * 1.4, solidSize * 1.4), color: 0x4ecdc4 }, // Cyan
-        { name: 'octahedron', geometry: new THREE.OctahedronGeometry(solidSize), color: 0xffe66d }, // Yellow
-        { name: 'dodecahedron', geometry: new THREE.DodecahedronGeometry(solidSize), color: 0x95e1d3 }, // Mint green
-        { name: 'icosahedron', geometry: new THREE.IcosahedronGeometry(solidSize), color: 0xc7a4ff } // Purple
+        { name: 'tetrahedron', geometry: new THREE.TetrahedronGeometry(solidSize), color: 0xfd6100 }, // orange
+        { name: 'cube', geometry: new THREE.BoxGeometry(solidSize * 1.4, solidSize * 1.4, solidSize * 1.4), color: 0xfd6100 }, // orange
+        { name: 'octahedron', geometry: new THREE.OctahedronGeometry(solidSize), color: 0xfd6100 }, // orange
+        { name: 'dodecahedron', geometry: new THREE.DodecahedronGeometry(solidSize), color: 0xfd6100 }, // orange
+        { name: 'icosahedron', geometry: new THREE.IcosahedronGeometry(solidSize), color: 0xfd6100 } // orange
     ];
     
     for (var i = 0; i < 5; i++) {
@@ -3741,7 +3741,7 @@ function initThreeScene() {
             color: platonicConfig[i].color,
             transparent: true,
             opacity: 0.6,
-            shininess: 100,
+            shininess: 0,
             //roughness: 0.0
         });
         
