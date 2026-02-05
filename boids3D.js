@@ -83,6 +83,7 @@ var gButtons = {
 };
 var gButtonPulseTime = 0;
 var deltaT = 1.0 / 60.0;
+var geometrySegments = 16 ; // Number of segments for boid geometries
 
 // Menu system variables
 var mainMenuVisible = true;
@@ -1585,7 +1586,7 @@ class BOID {
         this.grabbed = false;
         
         // Create front cone mesh
-        var geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
+        var geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
         var material = new THREE.MeshPhongMaterial({color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`)});
         this.visMesh = new THREE.Mesh(geometry, material);
         this.visMesh.position.copy(pos);
@@ -2127,13 +2128,13 @@ function recreateBoidGeometries() {
         
         switch (gBoidGeometryType) {
             case 0: // Sphere
-                geometry = new THREE.SphereGeometry(rad, 16, 16);
+                geometry = new THREE.SphereGeometry(rad, geometrySegments, geometrySegments);
                 break;
             case 1: // Cone (default)
-                geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
+                geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
                 break;
             case 2: // Cylinder
-                geometry = new THREE.CylinderGeometry(rad, rad, 3 * rad, 16);
+                geometry = new THREE.CylinderGeometry(rad, rad, 3 * rad, geometrySegments);
                 break;
             case 3: // Box
                 geometry = new THREE.BoxGeometry(2 * rad, 2 * rad, 2 * rad);
@@ -2151,19 +2152,19 @@ function recreateBoidGeometries() {
                 geometry = new THREE.IcosahedronGeometry(rad * 1.5);
                 break;
             case 8: // Capsule
-                geometry = new THREE.CapsuleGeometry(rad, 2.7 * rad, 8, 16);
+                geometry = new THREE.CapsuleGeometry(rad, 2.7 * rad, 0.5 * geometrySegments, geometrySegments);
                 break;
             case 9: // Torus
-                geometry = new THREE.TorusGeometry(rad, rad * 0.4, 16, 32);
+                geometry = new THREE.TorusGeometry(rad, rad * 0.4, geometrySegments, 2 * geometrySegments);
                 break;
             case 10: // TorusKnot
-                geometry = new THREE.TorusKnotGeometry(rad, rad * 0.3, 64, 16);
+                geometry = new THREE.TorusKnotGeometry(rad, rad * 0.3, 4 * geometrySegments, geometrySegments);
                 break;
             case 11: // Plane
                 geometry = new THREE.PlaneGeometry(2.5 * rad, 2.5 * rad);
                 break;
             default:
-                geometry = new THREE.ConeGeometry(rad, 3 * rad, 16, 16);
+                geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
         }
         
         const material = new THREE.MeshPhongMaterial({
@@ -2834,7 +2835,7 @@ function drawStylingMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 1 + knobRadius * 2.0 + knobSpacing * 0.9; // Reduced height for 3 knobs + buttons
+    const menuHeight = knobSpacing * 1 + knobRadius * 2.0 + knobSpacing * 0.9 + knobRadius * 2.2; // Extended height for mesh detail buttons
     const padding = 1.7 * knobRadius;
     
     // Position menu slightly below simulation menu
@@ -3069,6 +3070,54 @@ function drawStylingMenu() {
         ctx.fillStyle = `hsla(30, 30%, 90%, ${stylingMenuOpacity})`;
         ctx.fillText(geometryNames[i], btnX + buttonWidth / 2, btnY + buttonHeight / 2);
         
+    }
+    
+    // Draw Mesh Detail label and radio buttons
+    const meshDetailY = buttonY + 4 * (buttonHeight + buttonSpacing) + knobRadius * 0.8;
+    ctx.font = `bold ${0.04 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
+    ctx.fillText('Mesh Detail', 0.5 * menuWidth, meshDetailY + 1);
+    ctx.fillStyle = `hsla(30, 10%, 80%, ${stylingMenuOpacity})`;
+    ctx.fillText('Mesh Detail', 0.5 * menuWidth, meshDetailY);
+    
+    // Draw horizontal radio buttons for geometry segments
+    const segmentOptions = [8, 16, 24, 32, 64];
+    const meshRadioY = meshDetailY + knobRadius * 0.8;
+    const meshRadioRadius = knobRadius * 0.35;
+    const totalRadioWidth = segmentOptions.length * meshRadioRadius * 2 + (segmentOptions.length - 1) * meshRadioRadius * 1.5;
+    const radioStartX = 0.5 * menuWidth - totalRadioWidth / 2 + meshRadioRadius;
+    const radioSpacingH = meshRadioRadius * 3.5;
+    
+    ctx.font = `${0.32 * knobRadius}px Arial`;
+    for (let i = 0; i < segmentOptions.length; i++) {
+        const rbX = radioStartX + i * radioSpacingH;
+        
+        // Draw radio button circle
+        ctx.beginPath();
+        ctx.arc(rbX, meshRadioY, meshRadioRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsla(30, 30%, 20%, ${0.8 * stylingMenuOpacity})`;
+        ctx.strokeStyle = `hsla(30, 20%, 60%, ${stylingMenuOpacity})`;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw filled circle if selected
+        if (geometrySegments === segmentOptions[i]) {
+            ctx.beginPath();
+            ctx.arc(rbX, meshRadioY, meshRadioRadius * 0.5, 0, 2 * Math.PI);
+            ctx.fillStyle = `hsla(30, 60%, 60%, ${stylingMenuOpacity})`;
+            ctx.fill();
+        }
+        
+        // Draw label below button
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
+        ctx.fillText(segmentOptions[i], rbX + 1, meshRadioY + meshRadioRadius + 4 + 1);
+        ctx.fillStyle = `hsla(30, 10%, 90%, ${stylingMenuOpacity})`;
+        ctx.fillText(segmentOptions[i], rbX, meshRadioY + meshRadioRadius + 4);
     }
     
     ctx.restore();
@@ -4575,19 +4624,19 @@ function onPointer(evt) {
                             let geometry;
                             const rad = boid.rad;
                             switch (gBoidGeometryType) {
-                                case 0: geometry = new THREE.SphereGeometry(rad, 16, 16); break;
-                                case 1: geometry = new THREE.ConeGeometry(rad, 3 * rad, 32, 32); break;
-                                case 2: geometry = new THREE.CylinderGeometry(rad, rad, 3 * rad, 16); break;
+                                case 0: geometry = new THREE.SphereGeometry(rad, geometrySegments, 16); break;
+                                case 1: geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1); break;
+                                case 2: geometry = new THREE.CylinderGeometry(rad, rad, 3 * rad, geometrySegments); break;
                                 case 3: geometry = new THREE.BoxGeometry(2 * rad, 2 * rad, 2 * rad); break;
                                 case 4: geometry = new THREE.TetrahedronGeometry(rad * 1.5); break;
                                 case 5: geometry = new THREE.OctahedronGeometry(rad * 1.5); break;
                                 case 6: geometry = new THREE.DodecahedronGeometry(rad * 1.5); break;
                                 case 7: geometry = new THREE.IcosahedronGeometry(rad * 1.5); break;
-                                case 8: geometry = new THREE.CapsuleGeometry(rad, 2.7 * rad, 8, 16); break;
-                                case 9: geometry = new THREE.TorusGeometry(rad, rad * 0.4, 16, 32); break;
-                                case 10: geometry = new THREE.TorusKnotGeometry(rad, rad * 0.3, 64, 16); break;
+                                case 8: geometry = new THREE.CapsuleGeometry(rad, 2.7 * rad, 0.5 * geometrySegments, geometrySegments); break;
+                                case 9: geometry = new THREE.TorusGeometry(rad, rad * 0.4, geometrySegments, 2 * geometrySegments); break;
+                                case 10: geometry = new THREE.TorusKnotGeometry(rad, rad * 0.3, 4 * geometrySegments, geometrySegments); break;
                                 case 11: geometry = new THREE.PlaneGeometry(2.5 * rad, 2.5 * rad); break;
-                                default: geometry = new THREE.ConeGeometry(rad, 3 * rad, 32, 32);
+                                default: geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
                             }
                             const material = new THREE.MeshPhongMaterial({
                                 color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, 50%)`),
@@ -5031,7 +5080,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 1 + knobRadius * 2.0 + knobSpacing * 0.9;
+    const menuHeight = knobSpacing * 1 + knobRadius * 2.0 + knobSpacing * 0.9 + knobRadius * 2.2;
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = menuX * window.innerWidth;
@@ -5089,6 +5138,28 @@ function checkStylingMenuClick(clientX, clientY) {
             clientY >= btnY && clientY <= btnY + buttonHeight) {
             gBoidGeometryType = i;
             // Recreate all boid geometries
+            recreateBoidGeometries();
+            return true;
+        }
+    }
+    
+    // Check mesh detail radio buttons
+    const meshDetailY = buttonY + 4 * (buttonHeight + buttonSpacing) + knobRadius * 0.8;
+    const segmentOptions = [8, 16, 24, 32, 64];
+    const meshRadioY = meshDetailY + knobRadius * 0.8;
+    const meshRadioRadius = knobRadius * 0.35;
+    const totalRadioWidth = segmentOptions.length * meshRadioRadius * 2 + (segmentOptions.length - 1) * meshRadioRadius * 1.5;
+    const radioStartX = menuOriginX + 0.5 * menuWidth - totalRadioWidth / 2 + meshRadioRadius;
+    const radioSpacingH = meshRadioRadius * 3.5;
+    
+    for (let i = 0; i < segmentOptions.length; i++) {
+        const rbX = radioStartX + i * radioSpacingH;
+        const rdx = clientX - rbX;
+        const rdy = clientY - meshRadioY;
+        
+        if (rdx * rdx + rdy * rdy < (meshRadioRadius + 5) * (meshRadioRadius + 5)) {
+            geometrySegments = segmentOptions[i];
+            // Recreate all boid geometries with new segment count
             recreateBoidGeometries();
             return true;
         }
