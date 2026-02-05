@@ -1679,9 +1679,6 @@ class BOID {
                 this.visMesh.rotateX(-Math.PI / 4);
                 this.visMesh.rotateY(-Math.PI / 4);
                 this.visMesh.rotateZ(-Math.PI / 2);
-                /*this.visMesh.rotateX(-Math.PI / 4);
-                this.visMesh.rotateY(-Math.PI / 4);
-                this.visMesh.rotateZ(+Math.PI / 2);*/
             } else if (gBoidGeometryType === 5) {
                 // Octahedron - rotate 90 degrees about horizontal axis
                 this.visMesh.rotateX(Math.PI / 2);
@@ -3252,7 +3249,6 @@ function initThreeScene() {
         'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/grafWall.jpg',
         function(texture) {
             console.log('grafWall.jpg loaded successfully on front wall');
-            console.log('Image dimensions:', texture.image.width, 'x', texture.image.height);
             // Flip the texture horizontally
             texture.wrapS = THREE.RepeatWrapping;
             texture.repeat.x = -1;
@@ -3814,19 +3810,17 @@ function initThreeScene() {
         innerSolid.castShadow = true;
         innerSolid.receiveShadow = true;
         
-        // Orient tetrahedron with base face parallel to ground, apex pointing down
+        // Orient tetrahedron with base face on pedestal, apex pointing up
         if (i === 0) {
-            const upwardTarget = new THREE.Vector3(xPos, solidY + 1, backWallZ);
-            solid.lookAt(upwardTarget);
-            solid.rotateX(-Math.PI / 4);
-            solid.rotateY(-Math.PI / 4);
-            solid.rotateZ(-Math.PI / 2);
+            // Apply the correct rotation for flat base orientation
+            solid.rotation.x = -2.4; // ≈ -137.5° - primary tilt
+            solid.rotation.y = Math.PI / 6; // 30° - aligns base triangle
+            solid.rotation.z = Math.PI / 9; // 20° - fine-tunes horizontal base
             
             // Apply same orientation to inner solid
-            innerSolid.lookAt(upwardTarget);
-            innerSolid.rotateX(-Math.PI / 4);
-            innerSolid.rotateY(-Math.PI / 4);
-            innerSolid.rotateZ(-Math.PI / 2);
+            innerSolid.rotation.x = -2.4;
+            innerSolid.rotation.y = Math.PI / 6;
+            innerSolid.rotation.z = Math.PI / 9;
         }
         
         // Create a group to hold both solids so they rotate together around world Y-axis
@@ -3834,14 +3828,13 @@ function initThreeScene() {
         solidGroup.add(solid);
         solidGroup.add(innerSolid);
         
-        // Adjust Y position for tetrahedron to sit lower
-        var yPos = (i === 0) ? solidY - 0.4 : solidY;
-        solidGroup.position.set(xPos, yPos, backWallZ);
-        
-        // Flip tetrahedron upside-down
+        // Position on pedestal
         if (i === 0) {
-            solidGroup.rotateZ(Math.PI);
+            var yPos = solidY - 0.35;
+        } else {
+            var yPos = solidY; 
         }
+        solidGroup.position.set(xPos, yPos, backWallZ);
         
         gThreeScene.add(solidGroup);
         
