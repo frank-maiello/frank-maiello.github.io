@@ -2248,7 +2248,7 @@ function drawMainMenu() {
     ctx.save();
     ctx.translate(iconX, iconY);
     
-    if (gRunning) {
+    if (!gRunning) {
         // Draw pause icon (two bars)
         const barWidth = iconSize * 0.2;
         const barHeight = iconSize * 0.7;
@@ -2257,7 +2257,7 @@ function drawMainMenu() {
         ctx.fillRect(barSpacing - barWidth / 2, -barHeight / 2, barWidth, barHeight);
     } else {
         // Draw play icon (triangle)
-        const triSize = iconSize * 0.6;
+        const triSize = iconSize * 1.0;
         ctx.beginPath();
         ctx.moveTo(-triSize * 0.3, -triSize * 0.5);
         ctx.lineTo(-triSize * 0.3, triSize * 0.5);
@@ -2325,13 +2325,13 @@ function drawMainMenu() {
     const itemY3 = itemY2 + itemHeight + padding;
     ctx.beginPath();
     ctx.roundRect(itemX, itemY3, itemWidth, itemHeight, cornerRadius * 0.5);
-    ctx.fillStyle = stylingMenuVisible ? 'rgba(164, 220, 100, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fillStyle = stylingMenuVisible ? 'rgba(255, 150, 80, 0.3)' : 'rgba(38, 38, 38, 0.8)';
     ctx.fill();
     
     // Draw necktie icon
     const icon3X = itemX + itemWidth / 2;
     const icon3Y = itemY3 + itemHeight / 2;
-    const icon3Color = stylingMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+    const icon3Color = stylingMenuVisible ? 'rgba(255, 180, 100, 1.0)' : 'rgba(76, 76, 76, 1.0)';
     ctx.strokeStyle = icon3Color;
     ctx.fillStyle = icon3Color;
     ctx.lineWidth = 2;
@@ -2370,7 +2370,16 @@ function drawMainMenu() {
     const itemY4 = itemY3 + itemHeight + padding;
     ctx.beginPath();
     ctx.roundRect(itemX, itemY4, itemWidth, itemHeight, cornerRadius * 0.5);
-    ctx.fillStyle = 'rgba(38, 38, 38, 0.8)';
+    
+    // Background color varies by camera mode
+    const cameraBackgroundColors = [
+        'rgba(80, 50, 50, 0.8)',   // Mode 0: Static - dark red
+        'rgba(50, 50, 80, 0.8)',   // Mode 1: Rotate CCW - dark blue
+        'rgba(50, 80, 50, 0.8)',   // Mode 2: Rotate CW - dark green
+        'rgba(80, 50, 80, 0.8)',   // Mode 3: Behind boid - dark purple
+        'rgba(80, 70, 50, 0.8)'    // Mode 4: In front of boid - dark gold
+    ];
+    ctx.fillStyle = cameraBackgroundColors[gCameraMode];
     ctx.fill();
     
     // Draw camera or eye icon depending on camera mode
@@ -2561,7 +2570,7 @@ function drawSimMenu() {
         {min: 0, max: 0.2},         // avoidFactor
         {min: 0, max: 0.2},         // matchingFactor
         {min: 0, max: 0.005},       // centeringFactor
-        {min: 1.0, max: 15.0},      // maxSpeed
+        {min: 1.0, max: 30.0},      // maxSpeed
         {min: 0, max: 0.2},         // turnFactor
         {min: 0.5, max: 5.0}        // margin
     ];
@@ -2674,7 +2683,7 @@ function drawSimMenu() {
             'Separation', 'Alignment', 'Cohesion',
             'Speed Limit', 'Corralling Force', 'Corral Margin'
         ];
-        ctx.font = `${0.35 * knobRadius}px Arial`;
+        ctx.font = `${0.35 * knobRadius}px verdana`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = `rgba(230, 240, 250, ${menuOpacity})`;
@@ -2693,7 +2702,7 @@ function drawSimMenu() {
             case 7: valueText = boidProps.turnFactor.toFixed(3); break;
             case 8: valueText = boidProps.margin.toFixed(1); break;
         }
-        ctx.font = `${0.25 * knobRadius}px Arial`;
+        ctx.font = `${0.3 * knobRadius}px verdana`;
         ctx.fillStyle = `rgba(128, 230, 200, ${menuOpacity})`;
         ctx.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
     }
@@ -2840,16 +2849,16 @@ function drawStylingMenu() {
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
     const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `hsl(100, 30%, 20%, ${stylingMenuOpacity})`);
-    menuGradient.addColorStop(1, `hsl(120, 10%, 10%, ${stylingMenuOpacity})`);
+    menuGradient.addColorStop(0, `hsl(30, 30%, 20%, ${stylingMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsl(25, 10%, 10%, ${stylingMenuOpacity})`);
     ctx.fillStyle = menuGradient;
     ctx.fill();
-    ctx.strokeStyle = `hsla(150, 20%, 70%, ${stylingMenuOpacity})`;
+    ctx.strokeStyle = `hsla(35, 20%, 70%, ${stylingMenuOpacity})`;
     ctx.lineWidth = 2;
     ctx.stroke();
     
     // Draw title
-    ctx.fillStyle = `hsla(150, 10%, 80%, ${stylingMenuOpacity})`;
+    ctx.fillStyle = `hsla(35, 10%, 80%, ${stylingMenuOpacity})`;
     ctx.font = `bold ${0.05 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.fillText('STYLING', menuWidth / 2, -padding + 0.05 * menuScale);
@@ -2891,9 +2900,9 @@ function drawStylingMenu() {
         // Draw knob background
         ctx.beginPath();
         ctx.arc(knobX, knobY, 1.05 * knobRadius, 0, 2 * Math.PI);
-        ctx.fillStyle = `hsla(150, 30%, 10%, ${0.9 * stylingMenuOpacity})`;
+        ctx.fillStyle = `hsla(30, 30%, 10%, ${0.9 * stylingMenuOpacity})`;
         ctx.fill();
-        ctx.strokeStyle = `hsla(150, 20%, 50%, ${stylingMenuOpacity})`;
+        ctx.strokeStyle = `hsla(30, 20%, 50%, ${stylingMenuOpacity})`;
         ctx.lineWidth = 1;
         ctx.stroke();
         
@@ -2909,8 +2918,8 @@ function drawStylingMenu() {
             knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
             knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
         );
-        gradient.addColorStop(0, `hsla(150, 30%, 60%, ${stylingMenuOpacity})`);
-        gradient.addColorStop(0.5, `hsla(180, 30%, 60%, ${stylingMenuOpacity})`);
+        gradient.addColorStop(0, `hsla(30, 30%, 60%, ${stylingMenuOpacity})`);
+        gradient.addColorStop(0.5, `hsla(40, 30%, 60%, ${stylingMenuOpacity})`);
         ctx.strokeStyle = gradient;
         ctx.beginPath();
         ctx.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
@@ -2925,7 +2934,7 @@ function drawStylingMenu() {
         ctx.beginPath();
         ctx.moveTo(knobX, knobY);
         ctx.lineTo(pointerEndX, pointerEndY);
-        ctx.strokeStyle = `hsla(150, 30%, 80%, ${stylingMenuOpacity})`;
+        ctx.strokeStyle = `hsla(30, 30%, 80%, ${stylingMenuOpacity})`;
         ctx.lineWidth = 2;
         ctx.stroke();
         
@@ -2938,7 +2947,7 @@ function drawStylingMenu() {
         ctx.textBaseline = 'middle';
         ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
         ctx.fillText(labels[knob], knobX + 2, knobY + 1.35 * knobRadius + 1);
-        ctx.fillStyle = `hsla(150, 10%, 90%, ${stylingMenuOpacity})`;
+        ctx.fillStyle = `hsla(30, 10%, 90%, ${stylingMenuOpacity})`;
         ctx.fillText(labels[knob], knobX, knobY + 1.35 * knobRadius);
         
         // Draw value
@@ -2955,7 +2964,7 @@ function drawStylingMenu() {
         if (isOff && knob === 0) {
             ctx.fillStyle = `hsla(0, 90%, 70%, ${stylingMenuOpacity})`;
         } else {
-            ctx.fillStyle = `hsla(150, 80%, 70%, ${stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 80%, 70%, ${stylingMenuOpacity})`;
         }
         ctx.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
     }
@@ -2977,11 +2986,11 @@ function drawStylingMenu() {
         ctx.beginPath();
         ctx.arc(radioX, rbY, radioRadius, 0, 2 * Math.PI);
         if (trailDisabled) {
-            ctx.fillStyle = `hsla(150, 10%, 25%, ${0.5 * stylingMenuOpacity})`;
-            ctx.strokeStyle = `hsla(150, 5%, 40%, ${0.5 * stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 10%, 25%, ${0.5 * stylingMenuOpacity})`;
+            ctx.strokeStyle = `hsla(30, 5%, 40%, ${0.5 * stylingMenuOpacity})`;
         } else {
-            ctx.fillStyle = `hsla(150, 30%, 20%, ${0.8 * stylingMenuOpacity})`;
-            ctx.strokeStyle = `hsla(150, 20%, 60%, ${stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 30%, 20%, ${0.8 * stylingMenuOpacity})`;
+            ctx.strokeStyle = `hsla(30, 20%, 60%, ${stylingMenuOpacity})`;
         }
         ctx.fill();
         ctx.lineWidth = 2;
@@ -2991,7 +3000,7 @@ function drawStylingMenu() {
         if (gTrailColorMode === i && !trailDisabled) {
             ctx.beginPath();
             ctx.arc(radioX, rbY, radioRadius * 0.5, 0, 2 * Math.PI);
-            ctx.fillStyle = `hsla(150, 60%, 60%, ${stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 60%, 60%, ${stylingMenuOpacity})`;
             ctx.fill();
         }
         
@@ -3002,12 +3011,12 @@ function drawStylingMenu() {
         if (trailDisabled) {
             ctx.fillStyle = `hsla(0, 0%, 30%, ${0.5 * stylingMenuOpacity})`;
             ctx.fillText(radioLabels[i], radioX + radioRadius + 5 + 2, rbY + 1);
-            ctx.fillStyle = `hsla(150, 5%, 50%, ${0.5 * stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 5%, 50%, ${0.5 * stylingMenuOpacity})`;
             ctx.fillText(radioLabels[i], radioX + radioRadius + 5, rbY);
         } else {
             ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
             ctx.fillText(radioLabels[i], radioX + radioRadius + 5 + 2, rbY + 1);
-            ctx.fillStyle = `hsla(150, 10%, 90%, ${stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 10%, 90%, ${stylingMenuOpacity})`;
             ctx.fillText(radioLabels[i], radioX + radioRadius + 5, rbY);
         }
     }
@@ -3017,7 +3026,7 @@ function drawStylingMenu() {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
     ctx.fillText('Rendering Style', 0.5 * menuWidth, menuTopMargin + 1.5 * padding);
-    ctx.fillStyle = `hsla(150, 10%, 80%, ${stylingMenuOpacity})`;
+    ctx.fillStyle = `hsla(30, 10%, 80%, ${stylingMenuOpacity})`;
     ctx.fillText('Rendering Style', 0.5 * menuWidth, menuTopMargin + 1.5 * padding);
     
     // Draw boid geometry selection buttons
@@ -3045,19 +3054,19 @@ function drawStylingMenu() {
         ctx.beginPath();
         ctx.roundRect(btnX, btnY, buttonWidth, buttonHeight, 4);
         if (gBoidGeometryType === i) {
-            ctx.fillStyle = `hsla(150, 30%, 50%, ${0.8 * stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 30%, 50%, ${0.8 * stylingMenuOpacity})`;
         } else {
-            ctx.fillStyle = `hsla(150, 30%, 20%, ${0.6 * stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 30%, 20%, ${0.6 * stylingMenuOpacity})`;
         }
         ctx.fill();
-        ctx.strokeStyle = `hsla(150, 10%, 60%, ${stylingMenuOpacity})`;
+        ctx.strokeStyle = `hsla(30, 10%, 60%, ${stylingMenuOpacity})`;
         ctx.lineWidth = 1;
         ctx.stroke();
         
         // Draw label
         ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
         ctx.fillText(geometryNames[i], btnX + buttonWidth / 2 + 2, btnY + buttonHeight / 2 + 1);
-        ctx.fillStyle = `hsla(150, 30%, 90%, ${stylingMenuOpacity})`;
+        ctx.fillStyle = `hsla(30, 30%, 90%, ${stylingMenuOpacity})`;
         ctx.fillText(geometryNames[i], btnX + buttonWidth / 2, btnY + buttonHeight / 2);
         
     }
@@ -3681,6 +3690,116 @@ function initThreeScene() {
     rightBaseboard.castShadow = true;
     gThreeScene.add(rightBaseboard);
     
+    // Create five pedestals with Platonic solids on back wall
+    var pedestalSize = 1.5;
+    var pedestalHeight = 7;
+    var solidSize = 0.8;
+    var backWallZ = -boxSize.z + baseboardDepth + pedestalSize / 2;
+    var pedestalY = baseboardHeight + pedestalHeight / 2;
+    var solidY = baseboardHeight + pedestalHeight + solidSize;
+    
+    // Pedestal material
+    var pedestalMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xe2e2e2,
+        metalness: 0.1,
+        roughness: 0.7
+    });
+    
+    // Calculate spacing to distribute 5 pedestals evenly across back wall
+    // with equal spacing from walls and between pedestals
+    var totalWidth = boxSize.x * 2;
+    var spacing = totalWidth / 6; // 6 equal spaces: wall|space|ped|space|ped|space|ped|space|ped|space|ped|space|wall
+    var startX = -totalWidth / 2 + spacing;
+    
+    // Array to store Platonic solid meshes for rotation animation
+    window.gPlatonicSolids = [];
+    
+    // Define the five Platonic solids with their colors
+    var platonicConfig = [
+        { name: 'tetrahedron', geometry: new THREE.TetrahedronGeometry(solidSize), color: 0xff6b6b }, // Red
+        { name: 'cube', geometry: new THREE.BoxGeometry(solidSize * 1.4, solidSize * 1.4, solidSize * 1.4), color: 0x4ecdc4 }, // Cyan
+        { name: 'octahedron', geometry: new THREE.OctahedronGeometry(solidSize), color: 0xffe66d }, // Yellow
+        { name: 'dodecahedron', geometry: new THREE.DodecahedronGeometry(solidSize), color: 0x95e1d3 }, // Mint green
+        { name: 'icosahedron', geometry: new THREE.IcosahedronGeometry(solidSize), color: 0xc7a4ff } // Purple
+    ];
+    
+    for (var i = 0; i < 5; i++) {
+        var xPos = startX + i * spacing;
+        
+        // Create pedestal
+        var pedestal = new THREE.Mesh(
+            new THREE.BoxGeometry(pedestalSize, pedestalHeight, pedestalSize),
+            pedestalMaterial
+        );
+        pedestal.position.set(xPos, pedestalY, backWallZ);
+        pedestal.castShadow = true;
+        pedestal.receiveShadow = true;
+        gThreeScene.add(pedestal);
+        
+        // Create outer transparent Platonic solid
+        var solidMaterial = new THREE.MeshPhongMaterial({
+            color: platonicConfig[i].color,
+            transparent: true,
+            opacity: 0.6,
+            shininess: 100,
+            //roughness: 0.0
+        });
+        
+        var solid = new THREE.Mesh(platonicConfig[i].geometry, solidMaterial);
+        solid.castShadow = true;
+        solid.receiveShadow = true;
+        
+        // Create inner opaque solid (smaller copy)
+        var innerMaterial = new THREE.MeshPhongMaterial({
+            color: platonicConfig[i].color,
+            transparent: false,
+            opacity: 1.0,
+            shininess: 100,
+            emissive: 0xffffff,
+            emissiveIntensity: 0.3,
+            //roughness: 0.0
+        });
+        
+        var innerSolid = new THREE.Mesh(platonicConfig[i].geometry, innerMaterial);
+        innerSolid.scale.set(0.6, 0.6, 0.6); // 60% of outer size
+        innerSolid.castShadow = true;
+        innerSolid.receiveShadow = true;
+        
+        // Orient tetrahedron with base face parallel to ground, apex pointing down
+        if (i === 0) {
+            const upwardTarget = new THREE.Vector3(xPos, solidY + 1, backWallZ);
+            solid.lookAt(upwardTarget);
+            solid.rotateX(-Math.PI / 4);
+            solid.rotateY(-Math.PI / 4);
+            solid.rotateZ(-Math.PI / 2);
+            
+            // Apply same orientation to inner solid
+            innerSolid.lookAt(upwardTarget);
+            innerSolid.rotateX(-Math.PI / 4);
+            innerSolid.rotateY(-Math.PI / 4);
+            innerSolid.rotateZ(-Math.PI / 2);
+        }
+        
+        // Create a group to hold both solids so they rotate together around world Y-axis
+        var solidGroup = new THREE.Group();
+        solidGroup.add(solid);
+        solidGroup.add(innerSolid);
+        
+        // Adjust Y position for tetrahedron to sit lower
+        var yPos = (i === 0) ? solidY - 0.4 : solidY;
+        solidGroup.position.set(xPos, yPos, backWallZ);
+        
+        // Flip tetrahedron upside-down
+        if (i === 0) {
+            solidGroup.rotateZ(Math.PI);
+        }
+        
+        gThreeScene.add(solidGroup);
+        
+        // Store group for rotation animation (rotates around world Y-axis)
+        window.gPlatonicSolids.push(solidGroup);
+    }
+    
     /*// Top wall - pastel lavender
     var topWall = new THREE.Mesh(
         new THREE.PlaneGeometry(boxSize.x * 2, boxSize.z * 2),
@@ -3747,8 +3866,8 @@ function initThreeScene() {
     
     // Create sphere obstacle
     var sphereObstacle = new SphereObstacle(
-        4,  // radius
-        new THREE.Vector3(-10, 10, 6),  // position
+        3,  // radius
+        new THREE.Vector3(-14, 15, 14),  // position
     );
     gObstacles.push(sphereObstacle);
 
@@ -3765,7 +3884,7 @@ function initThreeScene() {
     var cylinderObstacle = new CylinderObstacle(
         2.5,  // radius
         12,  // height
-        new THREE.Vector3(10, 6.03, -5),  // position
+        new THREE.Vector3(5, 6.03, -9),  // position
         { x: 0, y: 0, z: 0 }  // rotation
     );
     gObstacles.push(cylinderObstacle);
@@ -4387,7 +4506,7 @@ function onPointer(evt) {
                 {min: 0, max: 0.2},
                 {min: 0, max: 0.2},
                 {min: 0, max: 0.005},
-                {min: 1.0, max: 15.0},
+                {min: 1.0, max: 30.0},
                 {min: 0, max: 0.2},
                 {min: 0.5, max: 5.0}
             ];
@@ -5219,6 +5338,13 @@ function update() {
         // Both tori rotate around the Y axis (vertical), preserving their X rotation (tilt)
         gTori[0].rotation.y = gToriRotation;
         gTori[1].rotation.y = gToriRotation;
+    }
+    
+    // Animate Platonic solids rotation around Y axis
+    if (window.gPlatonicSolids && window.gPlatonicSolids.length === 5) {
+        for (var i = 0; i < window.gPlatonicSolids.length; i++) {
+            window.gPlatonicSolids[i].rotation.y += 0.5 * deltaT; // Slow rotation
+        }
     }
     
     // Update menu animations
