@@ -158,6 +158,8 @@ var boidProps = {
     maxSpeed: 8.0, // maximum speed limit
     turnFactor: 0.05, // How strongly Boids turn back when near edge
     margin: 2.0, // Distance from boundary to start turning
+    wireframe: false, // Render boids in wireframe mode
+    material: 'phong' // Material type: 'basic', 'phong', 'standard', 'normal', 'toon', 'depth'
 };
 
 // Boid trail tracking variables
@@ -167,6 +169,7 @@ var gTrailRadius = 0.5; // Multiplier for trail tube radius (relative to boid ra
 var gTrailBoidIndex = 1; // Index of boid to track (second boid in array)
 var gTrailPositions = []; // Array to store trail positions
 var gTrailMesh = null; // THREE.Mesh for the trail tube
+var gTrailCapMesh = null; // THREE.Mesh for the disc cap at trail end
 var gTrailUpdateCounter = 0; // Counter to limit trail updates
 var gTrailUpdateFrequency = 1; // Update trail every N frames
 var gTrailColorMode = 3; // 0=White, 1=Black, 2=B&W, 3=Color
@@ -321,7 +324,17 @@ class SphereObstacle {
     
     createMesh() {
         var geometry = new THREE.SphereGeometry(this.radius, 32, 32);
-        var material = new THREE.MeshPhongMaterial({color: 0xc6b1aa, shininess: 100});
+        //var geometry = new THREE.TorusKnotGeometry(this.radius, this.radius * 0.4, 100, 16, 2, 3);
+        //var material = new THREE.MeshPhongMaterial({color: 0xc6b1aa, shininess: 100});
+        /*var material = new THREE.MeshPhongMaterial({
+            color: 0xc6b1aa, 
+            shininess: 100, 
+            wireframe: boidProps.wireframe});*/
+        var material = new THREE.MeshStandardMaterial({
+            color: `${`hsl(20, 90%, 50%)`}`, 
+            metalness: 0.6, 
+            roughness: 0.5,
+            wireframe: boidProps.wireframe});
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.position.copy(this.position);
         this.mesh.castShadow = true;
@@ -1586,15 +1599,55 @@ class BOID {
         this.grabbed = false;
         
         // Create front cone mesh
+        let material;
+        if (boidProps.material === 'standard') {
+            material = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
+                metalness: 0.5, 
+                roughness: 0.4, 
+                wireframe: boidProps.wireframe});
+        } else if (boidProps.material === 'phong') {
+            material = new THREE.MeshPhongMaterial({
+                color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
+                shininess: 100, 
+                shininess: 100, 
+                wireframe: boidProps.wireframe});
+        } else if (boidProps.material === 'normal') {
+            material = new THREE.MeshNormalMaterial({
+                wireframe: boidProps.wireframe});
+        } else if (boidProps.material === 'toon') {
+            material = new THREE.MeshToonMaterial({
+                color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
+                shininess: 100, 
+                wireframe: boidProps.wireframe});
+        } else if (boidProps.material === 'depth') {
+            material = new THREE.MeshDepthMaterial({
+                wireframe: boidProps.wireframe});
+        } else {
+            material = new THREE.MeshBasicMaterial({
+                color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
+                shininess: 100, 
+                wireframe: boidProps.wireframe});
+        }
         var geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
-        var material = new THREE.MeshPhongMaterial({color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`)});
         this.visMesh = new THREE.Mesh(geometry, material);
         this.visMesh.position.copy(pos);
         this.visMesh.userData = this;
-        this.visMesh.layers.enable(1);
+        //this.visMesh.layers.enable(1);
         this.visMesh.castShadow = true;
         this.visMesh.receiveShadow = true;
         gThreeScene.add(this.visMesh);
+
+        /*// Create tapered cylinder at rear 
+        var geometry2 = new THREE.CylinderGeometry(0.4 * rad, 0.2 * rad, 3 * rad, geometrySegments);
+        var material = new THREE.MeshPhongMaterial({color: new THREE.Color(`hsl(${hue + 20}, ${sat}%, ${light}%)`), shininess: 100, shininess: 100, wireframe: boidProps.wireframe});
+        this.visMesh2 = new THREE.Mesh(geometry2, material);
+        this.visMesh2.position.copy(pos);
+        this.visMesh2.userData = this;
+        this.visMesh2.layers.enable(1);
+        this.visMesh2.castShadow = true;
+        this.visMesh2.receiveShadow = true;
+        gThreeScene.add(this.visMesh2);*/
     }
     
     simulate() {
@@ -1691,7 +1744,7 @@ class BOID {
             // Position hemisphere at the flat base of the cone (back end)
             if (this.visMesh2) {
                 // Cone base is at pos - direction * 1.5 * rad
-                const hemisphereOffset = direction.clone().multiplyScalar(-1.5 * this.rad);
+                const hemisphereOffset = direction.clone().multiplyScalar(-3 * this.rad);
                 this.visMesh2.position.copy(this.pos).add(hemisphereOffset);
                 
                 // Orient hemisphere to look backward (opposite of cone direction)
@@ -1815,16 +1868,39 @@ function makeBoids() {
     const radius = boidRadius;
     const numBoids = 1500;
     let pos, vel, hue, sat, light;
-    const spawnRadius = 3.5; // Radius of spherical spawn volume
+    const spawnRadius = 4.0; // Radius of spherical spawn volume
     const minMargin = 0.2; // Minimum margin as multiple of radius
     const minDistance = 2 * radius * (1 + minMargin); // Minimum center-to-center distance
-    const maxAttempts = 100000; // Max attempts per boid to find valid position (temporarily unlimited)
+    const maxAttempts = 1000; // Max attempts per boid to find valid position (temporarily unlimited)
     const spawnCenter = new THREE.Vector3(0, 4 * spawnRadius, 0); // Center of spawn sphere
     
+    function defineAndSet(pos, radius, i) {
+        // Set velocity to point outward from spawn center
+        vel = pos.clone().sub(spawnCenter).normalize();
+        const speed = 1 + Math.random() * 4; // Random speed between 1 and 5
+        vel.multiplyScalar(speed);
+        if (i == 0) {
+            hue = Math.round(340 + Math.random() * 40);
+            sat = 90;
+            light = 70;
+        } else if (i < 101) {
+            hue = Math.round(160 + Math.random() * 35);
+            sat = Math.round(30 + Math.random() * 70); 
+            light = 50;
+        } else {
+            hue = Math.round(340 + Math.random() * 40);
+            sat = Math.round(40 + Math.random() * 60); 
+            light = Math.round(30 + Math.random() * 40); 
+        }
+        gPhysicsScene.objects.push(new BOID(pos, radius, vel, hue, sat, light) );
+    }
+    var safelySpawned = 0;
     for (var i = 0; i < numBoids; i++) {
         let validPosition = false;
         let attempts = 0;
+        
         while (!validPosition && attempts < maxAttempts) {
+            validPosition = true;
             // Generate random position within a sphere
             let theta = Math.random() * Math.PI * 2; // Azimuthal angle
             let phi = Math.acos(2 * Math.random() - 1); // Polar angle
@@ -1834,9 +1910,7 @@ function makeBoids() {
                 4 * spawnRadius + r * Math.cos(phi), // Offset upward
                 r * Math.sin(phi) * Math.sin(theta)
             );
-            // TEMPORARILY DISABLED: Check if position overlaps with existing balls
-            validPosition = true; // Always accept position (overlap check disabled)
-            /*
+            // Check if position overlaps with existing balls
             for (let j = 0; j < gPhysicsScene.objects.length; j++) {
                 const existingBall = gPhysicsScene.objects[j];
                 const distSquared = pos.distanceToSquared(existingBall.pos);
@@ -1845,30 +1919,19 @@ function makeBoids() {
                     break;
                 }
             }
-            */
             attempts++;
         }
         // Only add boid if valid position found
+        
         if (validPosition) {
-            // Set velocity to point outward from spawn center
-            vel = pos.clone().sub(spawnCenter).normalize();
-            const speed = 1 + Math.random() * 4; // Random speed between 1 and 5
-            vel.multiplyScalar(speed);
-            light = 50;
-            if (i == 0) {
-                hue = 220;
-                sat = 90;
-            } else if (i < 101) {
-                hue = Math.round(Math.random() * 360);
-                sat = Math.round(30 + Math.random() * 70);
-            } else {
-                hue = Math.round(340 + Math.random() * 40);
-                sat = Math.round(30 + Math.random() * 70); // 50% to 100% saturation
-            }
-            gPhysicsScene.objects.push(new BOID(pos, radius, vel, hue, sat, light) );
+            defineAndSet(pos, radius, i);
+            safelySpawned += 1;
+        } else {
+            defineAndSet(pos, radius, i);
         }
     }
-    console.log("Successfully spawned " + gPhysicsScene.objects.length + " boids out of " + numBoids + " requested");
+    console.log("Spawned " + safelySpawned + " clash-free boids ");
+    console.log("Spawned " + gPhysicsScene.objects.length + " boids total ");
 }
 
 
@@ -2020,6 +2083,13 @@ function updateBoidTrail() {
         if (gTrailMesh.material) gTrailMesh.material.dispose();
     }
     
+    // Remove old trail cap
+    if (gTrailCapMesh) {
+        gThreeScene.remove(gTrailCapMesh);
+        if (gTrailCapMesh.geometry) gTrailCapMesh.geometry.dispose();
+        if (gTrailCapMesh.material) gTrailCapMesh.material.dispose();
+    }
+    
     // Create curve from trail positions
     const curve = new THREE.CatmullRomCurve3(gTrailPositions);
     
@@ -2090,6 +2160,25 @@ function updateBoidTrail() {
     gTrailMesh.castShadow = true;
     gTrailMesh.receiveShadow = false;
     gThreeScene.add(gTrailMesh);
+    
+    // Create disc cap at the tail end (oldest position)
+    const tailPosition = gTrailPositions[0];
+    const capGeometry = new THREE.CircleGeometry(tubeRadius, radialSegments);
+    const capMaterial = tubeMaterial.clone();
+    gTrailCapMesh = new THREE.Mesh(capGeometry, capMaterial);
+    gTrailCapMesh.position.copy(tailPosition);
+    
+    // Orient the disc to face along the trail direction
+    if (gTrailPositions.length > 1) {
+        const nextPosition = gTrailPositions[1];
+        const direction = new THREE.Vector3().subVectors(nextPosition, tailPosition).normalize();
+        const up = new THREE.Vector3(0, 0, 1);
+        gTrailCapMesh.quaternion.setFromUnitVectors(up, direction.negate());
+    }
+    
+    gTrailCapMesh.castShadow = true;
+    gTrailCapMesh.receiveShadow = false;
+    gThreeScene.add(gTrailCapMesh);
 }
 
 function clearBoidTrail() {
@@ -2099,6 +2188,12 @@ function clearBoidTrail() {
         if (gTrailMesh.geometry) gTrailMesh.geometry.dispose();
         if (gTrailMesh.material) gTrailMesh.material.dispose();
         gTrailMesh = null;
+    }
+    if (gTrailCapMesh) {
+        gThreeScene.remove(gTrailCapMesh);
+        if (gTrailCapMesh.geometry) gTrailCapMesh.geometry.dispose();
+        if (gTrailCapMesh.material) gTrailCapMesh.material.dispose();
+        gTrailCapMesh = null;
     }
 }
 
@@ -2121,6 +2216,7 @@ function recreateBoidGeometries() {
         
         // Create new geometry based on type
         let geometry;
+        var siding = 'THREE.FrontSide';
         const rad = boid.rad;
         
         switch (gBoidGeometryType) {
@@ -2163,11 +2259,70 @@ function recreateBoidGeometries() {
             default:
                 geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
         }
-        
-        const material = new THREE.MeshPhongMaterial({
-            color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, 50%)`),
-            side: gBoidGeometryType === 11 ? THREE.DoubleSide : THREE.FrontSide
-        });
+
+        let material;
+        if (gBoidGeometryType != 11) {
+            if (boidProps.material === 'standard') {
+                material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                    metalness: 0.5, 
+                    roughness: 0.4, 
+                    wireframe: boidProps.wireframe});
+            } else if (boidProps.material === 'phong') {
+                material = new THREE.MeshPhongMaterial({
+                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                    shininess: 100, 
+                    wireframe: boidProps.wireframe});
+            } else if (boidProps.material === 'normal') {
+                material = new THREE.MeshNormalMaterial({
+                    wireframe: boidProps.wireframe});
+            } else if (boidProps.material === 'toon') {
+                material = new THREE.MeshToonMaterial({
+                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                    wireframe: boidProps.wireframe});
+            } else if (boidProps.material === 'depth') {
+                material = new THREE.MeshDepthMaterial({
+                    wireframe: boidProps.wireframe});
+            } else {
+                material = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                    wireframe: boidProps.wireframe});
+            } 
+        } else {
+            if (boidProps.material === 'standard') {
+                material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                    metalness: 0.5, 
+                    roughness: 0.4, 
+                    wireframe: boidProps.wireframe,
+                    side: THREE.DoubleSide});
+            } else if (boidProps.material === 'phong') {
+                material = new THREE.MeshPhongMaterial({
+                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                    shininess: 100, 
+                    wireframe: boidProps.wireframe,
+                    side: THREE.DoubleSide});
+            } else if (boidProps.material === 'normal') {
+                material = new THREE.MeshNormalMaterial({
+                    wireframe: boidProps.wireframe, 
+                    side: THREE.DoubleSide});
+            } else if (boidProps.material === 'toon') {
+                material = new THREE.MeshToonMaterial({
+                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                    wireframe: boidProps.wireframe,
+                    side: THREE.DoubleSide});
+            } else if (boidProps.material === 'depth') {
+                material = new THREE.MeshDepthMaterial({
+                    wireframe: boidProps.wireframe,
+                    side: THREE.DoubleSide});
+            } else {
+                material = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                    wireframe: boidProps.wireframe,
+                    side: THREE.DoubleSide});
+            }
+        }
+
         boid.visMesh = new THREE.Mesh(geometry, material);
         boid.visMesh.position.copy(boid.pos);
         boid.visMesh.userData = boid;
@@ -2234,7 +2389,7 @@ function drawMainMenu() {
     
     ctx.beginPath();
     ctx.roundRect(itemX, itemY, itemWidth, itemHeight, cornerRadius * 0.5);
-    ctx.fillStyle = gRunning ? 'rgba(100, 220, 100, 0.3)' : 'rgba(220, 100, 100, 0.3)';
+    ctx.fillStyle = gRunning ? 'rgba(100, 220, 100, 0.3)' : 'rgba(252, 43, 43, 0.3)';
     ctx.fill();
     
     // Draw play/pause icon
@@ -2832,7 +2987,7 @@ function drawStylingMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 1 + knobRadius * 2.0 + knobSpacing * 0.9 + knobRadius * 2.2; // Extended height for mesh detail buttons
+    const menuHeight = 13 * knobRadius;
     const padding = 1.7 * knobRadius;
     
     // Position menu slightly below simulation menu
@@ -3023,9 +3178,9 @@ function drawStylingMenu() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
-    ctx.fillText('Rendering Style', 0.5 * menuWidth, menuTopMargin + 1.5 * padding);
+    ctx.fillText('Boid Style', 0.5 * menuWidth, menuTopMargin + 1.5 * padding);
     ctx.fillStyle = `hsla(30, 10%, 80%, ${stylingMenuOpacity})`;
-    ctx.fillText('Rendering Style', 0.5 * menuWidth, menuTopMargin + 1.5 * padding);
+    ctx.fillText('Boid Style', 0.5 * menuWidth, menuTopMargin + 1.5 * padding);
     
     // Draw boid geometry selection buttons
     const buttonY = menuTopMargin + knobRadius * 3;
@@ -3075,9 +3230,9 @@ function drawStylingMenu() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
-    ctx.fillText('Mesh Detail', 0.5 * menuWidth, meshDetailY + 1);
+    ctx.fillText('Surface Mesh Detail', 0.5 * menuWidth, meshDetailY + 1);
     ctx.fillStyle = `hsla(30, 10%, 80%, ${stylingMenuOpacity})`;
-    ctx.fillText('Mesh Detail', 0.5 * menuWidth, meshDetailY);
+    ctx.fillText('Surface Mesh Detail', 0.5 * menuWidth, meshDetailY);
     
     // Draw horizontal radio buttons for geometry segments
     const segmentOptions = [8, 16, 24, 32, 64];
@@ -3115,6 +3270,55 @@ function drawStylingMenu() {
         ctx.fillText(segmentOptions[i], rbX + 1, meshRadioY + meshRadioRadius + 4 + 1);
         ctx.fillStyle = `hsla(30, 10%, 90%, ${stylingMenuOpacity})`;
         ctx.fillText(segmentOptions[i], rbX, meshRadioY + meshRadioRadius + 4);
+    }
+    
+    // Draw material type section
+    const materialY = meshRadioY + knobRadius * 1.8;
+    ctx.font = `bold ${0.04 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
+    ctx.fillText('Material Type', 0.5 * menuWidth, materialY + 1);
+    ctx.fillStyle = `hsla(30, 10%, 80%, ${stylingMenuOpacity})`;
+    ctx.fillText('Material Type', 0.5 * menuWidth, materialY);
+    
+    // Draw horizontal radio buttons for material types
+    const materialOptions = ['basic', 'phong', 'standard', 'normal', 'toon'];
+    const materialLabels = ['2D', 'Plastic', 'Metal', '"Normal"', 'Cartoon'];
+    const materialRadioY = materialY + knobRadius * 0.8;
+    const materialRadioRadius = knobRadius * 0.35;
+    const totalMaterialRadioWidth = materialOptions.length * materialRadioRadius * 2 + (materialOptions.length - 1) * materialRadioRadius * 1.5;
+    const materialRadioStartX = 0.5 * menuWidth - totalMaterialRadioWidth / 2 + materialRadioRadius;
+    const materialRadioSpacingH = materialRadioRadius * 3.5;
+    
+    ctx.font = `${0.30 * knobRadius}px arial`;
+    for (let i = 0; i < materialOptions.length; i++) {
+        const rbX = materialRadioStartX + i * materialRadioSpacingH;
+        
+        // Draw radio button circle
+        ctx.beginPath();
+        ctx.arc(rbX, materialRadioY, materialRadioRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsla(30, 30%, 20%, ${0.8 * stylingMenuOpacity})`;
+        ctx.strokeStyle = `hsla(30, 20%, 60%, ${stylingMenuOpacity})`;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw filled circle if selected
+        if (boidProps.material === materialOptions[i]) {
+            ctx.beginPath();
+            ctx.arc(rbX, materialRadioY, materialRadioRadius * 0.5, 0, 2 * Math.PI);
+            ctx.fillStyle = `hsla(30, 60%, 60%, ${stylingMenuOpacity})`;
+            ctx.fill();
+        }
+        
+        // Draw label below button
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = `hsla(0, 0%, 10%, ${stylingMenuOpacity})`;
+        ctx.fillText(materialLabels[i], rbX + 1, materialRadioY + materialRadioRadius + 4 + 1);
+        ctx.fillStyle = `hsla(30, 10%, 90%, ${stylingMenuOpacity})`;
+        ctx.fillText(materialLabels[i], rbX, materialRadioY + materialRadioRadius + 4);
     }
     
     ctx.restore();
@@ -3248,7 +3452,6 @@ function initThreeScene() {
     var frontWallTexture = new THREE.TextureLoader().load(
         'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/grafWall.jpg',
         function(texture) {
-            console.log('grafWall.jpg loaded successfully on front wall');
             // Flip the texture horizontally
             texture.wrapS = THREE.RepeatWrapping;
             texture.repeat.x = -1;
@@ -3420,7 +3623,6 @@ function initThreeScene() {
     var painting2Texture = new THREE.TextureLoader().load(
         'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Marcel_Duchamp_Nude_Descending_Staircase.jpg',
         function(texture) {
-            console.log('Marcel_Duchamp_Nude_Descending_Staircase.jpg loaded successfully');
             painting2Material.map = texture;
             painting2Material.emissiveMap = texture;
             painting2Material.color.setHex(0xffffff);
@@ -3594,7 +3796,6 @@ function initThreeScene() {
     var paintingTexture = new THREE.TextureLoader().load(
         'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Joan_Miro_Untitled.webp',
         function(texture) {
-            console.log('Joan_Miro_Untitled.webp loaded successfully');
             paintingMaterial.map = texture;
             paintingMaterial.emissiveMap = texture;
             paintingMaterial.color.setHex(0xffffff);
@@ -3842,6 +4043,73 @@ function initThreeScene() {
         window.gPlatonicSolids.push(solidGroup);
     }
     
+    /*// Add oval-framed painting on back wall (Louis Wain cat)
+    var ovalPaintingWidth = 3;
+    var ovalPaintingHeight = 4;
+    var ovalPaintingX = -20; // Position on right half of back wall
+    var ovalPaintingY = boxSize.y / 2 + 6;
+    var ovalPaintingZ = -boxSize.z + 0.1;
+    var ovalFrameThickness = 0.2; // Tube radius - diameter will be 0.3 to match other frames
+    var ovalFrameDepth = 0.15;
+    
+    // Create painting image (use PlaneGeometry for proper texture display)
+    var imageWidth = ovalPaintingWidth * 0.9;
+    var imageHeight = ovalPaintingHeight * 0.9;
+    var ovalImageMaterial = new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        side: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    // Load Louis Wain cat painting
+    var ovalImageTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/wainCatOval.png',
+        function(texture) {
+            ovalImageMaterial.map = texture;
+            ovalImageMaterial.emissiveMap = texture;
+            ovalImageMaterial.color.setHex(0xffffff);
+            ovalImageMaterial.emissive.setHex(0xffffff);
+            ovalImageMaterial.emissiveIntensity = 0.3;
+            ovalImageMaterial.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading wainCatOval.png:', err);
+        }
+    );
+    
+    var ovalImage = new THREE.Mesh(
+        new THREE.PlaneGeometry(imageWidth, imageHeight),
+        ovalImageMaterial
+    );
+    ovalImage.position.set(ovalPaintingX, ovalPaintingY, ovalPaintingZ + 0.05);
+    ovalImage.castShadow = true;
+    ovalImage.receiveShadow = true;
+    gThreeScene.add(ovalImage);
+    
+    // Create oval frame using torus geometry stretched into ellipse
+    var ovalFrameMaterial = new THREE.MeshStandardMaterial({
+        color: 0x5a3a1a,
+        metalness: 0.1,
+        roughness: 0.7
+    });
+    
+    var ovalFrameGeometry = new THREE.TorusGeometry(1, ovalFrameThickness / 2, 16, 64);
+    var ovalFrame = new THREE.Mesh(ovalFrameGeometry, ovalFrameMaterial);
+    
+    // Scale to create ellipse matching the canvas oval
+    ovalFrame.scale.set(ovalPaintingWidth / 2, ovalPaintingHeight / 2, 1);
+    ovalFrame.position.set(ovalPaintingX, ovalPaintingY, ovalPaintingZ + ovalFrameDepth / 2);
+    ovalFrame.castShadow = true;
+    ovalFrame.receiveShadow = true;
+    gThreeScene.add(ovalFrame);
+    */
+   
     /*// Top wall - pastel lavender
     var topWall = new THREE.Mesh(
         new THREE.PlaneGeometry(boxSize.x * 2, boxSize.z * 2),
@@ -3862,7 +4130,6 @@ function initThreeScene() {
         'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/image_sistine.jpg',
         function(texture) {
             // Success callback
-            console.log('Ceiling texture loaded successfully');
             
             // Rotate texture 90 degrees and mirror
             texture.center.set(0.5, 0.5);
@@ -4125,6 +4392,7 @@ class Grabber {
             this.physicsObject.moveGrabbed(pos, this.vel);
         }
     }
+    
     end(x, y) {
         if (this.physicsObject) { 
             this.physicsObject.endGrab(this.prevPos, this.vel);
@@ -4192,6 +4460,21 @@ function onPointer(evt) {
             return;
         }
         
+        // Check simulation submenu clicks FIRST (before main menu)
+        if (checkSimMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
+        // Check styling submenu clicks FIRST (before main menu)
+        if (checkStylingMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
+        // Check instructions submenu clicks FIRST (before main menu)
+        if (checkInstructionsMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
         // Check main menu item clicks (only when menu is visible)
         if (mainMenuVisible && mainMenuOpacity > 0.5) {
             const itemHeight = 0.12 * menuScale;
@@ -4200,10 +4483,10 @@ function onPointer(evt) {
             const menuHeight = itemHeight * 5 + (padding * 6);
             const menuBaseY = ellipsisY + 0.08 * menuScale;
             const menuBaseX = ellipsisX - padding;
-            const menuX = menuBaseX + mainMenuXOffset * menuScale;
-            const menuY = menuBaseY;
-            const itemX = menuX + padding;
-            const itemY = menuY + padding;
+            const mainMenuPosX = menuBaseX + mainMenuXOffset * menuScale;
+            const mainMenuPosY = menuBaseY;
+            const itemX = mainMenuPosX + padding;
+            const itemY = mainMenuPosY + padding;
             
             // Check Run/Pause menu item (now first)
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
@@ -4238,11 +4521,9 @@ function onPointer(evt) {
             const itemY4 = itemY3 + itemHeight + padding;
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
                 evt.clientY >= itemY4 && evt.clientY <= itemY4 + itemHeight) {
-                console.log("Camera button clicked"); // Debug
                 // Camera mode cycling
                 const previousMode = gCameraMode;
                 gCameraMode = (gCameraMode + 1) % 5;
-                console.log("Camera mode changed from", previousMode, "to", gCameraMode); // Debug
                 
                 // Save camera position when leaving any third-person mode (0, 1, or 2)
                 if (previousMode >= 0 && previousMode <= 2) {
@@ -4272,21 +4553,6 @@ function onPointer(evt) {
                 stylingMenuVisible = false; // Close styling menu when opening instructions
                 return;
             }
-        }
-        
-        // Check simulation submenu clicks
-        if (checkSimMenuClick(evt.clientX, evt.clientY)) {
-            return;
-        }
-        
-        // Check styling submenu clicks
-        if (checkStylingMenuClick(evt.clientX, evt.clientY)) {
-            return;
-        }
-        
-        // Check instructions submenu clicks
-        if (checkInstructionsMenuClick(evt.clientX, evt.clientY)) {
-            return;
         }
         
         // Check if clicking on lamp cone
@@ -4401,6 +4667,13 @@ function onPointer(evt) {
         if (hitSphere && hitSphereObstacle) {
             gDraggingSphere = true;
             window.draggingSphereObstacle = hitSphereObstacle; // Store reference globally
+            
+            // Store the distance from camera to sphere center (for fixed plane)
+            var cameraToSphere = new THREE.Vector3();
+            cameraToSphere.subVectors(hitSphereObstacle.position, gCamera.position);
+            var cameraDirection = new THREE.Vector3();
+            gCamera.getWorldDirection(cameraDirection);
+            gSphereDragPlaneDistance = cameraToSphere.dot(cameraDirection);
             
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
@@ -4631,10 +4904,39 @@ function onPointer(evt) {
                                 case 11: geometry = new THREE.PlaneGeometry(2.5 * rad, 2.5 * rad); break;
                                 default: geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
                             }
-                            const material = new THREE.MeshPhongMaterial({
-                                color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, 50%)`),
-                                side: gBoidGeometryType === 11 ? THREE.DoubleSide : THREE.FrontSide
-                            });
+                            let material;
+                            if (boidProps.material === 'standard') {
+                                material = new THREE.MeshStandardMaterial({
+                                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                                    metalness: 0.5,
+                                    roughness: 0.4, 
+                                    wireframe: boidProps.wireframe});
+                            } else if (boidProps.material === 'phong') {
+                                material = new THREE.MeshPhongMaterial({
+                                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                                    shininess: 100, 
+                                    wireframe: boidProps.wireframe});
+                            } else if (boidProps.material === 'normal') {
+                                material = new THREE.MeshNormalMaterial({wireframe: boidProps.wireframe});
+                            } else if (boidProps.material === 'toon') {
+                                material = new THREE.MeshToonMaterial({
+                                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                                    wireframe: boidProps.wireframe});
+                            } else if (boidProps.material === 'depth') {
+                                material = new THREE.MeshDepthMaterial({
+                                    wireframe: boidProps.wireframe});
+                            } else {
+                                material = new THREE.MeshBasicMaterial({
+                                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
+                                    wireframe: boidProps.wireframe});
+                            }
+                            
+                            if (gBoidGeometryType === 11) {
+                                material = new THREE.MeshStandardMaterial({
+                                color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`),
+                                side: THREE.DoubleSide});
+                            }
+
                             boid.visMesh = new THREE.Mesh(geometry, material);
                             boid.visMesh.position.copy(boid.pos);
                             boid.visMesh.userData = boid;
@@ -4682,61 +4984,47 @@ function onPointer(evt) {
         if (gDraggingSphere && window.draggingSphereObstacle) {
             var sphereObstacle = window.draggingSphereObstacle;
             
-            // Check if Shift key is held for vertical movement
-            if (evt.shiftKey) {
-                // Vertical drag: move sphere up/down based on mouse Y movement
-                const deltaY = evt.clientY - gPointerLastY;
-                const verticalSpeed = 0.02; // Adjust sensitivity
-                const newY = sphereObstacle.position.y - deltaY * verticalSpeed;
+            // Move sphere in 3D space along a fixed plane perpendicular to camera view
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Use fixed plane at the distance established when drag started
+            var cameraDirection = new THREE.Vector3();
+            gCamera.getWorldDirection(cameraDirection);
+            var planePoint = new THREE.Vector3();
+            planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gSphereDragPlaneDistance));
+            var spherePlane = new THREE.Plane();
+            spherePlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+            
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(spherePlane, intersectionPoint);
+            
+            if (intersectionPoint && gSphereDragOffset) {
+                // Apply the offset to maintain grab point
+                var newPosition = new THREE.Vector3(
+                    intersectionPoint.x + gSphereDragOffset.x,
+                    intersectionPoint.y + gSphereDragOffset.y,
+                    intersectionPoint.z + gSphereDragOffset.z
+                );
                 
-                // Clamp to reasonable bounds
-                const minY = sphereObstacle.radius; // Don't go below floor + radius
-                const maxY = gPhysicsScene.worldSize.y - sphereObstacle.radius;
-                const clampedY = Math.max(minY, Math.min(maxY, newY));
+                // Clamp to room boundaries (sphere center must stay within room)
+                var minBoundX = -gPhysicsScene.worldSize.x + sphereObstacle.radius;
+                var maxBoundX = gPhysicsScene.worldSize.x - sphereObstacle.radius;
+                var minBoundY = sphereObstacle.radius;
+                var maxBoundY = gPhysicsScene.worldSize.y - sphereObstacle.radius;
+                var minBoundZ = -gPhysicsScene.worldSize.z + sphereObstacle.radius;
+                var maxBoundZ = gPhysicsScene.worldSize.z - sphereObstacle.radius;
                 
-                sphereObstacle.updatePosition(new THREE.Vector3(
-                    sphereObstacle.position.x,
-                    clampedY,
-                    sphereObstacle.position.z
-                ));
+                newPosition.x = Math.max(minBoundX, Math.min(maxBoundX, newPosition.x));
+                newPosition.y = Math.max(minBoundY, Math.min(maxBoundY, newPosition.y));
+                newPosition.z = Math.max(minBoundZ, Math.min(maxBoundZ, newPosition.z));
                 
-                gPointerLastY = evt.clientY;
-            } else {
-                // Horizontal drag: move sphere along XZ plane
-                var rect = gRenderer.domElement.getBoundingClientRect();
-                var mousePos = new THREE.Vector2();
-                mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
-                mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
-                
-                var raycaster = new THREE.Raycaster();
-                raycaster.setFromCamera(mousePos, gCamera);
-                
-                // Define plane at the height where the sphere was grabbed
-                var spherePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gSphereDragPlaneHeight);
-                var intersectionPoint = new THREE.Vector3();
-                raycaster.ray.intersectPlane(spherePlane, intersectionPoint);
-                
-                if (intersectionPoint) {
-                    // Apply the offset to maintain grab point (keep Y at sphere's original height)
-                    var newX = intersectionPoint.x + (gSphereDragOffset ? gSphereDragOffset.x : 0);
-                    var newZ = intersectionPoint.z + (gSphereDragOffset ? gSphereDragOffset.z : 0);
-                    
-                    // Clamp to room boundaries (sphere center must stay within room)
-                    var minBoundX = -gPhysicsScene.worldSize.x + sphereObstacle.radius;
-                    var maxBoundX = gPhysicsScene.worldSize.x - sphereObstacle.radius;
-                    var minBoundZ = -gPhysicsScene.worldSize.z + sphereObstacle.radius;
-                    var maxBoundZ = gPhysicsScene.worldSize.z - sphereObstacle.radius;
-                    
-                    newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
-                    newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
-                    
-                    var newPosition = new THREE.Vector3(
-                        newX,
-                        sphereObstacle.position.y, // Keep sphere at its original height
-                        newZ
-                    );
-                    sphereObstacle.updatePosition(newPosition);
-                }
+                sphereObstacle.updatePosition(newPosition);
             }
             return;
         }
@@ -5073,7 +5361,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 1 + knobRadius * 2.0 + knobSpacing * 0.9 + knobRadius * 2.2;
+    const menuHeight = 13 * knobRadius;
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = menuX * window.innerWidth;
@@ -5153,6 +5441,28 @@ function checkStylingMenuClick(clientX, clientY) {
         if (rdx * rdx + rdy * rdy < (meshRadioRadius + 5) * (meshRadioRadius + 5)) {
             geometrySegments = segmentOptions[i];
             // Recreate all boid geometries with new segment count
+            recreateBoidGeometries();
+            return true;
+        }
+    }
+    
+    // Check material type radio buttons
+    const materialOptions = ['basic', 'phong', 'standard', 'normal', 'toon'];
+    const materialY = meshRadioY + knobRadius * 1.8;
+    const materialRadioY = materialY + knobRadius * 0.8;
+    const materialRadioRadius = knobRadius * 0.35;
+    const totalMaterialRadioWidth = materialOptions.length * materialRadioRadius * 2 + (materialOptions.length - 1) * materialRadioRadius * 1.5;
+    const materialRadioStartX = menuOriginX + 0.5 * menuWidth - totalMaterialRadioWidth / 2 + materialRadioRadius;
+    const materialRadioSpacingH = materialRadioRadius * 3.5;
+    
+    for (let i = 0; i < materialOptions.length; i++) {
+        const rbX = materialRadioStartX + i * materialRadioSpacingH;
+        const rdx = clientX - rbX;
+        const rdy = clientY - materialRadioY;
+        
+        if (rdx * rdx + rdy * rdy < (materialRadioRadius + 5) * (materialRadioRadius + 5)) {
+            boidProps.material = materialOptions[i];
+            // Recreate all boid geometries with new material
             recreateBoidGeometries();
             return true;
         }
@@ -5289,16 +5599,14 @@ function onWindowResize() {
     if (gOverlayCanvas) {
         gOverlayCanvas.width = window.innerWidth;
         gOverlayCanvas.height = window.innerHeight;
-        // drawButtons(); // Removed - functionality moved to main menu
     }
 }
 
 function run() {
     gPhysicsScene.paused = !gPhysicsScene.paused;
-    // drawButtons(); // Removed - functionality moved to main menu
 }
 
-function restart() {
+/*function restart() {
     // Remove all existing boids from scene
     for (var i = 0; i < gPhysicsScene.objects.length; i++) {
         gThreeScene.remove(gPhysicsScene.objects[i].visMesh);
@@ -5357,7 +5665,8 @@ function restart() {
                     hue = 220;
                     sat = 90;
                 } else if (i < 51) {
-                    hue = Math.round(100 + Math.random() * 40);
+                    //hue = Math.round(100 + Math.random() * 40);
+                    hue = 180;
                     sat = 90;
                 } else {
                     hue = Math.round(340 + Math.random() * 40);
@@ -5381,7 +5690,7 @@ function restart() {
     }
     
     requestAnimationFrame(createBatch);
-}
+}*/
 
 //  RUN -----------------------------------
 function update() {
