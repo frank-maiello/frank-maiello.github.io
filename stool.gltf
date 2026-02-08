@@ -20,34 +20,12 @@
         10,
         11,
         12,
-        13,
-        14
+        13
       ]
     }
   ],
   "scene": 0,
   "nodes": [
-    {
-      "matrix": [
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        10,
-        0,
-        1
-      ],
-      "name": "HemisphereLight"
-    },
     {
       "matrix": [
         0.8,
@@ -199,7 +177,7 @@
         0,
         1
       ],
-      "name": "Cylinder",
+      "name": "Top Strut 1",
       "mesh": 6
     },
     {
@@ -221,7 +199,7 @@
         0,
         1
       ],
-      "name": "Cylinder",
+      "name": "Top Strut 2",
       "mesh": 6
     },
     {
@@ -243,7 +221,7 @@
         0.6,
         1
       ],
-      "name": "Cylinder",
+      "name": "Top Strut 3",
       "mesh": 6
     },
     {
@@ -265,7 +243,7 @@
         -0.6,
         1
       ],
-      "name": "Cylinder",
+      "name": "Top Strut 4",
       "mesh": 6
     },
     {
@@ -287,7 +265,7 @@
         0,
         1
       ],
-      "name": "Cylinder",
+      "name": "Bottom Strut 1",
       "mesh": 6
     },
     {
@@ -309,7 +287,7 @@
         0,
         1
       ],
-      "name": "Cylinder",
+      "name": "Bottom Strut 2",
       "mesh": 6
     },
     {
@@ -331,7 +309,7 @@
         0.8,
         1
       ],
-      "name": "Cylinder",
+      "name": "Bottom Strut 3",
       "mesh": 6
     },
     {
@@ -353,7 +331,7 @@
         -0.8,
         1
       ],
-      "name": "Cylinder",
+      "name": "Bottom Strut 4",
       "mesh": 6
     }
   ],
