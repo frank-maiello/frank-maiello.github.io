@@ -103,19 +103,56 @@ var instructionsMenuVisible = false; // Instructions submenu visibility
 var instructionsMenuVisibleBeforeHide = false;
 var instructionsMenuOpacity = 0;
 var instructionsMenuFadeSpeed = 3.0;
+var colorMenuVisible = false; // Color submenu visibility
+var colorMenuVisibleBeforeHide = false;
+var colorMenuOpacity = 0;
+var colorMenuFadeSpeed = 3.0;
+var lightingMenuVisible = false; // Lighting submenu visibility
+var lightingMenuVisibleBeforeHide = false;
+var lightingMenuOpacity = 0;
+var lightingMenuFadeSpeed = 3.0;
 var menuScale = 300; // Master menu size control (increased 50%)
-var menuX = 0.1; // Menu position in world coordinates
-var menuY = 0.2;
+var simMenuX = 0.2; // Simulation menu position
+var simMenuY = 0.2;
+var stylingMenuX = 0.2; // Styling menu position
+var stylingMenuY = 0.2;
+var instructionsMenuX = 0.2; // Instructions menu position
+var instructionsMenuY = 0.2;
+var colorMenuX = 0.2; // Color menu position
+var colorMenuY = 0.2;
+var lightingMenuX = 0.2; // Lighting menu position
+var lightingMenuY = 0.2;
+var gColorWheelCanvas = null; // Offscreen canvas for color wheel
+var gColorWheelCtx = null;
+var gPrimaryHue = 180; // Primary hue (0-360)
+var gSecondaryHue = 0; // Secondary hue (0-360)
+var gPrimaryRingRotation = 180 * Math.PI / 180; // Rotation angle for primary ring (radians)
+var gSecondaryRingRotation = 0 * Math.PI / 180; // Rotation angle for secondary ring (radians)
+var gColorMixPercentage = 50; // Percentage of boids with primary color (0-100)
+var gColorationMode = 0; // 0 = Normal, 1 = By Direction, 2 = By Speed
+var gDraggingMixKnob = false; // Track if dragging the mix knob
+var gDraggingPrimaryRing = false; // Track if dragging primary ring
+var gDraggingSecondaryRing = false; // Track if dragging secondary ring
+var gRingDragStartAngle = 0; // Starting angle when drag began
 var draggedKnob = null; // Currently dragged knob index
 var dragStartMouseX = 0;
 var dragStartMouseY = 0;
 var dragStartValue = 0;
 var isDraggingMenu = false;
+var draggingMenuType = null; // 'sim', 'styling', 'instructions', 'color'
 var menuDragStartX = 0;
 var menuDragStartY = 0;
 var menuStartX = 0;
 var menuStartY = 0;
 var mouseAttached = false;
+
+// Lighting control variables
+var gAmbientLight = null;
+var gDirectionalLight = null;
+var gAmbientIntensity = 1.0; // Ambient light intensity (0-2)
+var gOverheadIntensity = 1.0; // Directional light intensity (0-2)
+var gSpotlightIntensity = 0.8; // Spotlight intensity (0-2)
+var gSpotlightPenumbra = 0.2; // Spotlight penumbra (0-1)
 
 var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all separation
 var SpatialGrid; // Global spatial grid instance
@@ -423,6 +460,9 @@ class CylinderObstacle {
         const totalGroutHeight = groutThickness * (numSections - 1);
         const sectionHeight = (this.height - totalGroutHeight) / numSections;
         
+        // Store section height for extended avoidance calculations
+        this.sectionHeight = sectionHeight;
+        
         this.columnSections = [];
         this.groutLayers = [];
         
@@ -676,8 +716,9 @@ class CylinderObstacle {
         // Distance from cylinder axis (Y axis)
         const radialDist = Math.sqrt(localPoint.x * localPoint.x + localPoint.z * localPoint.z);
         
-        // Distance from cylinder caps
-        const halfHeight = this.height / 2;
+        // Distance from cylinder caps - extend height by one section for boid avoidance
+        const extendedHeight = this.height + (this.sectionHeight || 0);
+        const halfHeight = extendedHeight / 2;
         const verticalDist = Math.abs(localPoint.y) - halfHeight;
         
         // If inside the cylinder volume
@@ -1880,15 +1921,15 @@ function makeBoids() {
         const speed = 1 + Math.random() * 4; // Random speed between 1 and 5
         vel.multiplyScalar(speed);
         if (i == 0) {
-            hue = Math.round(340 + Math.random() * 40);
-            sat = 90;
-            light = 70;
+            hue = 0;
+            sat = 0;
+            light = 100;
         } else if (i < 101) {
-            hue = Math.round(160 + Math.random() * 35);
-            sat = Math.round(30 + Math.random() * 70); 
-            light = 50;
+            hue = Math.round(180 + (2 * (-0.5 + Math.random())) * 20);
+            sat = Math.round(40 + Math.random() * 60); 
+            light = Math.round(30 + Math.random() * 40); 
         } else {
-            hue = Math.round(340 + Math.random() * 40);
+            hue = Math.round(360 + (2 * (-0.5 + Math.random())) * 20);
             sat = Math.round(40 + Math.random() * 60); 
             light = Math.round(30 + Math.random() * 40); 
         }
@@ -2361,7 +2402,7 @@ function drawMainMenu() {
     const itemHeight = 0.12 * menuScale;
     const itemWidth = 0.15 * menuScale;
     const padding = 0.02 * menuScale;
-    const menuHeight = itemHeight * 5 + (padding * 6); // Five items now
+    const menuHeight = itemHeight * 7 + (padding * 8); // Seven items now
     const menuWidth = itemWidth + (padding * 2);
     
     const menuBaseY = ellipsisY + 0.08 * menuScale;
@@ -2519,10 +2560,134 @@ function drawMainMenu() {
     
     ctx.restore();
 
-    // Draw Camera menu item
+    // Draw Color menu item
     const itemY4 = itemY3 + itemHeight + padding;
     ctx.beginPath();
     ctx.roundRect(itemX, itemY4, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.fillStyle = colorMenuVisible ? 'hsla(0, 100%, 70%, 0.30)' : 'hsla(0, 0%, 15%, 0.80)';
+    ctx.fill();
+    
+    // Draw color palette icon
+    const icon4X = itemX + itemWidth / 2;
+    const icon4Y = itemY4 + itemHeight / 2;
+    const icon4Color = colorMenuVisible ? 'hsla(0, 0%, 70%, 1.0)' : 'hsla(0, 0%, 30%, 1.0)';
+    ctx.strokeStyle = icon4Color;
+    ctx.fillStyle = icon4Color;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    
+    ctx.save();
+    ctx.translate(icon4X, icon4Y);
+    
+    // Draw artist palette shape
+    const paletteSize = iconSize * 1.2;
+    ctx.beginPath();
+    // Oval palette
+    ctx.ellipse(0, 0, paletteSize * 0.7, paletteSize * 0.5, 0.3, 0, 2 * Math.PI);
+    ctx.stroke();
+    if (colorMenuVisible) {
+        ctx.fillStyle = 'hsla(0, 0%, 70%, 0.5)';
+        ctx.fill();
+    }
+    
+    // Thumb hole
+    ctx.beginPath();
+    ctx.ellipse(paletteSize * -0.3, paletteSize * 0.15, paletteSize * 0.2, paletteSize * 0.15, 0.3, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.fillStyle = colorMenuVisible ? 'hsla(0, 100%, 0%, 0.4)' : 'hsla(0, 0%, 15%, 0.8)';
+    ctx.fill();
+    
+    // Color dots on palette arranged in elliptical arc
+    const dotColors = ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0088ff', '#0000ff', '#8800ff'];
+    const numDots = dotColors.length;
+    const ellipseRadiusX = paletteSize * 0.35;
+    const ellipseRadiusY = paletteSize * 0.25;
+    const ellipseRotation = 0.3;
+    const startAngle = -0.7;
+    const endAngle = 2.8;
+    
+    for (let i = 0; i < numDots; i++) {
+        const angle = startAngle + (endAngle - startAngle) * (i / (numDots - 1));
+        const x = ellipseRadiusX * Math.cos(angle);
+        const y = -ellipseRadiusY * Math.sin(angle);
+        // Rotate the ellipse
+        const rotatedX = x * Math.cos(ellipseRotation) - y * Math.sin(ellipseRotation);
+        const rotatedY = x * Math.sin(ellipseRotation) + y * Math.cos(ellipseRotation);
+        
+        ctx.beginPath();
+        ctx.arc(rotatedX, rotatedY, paletteSize * 0.08, 0, 2 * Math.PI);
+        ctx.fillStyle = dotColors[i];
+        ctx.fill();
+    }
+    
+    ctx.restore();
+
+    // Draw Lighting menu item
+    const itemY5 = itemY4 + itemHeight + padding;
+    ctx.beginPath();
+    ctx.roundRect(itemX, itemY5, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.fillStyle = lightingMenuVisible ? 'rgba(255, 204, 0, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fill();
+    
+    // Draw lightbulb icon
+    const icon5X = itemX + itemWidth / 2;
+    const icon5Y = itemY5 + itemHeight / 2;
+    const icon5Color = lightingMenuVisible ? 'hsla(0, 0%, 70%, 1.0)' : 'hsla(0, 0%, 30%, 1.0)';
+    ctx.strokeStyle = icon5Color;
+    ctx.fillStyle = icon5Color;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    
+    ctx.save();
+    ctx.translate(icon5X, icon5Y);
+    
+    // Draw lightbulb
+    const bulbSize = iconSize * 1.2;
+    
+    // Bulb glass (rounded shape)
+    ctx.beginPath();
+    ctx.arc(0, -bulbSize * 0.15, bulbSize * 0.35, 0, Math.PI, true);
+    ctx.lineTo(-bulbSize * 0.15, bulbSize * 0.15);
+    ctx.arc(0, bulbSize * 0.15, bulbSize * 0.15, Math.PI, 0, true);
+    ctx.closePath();
+    ctx.stroke();
+    if (lightingMenuVisible) {
+        ctx.fillStyle = 'hsla(60, 100%, 80%, 0.3)';
+        ctx.fill();
+    }
+    
+    // Screw base
+    ctx.beginPath();
+    ctx.rect(-bulbSize * 0.15, bulbSize * 0.15, bulbSize * 0.3, bulbSize * 0.25);
+    ctx.stroke();
+    
+    // Screw threads (3 horizontal lines)
+    for (let i = 0; i < 3; i++) {
+        const y = bulbSize * (0.2 + i * 0.08);
+        ctx.beginPath();
+        ctx.moveTo(-bulbSize * 0.15, y);
+        ctx.lineTo(bulbSize * 0.15, y);
+        ctx.stroke();
+    }
+    
+    // Filament inside bulb (if visible)
+    if (lightingMenuVisible) {
+        ctx.strokeStyle = 'hsla(45, 100%, 60%, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, bulbSize * 0.05);
+        ctx.lineTo(-bulbSize * 0.1, -bulbSize * 0.1);
+        ctx.moveTo(0, bulbSize * 0.05);
+        ctx.lineTo(bulbSize * 0.1, -bulbSize * 0.1);
+        ctx.stroke();
+    }
+    
+    ctx.restore();
+
+    // Draw Camera menu item
+    const itemY6 = itemY5 + itemHeight + padding;
+    ctx.beginPath();
+    ctx.roundRect(itemX, itemY6, itemWidth, itemHeight, cornerRadius * 0.5);
     
     // Background color varies by camera mode
     const cameraBackgroundColors = [
@@ -2536,12 +2701,12 @@ function drawMainMenu() {
     ctx.fill();
     
     // Draw camera or eye icon depending on camera mode
-    const icon4X = itemX + 0.5 * itemWidth;
-    const icon4Y = itemY4 + 0.6 * itemHeight;
-    //const icon4Color = 'rgba(76, 76, 76, 1.0)';
+    const icon6X = itemX + 0.5 * itemWidth;
+    const icon6Y = itemY6 + 0.6 * itemHeight;
+    //const icon6Color = 'rgba(76, 76, 76, 1.0)';
     
     ctx.save();
-    ctx.translate(icon4X, icon4Y);
+    ctx.translate(icon6X, icon6Y);
     
     if (gCameraMode == 0 || gCameraMode == 1 || gCameraMode == 2) {
         // Draw movie camera icon
@@ -2666,23 +2831,23 @@ function drawMainMenu() {
     ctx.restore();
 
     // Draw Instructions menu item
-    const itemY5 = itemY4 + itemHeight + padding;
+    const itemY7 = itemY6 + itemHeight + padding;
     ctx.beginPath();
-    ctx.roundRect(itemX, itemY5, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.roundRect(itemX, itemY7, itemWidth, itemHeight, cornerRadius * 0.5);
     ctx.fillStyle = instructionsMenuVisible ? 'rgba(255, 204, 0, 0.3)' : 'rgba(38, 38, 38, 0.8)';
     ctx.fill();
     
     // Draw question mark icon
-    const icon5X = itemX + itemWidth / 2;
-    const icon5Y = itemY5 + 0.42 * itemHeight;
-    const icon5Color = instructionsMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
-    ctx.strokeStyle = icon5Color;
-    ctx.fillStyle = icon5Color;
+    const icon7X = itemX + itemWidth / 2;
+    const icon7Y = itemY7 + 0.42 * itemHeight;
+    const icon7Color = instructionsMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+    ctx.strokeStyle = icon7Color;
+    ctx.fillStyle = icon7Color;
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     
     ctx.save();
-    ctx.translate(icon5X, icon5Y);
+    ctx.translate(icon7X, icon7Y);
     
     // Draw question mark
     const qmSize = iconSize;
@@ -2732,12 +2897,12 @@ function drawSimMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 3;
+    const menuHeight = knobSpacing * 2.5;
     const padding = 1.7 * knobRadius;
     
     // Convert world coordinates to screen coordinates
-    const menuUpperLeftX = menuX * window.innerWidth;
-    const menuUpperLeftY = menuY * window.innerHeight;
+    const menuUpperLeftX = simMenuX * window.innerWidth;
+    const menuUpperLeftY = simMenuY * window.innerHeight;
     
     ctx.save();
     ctx.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
@@ -2874,8 +3039,8 @@ function drawInstructionsMenu() {
     const padding = 0.17 * menuScale;
     
     // Position menu slightly below simulation menu
-    const menuUpperLeftX = (menuX + 0.01) * window.innerWidth;
-    const menuUpperLeftY = (menuY + 0.0) * window.innerHeight;
+    const menuUpperLeftX = (instructionsMenuX + 0.01) * window.innerWidth;
+    const menuUpperLeftY = (instructionsMenuY + 0.0) * window.innerHeight;
     
     ctx.save();
     ctx.translate(menuUpperLeftX, menuUpperLeftY);
@@ -2991,8 +3156,8 @@ function drawStylingMenu() {
     const padding = 1.7 * knobRadius;
     
     // Position menu slightly below simulation menu
-    const menuUpperLeftX = menuX * window.innerWidth;
-    const menuUpperLeftY = (menuY + 0.1) * window.innerHeight;
+    const menuUpperLeftX = stylingMenuX * window.innerWidth;
+    const menuUpperLeftY = (stylingMenuY + 0.1) * window.innerHeight;
     
     ctx.save();
     ctx.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
@@ -3324,6 +3489,390 @@ function drawStylingMenu() {
     ctx.restore();
 }
 
+function drawColorMenu() {
+    if (colorMenuOpacity <= 0) return;
+    
+    const ctx = gOverlayCtx;
+    const knobRadius = 0.1 * menuScale; // Match standard knob size
+    const colorWheelSize = 1.1 * menuScale; // Size of the color wheel rings
+    const menuWidth = 0.6 * menuScale; // Match other menus
+    const padding = 0.17 * menuScale;
+    const menuHeight = 0.75 * colorWheelSize;
+    const menuTopMargin = 0.33 * colorWheelSize; // Match other menus
+    const wheelCenterY = menuTopMargin; // Place center at top margin
+    
+    // Position menu
+    const menuUpperLeftX = colorMenuX * window.innerWidth;
+    const menuUpperLeftY = (colorMenuY + 0.1) * window.innerHeight;
+    
+    ctx.save();
+    ctx.translate(menuUpperLeftX, menuUpperLeftY);
+    
+    // Draw menu background
+    const cornerRadius = 8;
+    ctx.beginPath();
+    ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+    const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsl(0, 40%, 20%, ${colorMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsl(20, 20%, 10%, ${colorMenuOpacity})`);
+    ctx.fillStyle = menuGradient;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(0, 20%, 50%, ${colorMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw title
+    ctx.fillStyle = `hsla(0, 10%, 80%, ${colorMenuOpacity})`;
+    ctx.font = `bold ${0.05 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.fillText('COLOR', menuWidth / 2, -padding + 0.05 * menuScale);
+    
+    // Draw close button
+    const closeIconRadius = 0.1 * menuScale * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.02 * menuScale;
+    const closeIconY = -padding + closeIconRadius + 0.02 * menuScale;
+    ctx.beginPath();
+    ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(180, 40, 40, ${colorMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(0, 0, 0, ${colorMenuOpacity})`;
+    ctx.lineWidth = 2;
+    const xSize = closeIconRadius * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+    ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+    ctx.stroke();
+    
+    // Draw color rings from offscreen canvas
+    if (gColorWheelCanvas) {
+        ctx.save();
+        ctx.globalAlpha = colorMenuOpacity;
+        
+        // Gray out rings when not in Normal mode
+        if (gColorationMode === 1 || gColorationMode === 2) {
+            ctx.filter = 'grayscale(100%) brightness(0.6)';
+        }
+        
+        const centerX = menuWidth / 2;
+        const centerY = wheelCenterY;
+        
+        // Draw rotated rings
+        ctx.translate(centerX, centerY);
+        
+        // Draw primary ring (outer) with rotation
+        ctx.save();
+        ctx.rotate(gPrimaryRingRotation);
+        ctx.drawImage(gColorWheelCanvas, 
+            -colorWheelSize / 2, -colorWheelSize / 2, 
+            colorWheelSize, colorWheelSize);
+        ctx.restore();
+        
+        // Draw secondary ring (inner) with independent rotation
+        // We need to mask out the outer ring area
+        ctx.save();
+        ctx.rotate(gSecondaryRingRotation);
+        // Create a clipping path for the inner ring only
+        ctx.beginPath();
+        const innerRingOuterR = (colorWheelSize / 2) * 0.475;
+        const innerRingInnerR = (colorWheelSize / 2) * 0.343;
+        ctx.arc(0, 0, innerRingOuterR, 0, 2 * Math.PI);
+        ctx.arc(0, 0, innerRingInnerR, 0, 2 * Math.PI, true);
+        ctx.clip();
+        ctx.drawImage(gColorWheelCanvas, 
+            -colorWheelSize / 2, -colorWheelSize / 2, 
+            colorWheelSize, colorWheelSize);
+        ctx.restore();
+        
+        ctx.translate(-centerX, -centerY);
+        
+        // Draw wedge indicators at 3 o'clock position
+        const wedgeLength = 0.08 * menuScale;
+        const outerRingRadius = (colorWheelSize / 2) * 0.655;
+        const innerRingRadius = (colorWheelSize / 2) * 0.44;
+        
+        // Primary wedge (outer)
+        ctx.strokeStyle = 'white';
+        ctx.fillStyle = `hsl(${gPrimaryHue}, 100%, 50%)`;
+        ctx.lineWidth = 2;
+        
+        ctx.beginPath();
+        ctx.arc(centerX + outerRingRadius, centerY, wedgeLength * 0.8, 0, 2 * Math.PI);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Secondary wedge (inner)
+        ctx.fillStyle = `hsl(${gSecondaryHue}, 100%, 50%)`;
+        ctx.beginPath();
+        ctx.arc(centerX + innerRingRadius - 8, centerY, wedgeLength * 0.8, 0, 2 * Math.PI);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        ctx.filter = 'none';
+        ctx.restore();
+    }
+    
+    // Draw Mix knob in center (using standard knob style)
+    const knobCenterX = menuWidth / 2;
+    const knobCenterY = wheelCenterY;
+    
+    // Draw knob background (matching other menus)
+    ctx.beginPath();
+    ctx.arc(knobCenterX, knobCenterY, knobRadius * 1.05, 0, 2 * Math.PI);
+    ctx.fillStyle = `hsla(180, 30%, 10%, ${0.9 * colorMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(180, 20%, 60%, ${colorMenuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Calculate normalized value
+    const normalizedValue = gColorMixPercentage / 100;
+    
+    // Draw meter arc
+    const fullMeterSweep = 1.6 * Math.PI;
+    const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+    
+    const gradient = ctx.createLinearGradient(
+        knobCenterX + Math.cos(meterStart) * knobRadius,
+        knobCenterY + Math.sin(meterStart) * knobRadius,
+        knobCenterX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+        knobCenterY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+    );
+    
+    // Use grayscale colors when not in Normal mode
+    if (gColorationMode === 1 || gColorationMode === 2) {
+        gradient.addColorStop(0, `hsla(0, 0%, 40%, ${colorMenuOpacity})`);
+        gradient.addColorStop(1, `hsla(0, 0%, 40%, ${colorMenuOpacity})`);
+    } else {
+        gradient.addColorStop(0, `hsla(${gSecondaryHue}, 100%, 50%, ${colorMenuOpacity})`);
+        gradient.addColorStop(1, `hsla(${gPrimaryHue}, 100%, 50%, ${colorMenuOpacity})`);
+    }
+    ctx.strokeStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(knobCenterX, knobCenterY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    
+    // Draw needle
+    const pointerAngle = meterStart + fullMeterSweep * normalizedValue;
+    const pointerLength = knobRadius * 0.6;
+    const pointerEndX = knobCenterX + Math.cos(pointerAngle) * pointerLength;
+    const pointerEndY = knobCenterY + Math.sin(pointerAngle) * pointerLength;
+    ctx.beginPath();
+    ctx.moveTo(knobCenterX, knobCenterY);
+    ctx.lineTo(pointerEndX, pointerEndY);
+    ctx.strokeStyle = `hsla(320, 30%, 80%, ${colorMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw label (centered on knob)
+    ctx.font = `${0.35 * knobRadius}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
+    ctx.fillText('Mix', knobCenterX, knobCenterY + 0.6 * knobRadius);
+    
+    // Draw radio buttons for coloration mode
+    const radioY = menuHeight + 0.01 * menuScale;
+    const radioRadius = knobRadius * 0.3;
+    const radioSpacing = menuWidth / 3;
+    const radioLabels = ['By Wheel', 'By Direction', 'By Speed'];
+    
+    ctx.font = `${0.03 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    for (let i = 0; i < 3; i++) {
+        const radioX = (i + 0.5) * radioSpacing;
+        
+        // Draw radio button circle
+        ctx.beginPath();
+        ctx.arc(radioX, radioY, radioRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsla(0, 30%, 20%, ${0.8 * colorMenuOpacity})`;
+        ctx.strokeStyle = `hsla(0, 20%, 60%, ${colorMenuOpacity})`;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Fill if selected
+        if (gColorationMode === i) {
+            ctx.beginPath();
+            ctx.arc(radioX, radioY, radioRadius * 0.5, 0, 2 * Math.PI);
+            ctx.fillStyle = `hsla(0, 60%, 70%, ${colorMenuOpacity})`;
+            ctx.fill();
+        }
+        
+        // Draw label
+        ctx.fillStyle = `hsla(0, 10%, 80%, ${colorMenuOpacity})`;
+        ctx.fillText(radioLabels[i], radioX, radioY + 0.07 * menuScale);
+    }
+    
+    ctx.restore();
+}
+
+function drawLightingMenu() {
+    if (lightingMenuOpacity <= 0) return;
+    
+    const ctx = gOverlayCtx;
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuTopMargin = 0.2 * knobRadius;
+    const menuWidth = knobSpacing * 2; // 3 knobs across
+    const menuHeight = knobSpacing * 1.5; // 2 rows
+    const padding = 1.7 * knobRadius;
+    
+    const menuOriginX = lightingMenuX * window.innerWidth;
+    const menuOriginY = lightingMenuY * window.innerHeight;
+    
+    ctx.save();
+    ctx.translate(menuOriginX + knobSpacing, menuOriginY + 0.5 * knobSpacing);
+    ctx.globalAlpha = lightingMenuOpacity;
+    
+    // Draw menu background
+    const cornerRadius = 8;
+    ctx.beginPath();
+    ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+    ctx.fillStyle = `hsla(45, 30%, 12%, ${0.95 * lightingMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(45, 20%, 70%, ${lightingMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw title
+    ctx.fillStyle = `hsla(45, 10%, 90%, ${lightingMenuOpacity})`;
+    ctx.font = `bold ${0.05 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.fillText('LIGHTING', menuWidth / 2, -padding + 0.05 * menuScale);
+    
+    // Draw close button
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+    ctx.beginPath();
+    ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(180, 40, 40, ${lightingMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(0, 0, 0, ${lightingMenuOpacity})`;
+    ctx.lineWidth = 2;
+    const xSize = closeIconRadius * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+    ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+    ctx.stroke();
+    
+    const knobs = [
+        { label: 'Ambient', value: gAmbientIntensity, min: 0, max: 4 },
+        { label: 'Overhead', value: gOverheadIntensity, min: 0, max: 4 },
+        { label: 'Spotlight', value: gSpotlightIntensity, min: 0, max: 2 },
+        { label: 'Penumbra', value: gSpotlightPenumbra, min: 0, max: 1 }
+    ];
+    
+    const fullMeterSweep = 1.6 * Math.PI;
+    const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+    
+    for (let i = 0; i < knobs.length; i++) {
+        const row = Math.floor(i / 3);
+        const col = i % 3;
+        const knobX = col * knobSpacing;
+        const knobY = row * knobSpacing + menuTopMargin;
+        
+        // Draw knob background
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, knobRadius * 1.05, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsla(45, 30%, 10%, ${0.9 * lightingMenuOpacity})`;
+        ctx.fill();
+        ctx.strokeStyle = `hsla(45, 20%, 60%, ${lightingMenuOpacity})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Calculate normalized value
+        const normalizedValue = (knobs[i].value - knobs[i].min) / (knobs[i].max - knobs[i].min);
+        
+        // Draw meter arc
+        ctx.strokeStyle = `hsla(45, 60%, 60%, ${lightingMenuOpacity})`;
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        
+        // Draw needle
+        const pointerAngle = meterStart + fullMeterSweep * normalizedValue;
+        const pointerLength = knobRadius * 0.6;
+        const pointerEndX = knobX + Math.cos(pointerAngle) * pointerLength;
+        const pointerEndY = knobY + Math.sin(pointerAngle) * pointerLength;
+        ctx.beginPath();
+        ctx.moveTo(knobX, knobY);
+        ctx.lineTo(pointerEndX, pointerEndY);
+        ctx.strokeStyle = `hsla(45, 30%, 80%, ${lightingMenuOpacity})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw value inside meter
+        ctx.font = `${0.3 * knobRadius}px verdana`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = `hsla(45, 60%, 70%, ${lightingMenuOpacity})`;
+        ctx.fillText(knobs[i].value.toFixed(2), knobX, knobY + 0.6 * knobRadius);
+        
+        // Draw label below knob
+        ctx.font = `${0.35 * knobRadius}px verdana`;
+        ctx.fillStyle = `hsla(45, 10%, 90%, ${lightingMenuOpacity})`;
+        ctx.fillText(knobs[i].label, knobX, knobY + 1.35 * knobRadius);
+    }
+    
+    ctx.restore();
+}
+
+// Initialize the color wheel on an offscreen canvas
+function initColorWheel() {
+    // Create offscreen canvas for color rings
+    gColorWheelCanvas = document.createElement('canvas');
+    const size = 400; // Increased size
+    gColorWheelCanvas.width = size;
+    gColorWheelCanvas.height = size;
+    gColorWheelCtx = gColorWheelCanvas.getContext('2d');
+    
+    const centerX = size / 2;
+    const centerY = size / 2;
+    const outerRadius = size / 2 - 55; // Further reduced
+    const outerInnerRadius = outerRadius * 0.80; // Adjusted for larger knob
+    const innerRadius = outerRadius * 0.65; // Reduced inner ring size
+    const innerInnerRadius = outerRadius * 0.47; // Reduced inner ring size
+    
+    // Draw outer color ring (primary)
+    for (let angle = 0; angle < 360; angle += 1) {
+        const startAngle = angle * Math.PI / 180;
+        const endAngle = (angle + 1) * Math.PI / 180;
+        
+        gColorWheelCtx.beginPath();
+        gColorWheelCtx.arc(centerX, centerY, outerRadius, startAngle, endAngle);
+        gColorWheelCtx.arc(centerX, centerY, outerInnerRadius, endAngle, startAngle, true);
+        gColorWheelCtx.closePath();
+        
+        gColorWheelCtx.fillStyle = `hsl(${angle}, 100%, 50%)`;
+        gColorWheelCtx.fill();
+    }
+    
+    // Draw inner color ring (secondary)
+    for (let angle = 0; angle < 360; angle += 1) {
+        const startAngle = angle * Math.PI / 180;
+        const endAngle = (angle + 1) * Math.PI / 180;
+        
+        gColorWheelCtx.beginPath();
+        gColorWheelCtx.arc(centerX, centerY, innerRadius, startAngle, endAngle);
+        gColorWheelCtx.arc(centerX, centerY, innerInnerRadius, endAngle, startAngle, true);
+        gColorWheelCtx.closePath();
+        
+        gColorWheelCtx.fillStyle = `hsl(${angle}, 100%, 50%)`;
+        gColorWheelCtx.fill();
+    }
+}
+
 // ------------------------------------------		
 function initThreeScene() {
     gThreeScene = new THREE.Scene();
@@ -3337,7 +3886,9 @@ function initThreeScene() {
     }
     
     // Lights
-    gThreeScene.add( new THREE.AmbientLight( 0x4d4d4d ) );	
+    gAmbientLight = new THREE.AmbientLight( 0x4d4d4d );
+    gAmbientLight.intensity = gAmbientIntensity;
+    gThreeScene.add( gAmbientLight );	
     
     //gThreeScene.fog = new THREE.Fog( 0xaaaaaa, 10, 100 );				
 
@@ -3364,8 +3915,9 @@ function initThreeScene() {
     // Directional Overhead Light
     //var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
     //var dirLight = new THREE.DirectionalLight( 0x55505a, 2 );
-    var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
-    dirLight.position.set( 0, 30, 0 );
+    gDirectionalLight = new THREE.DirectionalLight( 0x55505a, gOverheadIntensity );
+    gDirectionalLight.position.set( 0, 30, 0 );
+    var dirLight = gDirectionalLight; // Keep backward compatibility
     dirLight.castShadow = true;
     dirLight.shadow.camera.near = 0.1;
     dirLight.shadow.camera.far = 40;
@@ -3992,7 +4544,7 @@ function initThreeScene() {
         });
         
         var solid = new THREE.Mesh(platonicConfig[i].geometry, solidMaterial);
-        solid.castShadow = true;
+        solid.castShadow = false; // Outer transparent shell doesn't cast shadow
         solid.receiveShadow = true;
         
         // Create inner opaque solid (smaller copy)
@@ -4043,18 +4595,18 @@ function initThreeScene() {
         window.gPlatonicSolids.push(solidGroup);
     }
     
-    /*// Add oval-framed painting on back wall (Louis Wain cat)
+    // Add oval-framed painting on back wall (Louis Wain cat)
     var ovalPaintingWidth = 3;
     var ovalPaintingHeight = 4;
-    var ovalPaintingX = -20; // Position on right half of back wall
+    var ovalPaintingX = 0; // Position on right half of back wall
     var ovalPaintingY = boxSize.y / 2 + 6;
     var ovalPaintingZ = -boxSize.z + 0.1;
-    var ovalFrameThickness = 0.2; // Tube radius - diameter will be 0.3 to match other frames
+    var ovalFrameThickness = 0.35; // Tube radius - diameter will be 0.3 to match other frames
     var ovalFrameDepth = 0.15;
     
     // Create painting image (use PlaneGeometry for proper texture display)
-    var imageWidth = ovalPaintingWidth * 0.9;
-    var imageHeight = ovalPaintingHeight * 0.9;
+    var imageWidth = ovalPaintingWidth * 0.83;
+    var imageHeight = ovalPaintingHeight * 0.83;
     var ovalImageMaterial = new THREE.MeshStandardMaterial({
         color: 0x000000,
         side: THREE.FrontSide,
@@ -4108,7 +4660,7 @@ function initThreeScene() {
     ovalFrame.castShadow = true;
     ovalFrame.receiveShadow = true;
     gThreeScene.add(ovalFrame);
-    */
+    
    
     /*// Top wall - pastel lavender
     var topWall = new THREE.Mesh(
@@ -4452,10 +5004,16 @@ function onPointer(evt) {
                 stylingMenuVisible = false;
                 instructionsMenuVisibleBeforeHide = instructionsMenuVisible;
                 instructionsMenuVisible = false;
+                colorMenuVisibleBeforeHide = colorMenuVisible;
+                colorMenuVisible = false;
+                lightingMenuVisibleBeforeHide = lightingMenuVisible;
+                lightingMenuVisible = false;
             } else {
                 menuVisible = menuVisibleBeforeHide;
                 stylingMenuVisible = stylingMenuVisibleBeforeHide;
                 instructionsMenuVisible = instructionsMenuVisibleBeforeHide;
+                colorMenuVisible = colorMenuVisibleBeforeHide;
+                lightingMenuVisible = lightingMenuVisibleBeforeHide;
             }
             return;
         }
@@ -4475,12 +5033,22 @@ function onPointer(evt) {
             return;
         }
         
+        // Check color submenu clicks FIRST (before main menu)
+        if (checkColorMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
+        // Check lighting submenu clicks FIRST (before main menu)
+        if (checkLightingMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
         // Check main menu item clicks (only when menu is visible)
         if (mainMenuVisible && mainMenuOpacity > 0.5) {
             const itemHeight = 0.12 * menuScale;
             const itemWidth = 0.15 * menuScale;
             const padding = 0.02 * menuScale;
-            const menuHeight = itemHeight * 5 + (padding * 6);
+            const menuHeight = itemHeight * 7 + (padding * 8);
             const menuBaseY = ellipsisY + 0.08 * menuScale;
             const menuBaseX = ellipsisX - padding;
             const mainMenuPosX = menuBaseX + mainMenuXOffset * menuScale;
@@ -4504,6 +5072,8 @@ function onPointer(evt) {
                 menuVisible = !menuVisible;
                 stylingMenuVisible = false; // Close styling menu when opening simulation
                 instructionsMenuVisible = false; // Close instructions menu when opening simulation
+                colorMenuVisible = false; // Close color menu when opening simulation
+                lightingMenuVisible = false; // Close lighting menu when opening simulation
                 return;
             }
             
@@ -4514,13 +5084,39 @@ function onPointer(evt) {
                 stylingMenuVisible = !stylingMenuVisible;
                 menuVisible = false; // Close simulation menu when opening styling
                 instructionsMenuVisible = false; // Close instructions menu when opening styling
+                colorMenuVisible = false; // Close color menu when opening styling
+                lightingMenuVisible = false; // Close lighting menu when opening styling
+                return;
+            }
+            
+            // Check Color menu item
+            const itemY4 = itemY3 + itemHeight + padding;
+            if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+                evt.clientY >= itemY4 && evt.clientY <= itemY4 + itemHeight) {
+                colorMenuVisible = !colorMenuVisible;
+                menuVisible = false; // Close simulation menu when opening color
+                stylingMenuVisible = false; // Close styling menu when opening color
+                instructionsMenuVisible = false; // Close instructions menu when opening color
+                lightingMenuVisible = false; // Close lighting menu when opening color
+                return;
+            }
+            
+            // Check Lighting menu item
+            const itemY5 = itemY4 + itemHeight + padding;
+            if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+                evt.clientY >= itemY5 && evt.clientY <= itemY5 + itemHeight) {
+                lightingMenuVisible = !lightingMenuVisible;
+                menuVisible = false; // Close simulation menu when opening lighting
+                stylingMenuVisible = false; // Close styling menu when opening lighting
+                instructionsMenuVisible = false; // Close instructions menu when opening lighting
+                colorMenuVisible = false; // Close color menu when opening lighting
                 return;
             }
             
             // Check Camera menu item
-            const itemY4 = itemY3 + itemHeight + padding;
+            const itemY6 = itemY5 + itemHeight + padding;
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
-                evt.clientY >= itemY4 && evt.clientY <= itemY4 + itemHeight) {
+                evt.clientY >= itemY6 && evt.clientY <= itemY6 + itemHeight) {
                 // Camera mode cycling
                 const previousMode = gCameraMode;
                 gCameraMode = (gCameraMode + 1) % 5;
@@ -4545,14 +5141,17 @@ function onPointer(evt) {
             }
             
             // Check Instructions menu item
-            const itemY5 = itemY4 + itemHeight + padding;
+            const itemY7 = itemY6 + itemHeight + padding;
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
-                evt.clientY >= itemY5 && evt.clientY <= itemY5 + itemHeight) {
+                evt.clientY >= itemY7 && evt.clientY <= itemY7 + itemHeight) {
                 instructionsMenuVisible = !instructionsMenuVisible;
                 menuVisible = false; // Close simulation menu when opening instructions
                 stylingMenuVisible = false; // Close styling menu when opening instructions
+                colorMenuVisible = false; // Close color menu when opening instructions
+                lightingMenuVisible = false; // Close lighting menu when opening instructions
                 return;
             }
+
         }
         
         // Check if clicking on lamp cone
@@ -4773,8 +5372,89 @@ function onPointer(evt) {
         if (isDraggingMenu) {
             const deltaX = evt.clientX - menuDragStartX;
             const deltaY = evt.clientY - menuDragStartY;
-            menuX = menuStartX + deltaX / window.innerWidth;
-            menuY = menuStartY + deltaY / window.innerHeight;
+            if (draggingMenuType === 'sim') {
+                simMenuX = menuStartX + deltaX / window.innerWidth;
+                simMenuY = menuStartY + deltaY / window.innerHeight;
+            } else if (draggingMenuType === 'styling') {
+                stylingMenuX = menuStartX + deltaX / window.innerWidth;
+                stylingMenuY = menuStartY + deltaY / window.innerHeight;
+            } else if (draggingMenuType === 'instructions') {
+                instructionsMenuX = menuStartX + deltaX / window.innerWidth;
+                instructionsMenuY = menuStartY + deltaY / window.innerHeight;
+            } else if (draggingMenuType === 'color') {
+                colorMenuX = menuStartX + deltaX / window.innerWidth;
+                colorMenuY = menuStartY + deltaY / window.innerHeight;
+            } else if (draggingMenuType === 'lighting') {
+                lightingMenuX = menuStartX + deltaX / window.innerWidth;
+                lightingMenuY = menuStartY + deltaY / window.innerHeight;
+            }
+            return;
+        }
+        
+        // Handle mix knob dragging
+        if (gDraggingMixKnob) {
+            const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+            const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+            const dragDelta = deltaX + deltaY;
+            
+            const dragSensitivity = 0.2;
+            const normalizedDelta = dragDelta / dragSensitivity;
+            const rangeSize = 100; // 0 to 100 percentage
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            newValue = Math.max(0, Math.min(100, newValue));
+            
+            gColorMixPercentage = newValue;
+            applyMixedColors();
+            return;
+        }
+        
+        // Handle primary ring dragging
+        if (gDraggingPrimaryRing) {
+            const colorWheelSize = 1.1 * menuScale;
+            const menuWidth = 0.6 * menuScale;
+            const menuTopMargin = 0.33 * colorWheelSize;
+            const menuUpperLeftX = colorMenuX * window.innerWidth;
+            const menuUpperLeftY = (colorMenuY + 0.1) * window.innerHeight;
+            const centerX = menuUpperLeftX + menuWidth / 2;
+            const centerY = menuUpperLeftY + menuTopMargin;
+            
+            const dx = evt.clientX - centerX;
+            const dy = evt.clientY - centerY;
+            let angle = Math.atan2(dy, dx);
+            
+            gPrimaryRingRotation = angle - gRingDragStartAngle;
+            
+            // Calculate hue from rotation (canvas rotates CCW, so negate)
+            let hue = (-gPrimaryRingRotation * 180 / Math.PI) % 360;
+            if (hue < 0) hue += 360;
+            gPrimaryHue = hue;
+            
+            applyMixedColors();
+            return;
+        }
+        
+        // Handle secondary ring dragging
+        if (gDraggingSecondaryRing) {
+            const colorWheelSize = 1.1 * menuScale;
+            const menuWidth = 0.6 * menuScale;
+            const menuTopMargin = 0.33 * colorWheelSize;
+            const menuUpperLeftX = colorMenuX * window.innerWidth;
+            const menuUpperLeftY = (colorMenuY + 0.1) * window.innerHeight;
+            const centerX = menuUpperLeftX + menuWidth / 2;
+            const centerY = menuUpperLeftY + menuTopMargin;
+            
+            const dx = evt.clientX - centerX;
+            const dy = evt.clientY - centerY;
+            let angle = Math.atan2(dy, dx);
+            
+            gSecondaryRingRotation = angle - gRingDragStartAngle;
+            
+            // Calculate hue from rotation
+            let hue = (-gSecondaryRingRotation * 180 / Math.PI) % 360;
+            if (hue < 0) hue += 360;
+            gSecondaryHue = hue;
+            
+            applyMixedColors();
             return;
         }
         
@@ -4783,6 +5463,54 @@ function onPointer(evt) {
             const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
             const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
             const dragDelta = deltaX + deltaY;
+            
+            // Check if it's a lighting menu knob (offset by 200)
+            if (draggedKnob >= 200) {
+                const lightingKnob = draggedKnob - 200;
+                const ranges = [
+                    {min: 0, max: 4},       // ambient intensity
+                    {min: 0, max: 4},       // overhead intensity
+                    {min: 0, max: 2},       // spotlight intensity
+                    {min: 0, max: 1}        // spotlight penumbra
+                ];
+                
+                const dragSensitivity = 0.2;
+                const normalizedDelta = dragDelta / dragSensitivity;
+                const range = ranges[lightingKnob];
+                const rangeSize = range.max - range.min;
+                let newValue = dragStartValue + normalizedDelta * rangeSize;
+                newValue = Math.max(range.min, Math.min(range.max, newValue));
+                
+                switch (lightingKnob) {
+                    case 0: // Ambient intensity
+                        gAmbientIntensity = newValue;
+                        if (gAmbientLight) gAmbientLight.intensity = gAmbientIntensity;
+                        break;
+                    case 1: // Overhead intensity
+                        gOverheadIntensity = newValue;
+                        if (gDirectionalLight) gDirectionalLight.intensity = gOverheadIntensity;
+                        break;
+                    case 2: // Spotlight intensity
+                        gSpotlightIntensity = newValue;
+                        // Update all lamp spotlights
+                        for (let lampId in gLamps) {
+                            if (gLamps[lampId] && gLamps[lampId].spotlight) {
+                                gLamps[lampId].spotlight.intensity = gSpotlightIntensity;
+                            }
+                        }
+                        break;
+                    case 3: // Spotlight penumbra
+                        gSpotlightPenumbra = newValue;
+                        // Update all lamp spotlights
+                        for (let lampId in gLamps) {
+                            if (gLamps[lampId] && gLamps[lampId].spotlight) {
+                                gLamps[lampId].spotlight.penumbra = gSpotlightPenumbra;
+                            }
+                        }
+                        break;
+                }
+                return;
+            }
             
             // Check if it's a styling menu knob (offset by 100)
             if (draggedKnob >= 100) {
@@ -4869,14 +5597,12 @@ function onPointer(evt) {
                                 (Math.random() - 0.5) * 10,
                                 (Math.random() - 0.5) * 10
                             );
-                            
-                            // Random hue (but not 220 which is reserved for first boid)
-                            hue = Math.round(340 + Math.random() * 40);
 
-                            // saturation
-                            sat = Math.floor(30 + 70 * Math.random());
+                            hue = Math.round(340 + Math.random() * 40);
+                            sat = Math.round(40 + Math.random() * 60); 
+                            light = Math.round(30 + Math.random() * 40); 
                             
-                            const newBoid = new BOID(pos, boidRadius, vel, hue, sat, 50);
+                            const newBoid = new BOID(pos, boidRadius, vel, hue, sat, light);
                             gPhysicsScene.objects.push(newBoid);
                             SpatialGrid.insert(newBoid);
                         }
@@ -5187,8 +5913,36 @@ function onPointer(evt) {
         }
     }
     else if (evt.type == "pointerup") {
+        if (gDraggingMixKnob) {
+            gDraggingMixKnob = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingPrimaryRing) {
+            gDraggingPrimaryRing = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingSecondaryRing) {
+            gDraggingSecondaryRing = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
         if (isDraggingMenu) {
             isDraggingMenu = false;
+            draggingMenuType = null;
             // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
@@ -5276,6 +6030,11 @@ function onPointer(evt) {
             gCameraManualControl = false;
             return;
         }
+        
+        // Re-enable orbit controls for any other clicks (e.g., color ring clicks)
+        if (gCameraMode < 3 && gCameraControl) {
+            gCameraControl.enabled = true;
+        }
     }
 }
 
@@ -5290,8 +6049,8 @@ function checkSimMenuClick(clientX, clientY) {
     const menuHeight = knobSpacing * 2 + knobRadius * 2.0;
     const padding = 1.7 * knobRadius;
     
-    const menuUpperLeftX = menuX * window.innerWidth;
-    const menuUpperLeftY = menuY * window.innerHeight;
+    const menuUpperLeftX = simMenuX * window.innerWidth;
+    const menuUpperLeftY = simMenuY * window.innerHeight;
     const menuOriginX = menuUpperLeftX + knobSpacing;
     const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
     
@@ -5339,10 +6098,11 @@ function checkSimMenuClick(clientX, clientY) {
     if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
         clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
         isDraggingMenu = true;
+        draggingMenuType = 'sim';
         menuDragStartX = clientX;
         menuDragStartY = clientY;
-        menuStartX = menuX;
-        menuStartY = menuY;
+        menuStartX = simMenuX;
+        menuStartY = simMenuY;
         
         // Disable orbit controls while dragging menu
         if (gCameraControl) {
@@ -5364,8 +6124,8 @@ function checkStylingMenuClick(clientX, clientY) {
     const menuHeight = 13 * knobRadius;
     const padding = 1.7 * knobRadius;
     
-    const menuUpperLeftX = menuX * window.innerWidth;
-    const menuUpperLeftY = (menuY + 0.1) * window.innerHeight;
+    const menuUpperLeftX = stylingMenuX * window.innerWidth;
+    const menuUpperLeftY = (stylingMenuY + 0.1) * window.innerHeight;
     const menuOriginX = menuUpperLeftX + knobSpacing;
     const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
     
@@ -5498,10 +6258,11 @@ function checkStylingMenuClick(clientX, clientY) {
     if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
         clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
         isDraggingMenu = true;
+        draggingMenuType = 'styling';
         menuDragStartX = clientX;
         menuDragStartY = clientY;
-        menuStartX = menuX;
-        menuStartY = menuY; // Don't add 0.2 offset here, it's already in menuOriginY
+        menuStartX = stylingMenuX;
+        menuStartY = stylingMenuY; // Don't add 0.2 offset here, it's already in menuOriginY
         
         if (gCameraControl) {
             gCameraControl.enabled = false;
@@ -5520,8 +6281,8 @@ function checkInstructionsMenuClick(clientX, clientY) {
     const menuHeight = 1.45 * menuScale;
     const padding = 0.17 * menuScale;
     
-    const menuUpperLeftX = (menuX + 0.01) * window.innerWidth;
-    const menuUpperLeftY = (menuY + 0.0) * window.innerHeight;
+    const menuUpperLeftX = (instructionsMenuX + 0.01) * window.innerWidth;
+    const menuUpperLeftY = (instructionsMenuY + 0.0) * window.innerHeight;
     const menuOriginX = menuUpperLeftX;
     const menuOriginY = menuUpperLeftY;
     
@@ -5541,10 +6302,11 @@ function checkInstructionsMenuClick(clientX, clientY) {
     if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
         clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
         isDraggingMenu = true;
+        draggingMenuType = 'instructions';
         menuDragStartX = clientX;
         menuDragStartY = clientY;
-        menuStartX = menuX + 0.01;
-        menuStartY = menuY + 0.0;
+        menuStartX = instructionsMenuX + 0.01;
+        menuStartY = instructionsMenuY + 0.0;
         
         if (gCameraControl) {
             gCameraControl.enabled = false;
@@ -5553,6 +6315,229 @@ function checkInstructionsMenuClick(clientX, clientY) {
     }
     
     return false;
+}
+
+function checkColorMenuClick(clientX, clientY) {
+    if (!colorMenuVisible || colorMenuOpacity <= 0.5) return false;
+    
+    const knobRadius = 0.1 * menuScale; // Match standard knob size
+    const colorWheelSize = 1.1 * menuScale; // Size of the color wheel rings
+    const menuWidth = 0.6 * menuScale; // Match other menus (actual background width)
+    const padding = 0.17 * menuScale;
+    const menuHeight = 0.75 * colorWheelSize;
+    const menuTopMargin = 0.33 * colorWheelSize; // Match drawing code
+    
+    const menuUpperLeftX = colorMenuX * window.innerWidth;
+    const menuUpperLeftY = (colorMenuY + 0.1) * window.innerHeight;
+    const menuOriginX = menuUpperLeftX;
+    const menuOriginY = menuUpperLeftY;
+    
+    // Check close button
+    const closeIconRadius = 0.1 * menuScale * 0.25;
+    const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
+    const closeIconY = menuOriginY - padding + closeIconRadius + 0.02 * menuScale;
+    const cdx = clientX - closeIconX;
+    const cdy = clientY - closeIconY;
+    
+    if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+        colorMenuVisible = false;
+        return true;
+    }
+    
+    const centerX = menuOriginX + menuWidth / 2;
+    const centerY = menuOriginY + menuTopMargin;
+    const dx = clientX - centerX;
+    const dy = clientY - centerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Only allow interaction with knob and rings in Normal mode
+    if (gColorationMode === 0) {
+        // Check if clicking on mix knob in center (with standard knob size)
+        if (distance <= knobRadius * 1.05) {
+            gDraggingMixKnob = true;
+            dragStartMouseX = clientX;
+            dragStartMouseY = clientY;
+            dragStartValue = gColorMixPercentage;
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        }
+        
+        // Define ring boundaries (further reduced)
+        const outerRingOuter = (colorWheelSize / 2) * 0.73;
+        const outerRingInner = (colorWheelSize / 2) * 0.58;
+        const innerRingOuter = (colorWheelSize / 2) * 0.51;
+        const innerRingInner = (colorWheelSize / 2) * 0.365;
+        
+        // Check if clicking on outer ring (primary color) - start dragging
+        if (distance >= outerRingInner && distance <= outerRingOuter) {
+            gDraggingPrimaryRing = true;
+            let angle = Math.atan2(dy, dx);
+            gRingDragStartAngle = angle - gPrimaryRingRotation;
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        }
+        
+        // Check if clicking on inner ring (secondary color) - start dragging
+        if (distance >= innerRingInner && distance <= innerRingOuter) {
+            gDraggingSecondaryRing = true;
+            let angle = Math.atan2(dy, dx);
+            gRingDragStartAngle = angle - gSecondaryRingRotation;
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        }
+    }
+    
+    // Check radio buttons for coloration mode
+    const radioY = menuOriginY + menuHeight + 0.01 * menuScale;
+    const radioRadius = knobRadius * 0.3;
+    const radioSpacing = menuWidth / 3;
+    
+    for (let i = 0; i < 3; i++) {
+        const radioX = menuOriginX + (i + 0.5) * radioSpacing;
+        const rdx = clientX - radioX;
+        const rdy = clientY - radioY;
+        
+        if (rdx * rdx + rdy * rdy < radioRadius * radioRadius) {
+            gColorationMode = i;
+            applyMixedColors();
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        }
+    }
+    
+    // Check if menu background clicked (for dragging or to block clicks underneath)
+    if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
+        clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
+        isDraggingMenu = true;
+        draggingMenuType = 'color';
+        menuDragStartX = clientX;
+        menuDragStartY = clientY;
+        menuStartX = colorMenuX;
+        menuStartY = colorMenuY;
+        
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    return false;
+}
+
+function checkLightingMenuClick(clientX, clientY) {
+    if (!lightingMenuVisible || lightingMenuOpacity <= 0.5) return false;
+    
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuTopMargin = 0.2 * knobRadius;
+    const menuWidth = knobSpacing * 2;
+    const menuHeight = knobSpacing * 1.5;
+    const padding = 1.7 * knobRadius;
+    
+    const menuUpperLeftX = lightingMenuX * window.innerWidth;
+    const menuUpperLeftY = lightingMenuY * window.innerHeight;
+    const menuOriginX = menuUpperLeftX + knobSpacing;
+    const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+    
+    // Check close button
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = menuOriginX - padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = menuOriginY - padding + closeIconRadius + 0.2 * knobRadius;
+    const cdx = clientX - closeIconX;
+    const cdy = clientY - closeIconY;
+    
+    if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+        lightingMenuVisible = false;
+        return true;
+    }
+    
+    // Check each knob
+    for (let i = 0; i < 4; i++) {
+        const row = Math.floor(i / 3);
+        const col = i % 3;
+        const knobX = menuOriginX + col * knobSpacing;
+        const knobY = menuOriginY + row * knobSpacing + menuTopMargin;
+        
+        const dx = clientX - knobX;
+        const dy = clientY - knobY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance <= knobRadius * 1.05) {
+            draggedKnob = i + 200; // Offset by 200 for lighting menu knobs
+            dragStartMouseX = clientX;
+            dragStartMouseY = clientY;
+            
+            const values = [gAmbientIntensity, gOverheadIntensity, gSpotlightIntensity, gSpotlightPenumbra];
+            dragStartValue = values[i];
+            
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        }
+    }
+    
+    // Check if menu background clicked (for dragging)
+    if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
+        clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
+        isDraggingMenu = true;
+        draggingMenuType = 'lighting';
+        menuDragStartX = clientX;
+        menuDragStartY = clientY;
+        menuStartX = lightingMenuX;
+        menuStartY = lightingMenuY;
+        
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    return false;
+}
+
+// Apply mixed colors to boids based on percentage
+function applyMixedColors() {
+    const numBoids = gPhysicsScene.objects.length;
+    
+    for (let i = 0; i < numBoids; i++) {
+        const boid = gPhysicsScene.objects[i];
+        if (boid && boid.hue !== undefined) {
+            if (gColorationMode === 0) {
+                // Normal mode: Mix primary and secondary colors
+                const numPrimary = Math.floor(numBoids * (gColorMixPercentage / 100));
+                boid.hue = i < numPrimary ? gPrimaryHue : gSecondaryHue;
+            } else if (gColorationMode === 1) {
+                // By Direction: Color based on heading
+                const vx = boid.vel.x;
+                const vz = boid.vel.z;
+                let angle = Math.atan2(vz, vx);
+                // Convert angle from -PI to PI to 0-360 degrees
+                boid.hue = ((angle * 180 / Math.PI + 180) % 360);
+            } else if (gColorationMode === 2) {
+                // By Speed: Color based on velocity magnitude
+                const speed = Math.sqrt(boid.vel.x * boid.vel.x + boid.vel.y * boid.vel.y + boid.vel.z * boid.vel.z);
+                // Map speed to hue (assuming typical boid speeds are 0-15)
+                // Use blue (240) for slow, red (0) for fast
+                const maxSpeed = 3;
+                const normalizedSpeed = Math.min(speed / maxSpeed, 1);
+                boid.hue = Math.round((1 - normalizedSpeed) * 360); // 240 (blue) to 0 (red)
+            }
+            
+            // Update boid color
+            if (boid.visMesh && boid.visMesh.material) {
+                boid.visMesh.material.color = new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`);
+            }
+        }
+    }
 }
 
 // Function to rotate lamp around pivot point
@@ -5747,6 +6732,23 @@ function update() {
         instructionsMenuOpacity = Math.max(0, instructionsMenuOpacity - instructionsMenuFadeSpeed * deltaT);
     }
     
+    if (colorMenuVisible) {
+        colorMenuOpacity = Math.min(0.9, colorMenuOpacity + colorMenuFadeSpeed * deltaT);
+    } else {
+        colorMenuOpacity = Math.max(0, colorMenuOpacity - colorMenuFadeSpeed * deltaT);
+    }
+    
+    if (lightingMenuVisible) {
+        lightingMenuOpacity = Math.min(0.9, lightingMenuOpacity + lightingMenuFadeSpeed * deltaT);
+    } else {
+        lightingMenuOpacity = Math.max(0, lightingMenuOpacity - lightingMenuFadeSpeed * deltaT);
+    }
+    
+    // Update colors if in dynamic mode (by direction or speed)
+    if (gColorationMode === 1 || gColorationMode === 2) {
+        applyMixedColors();
+    }
+    
     // Camera follow modes - follow first boid (modes 3 and 4)
     if (gCameraMode >= 3 && gPhysicsScene.objects.length > 0) {
         const firstBoid = gPhysicsScene.objects[0];
@@ -5839,6 +6841,8 @@ function update() {
     drawSimMenu();
     drawStylingMenu();
     drawInstructionsMenu();
+    drawColorMenu();
+    drawLightingMenu();
     
     // Draw fade-in effect (black overlay that fades out)
     if (gFadeInTime < gFadeInDuration) {
@@ -5853,6 +6857,7 @@ function update() {
 
 // RUN -----------------------------------
 initThreeScene();
+initColorWheel();
 onWindowResize();
 makeBoids();
 // Initialize spatial grid and populate it
