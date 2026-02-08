@@ -148,6 +148,24 @@ var mouseAttached = false;
 
 // Lighting control variables
 var gAmbientLight = null;
+
+// Bicycle wheel physics variables
+var gBicycleWheel = null; // Group containing wheel parts
+var gWheelParts = []; // Array of wheel meshes (tire, spokes, valve)
+var gStool = null; // Reference to entire stool model
+var gDraggingStool = false; // Track if dragging the stool
+var gStoolDragOffset = null; // Store offset from click point to stool center
+var gStoolDragPlaneHeight = 0; // Store the Y height where stool was grabbed
+var gWheelAngularVelocity = 0; // Current rotation speed (radians per second)
+var gWheelAngularAcceleration = 4.0; // Acceleration when spinning (rad/s²)
+var gWheelFriction = 0.5; // Base friction coefficient for deceleration
+var gWheelRockAmplitude = 0; // Current rocking amplitude
+var gWheelRockPhase = 0; // Current phase in rocking oscillation
+var gWheelIsSpinning = false; // Is the wheel currently being actively spun
+var gWheelValveInitialAngle = 168.75 * Math.PI / 180; // Initial valve offset from wheel zero rotation
+var gWheelValveAngle = 168.75 * Math.PI / 180; // Current angle of valve (initial position from model)
+var gWheelValveMass = 0.2; // Relative mass of valve (creates asymmetry)
+var gWheelRadius = 1.0; // Wheel radius for torque calculation
 var gDirectionalLight = null;
 var gAmbientIntensity = 1.0; // Ambient light intensity (0-2)
 var gOverheadIntensity = 1.0; // Directional light intensity (0-2)
@@ -3973,6 +3991,160 @@ function initThreeScene() {
     gridHelper.position.set(0, 0.01, 0);
     //gThreeScene.add( gridHelper );	
     
+    // Load stool model using GLTFLoader
+    // Check if GLTFLoader is available
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var loader = new THREE.GLTFLoader();
+        loader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/stool.gltf',
+            function(gltf) {
+                var stool = gltf.scene;
+                
+                // Position on floor in center of room
+                stool.position.set(-20, 0, -8);
+                stool.rotation.y = -Math.PI / 8; // Rotate 45 degrees
+                
+                // Scale if needed (adjust this value to make it bigger/smaller)
+                stool.scale.set(1, 1, 1);
+                
+                // Remove any imported lights first
+                var lightsToRemove = [];
+                stool.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Create a rotating wheel group
+                var rotatingWheelGroup = new THREE.Group();
+                var wheelPartsToRotate = [];
+                var hubMesh = null;
+                
+                // Apply MeshPhongMaterial to all meshes and enable shadows
+                stool.traverse(function(child) {
+                    if (child.isMesh) {
+                        // Get the original color if it exists
+                        var color = 0xcccccc;
+                        if (child.material && child.material.color) {
+                            color = child.material.color.getHex();
+                        }
+                        
+                        // Apply new MeshPhongMaterial
+                        child.material = new THREE.MeshPhongMaterial({
+                            color: color,
+                            shininess: 30
+                        });
+                        
+                        // Enable shadows
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        
+                        // Find hub to use as pivot point
+                        var name = child.name.toLowerCase();
+                        if (name === 'hubbody') {
+                            hubMesh = child;
+                        }
+                        
+                        // Mark base/fork parts as draggable
+                        if (name.includes('fork') || name.includes('leg') || name.includes('seat') || name.includes('base')) {
+                            child.userData.isDraggableStool = true;
+                        }
+                        
+                        // Identify wheel parts - tire, spokes, valve (NOT hub/axle/flanges)
+                        if ((name.includes('tire') || name.includes('spoke') || 
+                             name.includes('valve') || name.includes('vavle')) &&
+                            !name.includes('hub') && !name.includes('axle') && !name.includes('flange')) {
+                            wheelPartsToRotate.push(child);
+                        }
+                    }
+                });
+                
+                // Group wheel parts for rotation
+                if (wheelPartsToRotate.length > 0 && hubMesh) {
+                    // Find the parent that will contain our rotating group
+                    var wheelParent = hubMesh.parent;
+                    
+                    // Add rotating group to the same parent as hub
+                    if (wheelParent) {
+                        wheelParent.add(rotatingWheelGroup);
+                    } else {
+                        stool.add(rotatingWheelGroup);
+                    }
+                    
+                    // Position group at hub's local position (but don't copy rotation)
+                    rotatingWheelGroup.position.copy(hubMesh.position);
+                    
+                    // Reparent wheel parts to rotating group
+                    wheelPartsToRotate.forEach(function(part) {
+                        // Store original local transform relative to parent
+                        var localPos = part.position.clone();
+                        var localRot = part.rotation.clone();
+                        var localScale = part.scale.clone();
+                        var oldParent = part.parent;
+                        
+                        if (oldParent) {
+                            oldParent.remove(part);
+                        }
+                        rotatingWheelGroup.add(part);
+                        
+                        // Keep the part in the same world position
+                        // Calculate offset from hub
+                        part.position.set(
+                            localPos.x - hubMesh.position.x,
+                            localPos.y - hubMesh.position.y,
+                            localPos.z - hubMesh.position.z
+                        );
+                        part.rotation.copy(localRot);
+                        part.scale.copy(localScale);
+                    });
+                    
+                    gWheelParts = [rotatingWheelGroup]; // Store the group
+                    gBicycleWheel = rotatingWheelGroup;
+                } else {
+                    gWheelParts = wheelPartsToRotate;
+                    gBicycleWheel = stool;
+                }
+                
+                // Add invisible floor grab area under stool (large cylinder at ground level)
+                var floorGrabRadius = 2.5; // Radius to cover area inside legs
+                var floorGrabHeight = 0.1;
+                var floorGrabGeometry = new THREE.CylinderGeometry(floorGrabRadius, floorGrabRadius, floorGrabHeight, 32);
+                var floorGrabMaterial = new THREE.MeshBasicMaterial({visible: false});
+                var floorGrabMesh = new THREE.Mesh(floorGrabGeometry, floorGrabMaterial);
+                floorGrabMesh.position.set(0, floorGrabHeight / 2, 0); // At ground level
+                floorGrabMesh.userData.isDraggableStool = true;
+                stool.add(floorGrabMesh);
+                
+                // Add invisible grab area cylinder around upper stool parts
+                var upperGrabRadius = 1.5;
+                var upperGrabHeight = 6;
+                var upperGrabGeometry = new THREE.CylinderGeometry(upperGrabRadius, upperGrabRadius, upperGrabHeight, 32);
+                var upperGrabMaterial = new THREE.MeshBasicMaterial({visible: false});
+                var upperGrabMesh = new THREE.Mesh(upperGrabGeometry, upperGrabMaterial);
+                upperGrabMesh.position.set(0, upperGrabHeight / 2 + 2, 0); // Raised up
+                upperGrabMesh.userData.isDraggableStool = true;
+                stool.add(upperGrabMesh);
+                
+                gThreeScene.add(stool);
+                gStool = stool; // Store global reference
+                console.log('Stool loaded successfully with rotating wheel group containing ' + wheelPartsToRotate.length + ' parts');
+            },
+            function(xhr) {
+                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading stool model:', error);
+            }
+        );
+    } else {
+        console.error('THREE.GLTFLoader is not loaded. Please add the script tag: <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>');
+    }
+    
     // Add transparent boundary walls
     var boxSize = gPhysicsScene.worldSize;
     var wallOpacity = 1.0;
@@ -5154,9 +5326,26 @@ function onPointer(evt) {
 
         }
         
-        // Check if clicking on lamp cone
+        // Check if clicking on bicycle wheel
         var rect = gRenderer.domElement.getBoundingClientRect();
         var mousePos = new THREE.Vector2();
+        mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+        mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        var raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mousePos, gCamera);
+        
+        if (gWheelParts.length > 0) {
+            // Check if clicking on the rotating wheel group or its children
+            var wheelIntersects = raycaster.intersectObjects([gBicycleWheel], true);
+            if (wheelIntersects.length > 0) {
+                gWheelIsSpinning = true;
+                console.log('Started spinning wheel');
+                return;
+            }
+        }
+        
+        // Check if clicking on lamp cone
         mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
         mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
         
@@ -5174,10 +5363,25 @@ function onPointer(evt) {
         var hitSphere = false;
         var hitSphereObstacle = null;
         var hitLampId = 1; // Default to lamp 1
+        var hitStool = false;
+        
         for (var i = 0; i < intersects.length; i++) {
             // Skip non-interactive objects (status indicators, etc.)
             if (intersects[i].object.userData.isNonInteractive) {
                 continue;
+            }
+            if (intersects[i].object.userData.isDraggableStool && !hitStool) {
+                hitStool = true;
+                var actualClickPoint = intersects[i].point;
+                gStoolDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to stool center (X and Z only)
+                gStoolDragOffset = new THREE.Vector3(
+                    gStool.position.x - actualClickPoint.x,
+                    0,
+                    gStool.position.z - actualClickPoint.z
+                );
+                // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableSphere && !hitSphere) {
                 hitSphere = true;
@@ -5261,6 +5465,17 @@ function onPointer(evt) {
             }
             
             gLastLampBaseClickTime[hitLampId] = currentTime;
+        }
+        
+        if (hitStool && gStool) {
+            gDraggingStool = true;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging stool
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
         }
         
         if (hitSphere && hitSphereObstacle) {
@@ -5706,6 +5921,41 @@ function onPointer(evt) {
             return;
         }
         
+        // Handle stool dragging (translation along ground, horizontal only)
+        if (gDraggingStool && gStool) {
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Define plane at the height where the stool was grabbed
+            var stoolPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gStoolDragPlaneHeight);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(stoolPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                // Keep the stool's Y position constant, only move X and Z
+                var newX = intersectionPoint.x + (gStoolDragOffset ? gStoolDragOffset.x : 0);
+                var newZ = intersectionPoint.z + (gStoolDragOffset ? gStoolDragOffset.z : 0);
+                
+                // Clamp to room boundaries
+                var minBoundX = -gPhysicsScene.worldSize.x + 1;
+                var maxBoundX = gPhysicsScene.worldSize.x - 1;
+                var minBoundZ = -gPhysicsScene.worldSize.z + 1;
+                var maxBoundZ = gPhysicsScene.worldSize.z - 1;
+                
+                newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
+                newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
+                
+                gStool.position.x = newX;
+                gStool.position.z = newZ;
+            }
+            return;
+        }
+        
         // Handle sphere dragging (translation in 3D)
         if (gDraggingSphere && window.draggingSphereObstacle) {
             var sphereObstacle = window.draggingSphereObstacle;
@@ -5913,6 +6163,12 @@ function onPointer(evt) {
         }
     }
     else if (evt.type == "pointerup") {
+        // Stop spinning the bicycle wheel
+        if (gWheelIsSpinning) {
+            gWheelIsSpinning = false;
+            console.log('Stopped spinning wheel - velocity: ' + gWheelAngularVelocity.toFixed(2));
+        }
+        
         if (gDraggingMixKnob) {
             gDraggingMixKnob = false;
             // Re-enable orbit controls if in normal camera mode
@@ -5952,6 +6208,16 @@ function onPointer(evt) {
         
         if (draggedKnob !== null) {
             draggedKnob = null;
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingStool) {
+            gDraggingStool = false;
+            gStoolDragOffset = null;
+            // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
             }
@@ -6747,6 +7013,48 @@ function update() {
     // Update colors if in dynamic mode (by direction or speed)
     if (gColorationMode === 1 || gColorationMode === 2) {
         applyMixedColors();
+    }
+    
+    // Update bicycle wheel physics
+    if (gBicycleWheel && gWheelParts.length > 0) {
+        // Calculate valve position angle based on current rotation plus initial offset
+        gWheelValveAngle = (gBicycleWheel.rotation.x + gWheelValveInitialAngle) % (Math.PI * 2);
+        
+        // Apply acceleration if actively spinning
+        if (gWheelIsSpinning) {
+            gWheelAngularVelocity += gWheelAngularAcceleration * deltaT;
+            // Cap maximum speed
+            gWheelAngularVelocity = Math.min(gWheelAngularVelocity, 5);
+        } else {
+            // Apply friction deceleration - friction decreases as wheel slows down
+            if (Math.abs(gWheelAngularVelocity) > 0.01) {
+                // Dynamic friction: high friction at high speeds, very low friction at low speeds
+                var speedFactor = Math.abs(gWheelAngularVelocity) / 5.0; // Normalize to 0-1
+                var dynamicFriction = gWheelFriction * (0.1 + 0.98 * speedFactor); // Range: 0.02x to 1.0x friction
+                
+                var frictionDecel = dynamicFriction * deltaT;
+                if (gWheelAngularVelocity > 0) {
+                    gWheelAngularVelocity -= frictionDecel;
+                } else {
+                    gWheelAngularVelocity += frictionDecel;
+                }
+            }
+            
+            // Valve weight creates oscillating torque at low speeds
+            // This causes the wheel to rock back and forth around the axle
+            if (Math.abs(gWheelAngularVelocity) < 5.0) {
+                // Valve creates torque based on its angular position
+                // Maximum torque when valve is at sides (90° and 270°)
+                // Gravity pulls valve down: positive torque when valve descending, negative when ascending
+                var valveTorque = gWheelValveMass * Math.sin(gWheelValveAngle) * (5.0 - Math.abs(gWheelAngularVelocity));
+                gWheelAngularVelocity += valveTorque * deltaT * 4.0;
+            }
+        }
+        
+        // Apply rotation to the wheel group (only around X axis - the axle)
+        if (gBicycleWheel) {
+            gBicycleWheel.rotation.x += gWheelAngularVelocity * deltaT;
+        }
     }
     
     // Camera follow modes - follow first boid (modes 3 and 4)
