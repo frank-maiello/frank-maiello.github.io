@@ -154,6 +154,7 @@ var gBicycleWheel = null; // Group containing wheel parts
 var gWheelParts = []; // Array of wheel meshes (tire, spokes, valve)
 var gStool = null; // Reference to entire stool model
 var gDraggingStool = false; // Track if dragging the stool
+var gRotatingStool = false; // Track if rotating the stool
 var gStoolDragOffset = null; // Store offset from click point to stool center
 var gStoolDragPlaneHeight = 0; // Store the Y height where stool was grabbed
 var gWheelAngularVelocity = 0; // Current rotation speed (radians per second)
@@ -4051,8 +4052,13 @@ function initThreeScene() {
                         }
                         
                         // Mark base/fork parts as draggable
-                        if (name.includes('fork') || name.includes('leg') || name.includes('seat') || name.includes('base')) {
+                        if (name.includes('fork') || name.includes('seat') || name.includes('base')) {
                             child.userData.isDraggableStool = true;
+                        }
+                        
+                        // Mark legs separately for rotation
+                        if (name.includes('leg')) {
+                            child.userData.isStoolLeg = true;
                         }
                         
                         // Identify wheel parts - tire, spokes, valve (NOT hub/axle/flanges)
@@ -4101,6 +4107,17 @@ function initThreeScene() {
                         );
                         part.rotation.copy(localRot);
                         part.scale.copy(localScale);
+                        
+                        // Fix nested torus orientation if this is the tire
+                        if (part.name.toLowerCase().includes('tire')) {
+                            part.traverse(function(child) {
+                                if (child.geometry && child.geometry.type === 'TorusGeometry') {
+                                    // Reset rotation to match parent tire orientation
+                                    // Tire rotates around X axis, so nested torus should have no relative rotation
+                                    child.rotation.set(0, 0, 0);
+                                }
+                            });
+                        }
                     });
                     
                     gWheelParts = [rotatingWheelGroup]; // Store the group
@@ -4120,15 +4137,29 @@ function initThreeScene() {
                 floorGrabMesh.userData.isDraggableStool = true;
                 stool.add(floorGrabMesh);
                 
-                // Add invisible grab area cylinder around upper stool parts
-                var upperGrabRadius = 1.5;
-                var upperGrabHeight = 6;
-                var upperGrabGeometry = new THREE.CylinderGeometry(upperGrabRadius, upperGrabRadius, upperGrabHeight, 32);
-                var upperGrabMaterial = new THREE.MeshBasicMaterial({visible: false});
-                var upperGrabMesh = new THREE.Mesh(upperGrabGeometry, upperGrabMaterial);
-                upperGrabMesh.position.set(0, upperGrabHeight / 2 + 2, 0); // Raised up
-                upperGrabMesh.userData.isDraggableStool = true;
-                stool.add(upperGrabMesh);
+                // Add invisible grab area cylinder for seat area
+                var seatGrabRadius = 1.8;
+                var seatGrabHeight = 7.0; // Cover from base up through seat
+                var seatGrabGeometry = new THREE.CylinderGeometry(seatGrabRadius, seatGrabRadius, seatGrabHeight, 32);
+                var seatGrabMaterial = new THREE.MeshBasicMaterial({visible: false});
+                var seatGrabMesh = new THREE.Mesh(seatGrabGeometry, seatGrabMaterial);
+                seatGrabMesh.position.set(0, seatGrabHeight / 2, 0); // Start from ground
+                seatGrabMesh.userData.isDraggableStool = true;
+                stool.add(seatGrabMesh);
+                
+                // Add invisible cylinder around tire for easier clicking to spin wheel
+                var tireClickRadius = 2.0; // Larger than actual tire
+                var tireClickHeight = 2.0; // Cover tire height
+                var tireClickGeometry = new THREE.CylinderGeometry(tireClickRadius, tireClickRadius, tireClickHeight, 32);
+                var tireClickMaterial = new THREE.MeshBasicMaterial({visible: false});
+                var tireClickMesh = new THREE.Mesh(tireClickGeometry, tireClickMaterial);
+                // Position at hub height, rotate to horizontal like the wheel
+                if (hubMesh) {
+                    tireClickMesh.position.copy(hubMesh.position);
+                }
+                tireClickMesh.rotation.z = Math.PI / 2; // Rotate to horizontal
+                tireClickMesh.userData.isWheelClickArea = true;
+                stool.add(tireClickMesh);
                 
                 gThreeScene.add(stool);
                 gStool = stool; // Store global reference
@@ -4917,7 +4948,7 @@ function initThreeScene() {
     var cylinderObstacle = new CylinderObstacle(
         2.5,  // radius
         12,  // height
-        new THREE.Vector3(5, 6.03, -9),  // position
+        new THREE.Vector3(9, 6.03, -9),  // position
         { x: 0, y: 0, z: 0 }  // rotation
     );
     gObstacles.push(cylinderObstacle);
@@ -5338,8 +5369,27 @@ function onPointer(evt) {
         if (gWheelParts.length > 0) {
             // Check if clicking on the rotating wheel group or its children
             var wheelIntersects = raycaster.intersectObjects([gBicycleWheel], true);
+            // Also check for the tire click area in the stool
+            if (gStool) {
+                var stoolIntersects = raycaster.intersectObjects([gStool], true);
+                for (var i = 0; i < stoolIntersects.length; i++) {
+                    if (stoolIntersects[i].object.userData.isWheelClickArea) {
+                        gWheelIsSpinning = true;
+                        // Disable orbit controls while spinning wheel
+                        if (gCameraControl) {
+                            gCameraControl.enabled = false;
+                        }
+                        console.log('Started spinning wheel');
+                        return;
+                    }
+                }
+            }
             if (wheelIntersects.length > 0) {
                 gWheelIsSpinning = true;
+                // Disable orbit controls while spinning wheel
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
                 console.log('Started spinning wheel');
                 return;
             }
@@ -5364,11 +5414,16 @@ function onPointer(evt) {
         var hitSphereObstacle = null;
         var hitLampId = 1; // Default to lamp 1
         var hitStool = false;
+        var hitStoolLeg = false;
         
         for (var i = 0; i < intersects.length; i++) {
             // Skip non-interactive objects (status indicators, etc.)
             if (intersects[i].object.userData.isNonInteractive) {
                 continue;
+            }
+            if (intersects[i].object.userData.isStoolLeg && !hitStoolLeg) {
+                hitStoolLeg = true;
+                // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableStool && !hitStool) {
                 hitStool = true;
@@ -5465,6 +5520,18 @@ function onPointer(evt) {
             }
             
             gLastLampBaseClickTime[hitLampId] = currentTime;
+        }
+        
+        // Leg click takes priority for rotation
+        if (hitStoolLeg && gStool) {
+            gRotatingStool = true;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while rotating stool
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
         }
         
         if (hitStool && gStool) {
@@ -5921,6 +5988,17 @@ function onPointer(evt) {
             return;
         }
         
+        // Handle stool rotation (rotate around vertical Y axis)
+        if (gRotatingStool && gStool) {
+            var deltaX = evt.clientX - gPointerLastX;
+            gPointerLastX = evt.clientX;
+            
+            // Rotate around Y axis based on horizontal mouse movement
+            var rotationSpeed = 0.01;
+            gStool.rotation.y += deltaX * rotationSpeed;
+            return;
+        }
+        
         // Handle stool dragging (translation along ground, horizontal only)
         if (gDraggingStool && gStool) {
             var rect = gRenderer.domElement.getBoundingClientRect();
@@ -6166,6 +6244,10 @@ function onPointer(evt) {
         // Stop spinning the bicycle wheel
         if (gWheelIsSpinning) {
             gWheelIsSpinning = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
             console.log('Stopped spinning wheel - velocity: ' + gWheelAngularVelocity.toFixed(2));
         }
         
@@ -6208,6 +6290,15 @@ function onPointer(evt) {
         
         if (draggedKnob !== null) {
             draggedKnob = null;
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gRotatingStool) {
+            gRotatingStool = false;
+            // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
             }
