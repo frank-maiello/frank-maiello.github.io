@@ -3962,7 +3962,7 @@ function initThreeScene() {
         2
     );
     // Then move it -7 units along X axis and -15 units along Z axis
-    translateLampAssembly(-26, -35, 2);
+    translateLampAssembly(-37, -35, 2);
     // Then rotate it 90 degrees
     rotateLampAssembly(Math.PI * 0.9, 2);
 
