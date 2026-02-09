@@ -45,6 +45,7 @@ var gCylinderDragPlaneHeight = 0; // Store the Y height where the cylinder was g
 var gDraggingSphere = false; // Track if dragging the sphere obstacle
 var gSphereDragOffset = null; // Store offset from click point to sphere center
 var gSphereDragPlaneHeight = 0; // Store the Y height where the sphere was grabbed
+var gSphereHue = 90; // Current hue value for sphere obstacle (0-360)
 var gActiveLampId = 1; // Track which lamp is currently being interacted with (1 or 2)
 var gLampAngle = -0.0435; // Current lamp angle in radians (-2.49 degrees)
 var gLampAssemblyRotation = 0.0; // Current lamp assembly rotation around Y axis
@@ -153,6 +154,7 @@ var gAmbientLight = null;
 var gBicycleWheel = null; // Group containing wheel parts
 var gWheelParts = []; // Array of wheel meshes (tire, spokes, valve)
 var gStool = null; // Reference to entire stool model
+var gStoolObstacle = null; // Cylinder obstacle for boid avoidance
 var gDraggingStool = false; // Track if dragging the stool
 var gRotatingStool = false; // Track if rotating the stool
 var gStoolDragOffset = null; // Store offset from click point to stool center
@@ -454,11 +456,12 @@ class SphereObstacle {
 }
 
 class CylinderObstacle {
-    constructor(radius, height, position, rotation) {
+    constructor(radius, height, position, rotation, skipTori) {
         this.radius = radius;
         this.height = height;
         this.position = position.clone();
         this.rotation = rotation || { x: 0, y: 0, z: 0 };
+        this.skipTori = skipTori || false; // Flag to skip creating decorative tori
         this.mesh = null;
         
         // Create the cylinder mesh
@@ -619,22 +622,23 @@ class CylinderObstacle {
         // Store reference to first section as 'mesh' for backward compatibility
         this.mesh = this.columnSections[0];
         
-        // Create two tori on top of column
-        const torusRadius = this.radius * 0.7; // Major radius
-        const tubeRadius = 0.2; // Minor radius (tube thickness)
-        const tiltAngle = Math.PI / 6; // 30 degrees tilt from horizontal
+        // Create two tori on top of column (unless skipTori flag is set)
+        if (!this.skipTori) {
+            const torusRadius = this.radius * 0.7; // Major radius
+            const tubeRadius = 0.2; // Minor radius (tube thickness)
+            const tiltAngle = Math.PI / 6; // 30 degrees tilt from horizontal
+            
+            // Calculate top of column position
+            const columnTopY = this.position.y + 9.23;
+            
+            // Torus material
+            const torusMaterial = new THREE.MeshStandardMaterial({
+                color: 0xd4af37, // Gold color
+                metalness: 0.7,
+                roughness: 0.3
+            });
         
-        // Calculate top of column position
-        const columnTopY = this.position.y + 9.23;
-        
-        // Torus material
-        const torusMaterial = new THREE.MeshStandardMaterial({
-            color: 0xd4af37, // Gold color
-            metalness: 0.7,
-            roughness: 0.3
-        });
-        
-        const toriShiftY = Math.sin(tiltAngle) * (torusRadius - 1.6 * tubeRadius)
+            const toriShiftY = Math.sin(tiltAngle) * (torusRadius - 1.6 * tubeRadius);
         // Create first torus (tilted one way) with a parent group for Y rotation
         const torusGroup1 = new THREE.Group();
         torusGroup1.position.set(this.position.x, columnTopY - toriShiftY, this.position.z);
@@ -666,6 +670,10 @@ class CylinderObstacle {
         this.tiltAngle = tiltAngle;
         this.torusRadius = torusRadius;
         this.tubeRadius = tubeRadius;
+        } else {
+            // No tori for this obstacle
+            this.toriGroups = [];
+        }
         
         // Create conical pedestal
         const conicalPedestalRadius = this.radius * 1.5;
@@ -739,6 +747,24 @@ class CylinderObstacle {
         const extendedHeight = this.height + (this.sectionHeight || 0);
         const halfHeight = extendedHeight / 2;
         const verticalDist = Math.abs(localPoint.y) - halfHeight;
+        
+        // Add avoidance region above column where tori are located (if tori exist)
+        if (!this.skipTori && localPoint.y > halfHeight) {
+            // Tori region extends from top of column up about 2.5 units
+            const toriRegionHeight = 5;
+            const toriRegionTop = halfHeight + toriRegionHeight;
+            
+            // Tori have larger radius than column
+            const toriRadius = this.radius * 1.0; 
+            
+            // Check if point is in tori region
+            if (localPoint.y <= toriRegionTop && radialDist < toriRadius) {
+                // Inside tori avoidance volume
+                const distToToriWall = radialDist - toriRadius;
+                const distToToriTop = localPoint.y - toriRegionTop;
+                return Math.max(distToToriWall, distToToriTop);
+            }
+        }
         
         // If inside the cylinder volume
         if (radialDist < this.radius && Math.abs(localPoint.y) < halfHeight) {
@@ -884,6 +910,7 @@ class Lamp {
         this.spotlight.shadow.camera.far = 70;
         this.spotlight.shadow.mapSize.width = 2048;
         this.spotlight.shadow.mapSize.height = 2048;
+
         // Configure shadow camera to exclude layer 2 (lamp cones will be on layer 2)
         this.spotlight.shadow.camera.layers.set(0); // Only see layer 0
         this.spotlight.target.position.copy(lightTarget);
@@ -908,10 +935,11 @@ class Lamp {
         var coneGeometry = new THREE.CylinderGeometry(tipRadius, coneRadius, this.coneHeight, 64, 1, true);
         
         // Outer cone - normal yellow
-        var outerConeMaterial = new THREE.MeshPhongMaterial({
-            color: 0xffff00,
+        var outerConeMaterial = new THREE.MeshStandardMaterial({
+            color: 0xe0e0d1,
             side: THREE.FrontSide,
-            shininess: 30,
+            roughness: 0.4,
+            metalness: 0.4,
             colorWrite: true,
             depthWrite: true
         });
@@ -1112,12 +1140,15 @@ class Lamp {
         // Store reference to topmost section as 'pole' for backward compatibility
         this.pole = this.poleSections[sectionCount - 1];
         
-        // Add invisible larger cylinder around pole for easier clicking
+        // Add invisible larger cylinder around upper pole for easier clicking (exclude lower section)
         var poleHitAreaRadius = baseRadius * 4;
-        var poleHitGeometry = new THREE.CylinderGeometry(poleHitAreaRadius, poleHitAreaRadius, poleHeight, 8);
+        var poleHitHeight = poleHeight * 0.6; // Only upper 60% of pole
+        var poleHitGeometry = new THREE.CylinderGeometry(poleHitAreaRadius, poleHitAreaRadius, poleHitHeight, 8);
         var poleHitMaterial = new THREE.MeshBasicMaterial({visible: false});
         this.poleHitArea = new THREE.Mesh(poleHitGeometry, poleHitMaterial);
-        this.poleHitArea.position.set(poleBasePosition.x, poleHeight / 2, poleBasePosition.z);
+        // Position in upper portion of pole
+        var poleHitYPosition = poleHeight - poleHitHeight / 2;
+        this.poleHitArea.position.set(poleBasePosition.x, poleHitYPosition, poleBasePosition.z);
         this.poleHitArea.userData.isLampRotation = true;
         this.poleHitArea.userData.lampId = lampId;
         this.poleHitArea.userData.lampInstance = this;
@@ -1196,10 +1227,14 @@ class Lamp {
         this.pinAxis.normalize();
        
         // Add pedestal base
-        var pedestalRadius = 1.5;
+        var pedestalRadius = 1.6;
         var pedestalHeight = 0.2;
         var pedestalGeometry = new THREE.CylinderGeometry(pedestalRadius, pedestalRadius, pedestalHeight, 32);
-        var pedestalMaterial = new THREE.MeshPhongMaterial({color: 0x88821d, shininess: 30});
+        var pedestalMaterial = new THREE.MeshStandardMaterial({
+            color: 0x818181, 
+            metalness: 0.5,
+            roughness: 0.5
+        });
         this.basePlate = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
         
         // Position pedestal off-center toward room center
@@ -4163,6 +4198,33 @@ function initThreeScene() {
                 
                 gThreeScene.add(stool);
                 gStool = stool; // Store global reference
+                
+                // Create cylinder obstacle for boid avoidance (up to top of tire)
+                var stoolObstacleRadius = 2.5; // Cover stool legs area
+                var stoolObstacleHeight = 6.0; // Up to top of tire
+                // Pass skipTori flag to prevent adding decorative tori
+                gStoolObstacle = new CylinderObstacle(
+                    stoolObstacleRadius,
+                    stoolObstacleHeight,
+                    new THREE.Vector3(stool.position.x, stoolObstacleHeight / 2, stool.position.z),
+                    { x: 0, y: stool.rotation.y, z: 0 },
+                    true  // skipTori parameter
+                );
+                // Make the obstacle invisible by hiding its meshes
+                if (gStoolObstacle.columnSections) {
+                    gStoolObstacle.columnSections.forEach(function(section) {
+                        section.visible = false;
+                    });
+                }
+                if (gStoolObstacle.groutLayers) {
+                    gStoolObstacle.groutLayers.forEach(function(layer) {
+                        layer.visible = false;
+                    });
+                }
+                if (gStoolObstacle.discMesh) gStoolObstacle.discMesh.visible = false;
+                if (gStoolObstacle.conicalPedestalMesh) gStoolObstacle.conicalPedestalMesh.visible = false;
+                if (gStoolObstacle.pedestalMesh) gStoolObstacle.pedestalMesh.visible = false;
+                gObstacles.push(gStoolObstacle);
                 console.log('Stool loaded successfully with rotating wheel group containing ' + wheelPartsToRotate.length + ' parts');
             },
             function(xhr) {
@@ -6030,6 +6092,11 @@ function onPointer(evt) {
                 
                 gStool.position.x = newX;
                 gStool.position.z = newZ;
+                
+                // Update obstacle position
+                if (gStoolObstacle) {
+                    gStoolObstacle.updatePosition(new THREE.Vector3(newX, gStoolObstacle.position.y, newZ));
+                }
             }
             return;
         }
@@ -7053,6 +7120,15 @@ function update() {
         // Both tori rotate around the Y axis (vertical), preserving their X rotation (tilt)
         gTori[0].rotation.y = gToriRotation;
         gTori[1].rotation.y = gToriRotation;
+    }
+    
+    // Animate sphere obstacle hue
+    if (gObstacles.length > 0) {
+        gSphereHue = (gSphereHue + 1 * deltaT) % 360; // Slowly cycle through hues
+        var sphereObstacle = gObstacles.find(function(obs) { return obs instanceof SphereObstacle; });
+        if (sphereObstacle && sphereObstacle.mesh && sphereObstacle.mesh.material) {
+            sphereObstacle.mesh.material.color.setHSL(gSphereHue / 360, 0.9, 0.5);
+        }
     }
     
     // Animate Platonic solids rotation around Y axis
