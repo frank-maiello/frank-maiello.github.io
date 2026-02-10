@@ -165,6 +165,12 @@ var gDraggingDuck = false; // Track if dragging the duck
 var gRotatingDuckBeak = false; // Track if rotating the duck via beak
 var gDuckDragOffset = null; // Store offset from click point to duck center
 var gDuckDragPlaneHeight = 0; // Store the Y height where duck was grabbed
+var gDuckEntranceDisc = null; // Black disc for entrance animation
+var gDuckEntranceDiscOutline = null; // White outline for disc
+var gDuckEntranceState = 'waiting'; // States: waiting, expanding, rising, shrinking, complete
+var gDuckEntranceTimer = 0; // Timer for animation
+var gDuckTargetY = -0.4; // Target Y position for duck
+var gDuckStartY = -8; // Starting Y position (below floor)
 var gWheelAngularVelocity = 0; // Current rotation speed (radians per second)
 var gWheelAngularAcceleration = 4.0; // Acceleration when spinning (rad/s²)
 var gWheelFriction = 0.5; // Base friction coefficient for deceleration
@@ -4328,8 +4334,8 @@ function initThreeScene() {
             function(gltf) {
                 var duck = gltf.scene;
                 
-                // Position in the middle of the room
-                duck.position.set(18, -0.4, 10);
+                // Position below floor initially for entrance animation
+                duck.position.set(18, gDuckStartY, 10);
                 
                 // Scale if needed (adjust this value to make it bigger/smaller)
                 duck.scale.set(4, 4, 4);
@@ -4372,6 +4378,31 @@ function initThreeScene() {
                 
                 gThreeScene.add(duck);
                 gDuck = duck; // Store global reference
+                
+                // Create blue disc for entrance animation
+                var discGeometry = new THREE.CircleGeometry(0.01, 32);
+                var discMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x1E90FF,
+                    side: THREE.DoubleSide,
+                    transparent: false
+                });
+                gDuckEntranceDisc = new THREE.Mesh(discGeometry, discMaterial);
+                gDuckEntranceDisc.position.set(duck.position.x, 0.01, duck.position.z);
+                gDuckEntranceDisc.rotation.x = -Math.PI / 2; // Lay flat on floor
+                gDuckEntranceDisc.receiveShadow = true;
+                gThreeScene.add(gDuckEntranceDisc);
+                
+                // Create white outline ring for disc (thicker)
+                var ringGeometry = new THREE.RingGeometry(0.009, 0.011, 32);
+                var ringMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xFFFFFF, 
+                    side: THREE.DoubleSide 
+                });
+                gDuckEntranceDiscOutline = new THREE.Mesh(ringGeometry, ringMaterial);
+                gDuckEntranceDiscOutline.position.set(duck.position.x, 0.02, duck.position.z);
+                gDuckEntranceDiscOutline.rotation.x = -Math.PI / 2;
+                gDuckEntranceDiscOutline.receiveShadow = true;
+                gThreeScene.add(gDuckEntranceDiscOutline);
                 
                 // Store a clone as template for boid geometry
                 gDuckTemplate = duck.clone();
@@ -7411,6 +7442,101 @@ function update() {
         var sphereObstacle = gObstacles.find(function(obs) { return obs instanceof SphereObstacle; });
         if (sphereObstacle && sphereObstacle.mesh && sphereObstacle.mesh.material) {
             sphereObstacle.mesh.material.color.setHSL(gSphereHue / 360, 0.9, 0.5);
+        }
+    }
+    
+    // Duck entrance animation
+    if (gDuck && gDuckEntranceDisc && gDuckEntranceState !== 'complete') {
+        gDuckEntranceTimer += deltaT;
+        
+        if (gDuckEntranceState === 'waiting') {
+            // Wait for 1 second
+            if (gDuckEntranceTimer >= 1.0) {
+                gDuckEntranceState = 'expanding';
+                gDuckEntranceTimer = 0;
+            }
+        } else if (gDuckEntranceState === 'expanding') {
+            // Expand disc over 1 second with ease-in (slower start, faster end)
+            var duration = 1.0;
+            var t = Math.min(gDuckEntranceTimer / duration, 1.0);
+            // Quadratic ease-in: y = x^2
+            var eased = t * t;
+            var maxRadius = 5.0; // Bit larger than duck
+            var currentRadius = 0.01 + eased * maxRadius;
+            
+            // Update disc geometry
+            gDuckEntranceDisc.geometry.dispose();
+            gDuckEntranceDisc.geometry = new THREE.CircleGeometry(currentRadius, 32);
+            
+            // Update outline ring
+            if (gDuckEntranceDiscOutline) {
+                var ringWidth = 0.15;
+                gDuckEntranceDiscOutline.geometry.dispose();
+                gDuckEntranceDiscOutline.geometry = new THREE.RingGeometry(currentRadius - ringWidth/2, currentRadius + ringWidth/2, 32);
+            }
+            
+            if (t >= 1.0) {
+                gDuckEntranceState = 'rising';
+                gDuckEntranceTimer = 0;
+            }
+        } else if (gDuckEntranceState === 'rising') {
+            // Duck rises over 1.5 seconds
+            var duration = 1.5;
+            var t = Math.min(gDuckEntranceTimer / duration, 1.0);
+            // Smooth ease-out
+            var eased = 1 - Math.pow(1 - t, 3);
+            gDuck.position.y = gDuckStartY + eased * (gDuckTargetY - gDuckStartY);
+            
+            // Update obstacle position
+            if (gDuckObstacle) {
+                gDuckObstacle.updatePosition(new THREE.Vector3(
+                    gDuck.position.x,
+                    gDuck.position.y + 1.5,
+                    gDuck.position.z
+                ));
+            }
+            
+            if (t >= 1.0) {
+                gDuckEntranceState = 'shrinking';
+                gDuckEntranceTimer = 0;
+            }
+        } else if (gDuckEntranceState === 'shrinking') {
+            // Shrink disc over 2 seconds with ease-in (slower start, faster end)
+            var duration = 0.5;
+            var t = Math.min(gDuckEntranceTimer / duration, 1.0);
+            
+            // Quadratic ease-in: y = x^2 (starts slow, ends fast)
+            var eased = t * t;
+            var maxRadius = 5.0;
+            var currentRadius = maxRadius * (1 - eased);
+            
+            // Update disc geometry
+            gDuckEntranceDisc.geometry.dispose();
+            gDuckEntranceDisc.geometry = new THREE.CircleGeometry(Math.max(0.01, currentRadius), 32);
+            
+            // Update outline ring
+            if (gDuckEntranceDiscOutline) {
+                var ringWidth = 0.15;
+                var safeRadius = Math.max(0.01, currentRadius);
+                gDuckEntranceDiscOutline.geometry.dispose();
+                gDuckEntranceDiscOutline.geometry = new THREE.RingGeometry(Math.max(0.001, safeRadius - ringWidth/2), safeRadius + ringWidth/2, 32);
+            }
+            
+            if (t >= 1.0) {
+                gDuckEntranceState = 'complete';
+                // Remove disc and outline
+                gThreeScene.remove(gDuckEntranceDisc);
+                gDuckEntranceDisc.geometry.dispose();
+                gDuckEntranceDisc.material.dispose();
+                gDuckEntranceDisc = null;
+                
+                if (gDuckEntranceDiscOutline) {
+                    gThreeScene.remove(gDuckEntranceDiscOutline);
+                    gDuckEntranceDiscOutline.geometry.dispose();
+                    gDuckEntranceDiscOutline.material.dispose();
+                    gDuckEntranceDiscOutline = null;
+                }
+            }
         }
     }
     
