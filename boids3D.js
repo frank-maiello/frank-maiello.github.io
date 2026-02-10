@@ -241,7 +241,8 @@ var gTrailUpdateFrequency = 1; // Update trail every N frames
 var gTrailColorMode = 3; // 0=White, 1=Black, 2=B&W, 3=Color
 
 // Boid geometry type
-var gBoidGeometryType = 1; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane
+var gBoidGeometryType = 1; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck
+var gDuckTemplate = null; // Template duck model for boid geometry
 
 // OBSTACLE CLASSES ---------------------------------------------------------------------
 
@@ -1703,43 +1704,57 @@ class BOID {
         
         // Create front cone mesh
         let material;
-        if (boidProps.material === 'standard') {
-            material = new THREE.MeshStandardMaterial({
-                color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
-                metalness: 0.5, 
-                roughness: 0.4, 
-                wireframe: boidProps.wireframe});
-        } else if (boidProps.material === 'phong') {
-            material = new THREE.MeshPhongMaterial({
-                color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
-                shininess: 100, 
-                shininess: 100, 
-                wireframe: boidProps.wireframe});
-        } else if (boidProps.material === 'normal') {
-            material = new THREE.MeshNormalMaterial({
-                wireframe: boidProps.wireframe});
-        } else if (boidProps.material === 'toon') {
-            material = new THREE.MeshToonMaterial({
-                color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
-                shininess: 100, 
-                wireframe: boidProps.wireframe});
-        } else if (boidProps.material === 'depth') {
-            material = new THREE.MeshDepthMaterial({
-                wireframe: boidProps.wireframe});
+        
+        // Handle duck geometry specially
+        if (gBoidGeometryType === 12 && gDuckTemplate) {
+            // Clone duck template for this boid
+            this.visMesh = gDuckTemplate.clone();
+            this.visMesh.scale.set(0.3, 0.3, 0.3);
+            this.visMesh.position.copy(pos);
+            this.visMesh.userData = this;
+            this.visMesh.castShadow = true;
+            this.visMesh.receiveShadow = true;
+            gThreeScene.add(this.visMesh);
         } else {
-            material = new THREE.MeshBasicMaterial({
-                color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
-                shininess: 100, 
-                wireframe: boidProps.wireframe});
+            // Standard geometry with materials
+            if (boidProps.material === 'standard') {
+                material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
+                    metalness: 0.5, 
+                    roughness: 0.4, 
+                    wireframe: boidProps.wireframe});
+            } else if (boidProps.material === 'phong') {
+                material = new THREE.MeshPhongMaterial({
+                    color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
+                    shininess: 100, 
+                    shininess: 100, 
+                    wireframe: boidProps.wireframe});
+            } else if (boidProps.material === 'normal') {
+                material = new THREE.MeshNormalMaterial({
+                    wireframe: boidProps.wireframe});
+            } else if (boidProps.material === 'toon') {
+                material = new THREE.MeshToonMaterial({
+                    color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
+                    shininess: 100, 
+                    wireframe: boidProps.wireframe});
+            } else if (boidProps.material === 'depth') {
+                material = new THREE.MeshDepthMaterial({
+                    wireframe: boidProps.wireframe});
+            } else {
+                material = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
+                    shininess: 100, 
+                    wireframe: boidProps.wireframe});
+            }
+            var geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
+            this.visMesh = new THREE.Mesh(geometry, material);
+            this.visMesh.position.copy(pos);
+            this.visMesh.userData = this;
+            //this.visMesh.layers.enable(1);
+            this.visMesh.castShadow = true;
+            this.visMesh.receiveShadow = true;
+            gThreeScene.add(this.visMesh);
         }
-        var geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
-        this.visMesh = new THREE.Mesh(geometry, material);
-        this.visMesh.position.copy(pos);
-        this.visMesh.userData = this;
-        //this.visMesh.layers.enable(1);
-        this.visMesh.castShadow = true;
-        this.visMesh.receiveShadow = true;
-        gThreeScene.add(this.visMesh);
 
         /*// Create tapered cylinder at rear 
         var geometry2 = new THREE.CylinderGeometry(0.4 * rad, 0.2 * rad, 3 * rad, geometrySegments);
@@ -1871,6 +1886,10 @@ class BOID {
             } else if (gBoidGeometryType === 11) {
                 // Plane - rotate to be parallel to direction of movement
                 this.visMesh.rotateX(Math.PI / 2);
+            } else if (gBoidGeometryType === 12) {
+                // Duck - beak points along positive X axis in local space
+                // Rotate so beak points in direction of travel (forward = -Z after lookAt)
+                this.visMesh.rotateY(-Math.PI / 2);
             }
             // Torus and TorusKnot default orientation works correctly with lookAt (hole perpendicular to movement)
             
@@ -2389,12 +2408,34 @@ function recreateBoidGeometries() {
             case 11: // Plane
                 geometry = new THREE.PlaneGeometry(2.5 * rad, 2.5 * rad);
                 break;
+            case 12: // Duck
+                // Use cloned duck model if available
+                if (gDuckTemplate) {
+                    // Duck is handled differently - we'll clone the entire scene
+                    // Set a flag so we know to skip standard material creation
+                    geometry = null; // Will be handled specially
+                } else {
+                    // Fallback to cone if duck not loaded yet
+                    geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
+                }
+                break;
             default:
                 geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
         }
 
         let material;
-        if (gBoidGeometryType != 11) {
+        if (gBoidGeometryType === 12 && gDuckTemplate) {
+            // For duck geometry, clone the duck template
+            boid.visMesh = gDuckTemplate.clone();
+            boid.visMesh.scale.set(0.3, 0.3, 0.3); // Scale down for boid size
+            
+            // Set position and add to scene
+            boid.visMesh.position.copy(boid.pos);
+            boid.visMesh.castShadow = true;
+            boid.visMesh.receiveShadow = true;
+            gThreeScene.add(boid.visMesh);
+            continue; // Skip standard material creation
+        } else if (gBoidGeometryType != 11 && gBoidGeometryType != 12) {
             if (boidProps.material === 'standard') {
                 material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
@@ -3246,7 +3287,7 @@ function drawStylingMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = 13 * knobRadius;
+    const menuHeight = 15 * knobRadius;
     const padding = 1.7 * knobRadius;
     
     // Position menu slightly below simulation menu
@@ -3451,10 +3492,11 @@ function drawStylingMenu() {
     const geometryNames = [
         'Spheres', 'Cones', 'Cylinders', 'Cubes',
         'Tetrahedrons', 'Octahedrons', 'Dodecahedrons', 'Icosahedrons',
-        'Capsules', 'Tori', 'Knots', 'Planes'
+        'Capsules', 'Tori', 'Knots', 'Planes',
+        'Ducks'
     ];
     
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 13; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
@@ -3484,7 +3526,7 @@ function drawStylingMenu() {
     }
     
     // Draw Mesh Detail label and radio buttons
-    const meshDetailY = buttonY + 4 * (buttonHeight + buttonSpacing) + knobRadius * 0.8;
+    const meshDetailY = buttonY + 5 * (buttonHeight + buttonSpacing) + knobRadius * 0.8;
     ctx.font = `bold ${0.04 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -4330,6 +4372,9 @@ function initThreeScene() {
                 
                 gThreeScene.add(duck);
                 gDuck = duck; // Store global reference
+                
+                // Store a clone as template for boid geometry
+                gDuckTemplate = duck.clone();
                 
                 // Create sphere obstacle for boid avoidance
                 var duckObstacleRadius = 2.0; // Radius that covers the duck
@@ -6783,7 +6828,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = 13 * knobRadius;
+    const menuHeight = 15 * knobRadius;
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = stylingMenuX * window.innerWidth;
@@ -6829,7 +6874,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const buttonHeight = knobRadius * 1.3;
     const buttonSpacing = 4;
     
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 13; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
@@ -6847,7 +6892,7 @@ function checkStylingMenuClick(clientX, clientY) {
     }
     
     // Check mesh detail radio buttons
-    const meshDetailY = buttonY + 4 * (buttonHeight + buttonSpacing) + knobRadius * 0.8;
+    const meshDetailY = buttonY + 5 * (buttonHeight + buttonSpacing) + knobRadius * 0.8;
     const segmentOptions = [8, 16, 24, 32, 64];
     const meshRadioY = meshDetailY + knobRadius * 0.8;
     const meshRadioRadius = knobRadius * 0.35;
