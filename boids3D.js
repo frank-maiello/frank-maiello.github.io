@@ -247,8 +247,9 @@ var gTrailUpdateFrequency = 1; // Update trail every N frames
 var gTrailColorMode = 3; // 0=White, 1=Black, 2=B&W, 3=Color
 
 // Boid geometry type
-var gBoidGeometryType = 1; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck
+var gBoidGeometryType = 1; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish
 var gDuckTemplate = null; // Template duck model for boid geometry
+var gFishTemplate = null; // Template fish model for boid geometry
 
 // OBSTACLE CLASSES ---------------------------------------------------------------------
 
@@ -1711,11 +1712,20 @@ class BOID {
         // Create front cone mesh
         let material;
         
-        // Handle duck geometry specially
+        // Handle duck and fish geometry specially
         if (gBoidGeometryType === 12 && gDuckTemplate) {
             // Clone duck template for this boid
             this.visMesh = gDuckTemplate.clone();
             this.visMesh.scale.set(0.3, 0.3, 0.3);
+            this.visMesh.position.copy(pos);
+            this.visMesh.userData = this;
+            this.visMesh.castShadow = true;
+            this.visMesh.receiveShadow = true;
+            gThreeScene.add(this.visMesh);
+        } else if (gBoidGeometryType === 13 && gFishTemplate) {
+            // Clone fish template for this boid
+            this.visMesh = gFishTemplate.clone();
+            this.visMesh.scale.set(2.0, 2.0, 2.0);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
             this.visMesh.castShadow = true;
@@ -1896,6 +1906,9 @@ class BOID {
                 // Duck - beak points along positive X axis in local space
                 // Rotate so beak points in direction of travel (forward = -Z after lookAt)
                 this.visMesh.rotateY(-Math.PI / 2);
+            } else if (gBoidGeometryType === 13) {
+                // Fish - orient to swim in direction of travel
+                // No rotation needed - fish model is already oriented correctly
             }
             // Torus and TorusKnot default orientation works correctly with lookAt (hole perpendicular to movement)
             
@@ -2441,7 +2454,18 @@ function recreateBoidGeometries() {
             boid.visMesh.receiveShadow = true;
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
-        } else if (gBoidGeometryType != 11 && gBoidGeometryType != 12) {
+        } else if (gBoidGeometryType === 13 && gFishTemplate) {
+            // For fish geometry, clone the fish template
+            boid.visMesh = gFishTemplate.clone();
+            boid.visMesh.scale.set(2.0, 2.0, 2.0); // Scale down for boid size
+            
+            // Set position and add to scene
+            boid.visMesh.position.copy(boid.pos);
+            boid.visMesh.castShadow = true;
+            boid.visMesh.receiveShadow = true;
+            gThreeScene.add(boid.visMesh);
+            continue; // Skip standard material creation
+        } else if (gBoidGeometryType != 11 && gBoidGeometryType != 12 && gBoidGeometryType != 13) {
             if (boidProps.material === 'standard') {
                 material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
@@ -3499,10 +3523,10 @@ function drawStylingMenu() {
         'Spheres', 'Cones', 'Cylinders', 'Cubes',
         'Tetrahedrons', 'Octahedrons', 'Dodecahedrons', 'Icosahedrons',
         'Capsules', 'Tori', 'Knots', 'Planes',
-        'Ducks'
+        'Rubber Ducks', 'Barramundi'
     ];
     
-    for (let i = 0; i < 13; i++) {
+    for (let i = 0; i < 14; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
@@ -4426,6 +4450,71 @@ function initThreeScene() {
             },
             function(error) {
                 console.error('Error loading Duck model:', error);
+            }
+        );
+    }
+    
+    // Load Barramundi Fish model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var fishLoader = new THREE.GLTFLoader();
+        fishLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/BarramundiFish.gltf',
+            function(gltf) {
+                var fish = gltf.scene;
+                
+                // Position at geometric center of room (mid-height)
+                fish.position.set(15, 15, -19.2);
+                
+                // Scale fish appropriately
+                fish.scale.set(12, 12, 12);
+                
+                // Rotate to face forward
+                fish.rotation.y = 0.5 * Math.PI; // Rotate 90 degrees to face forward
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                fish.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and brighten materials
+                fish.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        
+                        // Brighten the material
+                        if (child.material) {
+                            if (child.material.map) {
+                                child.material.emissiveMap = child.material.map;
+                                child.material.emissive = new THREE.Color(0xffffff);
+                                child.material.emissiveIntensity = 0.3;
+                            }
+                            child.material.needsUpdate = true;
+                        }
+                    }
+                });
+                
+                //gThreeScene.add(fish);
+                window.gFish = fish; // Store global reference
+                
+                // Store a clone as template for boid geometry
+                gFishTemplate = fish.clone();
+                
+                console.log('Barramundi Fish model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Barramundi Fish model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Barramundi Fish model:', error);
             }
         );
     }
@@ -6905,7 +6994,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const buttonHeight = knobRadius * 1.3;
     const buttonSpacing = 4;
     
-    for (let i = 0; i < 13; i++) {
+    for (let i = 0; i < 14; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
