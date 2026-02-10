@@ -171,6 +171,11 @@ var gDuckEntranceState = 'waiting'; // States: waiting, expanding, rising, shrin
 var gDuckEntranceTimer = 0; // Timer for animation
 var gDuckTargetY = -0.4; // Target Y position for duck
 var gDuckStartY = -8; // Starting Y position (below floor)
+var gTeapot = null; // Teapot model reference
+var gTeapotAnimating = true; // Is teapot currently animating
+var gTeapotAnimationTimer = 0; // Timer for teapot slide animation
+var gTeapotStartZ = 25; // Starting Z position
+var gTeapotTargetZ = 10; // Target Z position
 var gWheelAngularVelocity = 0; // Current rotation speed (radians per second)
 var gWheelAngularAcceleration = 4.0; // Acceleration when spinning (rad/s²)
 var gWheelFriction = 0.5; // Base friction coefficient for deceleration
@@ -247,9 +252,10 @@ var gTrailUpdateFrequency = 1; // Update trail every N frames
 var gTrailColorMode = 3; // 0=White, 1=Black, 2=B&W, 3=Color
 
 // Boid geometry type
-var gBoidGeometryType = 1; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish
+var gBoidGeometryType = 1; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado
 var gDuckTemplate = null; // Template duck model for boid geometry
 var gFishTemplate = null; // Template fish model for boid geometry
+var gAvocadoTemplate = null; // Template avocado model for boid geometry
 
 // OBSTACLE CLASSES ---------------------------------------------------------------------
 
@@ -1708,6 +1714,7 @@ class BOID {
         this.sat = sat;
         this.light = light;
         this.grabbed = false;
+        this.spinAngle = 0; // For rotating models like avocado along travel axis
         
         // Create front cone mesh
         let material;
@@ -1726,6 +1733,15 @@ class BOID {
             // Clone fish template for this boid
             this.visMesh = gFishTemplate.clone();
             this.visMesh.scale.set(2.0, 2.0, 2.0);
+            this.visMesh.position.copy(pos);
+            this.visMesh.userData = this;
+            this.visMesh.castShadow = true;
+            this.visMesh.receiveShadow = true;
+            gThreeScene.add(this.visMesh);
+        } else if (gBoidGeometryType === 14 && gAvocadoTemplate) {
+            // Clone avocado template for this boid
+            this.visMesh = gAvocadoTemplate.clone();
+            this.visMesh.scale.set(10.0, 10.0, 6.0);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
             this.visMesh.castShadow = true;
@@ -1909,6 +1925,12 @@ class BOID {
             } else if (gBoidGeometryType === 13) {
                 // Fish - orient to swim in direction of travel
                 // No rotation needed - fish model is already oriented correctly
+            } else if (gBoidGeometryType === 14) {
+                // Avocado - orient to lead with bottom, upside-down
+                this.visMesh.rotateX(-Math.PI / 2);
+                // Add spin around the long axis (Y axis after rotateX)
+                this.spinAngle += 2.0 * deltaT; // Spin speed in radians per second
+                this.visMesh.rotateY(this.spinAngle);
             }
             // Torus and TorusKnot default orientation works correctly with lookAt (hole perpendicular to movement)
             
@@ -2465,7 +2487,18 @@ function recreateBoidGeometries() {
             boid.visMesh.receiveShadow = true;
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
-        } else if (gBoidGeometryType != 11 && gBoidGeometryType != 12 && gBoidGeometryType != 13) {
+        } else if (gBoidGeometryType === 14 && gAvocadoTemplate) {
+            // For avocado geometry, clone the avocado template
+            boid.visMesh = gAvocadoTemplate.clone();
+            boid.visMesh.scale.set(12.0, 12.0, 12.0); // Scale down for boid size
+            
+            // Set position and add to scene
+            boid.visMesh.position.copy(boid.pos);
+            boid.visMesh.castShadow = true;
+            boid.visMesh.receiveShadow = true;
+            gThreeScene.add(boid.visMesh);
+            continue; // Skip standard material creation
+        } else if (gBoidGeometryType != 11 && gBoidGeometryType != 12 && gBoidGeometryType != 13 && gBoidGeometryType != 14) {
             if (boidProps.material === 'standard') {
                 material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
@@ -3523,10 +3556,10 @@ function drawStylingMenu() {
         'Spheres', 'Cones', 'Cylinders', 'Cubes',
         'Tetrahedrons', 'Octahedrons', 'Dodecahedrons', 'Icosahedrons',
         'Capsules', 'Tori', 'Knots', 'Planes',
-        'Rubber Ducks', 'Barramundi'
+        'Rubber Ducks', 'Barramundi', 'Avocados'
     ];
     
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 15; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
@@ -4153,7 +4186,7 @@ function initThreeScene() {
                 stool.rotation.y = -Math.PI / 8; // Rotate 45 degrees
                 
                 // Scale if needed (adjust this value to make it bigger/smaller)
-                stool.scale.set(1, 1, 1);
+                stool.scale.set(1.5, 1.5, 1.5);
                 
                 // Remove any imported lights first
                 var lightsToRemove = [];
@@ -4515,6 +4548,110 @@ function initThreeScene() {
             },
             function(error) {
                 console.error('Error loading Barramundi Fish model:', error);
+            }
+        );
+    }
+    
+    // Load Avocado model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var avocadoLoader = new THREE.GLTFLoader();
+        avocadoLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Avocado.gltf',
+            function(gltf) {
+                var avocado = gltf.scene;
+                
+                // Position at geometric center of room (mid-height)
+                avocado.position.set(0, 8, 0);
+                
+                // Scale avocado appropriately
+                avocado.scale.set(12, 12, 12);
+                
+                // Rotate to face forward
+                avocado.rotation.y = 0.5 * Math.PI;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                avocado.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows for all meshes
+                avocado.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                //gThreeScene.add(avocado);
+                window.gAvocado = avocado; // Store global reference
+                
+                // Store a clone as template for boid geometry
+                gAvocadoTemplate = avocado.clone();
+                
+                console.log('Avocado model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Avocado model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Avocado model:', error);
+            }
+        );
+    }
+    
+    // Load Teapot model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var teapotLoader = new THREE.GLTFLoader();
+        teapotLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/teapotTable.gltf',
+            function(gltf) {
+                var teapot = gltf.scene;
+                
+                // Position object at starting position
+                teapot.position.set(-17, 0, 25);
+                
+                // Scale teapot appropriately
+                teapot.scale.set(.25, .25, .25);
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                teapot.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows for all meshes
+                teapot.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                gThreeScene.add(teapot);
+                gTeapot = teapot; // Store global reference
+                
+                console.log('Teapot model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Teapot model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Teapot model:', error);
             }
         );
     }
@@ -6994,7 +7131,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const buttonHeight = knobRadius * 1.3;
     const buttonSpacing = 4;
     
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 15; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
@@ -7626,6 +7763,28 @@ function update() {
                     gDuckEntranceDiscOutline = null;
                 }
             }
+        }
+    }
+    
+    // Teapot slide animation
+    if (gTeapot && gTeapotAnimating) {
+        gTeapotAnimationTimer += deltaT;
+        
+        // Slide from Z=25 to Z=10 over 2 seconds with ease-out (deceleration)
+        var duration = 2.0;
+        var t = Math.min(gTeapotAnimationTimer / duration, 1.0);
+        
+        // Cubic ease-out: y = 1 - (1-x)^3 (starts fast, ends slow - deceleration)
+        var eased = 1 - Math.pow(1 - t, 3);
+        
+        // Interpolate Z position
+        var currentZ = gTeapotStartZ + (gTeapotTargetZ - gTeapotStartZ) * eased;
+        gTeapot.position.z = currentZ;
+        
+        // Stop animation when complete
+        if (t >= 1.0) {
+            gTeapotAnimating = false;
+            gTeapot.position.z = gTeapotTargetZ; // Ensure final position is exact
         }
     }
     
