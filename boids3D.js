@@ -159,6 +159,12 @@ var gDraggingStool = false; // Track if dragging the stool
 var gRotatingStool = false; // Track if rotating the stool
 var gStoolDragOffset = null; // Store offset from click point to stool center
 var gStoolDragPlaneHeight = 0; // Store the Y height where stool was grabbed
+var gDuck = null; // Reference to duck model
+var gDuckObstacle = null; // Sphere obstacle for boid avoidance
+var gDraggingDuck = false; // Track if dragging the duck
+var gRotatingDuckBeak = false; // Track if rotating the duck via beak
+var gDuckDragOffset = null; // Store offset from click point to duck center
+var gDuckDragPlaneHeight = 0; // Store the Y height where duck was grabbed
 var gWheelAngularVelocity = 0; // Current rotation speed (radians per second)
 var gWheelAngularAcceleration = 4.0; // Acceleration when spinning (rad/s²)
 var gWheelFriction = 0.5; // Base friction coefficient for deceleration
@@ -214,6 +220,8 @@ var boidProps = {
     centeringFactor: 0.0005, // Rule #3 - Adjust velocity by this %
     minSpeed: 2.0, // minimum speed to maintain
     maxSpeed: 8.0, // maximum speed limit
+    //minSpeed: 5.0, // minimum speed to maintain
+    //maxSpeed: 20.0, // maximum speed limit
     turnFactor: 0.05, // How strongly Boids turn back when near edge
     margin: 2.0, // Distance from boundary to start turning
     wireframe: false, // Render boids in wireframe mode
@@ -1748,28 +1756,58 @@ class BOID {
     simulate() {
         if (this.grabbed) return;
         
-        // Apply boundary turning forces
+        // Apply boundary turning forces or bouncing
         var size = gPhysicsScene.worldSize;
         var margin = boidProps.margin;
         var turnFactor = boidProps.turnFactor;
+        var isMaxCorrallingForce = (turnFactor >= 0.2);
         
-        if (this.pos.x < -size.x + margin) {
-            this.vel.x += turnFactor;
-        }
-        if (this.pos.x > size.x - margin) {
-            this.vel.x -= turnFactor;
-        }
-        if (this.pos.z < -size.z + margin) {
-            this.vel.z += turnFactor;
-        }
-        if (this.pos.z > size.z - margin) {
-            this.vel.z -= turnFactor;
-        }
-        if (this.pos.y < margin) {
-            this.vel.y += turnFactor;
-        }
-        if (this.pos.y > size.y - margin) {
-            this.vel.y -= turnFactor;
+        if (isMaxCorrallingForce) {
+            // MAX setting: Hard boundaries with bouncing
+            if (this.pos.x < -size.x) {
+                this.pos.x = -size.x;
+                this.vel.x = Math.abs(this.vel.x) * 0.8; // Bounce with slight damping
+            }
+            if (this.pos.x > size.x) {
+                this.pos.x = size.x;
+                this.vel.x = -Math.abs(this.vel.x) * 0.8;
+            }
+            if (this.pos.z < -size.z) {
+                this.pos.z = -size.z;
+                this.vel.z = Math.abs(this.vel.z) * 0.8;
+            }
+            if (this.pos.z > size.z) {
+                this.pos.z = size.z;
+                this.vel.z = -Math.abs(this.vel.z) * 0.8;
+            }
+            if (this.pos.y < 0) {
+                this.pos.y = 0;
+                this.vel.y = Math.abs(this.vel.y) * 0.8;
+            }
+            if (this.pos.y > size.y) {
+                this.pos.y = size.y;
+                this.vel.y = -Math.abs(this.vel.y) * 0.8;
+            }
+        } else {
+            // Normal setting: Soft boundaries with turning forces
+            if (this.pos.x < -size.x + margin) {
+                this.vel.x += turnFactor;
+            }
+            if (this.pos.x > size.x - margin) {
+                this.vel.x -= turnFactor;
+            }
+            if (this.pos.z < -size.z + margin) {
+                this.vel.z += turnFactor;
+            }
+            if (this.pos.z > size.z - margin) {
+                this.vel.z -= turnFactor;
+            }
+            if (this.pos.y < margin) {
+                this.vel.y += turnFactor;
+            }
+            if (this.pos.y > size.y - margin) {
+                this.vel.y -= turnFactor;
+            }
         }
         
         // Enforce speed limits (both min and max)
@@ -2932,7 +2970,7 @@ function drawSimMenu() {
     const menuItems = [
         gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
         boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
-        boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin
+        boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin
     ];
     
     const ranges = [
@@ -2942,6 +2980,7 @@ function drawSimMenu() {
         {min: 0, max: 0.2},         // avoidFactor
         {min: 0, max: 0.2},         // matchingFactor
         {min: 0, max: 0.005},       // centeringFactor
+        {min: 1.0, max: 20.0},      // minSpeed
         {min: 1.0, max: 30.0},      // maxSpeed
         {min: 0, max: 0.2},         // turnFactor
         {min: 0.5, max: 5.0}        // margin
@@ -2951,7 +2990,7 @@ function drawSimMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 2.5;
+    const menuHeight = knobSpacing * 3.3;
     const padding = 1.7 * knobRadius;
     
     // Convert world coordinates to screen coordinates
@@ -3053,7 +3092,7 @@ function drawSimMenu() {
         const labels = [
             'Quantity', 'Size', 'Visual Range',
             'Separation', 'Alignment', 'Cohesion',
-            'Speed Limit', 'Corralling Force', 'Corral Margin'
+            'Minimum Speed', 'Speed Limit', 'Corralling Force', 'Corral Margin'
         ];
         ctx.font = `${0.35 * knobRadius}px verdana`;
         ctx.textAlign = 'center';
@@ -3070,9 +3109,10 @@ function drawSimMenu() {
             case 3: valueText = boidProps.avoidFactor.toFixed(3); break;
             case 4: valueText = boidProps.matchingFactor.toFixed(3); break;
             case 5: valueText = boidProps.centeringFactor.toFixed(4); break;
-            case 6: valueText = boidProps.maxSpeed.toFixed(1); break;
-            case 7: valueText = boidProps.turnFactor.toFixed(3); break;
-            case 8: valueText = boidProps.margin.toFixed(1); break;
+            case 6: valueText = boidProps.minSpeed.toFixed(1); break;
+            case 7: valueText = boidProps.maxSpeed.toFixed(1); break;
+            case 8: valueText = (boidProps.turnFactor >= 0.2) ? 'MAX' : boidProps.turnFactor.toFixed(3); break;
+            case 9: valueText = boidProps.margin.toFixed(1); break;
         }
         ctx.font = `${0.3 * knobRadius}px verdana`;
         ctx.fillStyle = `rgba(128, 230, 200, ${menuOpacity})`;
@@ -4236,6 +4276,82 @@ function initThreeScene() {
         );
     } else {
         console.error('THREE.GLTFLoader is not loaded. Please add the script tag: <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>');
+    }
+    
+    // Load Duck model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var duckLoader = new THREE.GLTFLoader();
+        duckLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Duck.gltf',
+            function(gltf) {
+                var duck = gltf.scene;
+                
+                // Position in the middle of the room
+                duck.position.set(18, -0.4, 10);
+                
+                // Scale if needed (adjust this value to make it bigger/smaller)
+                duck.scale.set(4, 4, 4);
+                duck.rotation.y = 0.8 * Math.PI; // Rotate to face slightly left of forward
+                
+                // Optional: rotate the duck to face a specific direction
+                // duck.rotation.y = Math.PI / 4; // Uncomment to rotate
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                duck.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and mark the main mesh as draggable
+                duck.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.userData.isDraggableDuck = true;
+                    }
+                });
+                
+                // Add invisible beak collision area for rotation
+                var beakCollisionGeometry = new THREE.BoxGeometry(0.45, 0.36, 0.36);
+                var beakCollisionMaterial = new THREE.MeshBasicMaterial({
+                    visible: false
+                });
+                var beakCollisionMesh = new THREE.Mesh(beakCollisionGeometry, beakCollisionMaterial);
+                beakCollisionMesh.position.set(0.825, 1.25, -0.15);
+                beakCollisionMesh.userData.isDuckBeak = true;
+                duck.add(beakCollisionMesh);
+                
+                gThreeScene.add(duck);
+                gDuck = duck; // Store global reference
+                
+                // Create sphere obstacle for boid avoidance
+                var duckObstacleRadius = 2.0; // Radius that covers the duck
+                gDuckObstacle = new SphereObstacle(
+                    duckObstacleRadius,
+                    new THREE.Vector3(duck.position.x, duck.position.y + 1.5, duck.position.z)
+                );
+                // Make the obstacle invisible
+                if (gDuckObstacle.mesh) {
+                    gDuckObstacle.mesh.visible = false;
+                }
+                gObstacles.push(gDuckObstacle);
+                
+                console.log('Duck model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Duck model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Duck model:', error);
+            }
+        );
     }
     
     // Add transparent boundary walls
@@ -5477,6 +5593,8 @@ function onPointer(evt) {
         var hitLampId = 1; // Default to lamp 1
         var hitStool = false;
         var hitStoolLeg = false;
+        var hitDuck = false;
+        var hitDuckBeak = false;
         
         for (var i = 0; i < intersects.length; i++) {
             // Skip non-interactive objects (status indicators, etc.)
@@ -5485,6 +5603,27 @@ function onPointer(evt) {
             }
             if (intersects[i].object.userData.isStoolLeg && !hitStoolLeg) {
                 hitStoolLeg = true;
+                // Don't break - check if other objects are also hit
+            }
+            
+            // Check for duck beak FIRST with highest priority
+            if (intersects[i].object.userData.isDuckBeak && !hitDuckBeak) {
+                hitDuckBeak = true;
+                // Don't check for draggable duck if beak is hit
+                continue;
+            }
+            
+            if (intersects[i].object.userData.isDraggableDuck && !hitDuck && !hitDuckBeak) {
+                hitDuck = true;
+                var actualClickPoint = intersects[i].point;
+                gDuckDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to duck center (X and Z only)
+                gDuckDragOffset = new THREE.Vector3(
+                    gDuck.position.x - actualClickPoint.x,
+                    0,
+                    gDuck.position.z - actualClickPoint.z
+                );
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableStool && !hitStool) {
@@ -5582,6 +5721,29 @@ function onPointer(evt) {
             }
             
             gLastLampBaseClickTime[hitLampId] = currentTime;
+        }
+        
+        // Duck beak click takes priority for rotation
+        if (hitDuckBeak && gDuck) {
+            gRotatingDuckBeak = true;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while rotating duck
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
+        if (hitDuck && gDuck && !hitDuckBeak) {
+            gDraggingDuck = true;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging duck
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
         }
         
         // Leg click takes priority for rotation
@@ -5893,6 +6055,7 @@ function onPointer(evt) {
                 {min: 0, max: 0.2},
                 {min: 0, max: 0.2},
                 {min: 0, max: 0.005},
+                {min: 1.0, max: 20.0},
                 {min: 1.0, max: 30.0},
                 {min: 0, max: 0.2},
                 {min: 0.5, max: 5.0}
@@ -6040,12 +6203,68 @@ function onPointer(evt) {
                 case 4: boidProps.matchingFactor = newValue; break;
                 case 5: boidProps.centeringFactor = newValue; break;
                 case 6: 
-                    boidProps.maxSpeed = newValue;
-                    // Also adjust minSpeed proportionally if needed
-                    boidProps.minSpeed = Math.min(boidProps.minSpeed, newValue * 0.25);
+                    boidProps.minSpeed = newValue;
+                    // Ensure maxSpeed is always greater than or equal to minSpeed
+                    boidProps.maxSpeed = Math.max(boidProps.maxSpeed, newValue);
                     break;
-                case 7: boidProps.turnFactor = newValue; break;
-                case 8: boidProps.margin = newValue; break;
+                case 7: 
+                    boidProps.maxSpeed = newValue;
+                    // Ensure minSpeed doesn't exceed maxSpeed
+                    boidProps.minSpeed = Math.min(boidProps.minSpeed, newValue);
+                    break;
+                case 8: boidProps.turnFactor = newValue; break;
+                case 9: boidProps.margin = newValue; break;
+            }
+            return;
+        }
+        
+        // Handle duck beak rotation (rotate duck around vertical Y axis)
+        if (gRotatingDuckBeak && gDuck) {
+            var deltaX = evt.clientX - gPointerLastX;
+            gPointerLastX = evt.clientX;
+            
+            // Rotate around Y axis based on horizontal mouse movement
+            var rotationSpeed = 0.01;
+            gDuck.rotation.y += deltaX * rotationSpeed;
+            return;
+        }
+        
+        // Handle duck dragging (translation along ground, horizontal only)
+        if (gDraggingDuck && gDuck) {
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Define plane at the height where the duck was grabbed
+            var duckPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gDuckDragPlaneHeight);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(duckPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                // Keep the duck's Y position constant, only move X and Z
+                var newX = intersectionPoint.x + (gDuckDragOffset ? gDuckDragOffset.x : 0);
+                var newZ = intersectionPoint.z + (gDuckDragOffset ? gDuckDragOffset.z : 0);
+                
+                // Clamp to room boundaries
+                var minBoundX = -gPhysicsScene.worldSize.x + 2;
+                var maxBoundX = gPhysicsScene.worldSize.x - 2;
+                var minBoundZ = -gPhysicsScene.worldSize.z + 2;
+                var maxBoundZ = gPhysicsScene.worldSize.z - 2;
+                
+                newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
+                newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
+                
+                gDuck.position.x = newX;
+                gDuck.position.z = newZ;
+                
+                // Update obstacle position
+                if (gDuckObstacle) {
+                    gDuckObstacle.updatePosition(new THREE.Vector3(newX, gDuck.position.y + 1.5, newZ));
+                }
             }
             return;
         }
@@ -6363,6 +6582,25 @@ function onPointer(evt) {
             return;
         }
         
+        if (gRotatingDuckBeak) {
+            gRotatingDuckBeak = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingDuck) {
+            gDraggingDuck = false;
+            gDuckDragOffset = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
         if (gRotatingStool) {
             gRotatingStool = false;
             // Re-enable orbit controls if in normal camera mode
@@ -6470,7 +6708,7 @@ function checkSimMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 2 + knobRadius * 2.0;
+    const menuHeight = knobSpacing * 3.3;
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = simMenuX * window.innerWidth;
@@ -6491,7 +6729,7 @@ function checkSimMenuClick(clientX, clientY) {
     }
     
     // Check knobs
-    for (let knob = 0; knob < 9; knob++) {
+    for (let knob = 0; knob < 10; knob++) {
         const row = Math.floor(knob / 3);
         const col = knob % 3;
         const knobX = menuOriginX + col * knobSpacing;
@@ -6507,7 +6745,7 @@ function checkSimMenuClick(clientX, clientY) {
             const menuItems = [
                 gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
                 boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
-                boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin
+                boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin
             ];
             dragStartValue = menuItems[knob];
             
