@@ -7,7 +7,8 @@
     {
       "name": "Scene",
       "nodes": [
-        0
+        0,
+        19
       ]
     }
   ],
@@ -103,8 +104,8 @@
         0,
         1,
         0,
-        0.25,
-        0,
+        0.25021762070647086,
+        -0.00007070925384049791,
         0,
         1
       ],
@@ -437,6 +438,27 @@
       ],
       "name": "Capsule",
       "mesh": 10
+    },
+    {
+      "matrix": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        10,
+        0,
+        1
+      ],
+      "name": "HemisphereLight"
     }
   ],
   "bufferViews": [
@@ -1395,6 +1417,16 @@
         ],
         "metallicFactor": 0,
         "roughnessFactor": 0.5
+      },
+      "emissiveFactor": [
+        0.7454042095350284,
+        0.9734452903978066,
+        1
+      ],
+      "extensions": {
+        "KHR_materials_emissive_strength": {
+          "emissiveStrength": 0.5
+        }
       }
     },
     {
@@ -1407,6 +1439,16 @@
         ],
         "metallicFactor": 0,
         "roughnessFactor": 0.5
+      },
+      "emissiveFactor": [
+        0.9046611743890203,
+        0.9734452903978066,
+        1
+      ],
+      "extensions": {
+        "KHR_materials_emissive_strength": {
+          "emissiveStrength": 0.5
+        }
       }
     }
   ],
@@ -1565,5 +1607,8 @@
         }
       ]
     }
+  ],
+  "extensionsUsed": [
+    "KHR_materials_emissive_strength"
   ]
 }
