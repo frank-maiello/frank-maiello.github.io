@@ -198,7 +198,18 @@ var gDirectionalLight = null;
 var gAmbientIntensity = 1.0; // Ambient light intensity (0-2)
 var gOverheadIntensity = 1.0; // Directional light intensity (0-2)
 var gSpotlightIntensity = 0.8; // Spotlight intensity (0-2)
+var gMiroPaintingGroup = null; // Reference to Miro painting + frame group
+var gDaliPaintingGroup = null; // Reference to Dali painting + frame group
+var gDuchampPaintingGroup = null; // Reference to Duchamp painting + frame group
+var gCurrentPainting = 'miro'; // Current painting displayed: 'miro', 'dali', or 'duchamp'
+var gTargetPainting = 'miro'; // Target painting to display
+var gPaintingAnimState = 'idle'; // States: idle, exiting, entering
+var gPaintingAnimTimer = 0; // Timer for painting animation
+var gPaintingBaseY = 0; // Base Y position for paintings in frame
+var gPaintingExitY = 50; // Y position when painting exits (above frame)
 var gSpotlightPenumbra = 0.2; // Spotlight penumbra (0-1)
+var gHangingStars = []; // Array of hanging star decorations
+var gStarAnimData = []; // Animation data for each star {star, wire, targetY, startY, timer, delay, animating}
 
 var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all separation
 var SpatialGrid; // Global spatial grid instance
@@ -2953,8 +2964,16 @@ function drawMainMenu() {
         
         ctx.beginPath();
         ctx.arc(rotatedX, rotatedY, paletteSize * 0.1, 0, 2 * Math.PI);
-        ctx.fillStyle = dotColors[i];
+        // Make colors faint when menu is not visible
+        if (colorMenuVisible) {
+            ctx.fillStyle = dotColors[i];
+        } else {
+            // Faint version of the actual color (low saturation and opacity)
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = dotColors[i];
+        }
         ctx.fill();
+        ctx.globalAlpha = 1.0; // Reset
     }
     
     ctx.restore();
@@ -2995,15 +3014,15 @@ function drawMainMenu() {
     
     // Screw base
     ctx.beginPath();
-    ctx.rect(-bulbSize * 0.15, bulbSize * 0.15, bulbSize * 0.3, bulbSize * 0.25);
+    ctx.rect(-bulbSize * 0.15, bulbSize * 0.15, bulbSize * 0.3, bulbSize * 0.35);
     ctx.stroke();
     
     // Screw threads (3 horizontal lines)
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
         const y = bulbSize * (0.2 + i * 0.08);
         ctx.beginPath();
         ctx.moveTo(-bulbSize * 0.15, y);
-        ctx.lineTo(bulbSize * 0.15, y);
+        ctx.lineTo(bulbSize * 0.15, y*1.1);
         ctx.stroke();
     }
     
@@ -4361,7 +4380,7 @@ function initThreeScene() {
                 var stool = gltf.scene;
                 
                 // Position on floor in center of room - start high for animation
-                stool.position.set(-20, 30, -8);
+                stool.position.set(-9, 30, -6);
                 stool.rotation.y = -Math.PI / 8; // Rotate 45 degrees
                 
                 // Scale if needed (adjust this value to make it bigger/smaller)
@@ -4853,6 +4872,150 @@ function initThreeScene() {
         );
     }
     
+    // Load Tube Star model using GLTFLoader for hanging decorations
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var starLoader = new THREE.GLTFLoader();
+        starLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeStar.gltf',
+            function(gltf) {
+                var starTemplate = gltf.scene;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                starTemplate.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows for template
+                starTemplate.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                // Create 12 hanging stars with random properties
+                var numStars = 24;
+                var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
+                var minY = WORLD_HEIGHT * 0.55; // Upper 1/3 of room
+                var maxY = WORLD_HEIGHT * 1.3; // Slightly below ceiling
+                var startYAboveCeiling = WORLD_HEIGHT + 5; // Start above ceiling
+                var minStarDistance = 6; // Minimum distance between stars (about 2 object sizes)
+                var starPositions = []; // Track placed star positions
+                
+                // Material for wires
+                var wireMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x222222,
+                    shininess: 10
+                });
+                
+                for (var i = 0; i < numStars; i++) {
+                    // Clone the star
+                    var star = starTemplate.clone();
+                    
+                    // Find a position that doesn't overlap with existing stars
+                    var x, targetY, z;
+                    var validPosition = false;
+                    var maxAttempts = 50;
+                    var attempt = 0;
+                    
+                    while (!validPosition && attempt < maxAttempts) {
+                        // Random position in upper 1/3 of room (this is target)
+                        x = (Math.random() * 2 - 1) * (WORLD_WIDTH - 3); // Leave margin from walls
+                        targetY = minY + Math.random() * (maxY - minY);
+                        z = (Math.random() * 2 - 1) * (WORLD_DEPTH - 3); // Leave margin from walls
+                        
+                        // Check distance to all existing stars
+                        validPosition = true;
+                        for (var j = 0; j < starPositions.length; j++) {
+                            var dx = x - starPositions[j].x;
+                            var dy = targetY - starPositions[j].y;
+                            var dz = z - starPositions[j].z;
+                            var distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                            
+                            if (distance < minStarDistance) {
+                                validPosition = false;
+                                break;
+                            }
+                        }
+                        
+                        attempt++;
+                    }
+                    
+                    // Store this position
+                    starPositions.push({x: x, y: targetY, z: z});
+                    
+                    // Start above ceiling for drop animation
+                    star.position.set(x, startYAboveCeiling, z);
+                    
+                    // Random scale with limited variability (0.85 to 1.15)
+                    var scale = 0.7 + Math.random() * 0.6;
+                    star.scale.set(scale, scale, scale);
+                    
+                    // Random rotation about y-axis only
+                    star.rotation.y = Math.random() * Math.PI * 2;
+                    
+                    // Ensure shadows on clone
+                    star.traverse(function(child) {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+                    
+                    gThreeScene.add(star);
+                    gHangingStars.push(star);
+                    
+                    // Create thin wire from top of star up to ceiling
+                    // Star height estimate - star origin is at center, so top is above y
+                    var starHeight = 2.8 * scale; // Top point of star above center
+                    var starTop = startYAboveCeiling + starHeight;
+                    var wireLength = ceilingY - starTop;
+                    var wireRadius = 0.015; // Very thin wire
+                    var wireGeometry = new THREE.CylinderGeometry(wireRadius, wireRadius, wireLength, 8);
+                    var wire = new THREE.Mesh(wireGeometry, wireMaterial);
+                    
+                    // Position wire from top of star to ceiling
+                    wire.position.set(x, starTop + wireLength / 2, z);
+                    wire.castShadow = true;
+                    wire.receiveShadow = true;
+                    
+                    gThreeScene.add(wire);
+                    
+                    // Store animation data with staggered delay
+                    gStarAnimData.push({
+                        star: star,
+                        wire: wire,
+                        x: x,
+                        z: z,
+                        targetY: targetY,
+                        startY: startYAboveCeiling,
+                        timer: 0,
+                        delay: 5 + i * 0.15, // Wait 10 seconds, then stagger by 0.15 seconds each
+                        animating: true,
+                        scale: scale,
+                        starHeight: starHeight
+                    });
+                }
+                
+                console.log('Tube Star models loaded successfully - ' + numStars + ' stars created');
+            },
+            function(xhr) {
+                console.log('Tube Star model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Tube Star model:', error);
+            }
+        );
+    }
+    
     // Add transparent boundary walls
     var boxSize = gPhysicsScene.worldSize;
     var wallOpacity = 1.0;
@@ -5205,52 +5368,13 @@ function initThreeScene() {
     rightWall.receiveShadow = true;
     gThreeScene.add(rightWall);
     
-    // Add framed painting on right wall
-    var paintingWidth = 16;
-    var paintingHeight = 12;
+    // Add framed paintings on right wall (Miro and Dali with different aspect ratios)
     var paintingY = boxSize.y / 2 + 2; // Vertical position
     var frameThickness = 0.3;
     var frameDepth = 0.15;
+    var paintingWallX = boxSize.x - 0.3; // X position on right wall
     
-    // Create painting plane with fallback color
-    var paintingMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x000000,
-        side: THREE.FrontSide,
-        emissive: 0x000000,
-        emissiveIntensity: 0,
-        metalness: 0,
-        roughness: 1,
-        transparent: true,
-        opacity: 1
-    });
-    
-    // Load painting texture
-    var paintingTexture = new THREE.TextureLoader().load(
-        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Joan_Miro_Untitled.webp',
-        function(texture) {
-            paintingMaterial.map = texture;
-            paintingMaterial.emissiveMap = texture;
-            paintingMaterial.color.setHex(0xffffff);
-            paintingMaterial.emissive.setHex(0xffffff);
-            paintingMaterial.emissiveIntensity = 0.3;
-            paintingMaterial.needsUpdate = true;
-        },
-        undefined,
-        function(err) {
-            console.error('Error loading Joan_Miro_Untitled.webp:', err);
-            console.log('Using fallback color for painting');
-        }
-    );
-    
-    var painting = new THREE.Mesh(
-        new THREE.PlaneGeometry(paintingWidth, paintingHeight),
-        paintingMaterial
-    );
-    painting.position.set(boxSize.x - 0.3, paintingY, 0);
-    painting.rotation.y = -Math.PI / 2;
-    painting.receiveShadow = true;
-    painting.castShadow = true;
-    gThreeScene.add(painting);
+    gPaintingBaseY = paintingY; // Store base Y position
     
     // Create frame material (wood-like)
     var frameMaterial = new THREE.MeshStandardMaterial({ 
@@ -5259,66 +5383,266 @@ function initThreeScene() {
         roughness: 0.7
     });
     
-    // Create frame pieces
-    // Top frame
-    var frameTop = new THREE.Mesh(
-        new THREE.BoxGeometry(paintingWidth + frameThickness * 2, frameThickness, frameDepth),
-        frameMaterial
-    );
-    frameTop.position.set(
-        boxSize.x - 0.3 - frameDepth / 2,
-        paintingY + paintingHeight / 2 + frameThickness / 2,
-        0
-    );
-    frameTop.rotation.y = -Math.PI / 2;
-    frameTop.castShadow = true;
-    frameTop.receiveShadow = true;
-    gThreeScene.add(frameTop);
+    // ===== MIRO PAINTING GROUP (Landscape 16x12) =====
+    gMiroPaintingGroup = new THREE.Group();
+    var miroWidth = 16;
+    var miroHeight = 12;
     
-    // Bottom frame
-    var frameBottom = new THREE.Mesh(
-        new THREE.BoxGeometry(paintingWidth + frameThickness * 2, frameThickness, frameDepth),
-        frameMaterial
-    );
-    frameBottom.position.set(
-        boxSize.x - 0.3 - frameDepth / 2,
-        paintingY - paintingHeight / 2 - frameThickness / 2,
-        0
-    );
-    frameBottom.rotation.y = -Math.PI / 2;
-    frameBottom.castShadow = true;
-    frameBottom.receiveShadow = true;
-    gThreeScene.add(frameBottom);
+    // Create Miro painting plane
+    var miroPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
     
-    // Left frame
-    var frameLeft = new THREE.Mesh(
-        new THREE.BoxGeometry(frameThickness, paintingHeight, frameDepth),
-        frameMaterial
+    // Load Miro painting texture
+    var miroPaintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Joan_Miro_Untitled.webp',
+        function(texture) {
+            miroPaintingMaterial.map = texture;
+            miroPaintingMaterial.emissiveMap = texture;
+            miroPaintingMaterial.color.setHex(0xffffff);
+            miroPaintingMaterial.emissive.setHex(0xffffff);
+            miroPaintingMaterial.emissiveIntensity = 0.3;
+            miroPaintingMaterial.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading Joan_Miro_Untitled.webp:', err);
+            console.log('Using fallback color for Miro painting');
+        }
     );
-    frameLeft.position.set(
-        boxSize.x - 0.3 - frameDepth / 2,
-        paintingY,
-        -paintingWidth / 2 - frameThickness / 2
-    );
-    frameLeft.rotation.y = -Math.PI / 2;
-    frameLeft.castShadow = true;
-    frameLeft.receiveShadow = true;
-    gThreeScene.add(frameLeft);
     
-    // Right frame
-    var frameRight = new THREE.Mesh(
-        new THREE.BoxGeometry(frameThickness, paintingHeight, frameDepth),
+    var miroPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(miroWidth, miroHeight),
+        miroPaintingMaterial
+    );
+    miroPainting.position.set(0, 0, -frameDepth / 2); // Same plane as frames
+    miroPainting.receiveShadow = true;
+    miroPainting.castShadow = true;
+    gMiroPaintingGroup.add(miroPainting);
+    
+    // Miro frame pieces (relative to group origin)
+    var miroFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(miroWidth + frameThickness * 2, frameThickness, frameDepth),
         frameMaterial
     );
-    frameRight.position.set(
-        boxSize.x - 0.3 - frameDepth / 2,
-        paintingY,
-        paintingWidth / 2 + frameThickness / 2
+    miroFrameTop.position.set(0, miroHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    miroFrameTop.castShadow = true;
+    miroFrameTop.receiveShadow = true;
+    gMiroPaintingGroup.add(miroFrameTop);
+    
+    var miroFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(miroWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
     );
-    frameRight.rotation.y = -Math.PI / 2;
-    frameRight.castShadow = true;
-    frameRight.receiveShadow = true;
-    gThreeScene.add(frameRight);
+    miroFrameBottom.position.set(0, -miroHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    miroFrameBottom.castShadow = true;
+    miroFrameBottom.receiveShadow = true;
+    gMiroPaintingGroup.add(miroFrameBottom);
+    
+    var miroFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, miroHeight, frameDepth),
+        frameMaterial
+    );
+    miroFrameLeft.position.set(-miroWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+    miroFrameLeft.castShadow = true;
+    miroFrameLeft.receiveShadow = true;
+    gMiroPaintingGroup.add(miroFrameLeft);
+    
+    var miroFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, miroHeight, frameDepth),
+        frameMaterial
+    );
+    miroFrameRight.position.set(miroWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+    miroFrameRight.castShadow = true;
+    miroFrameRight.receiveShadow = true;
+    gMiroPaintingGroup.add(miroFrameRight);
+    
+    // Position and orient group on wall
+    gMiroPaintingGroup.position.set(paintingWallX, paintingY, 0);
+    gMiroPaintingGroup.rotation.y = -Math.PI / 2;
+    gThreeScene.add(gMiroPaintingGroup);
+    
+    // ===== DALI PAINTING GROUP (Portrait 9x12) =====
+    gDaliPaintingGroup = new THREE.Group();
+    var daliWidth = 9;
+    var daliHeight = 12;
+    
+    // Create Dali painting plane
+    var daliPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    // Load Dali painting texture
+    var daliPaintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Salvador_Dali_Galatea_of_the_Spheres.jpg',
+        function(texture) {
+            daliPaintingMaterial.map = texture;
+            daliPaintingMaterial.emissiveMap = texture;
+            daliPaintingMaterial.color.setHex(0xffffff);
+            daliPaintingMaterial.emissive.setHex(0xffffff);
+            daliPaintingMaterial.emissiveIntensity = 0.3;
+            daliPaintingMaterial.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading Salvador_Dali_Galatea_of_the_Spheres.jpg:', err);
+            console.log('Using fallback color for Dali painting');
+        }
+    );
+    
+    var daliPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(daliWidth, daliHeight),
+        daliPaintingMaterial
+    );
+    daliPainting.position.set(0, 0, -frameDepth / 2); // Same plane as frames
+    daliPainting.receiveShadow = true;
+    daliPainting.castShadow = true;
+    gDaliPaintingGroup.add(daliPainting);
+    
+    // Dali frame pieces (relative to group origin)
+    var daliFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(daliWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    daliFrameTop.position.set(0, daliHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    daliFrameTop.castShadow = true;
+    daliFrameTop.receiveShadow = true;
+    gDaliPaintingGroup.add(daliFrameTop);
+    
+    var daliFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(daliWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    daliFrameBottom.position.set(0, -daliHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    daliFrameBottom.castShadow = true;
+    daliFrameBottom.receiveShadow = true;
+    gDaliPaintingGroup.add(daliFrameBottom);
+    
+    var daliFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, daliHeight, frameDepth),
+        frameMaterial
+    );
+    daliFrameLeft.position.set(-daliWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+    daliFrameLeft.castShadow = true;
+    daliFrameLeft.receiveShadow = true;
+    gDaliPaintingGroup.add(daliFrameLeft);
+    
+    var daliFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, daliHeight, frameDepth),
+        frameMaterial
+    );
+    daliFrameRight.position.set(daliWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+    daliFrameRight.castShadow = true;
+    daliFrameRight.receiveShadow = true;
+    gDaliPaintingGroup.add(daliFrameRight);
+    
+    // Position and orient group on wall (start high above frame)
+    gDaliPaintingGroup.position.set(paintingWallX, paintingY + 50, 0);
+    gDaliPaintingGroup.rotation.y = -Math.PI / 2;
+    gThreeScene.add(gDaliPaintingGroup);
+    
+    // ===== DUCHAMP PAINTING GROUP (Landscape 16x12) =====
+    gDuchampPaintingGroup = new THREE.Group();
+    var duchampWidth = 16;
+    var duchampHeight = 12;
+    
+    // Create Duchamp painting plane
+    var duchampPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    // Load Duchamp painting texture
+    var duchampPaintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Duchamp_Grinder_Sketch_Crop.jpg',
+        function(texture) {
+            duchampPaintingMaterial.map = texture;
+            duchampPaintingMaterial.emissiveMap = texture;
+            duchampPaintingMaterial.color.setHex(0xffffff);
+            duchampPaintingMaterial.emissive.setHex(0xffffff);
+            duchampPaintingMaterial.emissiveIntensity = 0.3;
+            duchampPaintingMaterial.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading Duchamp_Grinder_Sketch_Crop.jpg:', err);
+            console.log('Using fallback color for Duchamp painting');
+        }
+    );
+    
+    var duchampPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(duchampWidth, duchampHeight),
+        duchampPaintingMaterial
+    );
+    duchampPainting.position.set(0, 0, -frameDepth / 2); // Same plane as frames
+    duchampPainting.receiveShadow = true;
+    duchampPainting.castShadow = true;
+    gDuchampPaintingGroup.add(duchampPainting);
+    
+    // Duchamp frame pieces (relative to group origin)
+    var duchampFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(duchampWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    duchampFrameTop.position.set(0, duchampHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    duchampFrameTop.castShadow = true;
+    duchampFrameTop.receiveShadow = true;
+    gDuchampPaintingGroup.add(duchampFrameTop);
+    
+    var duchampFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(duchampWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    duchampFrameBottom.position.set(0, -duchampHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    duchampFrameBottom.castShadow = true;
+    duchampFrameBottom.receiveShadow = true;
+    gDuchampPaintingGroup.add(duchampFrameBottom);
+    
+    var duchampFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, duchampHeight, frameDepth),
+        frameMaterial
+    );
+    duchampFrameLeft.position.set(-duchampWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+    duchampFrameLeft.castShadow = true;
+    duchampFrameLeft.receiveShadow = true;
+    gDuchampPaintingGroup.add(duchampFrameLeft);
+    
+    var duchampFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, duchampHeight, frameDepth),
+        frameMaterial
+    );
+    duchampFrameRight.position.set(duchampWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+    duchampFrameRight.castShadow = true;
+    duchampFrameRight.receiveShadow = true;
+    gDuchampPaintingGroup.add(duchampFrameRight);
+    
+    // Position and orient group on wall (start high above frame)
+    gDuchampPaintingGroup.position.set(paintingWallX, paintingY + 50, 0);
+    gDuchampPaintingGroup.rotation.y = -Math.PI / 2;
+    gThreeScene.add(gDuchampPaintingGroup);
     
     // Add baseboard around perimeter walls
     var baseboardHeight = 0.3;
@@ -6192,12 +6516,12 @@ function onPointer(evt) {
             if (intersects[i].object.userData.isLampHeight) {
                 hitLampHeight = true;
                 hitLampId = intersects[i].object.userData.lampId || 1;
-                break; // Lamp pole takes priority, stop checking
+                // Don't break - check if base is also hit (base takes precedence)
             }
             if (intersects[i].object.userData.isLampRotation) {
                 hitLampRotation = true;
                 hitLampId = intersects[i].object.userData.lampId || 1;
-                break; // Lamp rotation sleeve takes priority, stop checking
+                // Don't break - check if base is also hit (base takes precedence)
             }
             if (intersects[i].object.userData.isLampBase) {
                 hitLampBase = true;
@@ -7395,7 +7719,24 @@ function checkStylingMenuClick(clientX, clientY) {
         
         if (clientX >= btnX && clientX <= btnX + buttonWidth &&
             clientY >= btnY && clientY <= btnY + buttonHeight) {
+            var previousType = gBoidGeometryType;
             gBoidGeometryType = i;
+            
+            // Determine which painting should be shown for this boid type
+            var desiredPainting = 'miro'; // Default for most types
+            if (i === 0) {
+                desiredPainting = 'dali'; // Sphere → Dali
+            } else if (i === 1 || i === 2) {
+                desiredPainting = 'duchamp'; // Cone or Cylinder → Duchamp
+            }
+            
+            // Trigger painting swap animation if needed
+            if (gPaintingAnimState === 'idle' && desiredPainting !== gCurrentPainting) {
+                gTargetPainting = desiredPainting;
+                gPaintingAnimState = 'exiting';
+                gPaintingAnimTimer = 0;
+            }
+            
             // Recreate all boid geometries
             recreateBoidGeometries();
             return true;
@@ -8043,6 +8384,47 @@ function update() {
         }
     }
     
+    // Painting swap animation (Miro <-> Dali <-> Duchamp groups with frames)
+    if (gMiroPaintingGroup && gDaliPaintingGroup && gDuchampPaintingGroup && gPaintingAnimState !== 'idle') {
+        gPaintingAnimTimer += deltaT;
+        
+        if (gPaintingAnimState === 'exiting') {
+            // Current painting accelerates upward over 0.8 seconds
+            var duration = 0.8;
+            var t = Math.min(gPaintingAnimTimer / duration, 1.0);
+            // Quadratic ease-in: starts slow, accelerates (y = x^2)
+            var eased = t * t;
+            
+            // Move the current painting up
+            var currentGroup = gCurrentPainting === 'miro' ? gMiroPaintingGroup : 
+                             (gCurrentPainting === 'dali' ? gDaliPaintingGroup : gDuchampPaintingGroup);
+            currentGroup.position.y = gPaintingBaseY + eased * (gPaintingExitY - gPaintingBaseY);
+            
+            if (t >= 1.0) {
+                gPaintingAnimState = 'entering';
+                gPaintingAnimTimer = 0;
+                gCurrentPainting = gTargetPainting; // Update current painting
+            }
+        } else if (gPaintingAnimState === 'entering') {
+            // Target painting drops down with ease-out over 1.0 seconds
+            var duration = 1.0;
+            var t = Math.min(gPaintingAnimTimer / duration, 1.0);
+            // Cubic ease-out: starts fast, decelerates (y = 1 - (1-x)^3)
+            var eased = 1 - Math.pow(1 - t, 3);
+            var startY = gPaintingBaseY + gPaintingExitY;
+            
+            // Move the target painting down
+            var targetGroup = gTargetPainting === 'miro' ? gMiroPaintingGroup : 
+                            (gTargetPainting === 'dali' ? gDaliPaintingGroup : gDuchampPaintingGroup);
+            targetGroup.position.y = startY - eased * (startY - gPaintingBaseY);
+            
+            if (t >= 1.0) {
+                gPaintingAnimState = 'idle';
+                gPaintingAnimTimer = 0;
+            }
+        }
+    }
+    
     // Teapot slide animation
     if (gTeapot && gTeapotAnimating) {
         gTeapotAnimationTimer += deltaT;
@@ -8100,6 +8482,42 @@ function update() {
                     gStoolTargetY + gStoolObstacle.height / 2,
                     gStool.position.z
                 ));
+            }
+        }
+    }
+    
+    // Star drop animations with staggered timing
+    for (var i = 0; i < gStarAnimData.length; i++) {
+        var starData = gStarAnimData[i];
+        if (starData.animating) {
+            starData.timer += deltaT;
+            
+            // Check if delay has passed
+            if (starData.timer >= starData.delay) {
+                var animTime = starData.timer - starData.delay;
+                var duration = 1.5; // Drop duration in seconds
+                var t = Math.min(animTime / duration, 1.0);
+                
+                // Cubic ease-out for natural drop
+                var eased = 1 - Math.pow(1 - t, 3);
+                var currentY = starData.startY + (starData.targetY - starData.startY) * eased;
+                starData.star.position.y = currentY;
+                
+                // Update wire position and length
+                var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
+                var starTop = currentY + starData.starHeight;
+                var wireLength = ceilingY - starTop;
+                
+                // Update wire geometry
+                starData.wire.geometry.dispose();
+                starData.wire.geometry = new THREE.CylinderGeometry(0.015, 0.015, wireLength, 8);
+                starData.wire.position.set(starData.x, starTop + wireLength / 2, starData.z);
+                
+                // Stop animation when complete
+                if (t >= 1.0) {
+                    starData.animating = false;
+                    starData.star.position.y = starData.targetY;
+                }
             }
         }
     }
