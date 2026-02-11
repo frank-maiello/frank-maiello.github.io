@@ -1419,13 +1419,13 @@
         "roughnessFactor": 0.5
       },
       "emissiveFactor": [
-        0.7454042095350284,
-        0.9734452903978066,
+        0.19461783043107173,
+        0.8879231178794776,
         1
       ],
       "extensions": {
         "KHR_materials_emissive_strength": {
-          "emissiveStrength": 0.1
+          "emissiveStrength": 0.05
         }
       }
     },
@@ -1441,13 +1441,13 @@
         "roughnessFactor": 0.5
       },
       "emissiveFactor": [
-        0.9046611743890203,
-        0.9734452903978066,
+        0.19461783043107173,
+        0.8879231178794776,
         1
       ],
       "extensions": {
         "KHR_materials_emissive_strength": {
-          "emissiveStrength": 0.1
+          "emissiveStrength": 0.05
         }
       }
     }
