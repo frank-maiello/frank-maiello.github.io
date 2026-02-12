@@ -210,6 +210,7 @@ var gPaintingExitY = 50; // Y position when painting exits (above frame)
 var gSpotlightPenumbra = 0.2; // Spotlight penumbra (0-1)
 var gHangingStars = []; // Array of hanging star decorations
 var gStarAnimData = []; // Animation data for each star {star, wire, targetY, startY, timer, delay, animating}
+var gEnableStarSwayAndTwist = true; // Enable/disable star swaying and twisting motion
 
 var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all separation
 var SpatialGrid; // Global spatial grid instance
@@ -4906,9 +4907,17 @@ function initThreeScene() {
                 var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
                 var minY = WORLD_HEIGHT * 0.55; // Upper 1/3 of room
                 var maxY = WORLD_HEIGHT * 1.3; // Slightly below ceiling
-                var startYAboveCeiling = WORLD_HEIGHT + 5; // Start above ceiling
+                var startYAboveCeiling = WORLD_HEIGHT + 12; // Start above ceiling
                 var minStarDistance = 6; // Minimum distance between stars (about 2 object sizes)
                 var starPositions = []; // Track placed star positions
+                
+                // Obstacle positions to avoid
+                var columnPos = {x: 9, z: -9}; // Column XZ position
+                var columnRadius = 2.5;
+                var columnAvoidRadius = 4; // Avoid area above column
+                var spherePos = {x: -24, y: 15, z: 14}; // Sphere obstacle position
+                var sphereRadius = 3;
+                var sphereAvoidRadius = 5; // Avoid area near sphere
                 
                 // Material for wires
                 var wireMaterial = new THREE.MeshPhongMaterial({
@@ -4932,8 +4941,30 @@ function initThreeScene() {
                         targetY = minY + Math.random() * (maxY - minY);
                         z = (Math.random() * 2 - 1) * (WORLD_DEPTH - 3); // Leave margin from walls
                         
-                        // Check distance to all existing stars
                         validPosition = true;
+                        
+                        // Check if above column (XZ distance)
+                        var dxColumn = x - columnPos.x;
+                        var dzColumn = z - columnPos.z;
+                        var distToColumn = Math.sqrt(dxColumn*dxColumn + dzColumn*dzColumn);
+                        if (distToColumn < columnAvoidRadius) {
+                            validPosition = false;
+                            attempt++;
+                            continue;
+                        }
+                        
+                        // Check if near sphere obstacle (3D distance)
+                        var dxSphere = x - spherePos.x;
+                        var dySphere = targetY - spherePos.y;
+                        var dzSphere = z - spherePos.z;
+                        var distToSphere = Math.sqrt(dxSphere*dxSphere + dySphere*dySphere + dzSphere*dzSphere);
+                        if (distToSphere < sphereAvoidRadius) {
+                            validPosition = false;
+                            attempt++;
+                            continue;
+                        }
+                        
+                        // Check distance to all existing stars
                         for (var j = 0; j < starPositions.length; j++) {
                             var dx = x - starPositions[j].x;
                             var dy = targetY - starPositions[j].y;
@@ -4979,20 +5010,44 @@ function initThreeScene() {
                     var starTop = startYAboveCeiling + starHeight;
                     var wireLength = ceilingY - starTop;
                     var wireRadius = 0.015; // Very thin wire
-                    var wireGeometry = new THREE.CylinderGeometry(wireRadius, wireRadius, wireLength, 8);
+                    // Create unit-length cylinder for efficiency (will be scaled)
+                    var wireGeometry = new THREE.CylinderGeometry(wireRadius, wireRadius, 1, 8);
                     var wire = new THREE.Mesh(wireGeometry, wireMaterial);
                     
                     // Position wire from top of star to ceiling
                     wire.position.set(x, starTop + wireLength / 2, z);
+                    wire.scale.set(1, wireLength, 1); // Scale to correct length
                     wire.castShadow = true;
                     wire.receiveShadow = true;
                     
                     gThreeScene.add(wire);
                     
+                    // Create truncated upside-down cone at hanging point
+                    var coneHeight = 0.5;
+                    var coneTopRadius = 0.3; // Wider at top
+                    var coneBottomRadius = 0.05; // Narrow at bottom (where wire connects)
+                    var coneGeometry = new THREE.CylinderGeometry(coneTopRadius, coneBottomRadius, coneHeight, 16);
+                    var coneMaterial = new THREE.MeshStandardMaterial({
+                        color: 0x444444,
+                        shininess: 30,
+                        emissive: 0xffffff,
+                        emissiveIntensity: 0.1,
+                    });
+                    var cone = new THREE.Mesh(coneGeometry, coneMaterial);
+                    
+                    // Position at the top of the wire (ceiling attachment point)
+                    // Cone center should be at ceilingY + coneHeight/2 so bottom aligns with wire top
+                    cone.position.set(x, ceilingY + coneHeight / 2, z);
+                    cone.castShadow = true;
+                    cone.receiveShadow = true;
+                    
+                    gThreeScene.add(cone);
+                    
                     // Store animation data with staggered delay
                     gStarAnimData.push({
                         star: star,
                         wire: wire,
+                        cone: cone,
                         x: x,
                         z: z,
                         targetY: targetY,
@@ -5001,7 +5056,18 @@ function initThreeScene() {
                         delay: 5 + i * 0.15, // Wait 10 seconds, then stagger by 0.15 seconds each
                         animating: true,
                         scale: scale,
-                        starHeight: starHeight
+                        starHeight: starHeight,
+                        coneHeight: coneHeight,
+                        // Sway physics
+                        offsetX: 0,
+                        offsetZ: 0,
+                        velX: (Math.random() - 0.5) * 2.0, // Random initial velocity
+                        velZ: (Math.random() - 0.5) * 2.0,
+                        swayPhase: Math.random() * 10, // Random phase for variation
+                        // Twist physics
+                        angularVel: (Math.random() - 0.5) * 4.0, // Random initial twist rate
+                        baseRotationY: star.rotation.y,
+                        twistPhase: Math.random() * 10 // Random phase for twist driving
                     });
                 }
                 
@@ -8508,10 +8574,10 @@ function update() {
                 var starTop = currentY + starData.starHeight;
                 var wireLength = ceilingY - starTop;
                 
-                // Update wire geometry
-                starData.wire.geometry.dispose();
-                starData.wire.geometry = new THREE.CylinderGeometry(0.015, 0.015, wireLength, 8);
+                // Update wire position and scale (no geometry recreation)
                 starData.wire.position.set(starData.x, starTop + wireLength / 2, starData.z);
+                starData.wire.scale.set(1, wireLength, 1);
+                starData.wire.rotation.set(0, 0, 0); // Keep vertical during drop
                 
                 // Stop animation when complete
                 if (t >= 1.0) {
@@ -8519,6 +8585,84 @@ function update() {
                     starData.star.position.y = starData.targetY;
                 }
             }
+        } else if (gEnableStarSwayAndTwist) {
+            // Apply gentle swaying and twisting after drop completes
+            var swayStiffness = 0.12; // Spring stiffness (lower = more sway)
+            var swayDamping = 0.98; // Velocity damping (close to 1 = less damping)
+            var twistDamping = 0.992;
+            var twistDriveStrength = 0.15;
+            
+            // Add subtle driving force using accumulated phase (no trig)
+            starData.swayPhase += deltaT;
+            var phaseX = starData.swayPhase % 4.0 - 2.0; // Oscillates -2 to 2
+            var phaseZ = (starData.swayPhase * 0.7) % 4.0 - 2.0;
+            var driveX = (phaseX > 0 ? 1 : -1) * 0.2; // Simple forcing
+            var driveZ = (phaseZ > 0 ? 1 : -1) * 0.2;
+            
+            // Simple spring physics for sway
+            var accelX = -swayStiffness * starData.offsetX + driveX;
+            var accelZ = -swayStiffness * starData.offsetZ + driveZ;
+            
+            starData.velX = starData.velX * swayDamping + accelX * deltaT;
+            starData.velZ = starData.velZ * swayDamping + accelZ * deltaT;
+            
+            starData.offsetX += starData.velX * deltaT;
+            starData.offsetZ += starData.velZ * deltaT;
+            
+            // Update star position with sway
+            starData.star.position.x = starData.x + starData.offsetX;
+            starData.star.position.z = starData.z + starData.offsetZ;
+            
+            // Update wire to connect fixed ceiling point to moving star (optimized)
+            var currentY = starData.targetY;
+            var starTop = currentY + starData.starHeight;
+            var ceilingY = 2 * WORLD_HEIGHT;
+            
+            // Fixed ceiling attachment point (bottom of cone)
+            var ceilingX = starData.x;
+            var ceilingZ = starData.z;
+            
+            // Moving star attachment point (top of star)
+            var starAttachX = starData.star.position.x;
+            var starAttachZ = starData.star.position.z;
+            
+            // Calculate wire vector
+            var dx = starAttachX - ceilingX;
+            var dy = starTop - ceilingY;
+            var dz = starAttachZ - ceilingZ;
+            var wireLengthSq = dx*dx + dy*dy + dz*dz;
+            var wireLength = Math.sqrt(wireLengthSq);
+            var invLength = 1.0 / wireLength;
+            
+            // Normalize direction (reuse inverted length)
+            var ndx = dx * invLength;
+            var ndy = dy * invLength;
+            var ndz = dz * invLength;
+            
+            // Position wire at midpoint
+            starData.wire.position.set(
+                (ceilingX + starAttachX) * 0.5,
+                (ceilingY + starTop) * 0.5,
+                (ceilingZ + starAttachZ) * 0.5
+            );
+            
+            // Scale wire length (geometry is unit length, keep X and Z at 1)
+            starData.wire.scale.set(1, wireLength, 1);
+            
+            // Rotate wire to point from ceiling to star using lookAt-style approach
+            // Create a helper to calculate the rotation
+            var upVec = new THREE.Vector3(ndx, ndy, ndz);
+            var defaultUp = new THREE.Vector3(0, 1, 0);
+            var quat = new THREE.Quaternion();
+            quat.setFromUnitVectors(defaultUp, upVec);
+            starData.wire.quaternion.copy(quat);
+            
+            // Gentle twist (damped angular velocity with driving force)
+            starData.twistPhase += deltaT * 0.5;
+            var twistDrive = ((starData.twistPhase % 3.0 - 1.5) > 0 ? 1 : -1) * twistDriveStrength;
+            starData.angularVel = starData.angularVel * twistDamping + twistDrive * deltaT;
+            starData.baseRotationY += starData.angularVel * deltaT;
+            starData.star.rotation.y = starData.baseRotationY;
         }
     }
     
