@@ -329,10 +329,11 @@ var gTrailUpdateFrequency = 1; // Update trail every N frames
 var gTrailColorMode = 3; // 0=White, 1=Black, 2=B&W, 3=Color
 
 // Boid geometry type
-var gBoidGeometryType = 1; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado
+var gBoidGeometryType = 1; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter
 var gDuckTemplate = null; // Template duck model for boid geometry
 var gFishTemplate = null; // Template fish model for boid geometry
 var gAvocadoTemplate = null; // Template avocado model for boid geometry
+var gHelicopterTemplate = null; // Template helicopter model for boid geometry
 
 // OBSTACLE CLASSES ---------------------------------------------------------------------
 
@@ -856,7 +857,7 @@ class CylinderObstacle {
         // Store reference to first section as 'mesh' for backward compatibility
         this.mesh = this.columnSections[0];
         
-        // Create two tori on top of column (unless skipTori flag is set)
+        // Create two rings on top of column (unless skipTori flag is set)
         if (!this.skipTori) {
             const torusRadius = this.radius * 0.7; // Major radius
             const tubeRadius = 0.2; // Minor radius (tube thickness)
@@ -1954,6 +1955,17 @@ class BOID {
             this.visMesh.castShadow = true;
             this.visMesh.receiveShadow = true;
             gThreeScene.add(this.visMesh);
+        } else if (gBoidGeometryType === 15 && gHelicopterTemplate) {
+            // Clone helicopter template for this boid
+            this.visMesh = gHelicopterTemplate.clone();
+            this.visMesh.scale.set(1.5, 1.5, 1.5);
+            this.visMesh.position.copy(pos);
+            this.visMesh.userData = this;
+            this.visMesh.castShadow = true;
+            this.visMesh.receiveShadow = true;
+            // Give each helicopter a random initial rotation
+            this.spinAngle = Math.random() * Math.PI * 2;
+            gThreeScene.add(this.visMesh);
         } else {
             // Standard geometry with materials
             if (boidProps.material === 'standard') {
@@ -2107,8 +2119,10 @@ class BOID {
                 this.pos.z + direction.z
             );
             
-            // Make mesh look at target
-            this.visMesh.lookAt(target);
+            // Make mesh look at target (skip for helicopters which handle their own rotation)
+            if (gBoidGeometryType !== 15) {
+                this.visMesh.lookAt(target);
+            }
             // Adjust for default orientation based on geometry type
             // Cone points along Y axis by default, needs rotation
             if (gBoidGeometryType === 1 || gBoidGeometryType === 2 || gBoidGeometryType === 8) {
@@ -2138,6 +2152,49 @@ class BOID {
                 // Add spin around the long axis (Y axis after rotateX)
                 this.spinAngle += 2.0 * deltaT; // Spin speed in radians per second
                 this.visMesh.rotateY(this.spinAngle);
+            } else if (gBoidGeometryType === 15) {
+                // Helicopter - stay mostly vertical with slight tilt toward motion direction
+                // Calculate horizontal direction (ignore vertical component for yaw)
+                const horizDir = new THREE.Vector3(direction.x, 0, direction.z);
+                const horizSpeed = horizDir.length();
+                
+                /*// Update spin angle continuously - spin rate proportional to vertical velocity
+                // More positive y velocity (ascending) = faster spin
+                // More negative y velocity (descending) = slower spin, but never stops
+                const baseSpinRate = 1.0; // rad/s - minimum spin when descending
+                const maxSpinRate = 20.0; // rad/s - maximum spin when ascending
+                // Normalize y velocity: -maxSpeed to +maxSpeed becomes 0 to 1
+                const normalizedYVel = Math.max(0, Math.min(1, (this.vel.y + boidProps.maxSpeed) / (2 * boidProps.maxSpeed)));
+                const spinRate = baseSpinRate + normalizedYVel * (maxSpinRate - baseSpinRate);
+                this.spinAngle += spinRate * deltaT;*/
+
+                // Update spin angle continuously
+                this.spinAngle += 5.0 * deltaT; // Spin speed in radians per second
+                
+                if (horizSpeed > 0.01) {
+                    horizDir.normalize();
+                    
+                    // Yaw to face horizontal direction of travel, plus rotor spin
+                    const yaw = Math.atan2(horizDir.x, horizDir.z);
+                    this.visMesh.rotation.y = yaw + this.spinAngle;
+                    
+                    // Add forward pitch based on speed (max ~20 degrees for visibility)
+                    const pitchAmount = Math.min(horizSpeed / boidProps.maxSpeed, 1.0) * 0.35; // 0.35 rad ≈ 20°
+                    this.visMesh.rotation.x = -pitchAmount;
+                    
+                    // Add roll based on turning
+                    if (this.lastHorizDir) {
+                        const turnDir = new THREE.Vector3().crossVectors(this.lastHorizDir, horizDir);
+                        const turnAmount = turnDir.y * 3.0; // Increase sensitivity
+                        this.visMesh.rotation.z = Math.max(-0.5, Math.min(0.5, turnAmount)); // Clamp to ±28°
+                    }
+                    this.lastHorizDir = horizDir.clone();
+                } else {
+                    // Not moving horizontally, just spin in place
+                    this.visMesh.rotation.y = this.spinAngle;
+                    this.visMesh.rotation.x = 0;
+                    this.visMesh.rotation.z = 0;
+                }
             }
             // Torus and TorusKnot default orientation works correctly with lookAt (hole perpendicular to movement)
             
@@ -2707,7 +2764,20 @@ function recreateBoidGeometries() {
             boid.visMesh.receiveShadow = true;
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
-        } else if (gBoidGeometryType != 11 && gBoidGeometryType != 12 && gBoidGeometryType != 13 && gBoidGeometryType != 14) {
+        } else if (gBoidGeometryType === 15 && gHelicopterTemplate) {
+            // For helicopter geometry, clone the helicopter template
+            boid.visMesh = gHelicopterTemplate.clone();
+            boid.visMesh.scale.set(1.5, 1.5, 1.5); // Scale for boid size
+            
+            // Set position and add to scene
+            boid.visMesh.position.copy(boid.pos);
+            boid.visMesh.castShadow = true;
+            boid.visMesh.receiveShadow = true;
+            // Give each helicopter a random initial rotation
+            boid.spinAngle = Math.random() * Math.PI * 2;
+            gThreeScene.add(boid.visMesh);
+            continue; // Skip standard material creation
+        } else if (gBoidGeometryType != 11 && gBoidGeometryType != 12 && gBoidGeometryType != 13 && gBoidGeometryType != 14 && gBoidGeometryType != 15) {
             if (boidProps.material === 'standard') {
                 material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
@@ -3579,7 +3649,7 @@ function drawStylingMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = 15 * knobRadius;
+    const menuHeight = 17.5 * knobRadius;
     const padding = 1.7 * knobRadius;
     
     // Position menu slightly below simulation menu
@@ -3639,10 +3709,10 @@ function drawStylingMenu() {
         'Spheres', 'Cones', 'Cylinders', 'Cubes',
         'Tetrahedrons', 'Octahedrons', 'Dodecahedrons', 'Icosahedrons',
         'Capsules', 'Tori', 'Knots', 'Planes',
-        'Rubber Ducks', 'Barramundi', 'Avocados'
+        'Rubber Ducks', 'Barramundi', 'Avocados', 'Helicopters'
     ];
     
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 16; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
@@ -3675,7 +3745,7 @@ function drawStylingMenu() {
     
     // ====== SECTION 2: SURFACE MESH DETAIL ======
     // Draw Mesh Detail label and radio buttons
-    const meshDetailY = buttonY + 5 * (buttonHeight + buttonSpacing) + knobRadius * 0.6;
+    const meshDetailY = buttonY + 6 * (buttonHeight + buttonSpacing) + knobRadius * 0.6;
     ctx.font = `bold ${0.04 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -4667,11 +4737,11 @@ function initThreeScene() {
     gFloor.position.set(0, 0, 0);
     gThreeScene.add( gFloor );
     
-    var gridHelper = new THREE.GridHelper( 84, 30, 0x888888, 0x888888 );
+    /*var gridHelper = new THREE.GridHelper( 84, 30, 0x888888, 0x888888 );
     gridHelper.material.opacity = 1.0;
     gridHelper.material.transparent = true;
     gridHelper.position.set(0, 0.01, 0);
-    //gThreeScene.add( gridHelper );	
+    gThreeScene.add( gridHelper );*/
     
     // Load stool model using GLTFLoader
     // Check if GLTFLoader is available
@@ -5104,6 +5174,58 @@ function initThreeScene() {
             },
             function(error) {
                 console.error('Error loading Avocado model:', error);
+            }
+        );
+    }
+    
+    // Load Helicopter model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var helicopterLoader = new THREE.GLTFLoader();
+        helicopterLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/helicopter.gltf',
+            function(gltf) {
+                var helicopter = gltf.scene;
+                
+                // Position at geometric center of room (mid-height)
+                helicopter.position.set(0, 10, 0);
+                
+                // Scale helicopter appropriately
+                helicopter.scale.set(1.5, 1.5, 1.5);
+                
+                // Rotate to face forward
+                helicopter.rotation.y = 0.5 * Math.PI;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                helicopter.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows for all meshes
+                helicopter.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                // Store a clone as template for boid geometry
+                gHelicopterTemplate = helicopter.clone();
+                
+                console.log('Helicopter model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Helicopter model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Helicopter model:', error);
             }
         );
     }
@@ -6881,7 +7003,6 @@ function onPointer(evt) {
                         if (gCameraControl) {
                             gCameraControl.enabled = false;
                         }
-                        console.log('Started spinning wheel');
                         return;
                     }
                 }
@@ -6892,7 +7013,6 @@ function onPointer(evt) {
                 if (gCameraControl) {
                     gCameraControl.enabled = false;
                 }
-                console.log('Started spinning wheel');
                 return;
             }
         }
@@ -8452,7 +8572,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = 15 * knobRadius;
+    const menuHeight = 17.5 * knobRadius;
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = stylingMenuX * window.innerWidth;
@@ -8478,7 +8598,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const buttonHeight = knobRadius * 1.3;
     const buttonSpacing = 4;
     
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 16; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
@@ -8513,7 +8633,7 @@ function checkStylingMenuClick(clientX, clientY) {
     }
     
     // Check mesh detail radio buttons
-    const meshDetailY = buttonY + 5 * (buttonHeight + buttonSpacing) + knobRadius * 0.6;
+    const meshDetailY = buttonY + 6 * (buttonHeight + buttonSpacing) + knobRadius * 0.6;
     const segmentOptions = [8, 16, 24, 32, 64];
     const meshRadioY = meshDetailY + knobRadius * 0.8;
     const meshRadioRadius = knobRadius * 0.35;
@@ -8562,7 +8682,7 @@ function checkStylingMenuClick(clientX, clientY) {
         const row = Math.floor(knob / 3);
         const col = knob % 3;
         const knobX = menuOriginX + col * knobSpacing;
-        const knobY = menuOriginY + row * knobSpacing + (trailSectionY - menuOriginY);
+        const knobY = trailSectionY + row * knobSpacing;
         
         const kdx = clientX - knobX;
         const kdy = clientY - knobY;
@@ -8584,7 +8704,7 @@ function checkStylingMenuClick(clientX, clientY) {
     }
     
     // Check radio buttons for trail color mode (now at bottom with knobs)
-    const radioY = menuOriginY + (trailSectionY - menuOriginY) - 0.4 * padding;
+    const radioY = trailSectionY - 0.4 * padding;
     const radioX = menuOriginX + knobSpacing * 1.75;
     const radioRadius = knobRadius * 0.3;
     const radioSpacing = knobRadius * 0.7;
