@@ -16,7 +16,7 @@ var gMouseDown = false;
 var gCameraAngle = 0;
 var gCameraRotationSpeed = 3.0; // Rotation state: 0 = stopped, 0.5 = forward, -0.5 = backward
 var gAutoRotate = true; // Enable/disable auto-rotation
-var gCameraMode = 1; // Camera mode: 0=static, 1=rotate CCW, 2=rotate CW, 3=behind boid, 4=in front of boid
+var gCameraMode = 1; // Camera mode: 0=rotate CW, 1=rotate CCW, 2=static, 3=behind boid, 4=in front of boid
 var gCameraManualControl = false; // Track if user is manually controlling camera
 var gCameraSpringStrength = 0.08; // Spring interpolation strength (lower = smoother)
 var gCameraOffset = new THREE.Vector3(0, 0, 0); // Manual camera offset in first-person mode
@@ -27,6 +27,11 @@ var gPointerLastX = 0;
 var gPointerLastY = 0;
 var container = null; // Container element for renderer
 var gLamps = []; // Array to store all Lamp instances
+
+// Camera mode text notification
+var gCameraModeText = ''; // Current text to display
+var gCameraModeTextTimer = 0; // Countdown timer for text fade
+var gCameraModeTextDuration = 2.0; // Duration in seconds for text to fade
 
 // Legacy globals for backward compatibility (lamp 1)
 var gLampPivot = null; // Pivot point for lamp rotation (pin center)
@@ -183,6 +188,12 @@ var gTeapotDragPlaneHeight = 0; // Store the Y height where the teapot was grabb
 var gStoolAnimating = true; // Is stool currently animating
 var gStoolAnimationTimer = 0; // Timer for stool lowering animation
 var gStoolStartY = 30; // Starting Y position (high above floor)
+var gGlobeLamp = null; // Globe lamp model reference
+var gGlobeLampLight = null; // Point light at center of globe lamp
+var gGlobeLampObstacle = null; // Sphere obstacle for boid avoidance
+var gDraggingGlobeLamp = false; // Track if dragging the globe lamp
+var gGlobeLampDragOffset = null; // Store offset from click point to globe lamp center
+var gGlobeLampDragPlaneDistance = 0; // Store the distance from camera for fixed plane dragging
 var gStoolTargetY = 0; // Target Y position (on floor)
 var gWheelAngularVelocity = 10; // Current rotation speed (radians per second) - starts at maximum
 var gWheelAngularAcceleration = 4.0; // Acceleration when spinning (rad/s²)
@@ -196,8 +207,17 @@ var gWheelValveMass = 0.1; // Relative mass of valve (creates asymmetry)
 var gWheelRadius = 1.0; // Wheel radius for torque calculation
 var gDirectionalLight = null;
 var gAmbientIntensity = 1.0; // Ambient light intensity (0-2)
+var gAmbientHue = 0; // Ambient light hue (0-360)
+var gAmbientSaturation = 0; // Ambient light saturation (0-100)
 var gOverheadIntensity = 1.0; // Directional light intensity (0-2)
-var gSpotlightIntensity = 0.8; // Spotlight intensity (0-2)
+var gOverheadHue = 0; // Overhead light hue (0-360)
+var gOverheadSaturation = 0; // Overhead light saturation (0-100)
+var gSpotlight1Intensity = 0.8; // Spotlight 1 intensity (0-2)
+var gSpotlight1Hue = 0; // Spotlight 1 hue (0-360)
+var gSpotlight1Saturation = 0; // Spotlight 1 saturation (0-100)
+var gSpotlight2Intensity = 0.8; // Spotlight 2 intensity (0-2)
+var gSpotlight2Hue = 0; // Spotlight 2 hue (0-360)
+var gSpotlight2Saturation = 0; // Spotlight 2 saturation (0-100)
 var gMiroPaintingGroup = null; // Reference to Miro painting + frame group
 var gDaliPaintingGroup = null; // Reference to Dali painting + frame group
 var gDuchampPaintingGroup = null; // Reference to Duchamp painting + frame group
@@ -207,10 +227,29 @@ var gPaintingAnimState = 'idle'; // States: idle, exiting, entering
 var gPaintingAnimTimer = 0; // Timer for painting animation
 var gPaintingBaseY = 0; // Base Y position for paintings in frame
 var gPaintingExitY = 50; // Y position when painting exits (above frame)
+var gLeftWallPainting = null; // Reference to Duchamp painting on left wall
+var gLeftWallFramePieces = []; // Frame pieces for left wall painting
+var gOvalPainting = null; // Reference to oval painting on back wall
+var gOvalFrame = null; // Reference to oval frame on back wall
+var gPaintingsDropping = true; // Flag for painting drop animation
+var gPaintingDropStartY = 50; // Starting Y position for painting drop
+var gPaintingDropTimer = 0; // Timer for painting drop animation
+var gPaintingDropDelay = 1.8; // Delay after walls finish before paintings drop
+var gPaintingDropDuration = 1.5; // Duration of painting drop animation
 var gSpotlightPenumbra = 0.2; // Spotlight penumbra (0-1)
+var gGlobeLampIntensity = 0; // Globe lamp point light intensity (0-3)
+var gGlobeLampHue = 0; // Globe lamp hue (0-360)
+var gGlobeLampSaturation = 80; // Globe lamp saturation (0-100)
 var gHangingStars = []; // Array of hanging star decorations
 var gStarAnimData = []; // Animation data for each star {star, wire, targetY, startY, timer, delay, animating}
 var gEnableStarSwayAndTwist = true; // Enable/disable star swaying and twisting motion
+var gPedestalAnimData = []; // Animation data for pedestals {pedestal, solidGroup, targetPedestalY, targetSolidY, startY, timer, delay, animating}
+var gColumnObstacle = null; // Reference to the column cylinder obstacle
+var gColumnDropping = false; // Flag for column drop animation
+var gColumnDropTimer = 0; // Timer for column drop animation
+var gColumnDropDelay = 0.0; // Delay after pedestals finish before column drops
+var gColumnDropDuration = 1.5; // Duration of column drop animation
+var gColumnStartY = 60; // Starting Y offset for column drop
 
 var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all separation
 var SpatialGrid; // Global spatial grid instance
@@ -226,12 +265,30 @@ var WORLD_WIDTH = 30;   // X dimension
 var WORLD_HEIGHT = 20;  // Y dimension  
 var WORLD_DEPTH = 20;   // Z dimension
 
+// Individual world size controls (for menu knobs)
+var gWorldSizeX = WORLD_WIDTH;
+var gWorldSizeY = WORLD_HEIGHT;
+var gWorldSizeZ = WORLD_DEPTH;
+
 var gPhysicsScene = {
     gravity : new THREE.Vector3(0.0, 0.0, 0.0),
     dt : 1.0 / 60.0,
-    worldSize : {x: WORLD_WIDTH, y: WORLD_HEIGHT, z: WORLD_DEPTH},
+    worldSize : {x: gWorldSizeX, y: gWorldSizeY, z: gWorldSizeZ},
     paused: false,
     objects: [],				
+};
+
+// Store references to scene elements that need to be resized
+var gWalls = { front: null, back: null, left: null, right: null };
+var gBaseboards = { front: null, back: null, left: null, right: null };
+var gFloor = null;
+
+// Wall animation state
+var gWallAnimation = {
+    front: { timer: 0, delay: 0.3, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
+    back: { timer: 0, delay: 0.45, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 },
+    left: { timer: 0, delay: 0.15, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
+    right: { timer: 0, delay: 0.6, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 }
 };
 
 var gRunning = true; // Track if simulation is running
@@ -552,6 +609,7 @@ class SphereObstacle {
         this.radius = radius;
         this.position = position.clone();
         this.mesh = null;
+        this.enabled = true;
         this.createMesh();
     }
     
@@ -638,6 +696,7 @@ class CylinderObstacle {
         this.rotation = rotation || { x: 0, y: 0, z: 0 };
         this.skipTori = skipTori || false; // Flag to skip creating decorative tori
         this.mesh = null;
+        this.enabled = true;
         
         // Create the cylinder mesh
         this.createMesh();
@@ -1067,7 +1126,7 @@ class CylinderObstacle {
 var gObstacles = []; // Global array to hold all obstacles
 
 class Lamp {
-    constructor(lightPosition, lightTarget, lampId) {
+    constructor(lightPosition, lightTarget, lampId, intensity) {
         this.lampId = lampId;
         this.angle = 0.0; // Start at zero, cone is already oriented correctly
         this.assemblyRotation = 0.0; // Assembly rotation around Y axis
@@ -1076,9 +1135,10 @@ class Lamp {
         this.rotatableGroup = new THREE.Group();
         
         // Create spotlight
-        this.spotlight = new THREE.SpotLight(0xffffff, 0.8);
+        this.spotlight = new THREE.SpotLight(0xffffff, intensity);
+        this.spotlight.visible = intensity > 0;
         this.spotlight.angle = Math.PI / 5;
-        this.spotlight.penumbra = 0.2;
+        this.spotlight.penumbra = gSpotlightPenumbra;
         this.spotlight.position.copy(lightPosition);
         this.spotlight.castShadow = true;
         this.spotlight.shadow.camera.near = 0.5;
@@ -1209,12 +1269,6 @@ class Lamp {
         this.tipLight.position.copy(this.coneTipCapInner.position);
         this.rotatableGroup.add(this.tipLight);
         this.tipLight.userData.initialPosition = this.tipLight.position.clone();
-        
-        this.rotatableGroup.add(this.outerCone);
-        
-        // Store initial position and orientation for absolute rotation calculations
-        this.outerCone.userData.initialPosition = this.outerCone.position.clone();
-        this.outerCone.userData.initialQuaternion = this.outerCone.quaternion.clone();
         
         // Inner cone - bright white
         var innerConeMaterial = new THREE.MeshPhongMaterial({
@@ -2345,7 +2399,9 @@ function handleBoidRules(boid) {
 
     // OBSTACLE AVOIDANCE - Apply before other rules
     for (let i = 0; i < gObstacles.length; i++) {
-        gObstacles[i].applyAvoidance(boid);
+        if (gObstacles[i].enabled) {
+            gObstacles[i].applyAvoidance(boid);
+        }
     }
     
     // RULE #1 - SEPARATION
@@ -2811,259 +2867,28 @@ function drawMainMenu() {
     
     ctx.restore();
 
-    // Draw Simulation menu item
+    // Draw Camera menu item
     const itemY2 = itemY + itemHeight + padding;
     ctx.beginPath();
     ctx.roundRect(itemX, itemY2, itemWidth, itemHeight, cornerRadius * 0.5);
-    ctx.fillStyle = menuVisible ? 'rgba(100, 150, 220, 0.3)' : 'rgba(38, 38, 38, 0.8)';
-    ctx.fill();
-    
-    // Draw icon
-    const icon2X = itemX + itemWidth / 2;
-    const icon2Y = itemY2 + itemHeight / 2;
-    const icon2Color = menuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
-    ctx.strokeStyle = icon2Color;
-    ctx.fillStyle = icon2Color;
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    
-    // Draw gear icon
-    const gearRadius = iconSize * 0.6;
-    ctx.save();
-    ctx.translate(icon2X, icon2Y);
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2;
-        const outerR = gearRadius;
-        const innerR = gearRadius * 0.7;
-        const x1 = Math.cos(angle - 0.1) * innerR;
-        const y1 = Math.sin(angle - 0.1) * innerR;
-        const x2 = Math.cos(angle - 0.1) * outerR;
-        const y2 = Math.sin(angle - 0.1) * outerR;
-        const x3 = Math.cos(angle + 0.1) * outerR;
-        const y3 = Math.sin(angle + 0.1) * outerR;
-        const x4 = Math.cos(angle + 0.1) * innerR;
-        const y4 = Math.sin(angle + 0.1) * innerR;
-        if (i === 0) ctx.moveTo(x1, y1);
-        ctx.lineTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.lineTo(x3, y3);
-        ctx.lineTo(x4, y4);
-    }
-    ctx.closePath();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, 0, gearRadius * 0.3, 0, 2 * Math.PI);
-    ctx.stroke();
-    ctx.restore();
-    
-    /*// Draw label
-    ctx.font = `${0.025 * menuScale}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = icon2Color;
-    ctx.fillText('Simulation', icon2X, itemY2 + itemHeight - padding);*/
-
-    // Draw Styling menu item
-    const itemY3 = itemY2 + itemHeight + padding;
-    ctx.beginPath();
-    ctx.roundRect(itemX, itemY3, itemWidth, itemHeight, cornerRadius * 0.5);
-    ctx.fillStyle = stylingMenuVisible ? 'rgba(255, 150, 80, 0.3)' : 'rgba(38, 38, 38, 0.8)';
-    ctx.fill();
-    
-    // Draw necktie icon
-    const icon3X = itemX + itemWidth / 2;
-    const icon3Y = itemY3 + itemHeight / 2;
-    const icon3Color = stylingMenuVisible ? 'rgba(255, 180, 100, 1.0)' : 'rgba(76, 76, 76, 1.0)';
-    ctx.strokeStyle = icon3Color;
-    ctx.fillStyle = icon3Color;
-    ctx.lineWidth = 2;
-    
-    ctx.save();
-    ctx.translate(icon3X, icon3Y);
-    
-    const tieWidth = iconSize * 0.5;
-    const tieLength = iconSize * 1.3;
-    const gapSize = iconSize * 0.06;
-    
-    ctx.fillStyle = icon3Color;
-    
-    // Draw knot (4-sided polygon - trapezoid)
-    ctx.beginPath();
-    ctx.moveTo(-tieWidth * 0.55, -tieLength * 0.5);  // Top left
-    ctx.lineTo(tieWidth * 0.55, -tieLength * 0.5);   // Top right
-    ctx.lineTo(tieWidth * 0.22, -tieLength * 0.2);   // Bottom right
-    ctx.lineTo(-tieWidth * 0.22, -tieLength * 0.2);  // Bottom left
-    ctx.closePath();
-    ctx.fill();
-    
-    // Draw tie body (5-sided polygon - pentagon)
-    ctx.beginPath();
-    ctx.moveTo(-tieWidth * 0.27, -tieLength * 0.2 + gapSize);  // Top left
-    ctx.lineTo(tieWidth * 0.27, -tieLength * 0.2 + gapSize);   // Top right
-    ctx.lineTo(tieWidth * 0.5, tieLength * 0.48);              // Right side
-    ctx.lineTo(0, tieLength * 0.6);                            // Bottom point
-    ctx.lineTo(-tieWidth * 0.5, tieLength * 0.48);             // Left side
-    ctx.closePath();
-    ctx.fill();
-    
-    ctx.restore();
-
-    // Draw Color menu item
-    const itemY4 = itemY3 + itemHeight + padding;
-    ctx.beginPath();
-    ctx.roundRect(itemX, itemY4, itemWidth, itemHeight, cornerRadius * 0.5);
-    ctx.fillStyle = colorMenuVisible ? 'hsla(0, 100%, 70%, 0.30)' : 'hsla(0, 0%, 15%, 0.80)';
-    ctx.fill();
-    
-    // Draw color palette icon
-    const icon4X = itemX + itemWidth / 2;
-    const icon4Y = itemY4 + itemHeight / 2;
-    const icon4Color = colorMenuVisible ? 'hsla(0, 0%, 70%, 1.0)' : 'hsla(0, 0%, 30%, 1.0)';
-    ctx.strokeStyle = icon4Color;
-    ctx.fillStyle = icon4Color;
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    
-    ctx.save();
-    ctx.translate(icon4X, icon4Y);
-    
-    // Draw artist palette shape
-    const paletteSize = iconSize * 1.2;
-    ctx.beginPath();
-    // Oval palette
-    ctx.ellipse(0, 0, paletteSize * 0.7, paletteSize * 0.5, 0.3, 0, 2 * Math.PI);
-    ctx.stroke();
-    if (colorMenuVisible) {
-        ctx.fillStyle = 'hsla(0, 0%, 70%, 0.5)';
-        ctx.fill();
-    }
-    
-    // Thumb hole
-    ctx.beginPath();
-    ctx.ellipse(paletteSize * -0.3, paletteSize * 0.15, paletteSize * 0.2, paletteSize * 0.15, 0.3, 0, 2 * Math.PI);
-    ctx.stroke();
-    ctx.fillStyle = colorMenuVisible ? 'hsla(0, 100%, 0%, 0.7)' : 'hsla(0, 0%, 10%, 0.8)';
-    ctx.fill();
-    
-    // Color dots on palette arranged in elliptical arc
-    const dotColors = ['#ff0000', '#00ff00', '#8800ff', '#ff8800', '#ffff00', '#0088ff', ];
-    const numDots = dotColors.length;
-    const ellipseRadiusX = paletteSize * 0.35;
-    const ellipseRadiusY = paletteSize * 0.25;
-    const ellipseRotation = 0.3;
-    const startAngle = -0.7;
-    const endAngle = 2.8;
-    
-    for (let i = 0; i < numDots; i++) {
-        const angle = startAngle + (endAngle - startAngle) * (i / (numDots - 1));
-        const x = ellipseRadiusX * Math.cos(angle);
-        const y = -ellipseRadiusY * Math.sin(angle);
-        // Rotate the ellipse
-        const rotatedX = x * Math.cos(ellipseRotation) - y * Math.sin(ellipseRotation);
-        const rotatedY = x * Math.sin(ellipseRotation) + y * Math.cos(ellipseRotation);
-        
-        ctx.beginPath();
-        ctx.arc(rotatedX, rotatedY, paletteSize * 0.1, 0, 2 * Math.PI);
-        // Make colors faint when menu is not visible
-        if (colorMenuVisible) {
-            ctx.fillStyle = dotColors[i];
-        } else {
-            // Faint version of the actual color (low saturation and opacity)
-            ctx.globalAlpha = 0.3;
-            ctx.fillStyle = dotColors[i];
-        }
-        ctx.fill();
-        ctx.globalAlpha = 1.0; // Reset
-    }
-    
-    ctx.restore();
-
-    // Draw Lighting menu item
-    const itemY5 = itemY4 + itemHeight + padding;
-    ctx.beginPath();
-    ctx.roundRect(itemX, itemY5, itemWidth, itemHeight, cornerRadius * 0.5);
-    ctx.fillStyle = lightingMenuVisible ? 'rgba(255, 204, 0, 0.3)' : 'rgba(38, 38, 38, 0.8)';
-    ctx.fill();
-    
-    // Draw lightbulb icon
-    const icon5X = itemX + itemWidth / 2;
-    const icon5Y = itemY5 + itemHeight / 2;
-    const icon5Color = lightingMenuVisible ? 'hsla(0, 0%, 70%, 1.0)' : 'hsla(0, 0%, 30%, 1.0)';
-    ctx.strokeStyle = icon5Color;
-    ctx.fillStyle = icon5Color;
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    
-    ctx.save();
-    ctx.translate(icon5X, icon5Y);
-    
-    // Draw lightbulb
-    const bulbSize = iconSize * 1.4;
-    
-    // Bulb glass (rounded shape)
-    ctx.beginPath();
-    ctx.arc(0, -bulbSize * 0.15, bulbSize * 0.35, 0, Math.PI, true);
-    ctx.lineTo(-bulbSize * 0.15, bulbSize * 0.15);
-    ctx.arc(0, bulbSize * 0.15, bulbSize * 0.15, Math.PI, 0, true);
-    ctx.closePath();
-    ctx.stroke();
-    if (lightingMenuVisible) {
-        ctx.fillStyle = 'hsla(60, 100%, 80%, 0.3)';
-        ctx.fill();
-    }
-    
-    // Screw base
-    ctx.beginPath();
-    ctx.rect(-bulbSize * 0.15, bulbSize * 0.15, bulbSize * 0.3, bulbSize * 0.35);
-    ctx.stroke();
-    
-    // Screw threads (3 horizontal lines)
-    for (let i = 0; i < 4; i++) {
-        const y = bulbSize * (0.2 + i * 0.08);
-        ctx.beginPath();
-        ctx.moveTo(-bulbSize * 0.15, y);
-        ctx.lineTo(bulbSize * 0.15, y*1.1);
-        ctx.stroke();
-    }
-    
-    // Filament inside bulb (if visible)
-    if (lightingMenuVisible) {
-        ctx.strokeStyle = 'hsla(45, 100%, 60%, 0.8)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(0, bulbSize * 0.05);
-        ctx.lineTo(-bulbSize * 0.1, -bulbSize * 0.1);
-        ctx.moveTo(0, bulbSize * 0.05);
-        ctx.lineTo(bulbSize * 0.1, -bulbSize * 0.1);
-        ctx.stroke();
-    }
-    
-    ctx.restore();
-
-    // Draw Camera menu item
-    const itemY6 = itemY5 + itemHeight + padding;
-    ctx.beginPath();
-    ctx.roundRect(itemX, itemY6, itemWidth, itemHeight, cornerRadius * 0.5);
     
     // Background color varies by camera mode
     const cameraBackgroundColors = [
-        'rgba(80, 50, 50, 0.8)',   // Mode 0: Static - dark red
-        'rgba(50, 50, 80, 0.8)',   // Mode 1: Rotate CCW - dark blue
-        'rgba(50, 80, 50, 0.8)',   // Mode 2: Rotate CW - dark green
-        'rgba(80, 50, 80, 0.8)',   // Mode 3: Behind boid - dark purple
-        'rgba(80, 70, 50, 0.8)'    // Mode 4: In front of boid - dark gold
+        'hsla(100, 35%, 30%, 0.80)',   // Mode 0: Rotate CW - dark green
+        'hsla(150, 40%, 30%, 0.80)',   // Mode 1: Rotate CCW - dark blue
+        'hsla(0, 80%, 30%, 0.3)',   // Mode 2: Static - dark red
+        'hsla(270, 20%, 30%, 0.80)',   // Mode 3: Behind boid - dark purple
+        'hsla(300, 30%, 30%, 0.80)'    // Mode 4: In front of boid - dark gold
     ];
     ctx.fillStyle = cameraBackgroundColors[gCameraMode];
     ctx.fill();
     
     // Draw camera or eye icon depending on camera mode
-    const icon6X = itemX + 0.5 * itemWidth;
-    const icon6Y = itemY6 + 0.6 * itemHeight;
-    //const icon6Color = 'rgba(76, 76, 76, 1.0)';
+    const icon2X = itemX + 0.5 * itemWidth;
+    const icon2Y = itemY2 + 0.6 * itemHeight;
     
     ctx.save();
-    ctx.translate(icon6X, icon6Y);
+    ctx.translate(icon2X, icon2Y);
     
     if (gCameraMode == 0 || gCameraMode == 1 || gCameraMode == 2) {
         // Draw movie camera icon
@@ -3099,17 +2924,9 @@ function drawMainMenu() {
         const rightReelY = -camSize * 0.36;
         const rightReelRadius = camSize * 0.22;
         
-        // Determine rotation based on camera mode
-        if (gCameraMode == 1) {
-            var time = Date.now() / 1000;
-            var rotationSign = 1; // Clockwise
-        } else if (gCameraMode == 2) {
-            var time = Date.now() / 1000;
-            var rotationSign = -1; // Counter-clockwise
-        } else {
-            var time = 0;
-            var rotationSign = 0; // No rotation
-        }
+        // Determine rotation based on camera mode (cache time calculation)
+        const time = (gCameraMode !== 2) ? (performance.now() * 0.001) : 0;
+        const rotationSign = (gCameraMode === 0) ? -1 : (gCameraMode === 1) ? 1 : 0;
         
         // Left reel
         ctx.beginPath();
@@ -3187,6 +3004,236 @@ function drawMainMenu() {
     
     ctx.restore();
 
+    // Draw Simulation menu item
+    const itemY3 = itemY2 + itemHeight + padding;
+    ctx.beginPath();
+    ctx.roundRect(itemX, itemY3, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.fillStyle = menuVisible ? 'rgba(100, 150, 220, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fill();
+    
+    // Draw icon
+    const icon3X = itemX + itemWidth / 2;
+    const icon3Y = itemY3 + itemHeight / 2;
+    const icon3Color = menuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+    ctx.strokeStyle = icon3Color;
+    ctx.fillStyle = icon3Color;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    
+    // Draw gear icon
+    const gearRadius3 = iconSize * 0.6;
+    ctx.save();
+    ctx.translate(icon3X, icon3Y);
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const outerR = gearRadius3;
+        const innerR = gearRadius3 * 0.7;
+        const x1 = Math.cos(angle - 0.1) * innerR;
+        const y1 = Math.sin(angle - 0.1) * innerR;
+        const x2 = Math.cos(angle - 0.1) * outerR;
+        const y2 = Math.sin(angle - 0.1) * outerR;
+        const x3 = Math.cos(angle + 0.1) * outerR;
+        const y3 = Math.sin(angle + 0.1) * outerR;
+        const x4 = Math.cos(angle + 0.1) * innerR;
+        const y4 = Math.sin(angle + 0.1) * innerR;
+        if (i === 0) ctx.moveTo(x1, y1);
+        ctx.lineTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.lineTo(x3, y3);
+        ctx.lineTo(x4, y4);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, gearRadius3 * 0.3, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.restore();
+    
+    /*// Draw label
+    ctx.font = `${0.025 * menuScale}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = icon3Color;
+    ctx.fillText('Simulation', icon3X, itemY3 + itemHeight - padding);*/
+
+    // Draw Styling menu item
+    const itemY4 = itemY3 + itemHeight + padding;
+    ctx.beginPath();
+    ctx.roundRect(itemX, itemY4, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.fillStyle = stylingMenuVisible ? 'rgba(255, 150, 80, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fill();
+    
+    // Draw necktie icon
+    const icon4X = itemX + itemWidth / 2;
+    const icon4Y = itemY4 + itemHeight / 2;
+    const icon4Color = stylingMenuVisible ? 'rgba(255, 180, 100, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+    ctx.strokeStyle = icon4Color;
+    ctx.fillStyle = icon4Color;
+    ctx.lineWidth = 2;
+    
+    ctx.save();
+    ctx.translate(icon4X, icon4Y);
+    
+    const tieWidth = iconSize * 0.5;
+    const tieLength = iconSize * 1.3;
+    const gapSize = iconSize * 0.06;
+    
+    ctx.fillStyle = icon4Color;
+    
+    // Draw knot (4-sided polygon - trapezoid)
+    ctx.beginPath();
+    ctx.moveTo(-tieWidth * 0.55, -tieLength * 0.5);  // Top left
+    ctx.lineTo(tieWidth * 0.55, -tieLength * 0.5);   // Top right
+    ctx.lineTo(tieWidth * 0.22, -tieLength * 0.2);   // Bottom right
+    ctx.lineTo(-tieWidth * 0.22, -tieLength * 0.2);  // Bottom left
+    ctx.closePath();
+    ctx.fill();
+    
+    // Draw tie body (5-sided polygon - pentagon)
+    ctx.beginPath();
+    ctx.moveTo(-tieWidth * 0.27, -tieLength * 0.2 + gapSize);  // Top left
+    ctx.lineTo(tieWidth * 0.27, -tieLength * 0.2 + gapSize);   // Top right
+    ctx.lineTo(tieWidth * 0.5, tieLength * 0.48);              // Right side
+    ctx.lineTo(0, tieLength * 0.6);                            // Bottom point
+    ctx.lineTo(-tieWidth * 0.5, tieLength * 0.48);             // Left side
+    ctx.closePath();
+    ctx.fill();
+    
+    ctx.restore();
+
+    // Draw Color menu item
+    const itemY5 = itemY4 + itemHeight + padding;
+    ctx.beginPath();
+    ctx.roundRect(itemX, itemY5, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.fillStyle = colorMenuVisible ? 'hsla(0, 100%, 70%, 0.30)' : 'hsla(0, 0%, 15%, 0.80)';
+    ctx.fill();
+    
+    // Draw color palette icon
+    const icon5X = itemX + itemWidth / 2;
+    const icon5Y = itemY5 + itemHeight / 2;
+    const icon5Color = colorMenuVisible ? 'hsla(0, 0%, 70%, 1.0)' : 'hsla(0, 0%, 30%, 1.0)';
+    ctx.strokeStyle = icon5Color;
+    ctx.fillStyle = icon5Color;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    
+    ctx.save();
+    ctx.translate(icon5X, icon5Y);
+    
+    // Draw artist palette shape
+    const paletteSize = iconSize * 1.2;
+    ctx.beginPath();
+    // Oval palette
+    ctx.ellipse(0, 0, paletteSize * 0.7, paletteSize * 0.5, 0.3, 0, 2 * Math.PI);
+    ctx.stroke();
+    if (colorMenuVisible) {
+        ctx.fillStyle = 'hsla(0, 0%, 70%, 0.5)';
+        ctx.fill();
+    }
+    
+    // Thumb hole
+    ctx.beginPath();
+    ctx.ellipse(paletteSize * -0.3, paletteSize * 0.15, paletteSize * 0.2, paletteSize * 0.15, 0.3, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.fillStyle = colorMenuVisible ? 'hsla(0, 100%, 0%, 0.7)' : 'hsla(0, 0%, 10%, 0.8)';
+    ctx.fill();
+    
+    // Color dots on palette arranged in elliptical arc
+    const dotColors = ['#ff0000', '#00ff00', '#8800ff', '#ff8800', '#ffff00', '#0088ff', ];
+    const numDots = dotColors.length;
+    const ellipseRadiusX = paletteSize * 0.35;
+    const ellipseRadiusY = paletteSize * 0.25;
+    const ellipseRotation = 0.3;
+    const startAngle = -0.7;
+    const endAngle = 2.8;
+    
+    for (let i = 0; i < numDots; i++) {
+        const angle = startAngle + (endAngle - startAngle) * (i / (numDots - 1));
+        const x = ellipseRadiusX * Math.cos(angle);
+        const y = -ellipseRadiusY * Math.sin(angle);
+        // Rotate the ellipse
+        const rotatedX = x * Math.cos(ellipseRotation) - y * Math.sin(ellipseRotation);
+        const rotatedY = x * Math.sin(ellipseRotation) + y * Math.cos(ellipseRotation);
+        
+        ctx.beginPath();
+        ctx.arc(rotatedX, rotatedY, paletteSize * 0.1, 0, 2 * Math.PI);
+        // Make colors faint when menu is not visible
+        if (colorMenuVisible) {
+            ctx.fillStyle = dotColors[i];
+        } else {
+            // Faint version of the actual color (low saturation and opacity)
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = dotColors[i];
+        }
+        ctx.fill();
+        ctx.globalAlpha = 1.0; // Reset
+    }
+    
+    ctx.restore();
+
+    // Draw Lighting menu item
+    const itemY6 = itemY5 + itemHeight + padding;
+    ctx.beginPath();
+    ctx.roundRect(itemX, itemY6, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.fillStyle = lightingMenuVisible ? 'rgba(255, 204, 0, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fill();
+    
+    // Draw lightbulb icon
+    const icon6X = itemX + itemWidth / 2;
+    const icon6Y = itemY6 + itemHeight / 2;
+    const icon6Color = lightingMenuVisible ? 'hsla(0, 0%, 70%, 1.0)' : 'hsla(0, 0%, 30%, 1.0)';
+    ctx.strokeStyle = icon6Color;
+    ctx.fillStyle = icon6Color;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    
+    ctx.save();
+    ctx.translate(icon6X, icon6Y);
+    
+    // Draw lightbulb
+    const bulbSize = iconSize * 1.4;
+    
+    // Bulb glass (rounded shape)
+    ctx.beginPath();
+    ctx.arc(0, -bulbSize * 0.15, bulbSize * 0.35, 0, Math.PI, true);
+    ctx.lineTo(-bulbSize * 0.15, bulbSize * 0.15);
+    ctx.arc(0, bulbSize * 0.15, bulbSize * 0.15, Math.PI, 0, true);
+    ctx.closePath();
+    ctx.stroke();
+    if (lightingMenuVisible) {
+        ctx.fillStyle = 'hsla(60, 100%, 80%, 0.3)';
+        ctx.fill();
+    }
+    
+    // Screw base
+    ctx.beginPath();
+    ctx.rect(-bulbSize * 0.15, bulbSize * 0.15, bulbSize * 0.3, bulbSize * 0.35);
+    ctx.stroke();
+    
+    // Screw threads (3 horizontal lines)
+    for (let i = 0; i < 4; i++) {
+        const y = bulbSize * (0.2 + i * 0.08);
+        ctx.beginPath();
+        ctx.moveTo(-bulbSize * 0.15, y);
+        ctx.lineTo(bulbSize * 0.15, y*1.1);
+        ctx.stroke();
+    }
+    
+    // Filament inside bulb (if visible)
+    if (lightingMenuVisible) {
+        ctx.strokeStyle = 'hsla(45, 100%, 60%, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, bulbSize * 0.05);
+        ctx.lineTo(-bulbSize * 0.1, -bulbSize * 0.1);
+        ctx.moveTo(0, bulbSize * 0.05);
+        ctx.lineTo(bulbSize * 0.1, -bulbSize * 0.1);
+        ctx.stroke();
+    }
+    
+    ctx.restore();
+
     // Draw Instructions menu item
     const itemY7 = itemY6 + itemHeight + padding;
     ctx.beginPath();
@@ -3224,6 +3271,19 @@ function drawMainMenu() {
     ctx.fill();
     
     ctx.restore();
+    
+    // Draw camera mode text notification (if timer is active)
+    if (gCameraModeTextTimer > 0) {
+        const textOpacity = Math.min(gCameraModeTextTimer / gCameraModeTextDuration, 1.0);
+        const textX = itemX + itemWidth + padding * 2;
+        const textY = itemY2 + itemHeight / 2;
+        
+        ctx.font = `${14}px Arial`;
+        ctx.fillStyle = `rgba(230, 230, 230, ${textOpacity})`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(gCameraModeText, textX, textY);
+    }
 
     ctx.restore();
 }
@@ -3235,7 +3295,8 @@ function drawSimMenu() {
     const menuItems = [
         gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
         boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
-        boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin
+        boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin,
+        gWorldSizeX, gWorldSizeY, gWorldSizeZ
     ];
     
     const ranges = [
@@ -3248,14 +3309,17 @@ function drawSimMenu() {
         {min: 1.0, max: 20.0},      // minSpeed
         {min: 1.0, max: 30.0},      // maxSpeed
         {min: 0, max: 0.2},         // turnFactor
-        {min: 0.5, max: 5.0}        // margin
+        {min: 0.5, max: 5.0},       // margin
+        {min: 10, max: 60},         // worldSizeX
+        {min: 10, max: 60},         // worldSizeY
+        {min: 10, max: 60}          // worldSizeZ
     ];
     
     const knobRadius = 0.1 * menuScale;
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 3.3;
+    const menuHeight = knobSpacing * 4.6;  // Increased for 13 knobs
     const padding = 1.7 * knobRadius;
     
     // Convert world coordinates to screen coordinates
@@ -3357,7 +3421,8 @@ function drawSimMenu() {
         const labels = [
             'Quantity', 'Size', 'Visual Range',
             'Separation', 'Alignment', 'Cohesion',
-            'Minimum Speed', 'Speed Limit', 'Corralling Force', 'Corral Margin'
+            'Minimum Speed', 'Speed Limit', 'Corralling Force', 'Corral Margin',
+            'World Size X', 'World Size Y', 'World Size Z'
         ];
         ctx.font = `${0.35 * knobRadius}px verdana`;
         ctx.textAlign = 'center';
@@ -3378,6 +3443,9 @@ function drawSimMenu() {
             case 7: valueText = boidProps.maxSpeed.toFixed(1); break;
             case 8: valueText = (boidProps.turnFactor >= 0.2) ? 'MAX' : boidProps.turnFactor.toFixed(3); break;
             case 9: valueText = boidProps.margin.toFixed(1); break;
+            case 10: valueText = gWorldSizeX.toFixed(0); break;
+            case 11: valueText = gWorldSizeY.toFixed(0); break;
+            case 12: valueText = gWorldSizeZ.toFixed(0); break;
         }
         ctx.font = `${0.3 * knobRadius}px verdana`;
         ctx.fillStyle = `rgba(128, 230, 200, ${menuOpacity})`;
@@ -4119,7 +4187,7 @@ function drawLightingMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2; // 3 knobs across
-    const menuHeight = knobSpacing * 1.5; // 2 rows
+    const menuHeight = knobSpacing * 5.5; // 6 rows (now with 16 knobs)
     const padding = 1.7 * knobRadius;
     
     const menuOriginX = lightingMenuX * window.innerWidth;
@@ -4165,8 +4233,20 @@ function drawLightingMenu() {
     
     const knobs = [
         { label: 'Ambient', value: gAmbientIntensity, min: 0, max: 4 },
+        { label: 'Hue', value: gAmbientHue, min: 0, max: 360 },
+        { label: 'Saturation', value: gAmbientSaturation, min: 0, max: 100 },
         { label: 'Overhead', value: gOverheadIntensity, min: 0, max: 4 },
-        { label: 'Spotlight', value: gSpotlightIntensity, min: 0, max: 2 },
+        { label: 'Hue', value: gOverheadHue, min: 0, max: 360 },
+        { label: 'Saturation', value: gOverheadSaturation, min: 0, max: 100 },
+        { label: 'Globe', value: gGlobeLampIntensity, min: 0, max: 3 },
+        { label: 'Hue', value: gGlobeLampHue, min: 0, max: 360 },
+        { label: 'Saturation', value: gGlobeLampSaturation, min: 0, max: 100 },
+        { label: 'Spotlight 1', value: gSpotlight1Intensity, min: 0, max: 2 },
+        { label: 'Hue', value: gSpotlight1Hue, min: 0, max: 360 },
+        { label: 'Saturation', value: gSpotlight1Saturation, min: 0, max: 100 },
+        { label: 'Spotlight 2', value: gSpotlight2Intensity, min: 0, max: 2 },
+        { label: 'Hue', value: gSpotlight2Hue, min: 0, max: 360 },
+        { label: 'Saturation', value: gSpotlight2Saturation, min: 0, max: 100 },
         { label: 'Penumbra', value: gSpotlightPenumbra, min: 0, max: 1 }
     ];
     
@@ -4192,11 +4272,55 @@ function drawLightingMenu() {
         const normalizedValue = (knobs[i].value - knobs[i].min) / (knobs[i].max - knobs[i].min);
         
         // Draw meter arc
-        ctx.strokeStyle = `hsla(45, 60%, 60%, ${lightingMenuOpacity})`;
-        ctx.beginPath();
-        ctx.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
-        ctx.lineWidth = 4;
-        ctx.stroke();
+        // For all Hue knobs (1, 4, 7, 10, 13), draw a continuous color gradient
+        if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13) {
+            // Draw continuous hue gradient arc
+            const numSegments = 30; // Reduced from 60 for better performance
+            const segmentAngle = fullMeterSweep / numSegments;
+            ctx.lineWidth = 4;
+            
+            for (let seg = 0; seg < numSegments; seg++) {
+                const segStart = meterStart + seg * segmentAngle;
+                const segEnd = segStart + segmentAngle;
+                const hue = (seg / numSegments) * 360;
+                
+                ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${lightingMenuOpacity})`;
+                ctx.beginPath();
+                ctx.arc(knobX, knobY, knobRadius * 0.85, segStart, segEnd);
+                ctx.stroke();
+            }
+        } else if (i === 2 || i === 5 || i === 8 || i === 11 || i === 14) {
+            // Saturation knobs - draw gradient from gray to full color
+            const numSegments = 20; // Reduced from 40 for better performance
+            const segmentAngle = fullMeterSweep / numSegments;
+            ctx.lineWidth = 4;
+            
+            // Determine which hue to use based on saturation knob index
+            let hueToUse;
+            if (i === 2) hueToUse = gAmbientHue;
+            else if (i === 5) hueToUse = gOverheadHue;
+            else if (i === 8) hueToUse = gGlobeLampHue;
+            else if (i === 11) hueToUse = gSpotlight1Hue;
+            else if (i === 14) hueToUse = gSpotlight2Hue;
+            
+            for (let seg = 0; seg < numSegments; seg++) {
+                const segStart = meterStart + seg * segmentAngle;
+                const segEnd = segStart + segmentAngle;
+                const sat = (seg / numSegments) * 100;
+                
+                ctx.strokeStyle = `hsla(${hueToUse}, ${sat}%, 60%, ${lightingMenuOpacity})`;
+                ctx.beginPath();
+                ctx.arc(knobX, knobY, knobRadius * 0.85, segStart, segEnd);
+                ctx.stroke();
+            }
+        } else {
+            // Normal single-color arc for other knobs
+            ctx.strokeStyle = `hsla(45, 60%, 60%, ${lightingMenuOpacity})`;
+            ctx.beginPath();
+            ctx.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
+            ctx.lineWidth = 4;
+            ctx.stroke();
+        }
         
         // Draw needle
         const pointerAngle = meterStart + fullMeterSweep * normalizedValue;
@@ -4206,7 +4330,29 @@ function drawLightingMenu() {
         ctx.beginPath();
         ctx.moveTo(knobX, knobY);
         ctx.lineTo(pointerEndX, pointerEndY);
-        ctx.strokeStyle = `hsla(45, 30%, 80%, ${lightingMenuOpacity})`;
+        
+        // For Hue and Saturation knobs, make needle match the selected color
+        if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13) {
+            // Hue knobs - needle in the selected hue
+            ctx.strokeStyle = `hsla(${knobs[i].value}, 80%, 60%, ${lightingMenuOpacity})`;
+        } else if (i === 2) {
+            // Ambient saturation - needle in ambient color
+            ctx.strokeStyle = `hsla(${gAmbientHue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+        } else if (i === 5) {
+            // Overhead saturation - needle in overhead color
+            ctx.strokeStyle = `hsla(${gOverheadHue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+        } else if (i === 8) {
+            // Globe saturation - needle in globe color
+            ctx.strokeStyle = `hsla(${gGlobeLampHue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+        } else if (i === 11) {
+            // Spotlight 1 saturation - needle in spotlight 1 color
+            ctx.strokeStyle = `hsla(${gSpotlight1Hue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+        } else if (i === 14) {
+            // Spotlight 2 saturation - needle in spotlight 2 color
+            ctx.strokeStyle = `hsla(${gSpotlight2Hue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+        } else {
+            ctx.strokeStyle = `hsla(45, 30%, 80%, ${lightingMenuOpacity})`;
+        }
         ctx.lineWidth = 2;
         ctx.stroke();
         
@@ -4214,8 +4360,41 @@ function drawLightingMenu() {
         ctx.font = `${0.3 * knobRadius}px verdana`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = `hsla(45, 60%, 70%, ${lightingMenuOpacity})`;
-        ctx.fillText(knobs[i].value.toFixed(2), knobX, knobY + 0.6 * knobRadius);
+        
+        // Check if this is an intensity knob at 0 (Ambient, Overhead, Globe, Spot1, Spot2)
+        let displayValue;
+        if ((i === 0 || i === 3 || i === 6 || i === 9 || i === 12) && knobs[i].value === 0) {
+            displayValue = 'OFF';
+            ctx.fillStyle = `hsla(0, 80%, 50%, ${lightingMenuOpacity})`; // Red color for OFF
+        } else if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13) {
+            // Hue knobs - show number in the selected hue color
+            ctx.fillStyle = `hsla(${knobs[i].value}, 80%, 60%, ${lightingMenuOpacity})`;
+            displayValue = Math.round(knobs[i].value).toString();
+        } else if (i === 2) {
+            // Ambient Saturation - show number in ambient color
+            ctx.fillStyle = `hsla(${gAmbientHue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+            displayValue = Math.round(knobs[i].value).toString();
+        } else if (i === 5) {
+            // Overhead Saturation - show number in overhead color
+            ctx.fillStyle = `hsla(${gOverheadHue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+            displayValue = Math.round(knobs[i].value).toString();
+        } else if (i === 8) {
+            // Globe Saturation - show number in globe color
+            ctx.fillStyle = `hsla(${gGlobeLampHue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+            displayValue = Math.round(knobs[i].value).toString();
+        } else if (i === 11) {
+            // Spotlight 1 Saturation - show number in spotlight 1 color
+            ctx.fillStyle = `hsla(${gSpotlight1Hue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+            displayValue = Math.round(knobs[i].value).toString();
+        } else if (i === 14) {
+            // Spotlight 2 Saturation - show number in spotlight 2 color
+            ctx.fillStyle = `hsla(${gSpotlight2Hue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+            displayValue = Math.round(knobs[i].value).toString();
+        } else {
+            ctx.fillStyle = `hsla(45, 60%, 70%, ${lightingMenuOpacity})`;
+            displayValue = knobs[i].value.toFixed(2);
+        }
+        ctx.fillText(displayValue, knobX, knobY + 0.6 * knobRadius);
         
         // Draw label below knob
         ctx.font = `${0.35 * knobRadius}px verdana`;
@@ -4271,6 +4450,122 @@ function initColorWheel() {
     }
 }
 
+// Function to update world geometry when size changes
+function updateWorldGeometry() {
+    const boxSize = gPhysicsScene.worldSize;
+    
+    // Update floor
+    if (gFloor) {
+        gThreeScene.remove(gFloor);
+        if (gFloor.geometry) gFloor.geometry.dispose();
+        if (gFloor.material) {
+            if (gFloor.material.map) gFloor.material.map.dispose();
+            gFloor.material.dispose();
+        }
+        
+        // Recreate floor with new size
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        const tileSize = 64;
+        for (let i = 0; i < 8; i++) {
+            for (let j = 0; j < 8; j++) {
+                //ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#3d3d3d';
+                ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#0e0f26';
+                ctx.fillRect(i * tileSize, j * tileSize, tileSize, tileSize);
+            }
+        }
+        const checkerTexture = new THREE.CanvasTexture(canvas);
+        checkerTexture.wrapS = THREE.RepeatWrapping;
+        checkerTexture.wrapT = THREE.RepeatWrapping;
+        const tilesWide = (boxSize.x * 2) / 4;
+        const tilesDeep = (boxSize.z * 2) / 4;
+        checkerTexture.repeat.set(tilesWide, tilesDeep);
+        
+        gFloor = new THREE.Mesh(
+            new THREE.PlaneGeometry(boxSize.x * 2, boxSize.z * 2, 1, 1),
+            new THREE.MeshPhongMaterial({ 
+                map: checkerTexture,
+                shininess: 100 
+            })
+        );
+        gFloor.rotation.x = -Math.PI / 2;
+        gFloor.receiveShadow = true;
+        gFloor.position.set(0, 0, 0);
+        gThreeScene.add(gFloor);
+    }
+    
+    // Update walls
+    if (gWalls.front) {
+        gWalls.front.geometry.dispose();
+        gWalls.front.geometry = new THREE.PlaneGeometry(boxSize.x * 2, boxSize.y);
+        gWalls.front.position.set(0, boxSize.y / 2, boxSize.z);
+        gWallAnimation.front.animating = false; // Stop animation if resizing
+    }
+    
+    if (gWalls.back) {
+        gWalls.back.geometry.dispose();
+        gWalls.back.geometry = new THREE.PlaneGeometry(boxSize.x * 2, boxSize.y);
+        gWalls.back.position.set(0, boxSize.y / 2, -boxSize.z);
+        gWallAnimation.back.animating = false; // Stop animation if resizing
+        // Update texture repeat
+        if (gWalls.back.material.map) {
+            gWalls.back.material.map.repeat.set((boxSize.x * 2) / (4 * 5), boxSize.y / (4 * 5));
+        }
+    }
+    
+    if (gWalls.left) {
+        gWalls.left.geometry.dispose();
+        gWalls.left.geometry = new THREE.PlaneGeometry(boxSize.z * 2, boxSize.y);
+        gWalls.left.position.set(-boxSize.x, boxSize.y / 2, 0);
+        gWallAnimation.left.animating = false; // Stop animation if resizing
+        // Update texture repeat
+        if (gWalls.left.material.map) {
+            gWalls.left.material.map.repeat.set((boxSize.z * 2) / (4 * 5), boxSize.y / (4 * 5));
+        }
+    }
+    
+    if (gWalls.right) {
+        gWalls.right.geometry.dispose();
+        gWalls.right.geometry = new THREE.PlaneGeometry(boxSize.z * 2, boxSize.y);
+        gWalls.right.position.set(boxSize.x, boxSize.y / 2, 0);
+        gWallAnimation.right.animating = false; // Stop animation if resizing
+        // Update texture repeat
+        if (gWalls.right.material.map) {
+            gWalls.right.material.map.repeat.set((boxSize.z * 2) / (4 * 5), boxSize.y / (4 * 5));
+        }
+    }
+    
+    // Update baseboards
+    const baseboardHeight = 0.3;
+    const baseboardDepth = 0.1;
+    
+    if (gBaseboards.front) {
+        gBaseboards.front.geometry.dispose();
+        gBaseboards.front.geometry = new THREE.BoxGeometry(boxSize.x * 2, baseboardHeight, baseboardDepth);
+        gBaseboards.front.position.set(0, baseboardHeight / 2, boxSize.z - baseboardDepth / 2);
+    }
+    
+    if (gBaseboards.back) {
+        gBaseboards.back.geometry.dispose();
+        gBaseboards.back.geometry = new THREE.BoxGeometry(boxSize.x * 2, baseboardHeight, baseboardDepth);
+        gBaseboards.back.position.set(0, baseboardHeight / 2, -boxSize.z + baseboardDepth / 2);
+    }
+    
+    if (gBaseboards.left) {
+        gBaseboards.left.geometry.dispose();
+        gBaseboards.left.geometry = new THREE.BoxGeometry(baseboardDepth, baseboardHeight, boxSize.z * 2);
+        gBaseboards.left.position.set(-boxSize.x + baseboardDepth / 2, baseboardHeight / 2, 0);
+    }
+    
+    if (gBaseboards.right) {
+        gBaseboards.right.geometry.dispose();
+        gBaseboards.right.geometry = new THREE.BoxGeometry(baseboardDepth, baseboardHeight, boxSize.z * 2);
+        gBaseboards.right.position.set(boxSize.x - baseboardDepth / 2, baseboardHeight / 2, 0);
+    }
+}
+
 // ------------------------------------------		
 function initThreeScene() {
     gThreeScene = new THREE.Scene();
@@ -4286,6 +4581,7 @@ function initThreeScene() {
     // Lights
     gAmbientLight = new THREE.AmbientLight( 0x4d4d4d );
     gAmbientLight.intensity = gAmbientIntensity;
+    gAmbientLight.visible = gAmbientIntensity > 0;
     gThreeScene.add( gAmbientLight );	
     
     //gThreeScene.fog = new THREE.Fog( 0xaaaaaa, 10, 100 );				
@@ -4295,7 +4591,8 @@ function initThreeScene() {
     gLamps[1] = new Lamp(
         new THREE.Vector3(22.61, 14.14, 18.58),
         new THREE.Vector3(16.16, 10.07, 12.13),
-        1
+        1,
+        gSpotlight1Intensity
     );
 
     // ===== LAMP 2 =====
@@ -4303,7 +4600,8 @@ function initThreeScene() {
     gLamps[2] = new Lamp(
         new THREE.Vector3(22.61, 14.14, 18.58),
         new THREE.Vector3(16.16, 10.07, 12.13),
-        2
+        2,
+        gSpotlight2Intensity
     );
     // Then move it -7 units along X axis and -15 units along Z axis
     translateLampAssembly(-37, -35, 2);
@@ -4314,6 +4612,7 @@ function initThreeScene() {
     //var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
     //var dirLight = new THREE.DirectionalLight( 0x55505a, 2 );
     gDirectionalLight = new THREE.DirectionalLight( 0x55505a, gOverheadIntensity );
+    gDirectionalLight.visible = gOverheadIntensity > 0;
     gDirectionalLight.position.set( 0, 30, 0 );
     var dirLight = gDirectionalLight; // Keep backward compatibility
     dirLight.castShadow = true;
@@ -4331,15 +4630,17 @@ function initThreeScene() {
     
     // Floor ground with checkerboard pattern
     var canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 256;
+    const tileRes = 512; // Size of each tile in pixels
+    canvas.width = tileRes;
+    canvas.height = tileRes;
     var ctx = canvas.getContext('2d');
     
     // Draw checkerboard
-    var tileSize = 128;
-    for (var i = 0; i < 8; i++) {
-        for (var j = 0; j < 8; j++) {
-            ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#3d3d3d';
+    var tileSize = 64;
+    for (var i = 0; i < tileRes; i++) {
+        for (var j = 0; j < tileRes; j++) {
+            //ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#3d3d3d';
+            ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#0e0f26';
             ctx.fillRect(i * tileSize, j * tileSize, tileSize, tileSize);
         }
     }
@@ -4352,18 +4653,19 @@ function initThreeScene() {
     var tilesDeep = (WORLD_DEPTH * 2) / 4;
     checkerTexture.repeat.set(tilesWide, tilesDeep);
     
-    var ground = new THREE.Mesh(
+    gFloor = new THREE.Mesh(
         new THREE.PlaneGeometry(WORLD_WIDTH * 2, WORLD_DEPTH * 2, 1, 1),
         new THREE.MeshPhongMaterial({ 
             map: checkerTexture,
-            shininess: 150 
+            shininess: 1.0,
+            roughness: 0.0,
         })
     );				
 
-    ground.rotation.x = - Math.PI / 2; // rotates X/Y to X/Z
-    ground.receiveShadow = true;
-    ground.position.set(0, 0, 0);
-    gThreeScene.add( ground );
+    gFloor.rotation.x = - Math.PI / 2; // rotates X/Y to X/Z
+    gFloor.receiveShadow = true;
+    gFloor.position.set(0, 0, 0);
+    gThreeScene.add( gFloor );
     
     var gridHelper = new THREE.GridHelper( 84, 30, 0x888888, 0x888888 );
     gridHelper.material.opacity = 1.0;
@@ -4591,7 +4893,7 @@ function initThreeScene() {
                 var duck = gltf.scene;
                 
                 // Position below floor initially for entrance animation
-                duck.position.set(18, gDuckStartY, 10);
+                duck.position.set(18, gDuckStartY, 7);
                 
                 // Scale if needed (adjust this value to make it bigger/smaller)
                 duck.scale.set(4, 4, 4);
@@ -4873,6 +5175,83 @@ function initThreeScene() {
         );
     }
     
+    // Load Globe Lamp model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var globeLampLoader = new THREE.GLTFLoader();
+        globeLampLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/globeLamp.gltf',
+            function(gltf) {
+                var globeLamp = gltf.scene;
+                
+                // Position object at starting position
+                globeLamp.position.set(20, 10, -15);
+                
+                // Scale appropriately if needed
+                globeLamp.scale.set(1, 1, 1);
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                globeLamp.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and mark as draggable for all meshes
+                globeLamp.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.userData.isDraggableGlobeLamp = true;
+                    }
+                });
+                
+                gThreeScene.add(globeLamp);
+                gGlobeLamp = globeLamp; // Store global reference
+                
+                // Create point light at center of lamp
+                const color = new THREE.Color();
+                color.setHSL(gGlobeLampHue / 360, gGlobeLampSaturation / 100, 0.5);
+                gGlobeLampLight = new THREE.PointLight(color, gGlobeLampIntensity, 50);
+                gGlobeLampLight.position.copy(globeLamp.position);
+                gGlobeLampLight.castShadow = true;
+                gGlobeLampLight.shadow.mapSize.width = 512;
+                gGlobeLampLight.shadow.mapSize.height = 512;
+                gGlobeLampLight.visible = gGlobeLampIntensity > 0;
+                gThreeScene.add(gGlobeLampLight);
+                
+                // Set initial visibility and enabled state based on intensity
+                globeLamp.visible = gGlobeLampIntensity > 0;
+                
+                // Create sphere obstacle for boid avoidance
+                var globeLampObstacleRadius = 3.0; // Radius that covers the lamp
+                gGlobeLampObstacle = new SphereObstacle(
+                    globeLampObstacleRadius,
+                    new THREE.Vector3(globeLamp.position.x, globeLamp.position.y, globeLamp.position.z)
+                );
+                // Make the obstacle invisible and set enabled state
+                if (gGlobeLampObstacle.mesh) {
+                    gGlobeLampObstacle.mesh.visible = false;
+                }
+                gGlobeLampObstacle.enabled = gGlobeLampIntensity > 0;
+                gObstacles.push(gGlobeLampObstacle);
+                
+                console.log('Globe Lamp model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Globe Lamp model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Globe Lamp model:', error);
+            }
+        );
+    }
+    
     // Load Tube Star model using GLTFLoader for hanging decorations
     if (typeof THREE.GLTFLoader !== 'undefined') {
         var starLoader = new THREE.GLTFLoader();
@@ -4902,7 +5281,7 @@ function initThreeScene() {
                     }
                 });
                 
-                // Create 12 hanging stars with random properties
+                // Create hanging stars with random properties
                 var numStars = 24;
                 var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
                 var minY = WORLD_HEIGHT * 0.55; // Upper 1/3 of room
@@ -5137,13 +5516,19 @@ function initThreeScene() {
         roughness: 1
     });
     
-    var frontWall = new THREE.Mesh(
+    gWalls.front = new THREE.Mesh(
         new THREE.PlaneGeometry(boxSize.x * 2, boxSize.y),
         frontWallMaterial
     );
-    frontWall.position.set(0, boxSize.y / 2, boxSize.z);
-    frontWall.receiveShadow = true;
-    gThreeScene.add(frontWall);
+    // Start horizontal, rotating around bottom edge at z=boxSize.z
+    gWalls.front.rotation.x = gWallAnimation.front.startRotation;
+    gWalls.front.position.set(
+        0,
+        (boxSize.y / 2) * Math.cos(gWallAnimation.front.startRotation),
+        boxSize.z + (boxSize.y / 2) * Math.sin(gWallAnimation.front.startRotation)
+    );
+    gWalls.front.receiveShadow = true;
+    gThreeScene.add(gWalls.front);
     
     // Back wall (negative Z) - pastel blue checkerboard
     var backWallCanvas = document.createElement('canvas');
@@ -5189,7 +5574,7 @@ function initThreeScene() {
     backWallTexture.wrapT = THREE.RepeatWrapping;
     backWallTexture.repeat.set((boxSize.x * 2) / (4 * 5), boxSize.y / (4 * 5));
     
-    var backWall = new THREE.Mesh(
+    gWalls.back = new THREE.Mesh(
         new THREE.PlaneGeometry(boxSize.x * 2, boxSize.y),
         new THREE.MeshPhongMaterial({ 
             map: backWallTexture,
@@ -5198,10 +5583,16 @@ function initThreeScene() {
             side: THREE.BackSide
         })
     );
-    backWall.rotation.y = Math.PI;
-    backWall.position.set(0, boxSize.y / 2, -boxSize.z);
-    backWall.receiveShadow = true;
-    gThreeScene.add(backWall);
+    gWalls.back.rotation.y = Math.PI;
+    // Start horizontal, rotating around bottom edge at z=-boxSize.z
+    gWalls.back.rotation.x = gWallAnimation.back.startRotation;
+    gWalls.back.position.set(
+        0,
+        (boxSize.y / 2) * Math.cos(gWallAnimation.back.startRotation),
+        -boxSize.z + (boxSize.y / 2) * Math.sin(gWallAnimation.back.startRotation)
+    );
+    gWalls.back.receiveShadow = true;
+    gThreeScene.add(gWalls.back);
     
     // Left wall (negative X) - pastel yellow checkerboard
     var leftWallCanvas = document.createElement('canvas');
@@ -5247,7 +5638,7 @@ function initThreeScene() {
     leftWallTexture.wrapT = THREE.RepeatWrapping;
     leftWallTexture.repeat.set((boxSize.z * 2) / (4 * 5), boxSize.y / (4 * 5));
     
-    var leftWall = new THREE.Mesh(
+    gWalls.left = new THREE.Mesh(
         new THREE.PlaneGeometry(boxSize.z * 2, boxSize.y),
         new THREE.MeshPhongMaterial({
             map: leftWallTexture,
@@ -5256,10 +5647,17 @@ function initThreeScene() {
             side: THREE.BackSide
         })
     );
-    leftWall.rotation.y = -Math.PI / 2;
-    leftWall.position.set(-boxSize.x, boxSize.y / 2, 0);
-    leftWall.receiveShadow = true;
-    gThreeScene.add(leftWall);
+    // Start horizontal, rotating around bottom edge at x=-boxSize.x
+    gWalls.left.rotation.order = 'YXZ'; // Apply Y rotation first, then X
+    gWalls.left.rotation.y = -Math.PI / 2;
+    gWalls.left.rotation.x = gWallAnimation.left.startRotation;
+    gWalls.left.position.set(
+        -boxSize.x - (boxSize.y / 2) * Math.sin(gWallAnimation.left.startRotation),
+        (boxSize.y / 2) * Math.cos(gWallAnimation.left.startRotation),
+        0
+    );
+    gWalls.left.receiveShadow = true;
+    gThreeScene.add(gWalls.left);
     
     // Add framed painting on left wall (Duchamp)
     var painting2Width = 12 * 0.9;
@@ -5302,11 +5700,12 @@ function initThreeScene() {
         new THREE.PlaneGeometry(painting2Width, painting2Height),
         painting2Material
     );
-    painting2.position.set(-boxSize.x + 0.3, painting2Y, 0);
+    painting2.position.set(-boxSize.x + 0.3, painting2Y + gPaintingDropStartY, 0);
     painting2.rotation.y = Math.PI / 2;
     painting2.receiveShadow = true;
     painting2.castShadow = true;
     gThreeScene.add(painting2);
+    gLeftWallPainting = painting2; // Store global reference
     
     // Create frame material (wood-like)
     var frame2Material = new THREE.MeshStandardMaterial({ 
@@ -5323,13 +5722,14 @@ function initThreeScene() {
     );
     frame2Top.position.set(
         -boxSize.x + 0.3 + frame2Depth / 2,
-        painting2Y + painting2Height / 2 + frame2Thickness / 2,
+        painting2Y + painting2Height / 2 + frame2Thickness / 2 + gPaintingDropStartY,
         0
     );
     frame2Top.rotation.y = Math.PI / 2;
     frame2Top.castShadow = true;
     frame2Top.receiveShadow = true;
     gThreeScene.add(frame2Top);
+    gLeftWallFramePieces.push(frame2Top);
     
     // Bottom frame
     var frame2Bottom = new THREE.Mesh(
@@ -5338,13 +5738,14 @@ function initThreeScene() {
     );
     frame2Bottom.position.set(
         -boxSize.x + 0.3 + frame2Depth / 2,
-        painting2Y - painting2Height / 2 - frame2Thickness / 2,
+        painting2Y - painting2Height / 2 - frame2Thickness / 2 + gPaintingDropStartY,
         0
     );
     frame2Bottom.rotation.y = Math.PI / 2;
     frame2Bottom.castShadow = true;
     frame2Bottom.receiveShadow = true;
     gThreeScene.add(frame2Bottom);
+    gLeftWallFramePieces.push(frame2Bottom);
     
     // Left frame
     var frame2Left = new THREE.Mesh(
@@ -5353,13 +5754,14 @@ function initThreeScene() {
     );
     frame2Left.position.set(
         -boxSize.x + 0.3 + frame2Depth / 2,
-        painting2Y,
+        painting2Y + gPaintingDropStartY,
         -painting2Width / 2 - frame2Thickness / 2
     );
     frame2Left.rotation.y = Math.PI / 2;
     frame2Left.castShadow = true;
     frame2Left.receiveShadow = true;
     gThreeScene.add(frame2Left);
+    gLeftWallFramePieces.push(frame2Left);
     
     // Right frame
     var frame2Right = new THREE.Mesh(
@@ -5368,13 +5770,14 @@ function initThreeScene() {
     );
     frame2Right.position.set(
         -boxSize.x + 0.3 + frame2Depth / 2,
-        painting2Y,
+        painting2Y + gPaintingDropStartY,
         painting2Width / 2 + frame2Thickness / 2
     );
     frame2Right.rotation.y = Math.PI / 2;
     frame2Right.castShadow = true;
     frame2Right.receiveShadow = true;
     gThreeScene.add(frame2Right);
+    gLeftWallFramePieces.push(frame2Right);
     
     // Right wall (positive X) - pastel green checkerboard
     var rightWallCanvas = document.createElement('canvas');
@@ -5420,7 +5823,7 @@ function initThreeScene() {
     rightWallTexture.wrapT = THREE.RepeatWrapping;
     rightWallTexture.repeat.set((boxSize.z * 2) / (4 * 5), boxSize.y / (4 * 5));
     
-    var rightWall = new THREE.Mesh(
+    gWalls.right = new THREE.Mesh(
         new THREE.PlaneGeometry(boxSize.z * 2, boxSize.y),
         new THREE.MeshPhongMaterial({ 
             map: rightWallTexture,
@@ -5429,10 +5832,17 @@ function initThreeScene() {
             side: THREE.BackSide
         })
     );
-    rightWall.rotation.y = Math.PI / 2;
-    rightWall.position.set(boxSize.x, boxSize.y / 2, 0);
-    rightWall.receiveShadow = true;
-    gThreeScene.add(rightWall);
+    // Start horizontal, rotating around bottom edge at x=boxSize.x
+    gWalls.right.rotation.order = 'YXZ'; // Apply Y rotation first, then X
+    gWalls.right.rotation.y = Math.PI / 2;
+    gWalls.right.rotation.x = -gWallAnimation.right.startRotation;
+    gWalls.right.position.set(
+        boxSize.x - (boxSize.y / 2) * Math.sin(gWallAnimation.right.startRotation),
+        (boxSize.y / 2) * Math.cos(gWallAnimation.right.startRotation),
+        0
+    );
+    gWalls.right.receiveShadow = true;
+    gThreeScene.add(gWalls.right);
     
     // Add framed paintings on right wall (Miro and Dali with different aspect ratios)
     var paintingY = boxSize.y / 2 + 2; // Vertical position
@@ -5531,8 +5941,8 @@ function initThreeScene() {
     miroFrameRight.receiveShadow = true;
     gMiroPaintingGroup.add(miroFrameRight);
     
-    // Position and orient group on wall
-    gMiroPaintingGroup.position.set(paintingWallX, paintingY, 0);
+    // Position and orient group on wall (start high for drop animation)
+    gMiroPaintingGroup.position.set(paintingWallX, paintingY + gPaintingDropStartY, 0);
     gMiroPaintingGroup.rotation.y = -Math.PI / 2;
     gThreeScene.add(gMiroPaintingGroup);
     
@@ -5719,44 +6129,44 @@ function initThreeScene() {
     });
     
     // Front baseboard
-    var frontBaseboard = new THREE.Mesh(
+    gBaseboards.front = new THREE.Mesh(
         new THREE.BoxGeometry(boxSize.x * 2, baseboardHeight, baseboardDepth),
         baseboardMaterial
     );
-    frontBaseboard.position.set(0, baseboardHeight / 2, boxSize.z - baseboardDepth / 2);
-    frontBaseboard.receiveShadow = true;
-    frontBaseboard.castShadow = true;
-    gThreeScene.add(frontBaseboard);
+    gBaseboards.front.position.set(0, baseboardHeight / 2, boxSize.z - baseboardDepth / 2);
+    gBaseboards.front.receiveShadow = true;
+    gBaseboards.front.castShadow = true;
+    gThreeScene.add(gBaseboards.front);
     
     // Back baseboard
-    var backBaseboard = new THREE.Mesh(
+    gBaseboards.back = new THREE.Mesh(
         new THREE.BoxGeometry(boxSize.x * 2, baseboardHeight, baseboardDepth),
         baseboardMaterial
     );
-    backBaseboard.position.set(0, baseboardHeight / 2, -boxSize.z + baseboardDepth / 2);
-    backBaseboard.receiveShadow = true;
-    backBaseboard.castShadow = true;
-    gThreeScene.add(backBaseboard);
+    gBaseboards.back.position.set(0, baseboardHeight / 2, -boxSize.z + baseboardDepth / 2);
+    gBaseboards.back.receiveShadow = true;
+    gBaseboards.back.castShadow = true;
+    gThreeScene.add(gBaseboards.back);
     
     // Left baseboard
-    var leftBaseboard = new THREE.Mesh(
+    gBaseboards.left = new THREE.Mesh(
         new THREE.BoxGeometry(baseboardDepth, baseboardHeight, boxSize.z * 2),
         baseboardMaterial
     );
-    leftBaseboard.position.set(-boxSize.x + baseboardDepth / 2, baseboardHeight / 2, 0);
-    leftBaseboard.receiveShadow = true;
-    leftBaseboard.castShadow = true;
-    gThreeScene.add(leftBaseboard);
+    gBaseboards.left.position.set(-boxSize.x + baseboardDepth / 2, baseboardHeight / 2, 0);
+    gBaseboards.left.receiveShadow = true;
+    gBaseboards.left.castShadow = true;
+    gThreeScene.add(gBaseboards.left);
     
     // Right baseboard
-    var rightBaseboard = new THREE.Mesh(
+    gBaseboards.right = new THREE.Mesh(
         new THREE.BoxGeometry(baseboardDepth, baseboardHeight, boxSize.z * 2),
         baseboardMaterial
     );
-    rightBaseboard.position.set(boxSize.x - baseboardDepth / 2, baseboardHeight / 2, 0);
-    rightBaseboard.receiveShadow = true;
-    rightBaseboard.castShadow = true;
-    gThreeScene.add(rightBaseboard);
+    gBaseboards.right.position.set(boxSize.x - baseboardDepth / 2, baseboardHeight / 2, 0);
+    gBaseboards.right.receiveShadow = true;
+    gBaseboards.right.castShadow = true;
+    gThreeScene.add(gBaseboards.right);
     
     // Create five pedestals with Platonic solids on back wall
     var pedestalSize = 1.5;
@@ -5791,6 +6201,9 @@ function initThreeScene() {
         { name: 'icosahedron', geometry: new THREE.IcosahedronGeometry(solidSize), color: 0xfd6100 } // orange
     ];
     
+    var pedestalStartY = WORLD_HEIGHT + 60; // Start high above ceiling
+    var solidStartY = pedestalStartY + pedestalHeight / 2 + solidSize;
+    
     for (var i = 0; i < 5; i++) {
         var xPos = startX + i * spacing;
         
@@ -5799,7 +6212,7 @@ function initThreeScene() {
             new THREE.BoxGeometry(pedestalSize, pedestalHeight, pedestalSize),
             pedestalMaterial
         );
-        pedestal.position.set(xPos, pedestalY, backWallZ);
+        pedestal.position.set(xPos, pedestalStartY, backWallZ);
         pedestal.castShadow = true;
         pedestal.receiveShadow = true;
         gThreeScene.add(pedestal);
@@ -5851,11 +6264,11 @@ function initThreeScene() {
         solidGroup.add(solid);
         solidGroup.add(innerSolid);
         
-        // Position on pedestal
+        // Position high above (will descend with pedestal)
         if (i === 0) {
-            var yPos = solidY - 0.35;
+            var yPos = solidStartY - 0.35;
         } else {
-            var yPos = solidY; 
+            var yPos = solidStartY; 
         }
         solidGroup.position.set(xPos, yPos, backWallZ);
         
@@ -5863,6 +6276,20 @@ function initThreeScene() {
         
         // Store group for rotation animation (rotates around world Y-axis)
         window.gPlatonicSolids.push(solidGroup);
+        
+        // Store animation data with staggered delay (left to right)
+        var targetPedestalY = pedestalY;
+        var targetSolidY = i === 0 ? (solidY - 0.35) : solidY;
+        gPedestalAnimData.push({
+            pedestal: pedestal,
+            solidGroup: solidGroup,
+            targetPedestalY: targetPedestalY,
+            targetSolidY: targetSolidY,
+            startY: pedestalStartY,
+            timer: 0,
+            delay: 0.5 + i * 0.15, // Staggered delays from left to right
+            animating: true
+        });
     }
     
     // Add oval-framed painting on back wall (Louis Wain cat)
@@ -5909,10 +6336,11 @@ function initThreeScene() {
         new THREE.PlaneGeometry(imageWidth, imageHeight),
         ovalImageMaterial
     );
-    ovalImage.position.set(ovalPaintingX, ovalPaintingY, ovalPaintingZ + 0.05);
+    ovalImage.position.set(ovalPaintingX, ovalPaintingY + gPaintingDropStartY, ovalPaintingZ + 0.05);
     ovalImage.castShadow = true;
     ovalImage.receiveShadow = true;
     gThreeScene.add(ovalImage);
+    gOvalPainting = ovalImage; // Store global reference
     
     // Create oval frame using torus geometry stretched into ellipse
     var ovalFrameMaterial = new THREE.MeshStandardMaterial({
@@ -5926,10 +6354,11 @@ function initThreeScene() {
     
     // Scale to create ellipse matching the canvas oval
     ovalFrame.scale.set(ovalPaintingWidth / 2, ovalPaintingHeight / 2, 1);
-    ovalFrame.position.set(ovalPaintingX, ovalPaintingY, ovalPaintingZ + ovalFrameDepth / 2);
+    ovalFrame.position.set(ovalPaintingX, ovalPaintingY + gPaintingDropStartY, ovalPaintingZ + ovalFrameDepth / 2);
     ovalFrame.castShadow = true;
     ovalFrame.receiveShadow = true;
     gThreeScene.add(ovalFrame);
+    gOvalFrame = ovalFrame; // Store global reference
     
    
     /*// Top wall - pastel lavender
@@ -6011,14 +6440,15 @@ function initThreeScene() {
     );
     gObstacles.push(torusObstacle);*/
 
-    // Create cylinder obstacle
-    var cylinderObstacle = new CylinderObstacle(
+    // Create cylinder obstacle (start high for drop animation)
+    gColumnObstacle = new CylinderObstacle(
         2.5,  // radius
         12,  // height
-        new THREE.Vector3(9, 6.03, -9),  // position
+        new THREE.Vector3(9, 6.03 + gColumnStartY, -9),  // position (start high)
         { x: 0, y: 0, z: 0 }  // rotation
     );
-    gObstacles.push(cylinderObstacle);
+    gObstacles.push(gColumnObstacle);
+    gColumnDropping = true; // Enable drop animation
     
     // Renderer
     gRenderer = new THREE.WebGLRenderer();
@@ -6031,7 +6461,7 @@ function initThreeScene() {
     
     // Camera	
     gCamera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 1000);
-    gCamera.position.set(-10.72, 16.08, 31.37);
+    gCamera.position.set(-16.99, 21.37, 43.12);
     gCamera.updateMatrixWorld();	
 
     gThreeScene.add(gCamera);
@@ -6335,10 +6765,42 @@ function onPointer(evt) {
                 return;
             }
             
-            // Check Simulation menu item
+            // Check Camera menu item
             const itemY2 = itemY + itemHeight + padding;
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
                 evt.clientY >= itemY2 && evt.clientY <= itemY2 + itemHeight) {
+                // Camera mode cycling
+                const previousMode = gCameraMode;
+                gCameraMode = (gCameraMode + 1) % 5;
+                
+                // Set camera mode text notification
+                const cameraModeNames = ['Orbit Camera CW', 'Orbit Camera CCW', 'Static Camera', 'Follow', 'Lead'];
+                gCameraModeText = cameraModeNames[gCameraMode];
+                gCameraModeTextTimer = gCameraModeTextDuration;
+                
+                // Save camera position when leaving any third-person mode (0, 1, or 2)
+                if (previousMode >= 0 && previousMode <= 2) {
+                    gSavedCameraPosition = gCamera.position.clone();
+                    gSavedCameraTarget = gCameraControl.target.clone();
+                }
+                
+                // Restore camera position when returning to any third-person mode from first-person
+                if (gCameraMode >= 0 && gCameraMode <= 2 && previousMode >= 3 && gSavedCameraPosition && gSavedCameraTarget) {
+                    gCamera.position.copy(gSavedCameraPosition);
+                    gCameraControl.target.copy(gSavedCameraTarget);
+                    gCameraControl.update();
+                }
+                
+                // Reset manual control flags
+                gCameraManualControl = false;
+                gCameraRotationOffset = { theta: 0, phi: 0 };
+                return;
+            }
+            
+            // Check Simulation menu item
+            const itemY3 = itemY2 + itemHeight + padding;
+            if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+                evt.clientY >= itemY3 && evt.clientY <= itemY3 + itemHeight) {
                 menuVisible = !menuVisible;
                 stylingMenuVisible = false; // Close styling menu when opening simulation
                 instructionsMenuVisible = false; // Close instructions menu when opening simulation
@@ -6348,9 +6810,9 @@ function onPointer(evt) {
             }
             
             // Check Styling menu item
-            const itemY3 = itemY2 + itemHeight + padding;
+            const itemY4 = itemY3 + itemHeight + padding;
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
-                evt.clientY >= itemY3 && evt.clientY <= itemY3 + itemHeight) {
+                evt.clientY >= itemY4 && evt.clientY <= itemY4 + itemHeight) {
                 stylingMenuVisible = !stylingMenuVisible;
                 menuVisible = false; // Close simulation menu when opening styling
                 instructionsMenuVisible = false; // Close instructions menu when opening styling
@@ -6360,9 +6822,9 @@ function onPointer(evt) {
             }
             
             // Check Color menu item
-            const itemY4 = itemY3 + itemHeight + padding;
+            const itemY5 = itemY4 + itemHeight + padding;
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
-                evt.clientY >= itemY4 && evt.clientY <= itemY4 + itemHeight) {
+                evt.clientY >= itemY5 && evt.clientY <= itemY5 + itemHeight) {
                 colorMenuVisible = !colorMenuVisible;
                 menuVisible = false; // Close simulation menu when opening color
                 stylingMenuVisible = false; // Close styling menu when opening color
@@ -6372,41 +6834,14 @@ function onPointer(evt) {
             }
             
             // Check Lighting menu item
-            const itemY5 = itemY4 + itemHeight + padding;
+            const itemY6 = itemY5 + itemHeight + padding;
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
-                evt.clientY >= itemY5 && evt.clientY <= itemY5 + itemHeight) {
+                evt.clientY >= itemY6 && evt.clientY <= itemY6 + itemHeight) {
                 lightingMenuVisible = !lightingMenuVisible;
                 menuVisible = false; // Close simulation menu when opening lighting
                 stylingMenuVisible = false; // Close styling menu when opening lighting
                 instructionsMenuVisible = false; // Close instructions menu when opening lighting
                 colorMenuVisible = false; // Close color menu when opening lighting
-                return;
-            }
-            
-            // Check Camera menu item
-            const itemY6 = itemY5 + itemHeight + padding;
-            if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
-                evt.clientY >= itemY6 && evt.clientY <= itemY6 + itemHeight) {
-                // Camera mode cycling
-                const previousMode = gCameraMode;
-                gCameraMode = (gCameraMode + 1) % 5;
-                
-                // Save camera position when leaving any third-person mode (0, 1, or 2)
-                if (previousMode >= 0 && previousMode <= 2) {
-                    gSavedCameraPosition = gCamera.position.clone();
-                    gSavedCameraTarget = gCameraControl.target.clone();
-                }
-                
-                // Restore camera position when returning to third-person static mode
-                if (gCameraMode === 0 && gSavedCameraPosition && gSavedCameraTarget) {
-                    gCamera.position.copy(gSavedCameraPosition);
-                    gCameraControl.target.copy(gSavedCameraTarget);
-                    gCameraControl.update();
-                }
-                
-                // Reset manual control flags
-                gCameraManualControl = false;
-                gCameraRotationOffset = { theta: 0, phi: 0 };
                 return;
             }
             
@@ -6485,6 +6920,7 @@ function onPointer(evt) {
         var hitDuck = false;
         var hitDuckBeak = false;
         var hitTeapot = false;
+        var hitGlobeLamp = false;
         
         for (var i = 0; i < intersects.length; i++) {
             // Skip non-interactive objects (status indicators, etc.)
@@ -6526,6 +6962,18 @@ function onPointer(evt) {
                     gTeapot.position.x - actualClickPoint.x,
                     0,
                     gTeapot.position.z - actualClickPoint.z
+                );
+                // Don't break - check if other objects are also hit
+            }
+            if (intersects[i].object.userData.isDraggableGlobeLamp && !hitGlobeLamp) {
+                hitGlobeLamp = true;
+                var actualClickPoint = intersects[i].point;
+                
+                // Store offset from click point to globe lamp center (full 3D)
+                gGlobeLampDragOffset = new THREE.Vector3(
+                    gGlobeLamp.position.x - actualClickPoint.x,
+                    gGlobeLamp.position.y - actualClickPoint.y,
+                    gGlobeLamp.position.z - actualClickPoint.z
                 );
                 // Don't break - check if other objects are also hit
             }
@@ -6668,6 +7116,25 @@ function onPointer(evt) {
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             // Disable orbit controls while dragging teapot
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
+        if (hitGlobeLamp && gGlobeLamp) {
+            gDraggingGlobeLamp = true;
+            
+            // Store the distance from camera to globe lamp center (for fixed plane)
+            var cameraToLamp = new THREE.Vector3();
+            cameraToLamp.subVectors(gGlobeLamp.position, gCamera.position);
+            var cameraDirection = new THREE.Vector3();
+            gCamera.getWorldDirection(cameraDirection);
+            gGlobeLampDragPlaneDistance = cameraToLamp.dot(cameraDirection);
+            
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging globe lamp
             if (gCameraControl) {
                 gCameraControl.enabled = false;
             }
@@ -6890,10 +7357,22 @@ function onPointer(evt) {
             if (draggedKnob >= 200) {
                 const lightingKnob = draggedKnob - 200;
                 const ranges = [
-                    {min: 0, max: 4},       // ambient intensity
-                    {min: 0, max: 4},       // overhead intensity
-                    {min: 0, max: 2},       // spotlight intensity
-                    {min: 0, max: 1}        // spotlight penumbra
+                    {min: 0, max: 4},       // 0: ambient intensity
+                    {min: 0, max: 360},     // 1: ambient hue
+                    {min: 0, max: 100},     // 2: ambient saturation
+                    {min: 0, max: 4},       // 3: overhead intensity
+                    {min: 0, max: 360},     // 4: overhead hue
+                    {min: 0, max: 100},     // 5: overhead saturation
+                    {min: 0, max: 3},       // 6: globe lamp intensity
+                    {min: 0, max: 360},     // 7: globe lamp hue
+                    {min: 0, max: 100},     // 8: globe lamp saturation
+                    {min: 0, max: 2},       // 9: spotlight 1 intensity
+                    {min: 0, max: 360},     // 10: spotlight 1 hue
+                    {min: 0, max: 100},     // 11: spotlight 1 saturation
+                    {min: 0, max: 2},       // 12: spotlight 2 intensity
+                    {min: 0, max: 360},     // 13: spotlight 2 hue
+                    {min: 0, max: 100},     // 14: spotlight 2 saturation
+                    {min: 0, max: 1}        // 15: spotlight penumbra
                 ];
                 
                 const dragSensitivity = 0.2;
@@ -6906,22 +7385,160 @@ function onPointer(evt) {
                 switch (lightingKnob) {
                     case 0: // Ambient intensity
                         gAmbientIntensity = newValue;
-                        if (gAmbientLight) gAmbientLight.intensity = gAmbientIntensity;
-                        break;
-                    case 1: // Overhead intensity
-                        gOverheadIntensity = newValue;
-                        if (gDirectionalLight) gDirectionalLight.intensity = gOverheadIntensity;
-                        break;
-                    case 2: // Spotlight intensity
-                        gSpotlightIntensity = newValue;
-                        // Update all lamp spotlights
-                        for (let lampId in gLamps) {
-                            if (gLamps[lampId] && gLamps[lampId].spotlight) {
-                                gLamps[lampId].spotlight.intensity = gSpotlightIntensity;
-                            }
+                        if (gAmbientLight) {
+                            gAmbientLight.intensity = gAmbientIntensity;
+                            gAmbientLight.visible = gAmbientIntensity > 0;
                         }
                         break;
-                    case 3: // Spotlight penumbra
+                    case 1: // Ambient hue
+                        gAmbientHue = Math.round(newValue);
+                        if (gAmbientLight) {
+                            const color = new THREE.Color();
+                            color.setHSL(gAmbientHue / 360, gAmbientSaturation / 100, 0.5);
+                            gAmbientLight.color = color;
+                        }
+                        break;
+                    case 2: // Ambient saturation
+                        gAmbientSaturation = Math.round(newValue);
+                        if (gAmbientLight) {
+                            const color = new THREE.Color();
+                            color.setHSL(gAmbientHue / 360, gAmbientSaturation / 100, 0.5);
+                            gAmbientLight.color = color;
+                        }
+                        break;
+                    case 3: // Overhead intensity
+                        gOverheadIntensity = newValue;
+                        if (gDirectionalLight) {
+                            gDirectionalLight.intensity = gOverheadIntensity;
+                            gDirectionalLight.visible = gOverheadIntensity > 0;
+                        }
+                        break;
+                    case 4: // Overhead hue
+                        gOverheadHue = Math.round(newValue);
+                        if (gDirectionalLight) {
+                            const color = new THREE.Color();
+                            color.setHSL(gOverheadHue / 360, gOverheadSaturation / 100, 0.5);
+                            gDirectionalLight.color = color;
+                        }
+                        break;
+                    case 5: // Overhead saturation
+                        gOverheadSaturation = Math.round(newValue);
+                        if (gDirectionalLight) {
+                            const color = new THREE.Color();
+                            color.setHSL(gOverheadHue / 360, gOverheadSaturation / 100, 0.5);
+                            gDirectionalLight.color = color;
+                        }
+                        break;
+                    case 6: // Globe lamp intensity
+                        gGlobeLampIntensity = newValue;
+                        if (gGlobeLampLight) {
+                            gGlobeLampLight.intensity = gGlobeLampIntensity;
+                        }
+                        // Show/hide globe lamp based on intensity
+                        if (gGlobeLamp) {
+                            gGlobeLamp.visible = gGlobeLampIntensity > 0;
+                        }
+                        if (gGlobeLampLight) {
+                            gGlobeLampLight.visible = gGlobeLampIntensity > 0;
+                        }
+                        // Enable/disable obstacle avoidance
+                        if (gGlobeLampObstacle) {
+                            gGlobeLampObstacle.enabled = gGlobeLampIntensity > 0;
+                        }
+                        break;
+                    case 7: // Globe lamp hue
+                        gGlobeLampHue = Math.round(newValue);
+                        if (gGlobeLampLight) {
+                            const color = new THREE.Color();
+                            color.setHSL(gGlobeLampHue / 360, gGlobeLampSaturation / 100, 0.5);
+                            gGlobeLampLight.color = color;
+                        }
+                        break;
+                    case 8: // Globe lamp saturation
+                        gGlobeLampSaturation = Math.round(newValue);
+                        if (gGlobeLampLight) {
+                            const color = new THREE.Color();
+                            color.setHSL(gGlobeLampHue / 360, gGlobeLampSaturation / 100, 0.5);
+                            gGlobeLampLight.color = color;
+                        }
+                        break;
+                    case 9: // Spotlight 1 intensity
+                        gSpotlight1Intensity = newValue;
+                        if (gLamps[1] && gLamps[1].spotlight) {
+                            const isOn = gSpotlight1Intensity > 0;
+                            gLamps[1].spotlight.intensity = gSpotlight1Intensity;
+                            gLamps[1].spotlight.visible = isOn;
+                            
+                            // Update lamp appearance
+                            gLamps[1].bulb.material.color.setHex(isOn ? 0xffffff : 0x333333);
+                            gLamps[1].innerCone.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
+                            gLamps[1].innerCone.material.emissiveIntensity = isOn ? 0.8 : 0;
+                            gLamps[1].innerCone.material.color.setHex(isOn ? 0xffff00 : 0x222222);
+                            gLamps[1].coneTipCapInner.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
+                            gLamps[1].coneTipCapInner.material.emissiveIntensity = isOn ? 0.8 : 0;
+                            gLamps[1].coneTipCapInner.material.color.setHex(isOn ? 0xffff00 : 0x222222);
+                            gLamps[1].coneTipCapOuter.material.color.setHex(isOn ? 0xffc71e : 0x222222);
+                            gLamps[1].tipLight.visible = isOn;
+                            gLamps[1].statusIndicator.material.color.setHex(isOn ? 0x00ff00 : 0xff0000);
+                            gLamps[1].statusIndicator.material.emissive.setHex(isOn ? 0x00ff00 : 0xff0000);
+                            gLamps[1].statusIndicator.material.emissiveIntensity = 0.8;
+                        }
+                        break;
+                    case 10: // Spotlight 1 hue
+                        gSpotlight1Hue = Math.round(newValue);
+                        if (gLamps[1] && gLamps[1].spotlight) {
+                            const color = new THREE.Color();
+                            color.setHSL(gSpotlight1Hue / 360, gSpotlight1Saturation / 100, 0.5);
+                            gLamps[1].spotlight.color = color;
+                        }
+                        break;
+                    case 11: // Spotlight 1 saturation
+                        gSpotlight1Saturation = Math.round(newValue);
+                        if (gLamps[1] && gLamps[1].spotlight) {
+                            const color = new THREE.Color();
+                            color.setHSL(gSpotlight1Hue / 360, gSpotlight1Saturation / 100, 0.5);
+                            gLamps[1].spotlight.color = color;
+                        }
+                        break;
+                    case 12: // Spotlight 2 intensity
+                        gSpotlight2Intensity = newValue;
+                        if (gLamps[2] && gLamps[2].spotlight) {
+                            const isOn = gSpotlight2Intensity > 0;
+                            gLamps[2].spotlight.intensity = gSpotlight2Intensity;
+                            gLamps[2].spotlight.visible = isOn;
+                            
+                            // Update lamp appearance
+                            gLamps[2].bulb.material.color.setHex(isOn ? 0xffffff : 0x333333);
+                            gLamps[2].innerCone.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
+                            gLamps[2].innerCone.material.emissiveIntensity = isOn ? 0.8 : 0;
+                            gLamps[2].innerCone.material.color.setHex(isOn ? 0xffff00 : 0x222222);
+                            gLamps[2].coneTipCapInner.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
+                            gLamps[2].coneTipCapInner.material.emissiveIntensity = isOn ? 0.8 : 0;
+                            gLamps[2].coneTipCapInner.material.color.setHex(isOn ? 0xffff00 : 0x222222);
+                            gLamps[2].coneTipCapOuter.material.color.setHex(isOn ? 0xffc71e : 0x222222);
+                            gLamps[2].tipLight.visible = isOn;
+                            gLamps[2].statusIndicator.material.color.setHex(isOn ? 0x00ff00 : 0xff0000);
+                            gLamps[2].statusIndicator.material.emissive.setHex(isOn ? 0x00ff00 : 0xff0000);
+                            gLamps[2].statusIndicator.material.emissiveIntensity = 0.8;
+                        }
+                        break;
+                    case 13: // Spotlight 2 hue
+                        gSpotlight2Hue = Math.round(newValue);
+                        if (gLamps[2] && gLamps[2].spotlight) {
+                            const color = new THREE.Color();
+                            color.setHSL(gSpotlight2Hue / 360, gSpotlight2Saturation / 100, 0.5);
+                            gLamps[2].spotlight.color = color;
+                        }
+                        break;
+                    case 14: // Spotlight 2 saturation
+                        gSpotlight2Saturation = Math.round(newValue);
+                        if (gLamps[2] && gLamps[2].spotlight) {
+                            const color = new THREE.Color();
+                            color.setHSL(gSpotlight2Hue / 360, gSpotlight2Saturation / 100, 0.5);
+                            gLamps[2].spotlight.color = color;
+                        }
+                        break;
+                    case 15: // Spotlight penumbra
                         gSpotlightPenumbra = newValue;
                         // Update all lamp spotlights
                         for (let lampId in gLamps) {
@@ -6974,7 +7591,10 @@ function onPointer(evt) {
                 {min: 1.0, max: 20.0},
                 {min: 1.0, max: 30.0},
                 {min: 0, max: 0.2},
-                {min: 0.5, max: 5.0}
+                {min: 0.5, max: 5.0},
+                {min: 10, max: 60},
+                {min: 10, max: 60},
+                {min: 10, max: 60}
             ];
             
             const dragSensitivity = 0.2;
@@ -7130,6 +7750,21 @@ function onPointer(evt) {
                     break;
                 case 8: boidProps.turnFactor = newValue; break;
                 case 9: boidProps.margin = newValue; break;
+                case 10: // World Size X
+                    gWorldSizeX = Math.round(newValue / 10) * 10;
+                    gPhysicsScene.worldSize.x = gWorldSizeX;
+                    updateWorldGeometry();
+                    break;
+                case 11: // World Size Y
+                    gWorldSizeY = Math.round(newValue / 10) * 10;
+                    gPhysicsScene.worldSize.y = gWorldSizeY;
+                    updateWorldGeometry();
+                    break;
+                case 12: // World Size Z
+                    gWorldSizeZ = Math.round(newValue / 10) * 10;
+                    gPhysicsScene.worldSize.z = gWorldSizeZ;
+                    updateWorldGeometry();
+                    break;
             }
             return;
         }
@@ -7231,6 +7866,63 @@ function onPointer(evt) {
                 // Update obstacle position
                 if (gTeapotObstacle) {
                     gTeapotObstacle.updatePosition(new THREE.Vector3(newX, gTeapot.position.y + gTeapotObstacle.height / 2, newZ));
+                }
+            }
+            return;
+        }
+        
+        // Handle globe lamp dragging (3D movement in space)
+        if (gDraggingGlobeLamp && gGlobeLamp) {
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Use fixed plane at the distance established when drag started
+            var cameraDirection = new THREE.Vector3();
+            gCamera.getWorldDirection(cameraDirection);
+            var planePoint = new THREE.Vector3();
+            planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gGlobeLampDragPlaneDistance));
+            var globeLampPlane = new THREE.Plane();
+            globeLampPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+            
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(globeLampPlane, intersectionPoint);
+            
+            if (intersectionPoint && gGlobeLampDragOffset) {
+                // Apply the offset to maintain grab point
+                var newPosition = new THREE.Vector3(
+                    intersectionPoint.x + gGlobeLampDragOffset.x,
+                    intersectionPoint.y + gGlobeLampDragOffset.y,
+                    intersectionPoint.z + gGlobeLampDragOffset.z
+                );
+                
+                // Clamp to room boundaries
+                var lampRadius = 3.0; // Same as obstacle radius
+                var minBoundX = -gPhysicsScene.worldSize.x + lampRadius;
+                var maxBoundX = gPhysicsScene.worldSize.x - lampRadius;
+                var minBoundY = lampRadius;
+                var maxBoundY = gPhysicsScene.worldSize.y - lampRadius;
+                var minBoundZ = -gPhysicsScene.worldSize.z + lampRadius;
+                var maxBoundZ = gPhysicsScene.worldSize.z - lampRadius;
+                
+                newPosition.x = Math.max(minBoundX, Math.min(maxBoundX, newPosition.x));
+                newPosition.y = Math.max(minBoundY, Math.min(maxBoundY, newPosition.y));
+                newPosition.z = Math.max(minBoundZ, Math.min(maxBoundZ, newPosition.z));
+                
+                gGlobeLamp.position.copy(newPosition);
+                
+                // Update light position
+                if (gGlobeLampLight) {
+                    gGlobeLampLight.position.copy(newPosition);
+                }
+                
+                // Update obstacle position
+                if (gGlobeLampObstacle) {
+                    gGlobeLampObstacle.updatePosition(newPosition);
                 }
             }
             return;
@@ -7576,6 +8268,16 @@ function onPointer(evt) {
             return;
         }
         
+        if (gDraggingGlobeLamp) {
+            gDraggingGlobeLamp = false;
+            gGlobeLampDragOffset = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
         if (gDraggingStool) {
             gDraggingStool = false;
             gStoolDragOffset = null;
@@ -7674,7 +8376,7 @@ function checkSimMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 3.3;
+    const menuHeight = knobSpacing * 4.6;  // Updated for 13 knobs
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = simMenuX * window.innerWidth;
@@ -7694,8 +8396,8 @@ function checkSimMenuClick(clientX, clientY) {
         return true;
     }
     
-    // Check knobs
-    for (let knob = 0; knob < 10; knob++) {
+    // Check knobs (now 13 knobs instead of 10)
+    for (let knob = 0; knob < 13; knob++) {
         const row = Math.floor(knob / 3);
         const col = knob % 3;
         const knobX = menuOriginX + col * knobSpacing;
@@ -7711,7 +8413,8 @@ function checkSimMenuClick(clientX, clientY) {
             const menuItems = [
                 gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
                 boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
-                boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin
+                boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin,
+                gWorldSizeX, gWorldSizeY, gWorldSizeZ
             ];
             dragStartValue = menuItems[knob];
             
@@ -8087,7 +8790,7 @@ function checkLightingMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 1.5;
+    const menuHeight = knobSpacing * 5.5; // 6 rows (now with 16 knobs)
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = lightingMenuX * window.innerWidth;
@@ -8108,7 +8811,7 @@ function checkLightingMenuClick(clientX, clientY) {
     }
     
     // Check each knob
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 16; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const knobX = menuOriginX + col * knobSpacing;
@@ -8123,7 +8826,14 @@ function checkLightingMenuClick(clientX, clientY) {
             dragStartMouseX = clientX;
             dragStartMouseY = clientY;
             
-            const values = [gAmbientIntensity, gOverheadIntensity, gSpotlightIntensity, gSpotlightPenumbra];
+            const values = [
+                gAmbientIntensity, gAmbientHue, gAmbientSaturation,
+                gOverheadIntensity, gOverheadHue, gOverheadSaturation,
+                gGlobeLampIntensity, gGlobeLampHue, gGlobeLampSaturation,
+                gSpotlight1Intensity, gSpotlight1Hue, gSpotlight1Saturation,
+                gSpotlight2Intensity, gSpotlight2Hue, gSpotlight2Saturation,
+                gSpotlightPenumbra
+            ];
             dragStartValue = values[i];
             
             if (gCameraControl) {
@@ -8491,6 +9201,14 @@ function update() {
         }
     }
     
+    // Update painting visibility based on position (hide when stored above room)
+    if (gMiroPaintingGroup && gDaliPaintingGroup && gDuchampPaintingGroup) {
+        var storageThreshold = gPaintingBaseY + gPaintingExitY * 0.5; // Halfway up
+        gMiroPaintingGroup.visible = gMiroPaintingGroup.position.y < storageThreshold;
+        gDaliPaintingGroup.visible = gDaliPaintingGroup.position.y < storageThreshold;
+        gDuchampPaintingGroup.visible = gDuchampPaintingGroup.position.y < storageThreshold;
+    }
+    
     // Teapot slide animation
     if (gTeapot && gTeapotAnimating) {
         gTeapotAnimationTimer += deltaT;
@@ -8666,11 +9384,81 @@ function update() {
         }
     }
     
+    // Pedestal descent animations with staggered timing
+    for (var i = 0; i < gPedestalAnimData.length; i++) {
+        var pedestalData = gPedestalAnimData[i];
+        if (pedestalData.animating) {
+            pedestalData.timer += deltaT;
+            
+            // Check if delay has passed
+            if (pedestalData.timer >= pedestalData.delay) {
+                var animTime = pedestalData.timer - pedestalData.delay;
+                var duration = 1.2; // Descent duration in seconds
+                var t = Math.min(animTime / duration, 1.0);
+                
+                // Cubic ease-out for natural descent
+                var eased = 1 - Math.pow(1 - t, 3);
+                var currentPedestalY = pedestalData.startY + (pedestalData.targetPedestalY - pedestalData.startY) * eased;
+                var solidOffset = pedestalData.targetSolidY - pedestalData.targetPedestalY;
+                var currentSolidY = pedestalData.startY + solidOffset + (pedestalData.targetPedestalY - pedestalData.startY) * eased;
+                
+                pedestalData.pedestal.position.y = currentPedestalY;
+                pedestalData.solidGroup.position.y = currentSolidY;
+                
+                // Stop animation when complete
+                if (t >= 1.0) {
+                    pedestalData.animating = false;
+                    pedestalData.pedestal.position.y = pedestalData.targetPedestalY;
+                    pedestalData.solidGroup.position.y = pedestalData.targetSolidY;
+                }
+            }
+        }
+    }
+    
+    // Animate column dropping after pedestals finish
+    if (gColumnDropping && gColumnObstacle) {
+        // Check if all pedestals have finished animating
+        const allPedestalsDone = gPedestalAnimData.every(function(data) {
+            return !data.animating;
+        });
+        
+        if (allPedestalsDone) {
+            gColumnDropTimer += deltaT;
+            
+            if (gColumnDropTimer >= gColumnDropDelay) {
+                const elapsed = gColumnDropTimer - gColumnDropDelay;
+                const progress = Math.min(1, elapsed / gColumnDropDuration);
+                
+                // Cubic ease-out: starts fast, decelerates
+                const easedProgress = 1 - Math.pow(1 - progress, 3);
+                
+                // Calculate current Y offset
+                const currentOffset = gColumnStartY * (1 - easedProgress);
+                const targetY = 6.03;
+                const currentY = targetY + currentOffset;
+                
+                // Update column position (this will update all parts)
+                gColumnObstacle.updatePosition(new THREE.Vector3(9, currentY, -9));
+                
+                // End animation when complete
+                if (progress >= 1) {
+                    gColumnDropping = false;
+                    gColumnObstacle.updatePosition(new THREE.Vector3(9, targetY, -9));
+                }
+            }
+        }
+    }
+    
     // Animate Platonic solids rotation around Y axis
     if (window.gPlatonicSolids && window.gPlatonicSolids.length === 5) {
         for (var i = 0; i < window.gPlatonicSolids.length; i++) {
             window.gPlatonicSolids[i].rotation.y += 0.5 * deltaT; // Slow rotation
         }
+    }
+    
+    // Animate globe lamp rotation around Y axis (only if visible/enabled)
+    if (gGlobeLamp && gGlobeLampIntensity > 0) {
+        gGlobeLamp.rotation.y += 0.3 * deltaT; // Slow spin
     }
     
     // Update menu animations
@@ -8715,6 +9503,142 @@ function update() {
     // Update colors if in dynamic mode (by direction or speed)
     if (gColorationMode === 1 || gColorationMode === 2) {
         applyMixedColors();
+    }
+    
+    // Animate walls tilting into place
+    const boxSize = gPhysicsScene.worldSize;
+    ['front', 'back', 'left', 'right'].forEach(wallName => {
+        const anim = gWallAnimation[wallName];
+        if (anim.animating) {
+            anim.timer += deltaT;
+            
+            if (anim.timer >= anim.delay) {
+                const elapsed = anim.timer - anim.delay;
+                const progress = Math.min(1, elapsed / anim.duration);
+                
+                // Ease-in cubic function: t^3
+                const easedProgress = progress * progress * progress;
+                
+                // Interpolate rotation
+                const currentRotation = anim.startRotation + (anim.targetRotation - anim.startRotation) * easedProgress;
+                
+                // Apply rotation and position based on wall orientation
+                // Walls rotate around their bottom edges at floor level
+                if (wallName === 'front') {
+                    gWalls.front.rotation.x = currentRotation;
+                    gWalls.front.position.y = (boxSize.y / 2) * Math.cos(currentRotation);
+                    gWalls.front.position.z = boxSize.z + (boxSize.y / 2) * Math.sin(currentRotation);
+                } else if (wallName === 'back') {
+                    gWalls.back.rotation.x = currentRotation;
+                    gWalls.back.position.y = (boxSize.y / 2) * Math.cos(currentRotation);
+                    gWalls.back.position.z = -boxSize.z + (boxSize.y / 2) * Math.sin(currentRotation);
+                } else if (wallName === 'left') {
+                    gWalls.left.rotation.x = currentRotation;
+                    gWalls.left.position.y = (boxSize.y / 2) * Math.cos(currentRotation);
+                    gWalls.left.position.x = -boxSize.x - (boxSize.y / 2) * Math.sin(currentRotation);
+                } else if (wallName === 'right') {
+                    gWalls.right.rotation.x = -currentRotation;
+                    gWalls.right.position.y = (boxSize.y / 2) * Math.cos(currentRotation);
+                    gWalls.right.position.x = boxSize.x - (boxSize.y / 2) * Math.sin(currentRotation);
+                }
+                
+                if (progress >= 1) {
+                    anim.animating = false;
+                    // Ensure final position is exact
+                    if (wallName === 'front') {
+                        gWalls.front.rotation.x = 0;
+                        gWalls.front.position.y = boxSize.y / 2;
+                        gWalls.front.position.z = boxSize.z;
+                    } else if (wallName === 'back') {
+                        gWalls.back.rotation.x = 0;
+                        gWalls.back.position.y = boxSize.y / 2;
+                        gWalls.back.position.z = -boxSize.z;
+                    } else if (wallName === 'left') {
+                        gWalls.left.rotation.x = 0;
+                        gWalls.left.position.y = boxSize.y / 2;
+                        gWalls.left.position.x = -boxSize.x;
+                        gWalls.left.position.z = 0;
+                    } else if (wallName === 'right') {
+                        gWalls.right.rotation.x = 0;
+                        gWalls.right.position.y = boxSize.y / 2;
+                        gWalls.right.position.x = boxSize.x;
+                        gWalls.right.position.z = 0;
+                    }
+                }
+            }
+        }
+    });
+    
+    // Animate paintings dropping into place after walls finish
+    if (gPaintingsDropping) {
+        // Check if all walls have finished animating
+        const allWallsDone = !gWallAnimation.front.animating && 
+                            !gWallAnimation.back.animating && 
+                            !gWallAnimation.left.animating && 
+                            !gWallAnimation.right.animating;
+        
+        if (allWallsDone) {
+            gPaintingDropTimer += deltaT;
+            
+            if (gPaintingDropTimer >= gPaintingDropDelay) {
+                const elapsed = gPaintingDropTimer - gPaintingDropDelay;
+                const progress = Math.min(1, elapsed / gPaintingDropDuration);
+                
+                // Cubic ease-out: starts fast, decelerates (y = 1 - (1-x)^3)
+                const easedProgress = 1 - Math.pow(1 - progress, 3);
+                
+                // Calculate current Y offset
+                const currentOffset = gPaintingDropStartY * (1 - easedProgress);
+                
+                // Update Miro painting group
+                if (gMiroPaintingGroup) {
+                    gMiroPaintingGroup.position.y = gPaintingBaseY + currentOffset;
+                }
+                
+                // Update Dali painting group (already high from swap system)
+                if (gDaliPaintingGroup && gDaliPaintingGroup.position.y > gPaintingBaseY + gPaintingDropStartY) {
+                    gDaliPaintingGroup.position.y = gPaintingBaseY + gPaintingExitY + currentOffset;
+                }
+                
+                // Update Duchamp painting group (already high from swap system)
+                if (gDuchampPaintingGroup && gDuchampPaintingGroup.position.y > gPaintingBaseY + gPaintingDropStartY) {
+                    gDuchampPaintingGroup.position.y = gPaintingBaseY + gPaintingExitY + currentOffset;
+                }
+                
+                // Update left wall painting and frame
+                if (gLeftWallPainting) {
+                    const painting2Y = boxSize.y / 2 + 1;
+                    gLeftWallPainting.position.y = painting2Y + currentOffset;
+                    
+                    // Update frame pieces
+                    const painting2Width = 12 * 0.9;
+                    const painting2Height = 16 * 0.9;
+                    const frame2Thickness = 0.3;
+                    
+                    if (gLeftWallFramePieces.length >= 4) {
+                        gLeftWallFramePieces[0].position.y = painting2Y + painting2Height / 2 + frame2Thickness / 2 + currentOffset; // top
+                        gLeftWallFramePieces[1].position.y = painting2Y - painting2Height / 2 - frame2Thickness / 2 + currentOffset; // bottom
+                        gLeftWallFramePieces[2].position.y = painting2Y + currentOffset; // left
+                        gLeftWallFramePieces[3].position.y = painting2Y + currentOffset; // right
+                    }
+                }
+                
+                // Update oval painting and frame on back wall
+                if (gOvalPainting) {
+                    const ovalPaintingY = boxSize.y / 2 + 6;
+                    gOvalPainting.position.y = ovalPaintingY + currentOffset;
+                }
+                if (gOvalFrame) {
+                    const ovalPaintingY = boxSize.y / 2 + 6;
+                    gOvalFrame.position.y = ovalPaintingY + currentOffset;
+                }
+                
+                // End animation when complete
+                if (progress >= 1) {
+                    gPaintingsDropping = false;
+                }
+            }
+        }
     }
     
     // Update bicycle wheel physics
@@ -8819,8 +9743,8 @@ function update() {
             gCamera.lookAt(lookAtPoint);
         }
     } else {
-        // Apply automatic rotation if in rotation modes (1 or 2)
-        if (gCameraMode === 1 || gCameraMode === 2) {
+        // Apply automatic rotation if in rotation modes (0 or 1)
+        if (gCameraMode === 0 || gCameraMode === 1) {
             const target = gCameraControl.target;
             
             // Get current camera position relative to target
@@ -8828,7 +9752,7 @@ function update() {
             const radius = offset.length();
             
             // Rotate around vertical axis (Y) - time-based for smooth independent motion
-            const direction = gCameraMode === 1 ? 1 : -1; // Mode 1 = CCW, Mode 2 = CW
+            const direction = gCameraMode === 1 ? 1 : -1; // Mode 1 = CCW, Mode 0 = CW
             const rotationAngle = direction * gCameraRotationSpeed * deltaT * Math.PI / 180; // Convert to radians, scale by deltaT
             const axis = new THREE.Vector3(0, 1, 0);
             offset.applyAxisAngle(axis, rotationAngle);
@@ -8860,6 +9784,12 @@ function update() {
         const opacity = 1 - fadeProgress; // 1 to 0
         gOverlayCtx.fillStyle = `rgba(0, 0, 0, ${opacity})`;
         gOverlayCtx.fillRect(0, 0, gOverlayCanvas.width, gOverlayCanvas.height);
+    }
+    
+    // Update camera mode text timer
+    if (gCameraModeTextTimer > 0) {
+        gCameraModeTextTimer -= deltaT;
+        if (gCameraModeTextTimer < 0) gCameraModeTextTimer = 0;
     }
     
     requestAnimationFrame(update);
