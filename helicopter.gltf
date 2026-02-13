@@ -9,65 +9,12 @@
       "nodes": [
         0,
         1,
-        2,
-        3,
-        4,
-        11
+        8
       ]
     }
   ],
   "scene": 0,
   "nodes": [
-    {
-      "name": "AmbientLight"
-    },
-    {
-      "matrix": [
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        5,
-        10,
-        7.5,
-        1
-      ],
-      "name": "DirectionalLight",
-      "extensions": {
-        "KHR_lights_punctual": {
-          "light": 0
-        }
-      }
-    },
-    {
-      "matrix": [
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        10,
-        0,
-        1
-      ],
-      "name": "HemisphereLight"
-    },
     {
       "matrix": [
         1,
@@ -111,9 +58,9 @@
       ],
       "name": "propAssembly",
       "children": [
-        5,
-        7,
-        9
+        2,
+        4,
+        6
       ]
     },
     {
@@ -137,7 +84,7 @@
       ],
       "name": "prop3",
       "children": [
-        6
+        3
       ]
     },
     {
@@ -183,7 +130,7 @@
       ],
       "name": "prop2",
       "children": [
-        8
+        5
       ]
     },
     {
@@ -211,7 +158,7 @@
     {
       "name": "prop1",
       "children": [
-        10
+        7
       ]
     },
     {
@@ -259,22 +206,6 @@
       "mesh": 4
     }
   ],
-  "extensions": {
-    "KHR_lights_punctual": {
-      "lights": [
-        {
-          "name": "DirectionalLight",
-          "color": [
-            1,
-            1,
-            1
-          ],
-          "intensity": 1,
-          "type": "directional"
-        }
-      ]
-    }
-  },
   "bufferViews": [
     {
       "buffer": 0,
@@ -843,8 +774,5 @@
         }
       ]
     }
-  ],
-  "extensionsUsed": [
-    "KHR_lights_punctual"
   ]
 }
