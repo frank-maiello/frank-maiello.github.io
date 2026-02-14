@@ -4533,19 +4533,50 @@ function updateWorldGeometry() {
             gFloor.material.dispose();
         }
         
-        // Recreate floor with new size
+        // Update floor ground with new size - same pattern as startup
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
+        const tileRes = 1024;
+        canvas.width = tileRes;
+        canvas.height = tileRes;
         const ctx = canvas.getContext('2d');
-        const tileSize = 64;
-        for (let i = 0; i < 8; i++) {
-            for (let j = 0; j < 8; j++) {
-                //ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#3d3d3d';
-                ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#0e0f26';
-                ctx.fillRect(i * tileSize, j * tileSize, tileSize, tileSize);
+        
+        ctx.fillStyle = 'hsl(0, 0%, 50%)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw checkerboard with circles
+        const tileSize = 512;
+        for (let i = 0; i < tileRes; i++) {
+            for (let j = 0; j < tileRes; j++) {
+                if ((i + j) % 2 === 0) {
+                    ctx.beginPath();
+                    ctx.arc(
+                        i * tileSize + tileSize / 2, 
+                        j * tileSize + tileSize / 2, 
+                        0.3 * tileSize, 
+                        0, 
+                        2 * Math.PI);
+                    ctx.fillStyle = 'hsl(296, 65%, 65%)';
+                    ctx.fill();
+                    ctx.strokeStyle = 'hsl(0, 0%, 15%)';
+                    ctx.lineWidth = 0.05 * tileSize;
+                    ctx.stroke();
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(
+                        i * tileSize + tileSize / 2, 
+                        j * tileSize + tileSize / 2, 
+                        0.45 * tileSize, 
+                        0, 
+                        2 * Math.PI);
+                    ctx.fillStyle = 'hsl(0, 0%, 15%)';
+                    ctx.fill();
+                    ctx.strokeStyle = 'hsl(0, 0%, 90%)';
+                    ctx.lineWidth = 0.05 * tileSize;
+                    ctx.stroke();
+                }
             }
         }
+        
         const checkerTexture = new THREE.CanvasTexture(canvas);
         checkerTexture.wrapS = THREE.RepeatWrapping;
         checkerTexture.wrapT = THREE.RepeatWrapping;
@@ -4556,9 +4587,9 @@ function updateWorldGeometry() {
         gFloor = new THREE.Mesh(
             new THREE.PlaneGeometry(boxSize.x * 2, boxSize.z * 2, 1, 1),
             new THREE.MeshPhongMaterial({ 
-                //map: checkerTexture,
-                color: new THREE.Color(`hsl(0, 0%, 100%)`),
-                shininess: 100 
+                map: checkerTexture,
+                shininess: 1.0,
+                roughness: 0.0,
             })
         );
         
@@ -5433,7 +5464,7 @@ function initThreeScene() {
             // Create hanging ornaments with random properties
             var numStars = 24;
             var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
-            var minY = WORLD_HEIGHT * 0.8; // Upper part of room
+            var minY = WORLD_HEIGHT * 0.7; // Upper part of room
             var maxY = WORLD_HEIGHT * 1.3; // Slightly below ceiling
             var startYAboveCeiling = WORLD_HEIGHT + 12; // Start above ceiling
             var minStarDistance = 6; // Minimum distance between stars (about 2 object sizes)
