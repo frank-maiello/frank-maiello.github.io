@@ -4556,10 +4556,12 @@ function updateWorldGeometry() {
         gFloor = new THREE.Mesh(
             new THREE.PlaneGeometry(boxSize.x * 2, boxSize.z * 2, 1, 1),
             new THREE.MeshPhongMaterial({ 
-                map: checkerTexture,
+                //map: checkerTexture,
+                color: new THREE.Color(`hsl(0, 0%, 100%)`),
                 shininess: 100 
             })
         );
+        
         gFloor.rotation.x = -Math.PI / 2;
         gFloor.receiveShadow = true;
         gFloor.position.set(0, 0, 0);
@@ -4698,20 +4700,59 @@ function initThreeScene() {
     dirLight.shadow.mapSize.height = res;
     gThreeScene.add( dirLight );
     
-    // Floor ground with checkerboard pattern
+    // Floor ground with checkerboard pattern -----------------------------
     var canvas = document.createElement('canvas');
-    const tileRes = 512; // Size of each tile in pixels
+    const tileRes = 1024; // Size of each tile in pixels
     canvas.width = tileRes;
     canvas.height = tileRes;
     var ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = 'hsl(0, 0%, 50%)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Draw checkerboard
-    var tileSize = 64;
+    var tileSize = 512;
     for (var i = 0; i < tileRes; i++) {
         for (var j = 0; j < tileRes; j++) {
             //ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#3d3d3d';
-            ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#0e0f26';
-            ctx.fillRect(i * tileSize, j * tileSize, tileSize, tileSize);
+            //ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#0e0f26';
+            //ctx.fillStyle = (i + j) % 2 === 0 ? '#0e0f26' : '#cccccc';
+            //ctx.fillRect(i * tileSize, j * tileSize, tileSize, tileSize);
+            if ((i + j) % 2 === 0) {
+                ctx.beginPath();
+                ctx.arc(
+                i * tileSize + tileSize / 2, 
+                j * tileSize + tileSize / 2, 
+                0.3 * tileSize, 
+                0, 
+                2 * Math.PI);
+                ctx.fillStyle = 'hsl(296, 65%, 65%)';
+                ctx.fill();
+                ctx.strokeStyle = 'hsl(0, 0%, 15%)';
+                ctx.lineWidth = 0.05 * tileSize;
+                ctx.stroke();
+                //ctx.fillStyle = 'hsl(296, 65%, 65%)';
+                //ctx.fillRect(-tileSize / 2, -tileSize / 2, 1.5 * tileSize, 1.5 * tileSize);
+            } else {
+                /*ctx.fillStyle = 'rgb(105, 107, 136)';
+                ctx.save();
+                ctx.translate(i * tileSize + tileSize / 2, j * tileSize + tileSize / 2);
+                ctx.rotate(Math.PI / 4);
+                ctx.fillRect(-tileSize / 2, -tileSize / 2, tileSize, tileSize);
+                ctx.restore();*/
+                ctx.beginPath();
+                ctx.arc(
+                i * tileSize + tileSize / 2, 
+                j * tileSize + tileSize / 2, 
+                0.45 * tileSize, 
+                0, 
+                2 * Math.PI);
+                ctx.fillStyle = 'hsl(0, 0%, 15%)';
+                ctx.fill();
+                ctx.strokeStyle = 'hsl(0, 0%, 90%)';
+                ctx.lineWidth = 0.05 * tileSize;
+                ctx.stroke();
+            }
         }
     }
     
@@ -4727,23 +4768,24 @@ function initThreeScene() {
         new THREE.PlaneGeometry(WORLD_WIDTH * 2, WORLD_DEPTH * 2, 1, 1),
         new THREE.MeshPhongMaterial({ 
             map: checkerTexture,
+            //color: new THREE.Color(`hsl(0, 0%, 30%)`),
             shininess: 1.0,
             roughness: 0.0,
         })
     );				
 
-    gFloor.rotation.x = - Math.PI / 2; // rotates X/Y to X/Z
+    gFloor.rotation.x = -Math.PI / 2; // rotates X/Y to X/Z
     gFloor.receiveShadow = true;
     gFloor.position.set(0, 0, 0);
     gThreeScene.add( gFloor );
     
-    /*var gridHelper = new THREE.GridHelper( 84, 30, 0x888888, 0x888888 );
+    /*var gridHelper = new THREE.GridHelper( 75, 50, 0xcca000, 0xcca000 );
     gridHelper.material.opacity = 1.0;
     gridHelper.material.transparent = true;
     gridHelper.position.set(0, 0.01, 0);
     gThreeScene.add( gridHelper );*/
     
-    // Load stool model using GLTFLoader
+    // Load stool model using GLTFLoader -----------------------------
     // Check if GLTFLoader is available
     if (typeof THREE.GLTFLoader !== 'undefined') {
         var loader = new THREE.GLTFLoader();
@@ -5374,13 +5416,225 @@ function initThreeScene() {
         );
     }
     
-    // Load Tube Star model using GLTFLoader for hanging decorations
+    // Load Tube Star, Heart, and Moon models using GLTFLoader for hanging decorations
     if (typeof THREE.GLTFLoader !== 'undefined') {
+        var starTemplate, heartTemplate, moonTemplate;
+        var modelsLoaded = 0;
+        var totalModels = 3;
+        
+        function onModelLoaded() {
+            modelsLoaded++;
+            if (modelsLoaded === totalModels) {
+                createHangingOrnaments();
+            }
+        }
+        
+        function createHangingOrnaments() {
+            // Create hanging ornaments with random properties
+            var numStars = 24;
+            var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
+            var minY = WORLD_HEIGHT * 0.8; // Upper part of room
+            var maxY = WORLD_HEIGHT * 1.3; // Slightly below ceiling
+            var startYAboveCeiling = WORLD_HEIGHT + 12; // Start above ceiling
+            var minStarDistance = 6; // Minimum distance between stars (about 2 object sizes)
+            var starPositions = []; // Track placed star positions
+            
+            // Obstacle positions to avoid
+            var columnPos = {x: 9, z: -9}; // Column XZ position
+            var columnRadius = 2.5;
+            var columnAvoidRadius = 4; // Avoid area above column
+            var spherePos = {x: -24, y: 15, z: 14}; // Sphere obstacle position
+            var sphereRadius = 3;
+            var sphereAvoidRadius = 5; // Avoid area near sphere
+            
+            // Material for wires
+            var wireMaterial = new THREE.MeshPhongMaterial({
+                color: 0x222222,
+                shininess: 10
+            });
+            
+            // Create array to determine which model to use for each ornament
+            // 1 moon, ~8 hearts (1/3), rest stars
+            var ornamentTypes = [];
+            ornamentTypes[0] = 'moon'; // First one is moon
+            var heartsCount = Math.floor(numStars / 3);
+            for (var i = 1; i <= heartsCount; i++) {
+                ornamentTypes[i] = 'heart';
+            }
+            for (var i = heartsCount + 1; i < numStars; i++) {
+                ornamentTypes[i] = 'star';
+            }
+            // Shuffle the array (except first element which is moon)
+            for (var i = numStars - 1; i > 1; i--) {
+                var j = Math.floor(Math.random() * (i - 1)) + 1; // Don't include index 0
+                var temp = ornamentTypes[i];
+                ornamentTypes[i] = ornamentTypes[j];
+                ornamentTypes[j] = temp;
+            }
+            
+            for (var i = 0; i < numStars; i++) {
+                // Choose the appropriate model template
+                var template;
+                if (ornamentTypes[i] === 'moon') {
+                    template = moonTemplate;
+                } else if (ornamentTypes[i] === 'heart') {
+                    template = heartTemplate;
+                } else {
+                    template = starTemplate;
+                }
+                var star = template.clone();
+                
+                // Find a position that doesn't overlap with existing stars
+                var x, targetY, z;
+                var validPosition = false;
+                var maxAttempts = 50;
+                var attempt = 0;
+                
+                while (!validPosition && attempt < maxAttempts) {
+                    // Random position in upper 1/3 of room (this is target)
+                    x = (Math.random() * 2 - 1) * (WORLD_WIDTH - 3); // Leave margin from walls
+                    targetY = minY + Math.random() * (maxY - minY);
+                    z = (Math.random() * 2 - 1) * (WORLD_DEPTH - 3); // Leave margin from walls
+                    
+                    validPosition = true;
+                    
+                    // Check if above column (XZ distance)
+                    var dxColumn = x - columnPos.x;
+                    var dzColumn = z - columnPos.z;
+                    var distToColumn = Math.sqrt(dxColumn*dxColumn + dzColumn*dzColumn);
+                    if (distToColumn < columnAvoidRadius) {
+                        validPosition = false;
+                        attempt++;
+                        continue;
+                    }
+                    
+                    // Check if near sphere obstacle (3D distance)
+                    var dxSphere = x - spherePos.x;
+                    var dySphere = targetY - spherePos.y;
+                    var dzSphere = z - spherePos.z;
+                    var distToSphere = Math.sqrt(dxSphere*dxSphere + dySphere*dySphere + dzSphere*dzSphere);
+                    if (distToSphere < sphereAvoidRadius) {
+                        validPosition = false;
+                        attempt++;
+                        continue;
+                    }
+                    
+                    // Check distance to all existing stars
+                    for (var j = 0; j < starPositions.length; j++) {
+                        var dx = x - starPositions[j].x;
+                        var dy = targetY - starPositions[j].y;
+                        var dz = z - starPositions[j].z;
+                        var distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                        
+                        if (distance < minStarDistance) {
+                            validPosition = false;
+                            break;
+                        }
+                    }
+                    
+                    attempt++;
+                }
+                
+                // Store this position
+                starPositions.push({x: x, y: targetY, z: z});
+                
+                // Start above ceiling for drop animation
+                star.position.set(x, startYAboveCeiling, z);
+                
+                // Random scale with limited variability (0.85 to 1.15)
+                var scale = 0.7 + Math.random() * 0.6;
+                star.scale.set(scale, scale, scale);
+                
+                // Random rotation about y-axis only
+                star.rotation.y = Math.random() * Math.PI * 2;
+                
+                // Ensure shadows on clone
+                star.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                gThreeScene.add(star);
+                gHangingStars.push(star);
+                
+                // Create thin wire from top of star up to ceiling
+                // Wire connects to model's origin (0,0,0)
+                var starHeight = 0; // No offset - connect to model origin
+                var starTop = startYAboveCeiling;
+                var wireLength = ceilingY - starTop;
+                var wireRadius = 0.015; // Very thin wire
+                // Create unit-length cylinder for efficiency (will be scaled)
+                var wireGeometry = new THREE.CylinderGeometry(wireRadius, wireRadius, 1, 8);
+                var wire = new THREE.Mesh(wireGeometry, wireMaterial);
+                
+                // Position wire from top of star to ceiling
+                wire.position.set(x, starTop + wireLength / 2, z);
+                wire.scale.set(1, wireLength, 1); // Scale to correct length
+                wire.castShadow = true;
+                wire.receiveShadow = true;
+                
+                gThreeScene.add(wire);
+                
+                // Create truncated upside-down cone at hanging point
+                var coneHeight = 0.5;
+                var coneTopRadius = 0.3; // Wider at top
+                var coneBottomRadius = 0.05; // Narrow at bottom (where wire connects)
+                var coneGeometry = new THREE.CylinderGeometry(coneTopRadius, coneBottomRadius, coneHeight, 16);
+                var coneMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x444444,
+                    shininess: 30,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 0.1,
+                });
+                var cone = new THREE.Mesh(coneGeometry, coneMaterial);
+                
+                // Position at the top of the wire (ceiling attachment point)
+                // Cone center should be at ceilingY + coneHeight/2 so bottom aligns with wire top
+                cone.position.set(x, ceilingY + coneHeight / 2, z);
+                cone.castShadow = true;
+                cone.receiveShadow = true;
+                
+                gThreeScene.add(cone);
+                
+                // Store animation data with staggered delay
+                gStarAnimData.push({
+                    star: star,
+                    wire: wire,
+                    cone: cone,
+                    x: x,
+                    z: z,
+                    targetY: targetY,
+                    startY: startYAboveCeiling,
+                    timer: 0,
+                    delay: 5 + i * 0.15, // Wait 10 seconds, then stagger by 0.15 seconds each
+                    animating: true,
+                    scale: scale,
+                    starHeight: starHeight,
+                    coneHeight: coneHeight,
+                    // Sway physics
+                    offsetX: 0,
+                    offsetZ: 0,
+                    velX: (Math.random() - 0.5) * 2.0, // Random initial velocity
+                    velZ: (Math.random() - 0.5) * 2.0,
+                    swayPhase: Math.random() * 10, // Random phase for variation
+                    // Twist physics
+                    angularVel: (Math.random() - 0.5) * 4.0, // Random initial twist rate
+                    baseRotationY: star.rotation.y,
+                    twistPhase: Math.random() * 10 // Random phase for twist driving
+                });
+            }
+            
+            console.log('Hanging ornaments created successfully - ' + numStars + ' ornaments (stars, hearts, and moon)');
+        }
+        
+        // Load Tube Star model
         var starLoader = new THREE.GLTFLoader();
         starLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeStar.gltf',
             function(gltf) {
-                var starTemplate = gltf.scene;
+                starTemplate = gltf.scene;
                 
                 // Remove any imported lights
                 var lightsToRemove = [];
@@ -5403,182 +5657,92 @@ function initThreeScene() {
                     }
                 });
                 
-                // Create hanging stars with random properties
-                var numStars = 24;
-                var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
-                var minY = WORLD_HEIGHT * 0.55; // Upper 1/3 of room
-                var maxY = WORLD_HEIGHT * 1.3; // Slightly below ceiling
-                var startYAboveCeiling = WORLD_HEIGHT + 12; // Start above ceiling
-                var minStarDistance = 6; // Minimum distance between stars (about 2 object sizes)
-                var starPositions = []; // Track placed star positions
-                
-                // Obstacle positions to avoid
-                var columnPos = {x: 9, z: -9}; // Column XZ position
-                var columnRadius = 2.5;
-                var columnAvoidRadius = 4; // Avoid area above column
-                var spherePos = {x: -24, y: 15, z: 14}; // Sphere obstacle position
-                var sphereRadius = 3;
-                var sphereAvoidRadius = 5; // Avoid area near sphere
-                
-                // Material for wires
-                var wireMaterial = new THREE.MeshPhongMaterial({
-                    color: 0x222222,
-                    shininess: 10
-                });
-                
-                for (var i = 0; i < numStars; i++) {
-                    // Clone the star
-                    var star = starTemplate.clone();
-                    
-                    // Find a position that doesn't overlap with existing stars
-                    var x, targetY, z;
-                    var validPosition = false;
-                    var maxAttempts = 50;
-                    var attempt = 0;
-                    
-                    while (!validPosition && attempt < maxAttempts) {
-                        // Random position in upper 1/3 of room (this is target)
-                        x = (Math.random() * 2 - 1) * (WORLD_WIDTH - 3); // Leave margin from walls
-                        targetY = minY + Math.random() * (maxY - minY);
-                        z = (Math.random() * 2 - 1) * (WORLD_DEPTH - 3); // Leave margin from walls
-                        
-                        validPosition = true;
-                        
-                        // Check if above column (XZ distance)
-                        var dxColumn = x - columnPos.x;
-                        var dzColumn = z - columnPos.z;
-                        var distToColumn = Math.sqrt(dxColumn*dxColumn + dzColumn*dzColumn);
-                        if (distToColumn < columnAvoidRadius) {
-                            validPosition = false;
-                            attempt++;
-                            continue;
-                        }
-                        
-                        // Check if near sphere obstacle (3D distance)
-                        var dxSphere = x - spherePos.x;
-                        var dySphere = targetY - spherePos.y;
-                        var dzSphere = z - spherePos.z;
-                        var distToSphere = Math.sqrt(dxSphere*dxSphere + dySphere*dySphere + dzSphere*dzSphere);
-                        if (distToSphere < sphereAvoidRadius) {
-                            validPosition = false;
-                            attempt++;
-                            continue;
-                        }
-                        
-                        // Check distance to all existing stars
-                        for (var j = 0; j < starPositions.length; j++) {
-                            var dx = x - starPositions[j].x;
-                            var dy = targetY - starPositions[j].y;
-                            var dz = z - starPositions[j].z;
-                            var distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
-                            
-                            if (distance < minStarDistance) {
-                                validPosition = false;
-                                break;
-                            }
-                        }
-                        
-                        attempt++;
-                    }
-                    
-                    // Store this position
-                    starPositions.push({x: x, y: targetY, z: z});
-                    
-                    // Start above ceiling for drop animation
-                    star.position.set(x, startYAboveCeiling, z);
-                    
-                    // Random scale with limited variability (0.85 to 1.15)
-                    var scale = 0.7 + Math.random() * 0.6;
-                    star.scale.set(scale, scale, scale);
-                    
-                    // Random rotation about y-axis only
-                    star.rotation.y = Math.random() * Math.PI * 2;
-                    
-                    // Ensure shadows on clone
-                    star.traverse(function(child) {
-                        if (child.isMesh) {
-                            child.castShadow = true;
-                            child.receiveShadow = true;
-                        }
-                    });
-                    
-                    gThreeScene.add(star);
-                    gHangingStars.push(star);
-                    
-                    // Create thin wire from top of star up to ceiling
-                    // Star height estimate - star origin is at center, so top is above y
-                    var starHeight = 2.8 * scale; // Top point of star above center
-                    var starTop = startYAboveCeiling + starHeight;
-                    var wireLength = ceilingY - starTop;
-                    var wireRadius = 0.015; // Very thin wire
-                    // Create unit-length cylinder for efficiency (will be scaled)
-                    var wireGeometry = new THREE.CylinderGeometry(wireRadius, wireRadius, 1, 8);
-                    var wire = new THREE.Mesh(wireGeometry, wireMaterial);
-                    
-                    // Position wire from top of star to ceiling
-                    wire.position.set(x, starTop + wireLength / 2, z);
-                    wire.scale.set(1, wireLength, 1); // Scale to correct length
-                    wire.castShadow = true;
-                    wire.receiveShadow = true;
-                    
-                    gThreeScene.add(wire);
-                    
-                    // Create truncated upside-down cone at hanging point
-                    var coneHeight = 0.5;
-                    var coneTopRadius = 0.3; // Wider at top
-                    var coneBottomRadius = 0.05; // Narrow at bottom (where wire connects)
-                    var coneGeometry = new THREE.CylinderGeometry(coneTopRadius, coneBottomRadius, coneHeight, 16);
-                    var coneMaterial = new THREE.MeshStandardMaterial({
-                        color: 0x444444,
-                        shininess: 30,
-                        emissive: 0xffffff,
-                        emissiveIntensity: 0.1,
-                    });
-                    var cone = new THREE.Mesh(coneGeometry, coneMaterial);
-                    
-                    // Position at the top of the wire (ceiling attachment point)
-                    // Cone center should be at ceilingY + coneHeight/2 so bottom aligns with wire top
-                    cone.position.set(x, ceilingY + coneHeight / 2, z);
-                    cone.castShadow = true;
-                    cone.receiveShadow = true;
-                    
-                    gThreeScene.add(cone);
-                    
-                    // Store animation data with staggered delay
-                    gStarAnimData.push({
-                        star: star,
-                        wire: wire,
-                        cone: cone,
-                        x: x,
-                        z: z,
-                        targetY: targetY,
-                        startY: startYAboveCeiling,
-                        timer: 0,
-                        delay: 5 + i * 0.15, // Wait 10 seconds, then stagger by 0.15 seconds each
-                        animating: true,
-                        scale: scale,
-                        starHeight: starHeight,
-                        coneHeight: coneHeight,
-                        // Sway physics
-                        offsetX: 0,
-                        offsetZ: 0,
-                        velX: (Math.random() - 0.5) * 2.0, // Random initial velocity
-                        velZ: (Math.random() - 0.5) * 2.0,
-                        swayPhase: Math.random() * 10, // Random phase for variation
-                        // Twist physics
-                        angularVel: (Math.random() - 0.5) * 4.0, // Random initial twist rate
-                        baseRotationY: star.rotation.y,
-                        twistPhase: Math.random() * 10 // Random phase for twist driving
-                    });
-                }
-                
-                console.log('Tube Star models loaded successfully - ' + numStars + ' stars created');
+                console.log('Tube Star model loaded successfully');
+                onModelLoaded();
             },
             function(xhr) {
                 console.log('Tube Star model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
             },
             function(error) {
                 console.error('Error loading Tube Star model:', error);
+            }
+        );
+        
+        // Load Tube Heart model
+        var heartLoader = new THREE.GLTFLoader();
+        heartLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeHeart.gltf',
+            function(gltf) {
+                heartTemplate = gltf.scene;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                heartTemplate.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows for template
+                heartTemplate.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                console.log('Tube Heart model loaded successfully');
+                onModelLoaded();
+            },
+            function(xhr) {
+                console.log('Tube Heart model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Tube Heart model:', error);
+            }
+        );
+        
+        // Load Tube Moon model
+        var moonLoader = new THREE.GLTFLoader();
+        moonLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeMoon.gltf',
+            function(gltf) {
+                moonTemplate = gltf.scene;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                moonTemplate.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows for template
+                moonTemplate.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                console.log('Tube Moon model loaded successfully');
+                onModelLoaded();
+            },
+            function(xhr) {
+                console.log('Tube Moon model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Tube Moon model:', error);
             }
         );
     }
@@ -9409,7 +9573,7 @@ function update() {
                 
                 // Update wire position and length
                 var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
-                var starTop = currentY + starData.starHeight;
+                var starTop = currentY; // Connect to model origin
                 var wireLength = ceilingY - starTop;
                 
                 // Update wire position and scale (no geometry recreation)
@@ -9453,7 +9617,7 @@ function update() {
             
             // Update wire to connect fixed ceiling point to moving star (optimized)
             var currentY = starData.targetY;
-            var starTop = currentY + starData.starHeight;
+            var starTop = currentY; // Connect to model origin
             var ceilingY = 2 * WORLD_HEIGHT;
             
             // Fixed ceiling attachment point (bottom of cone)
