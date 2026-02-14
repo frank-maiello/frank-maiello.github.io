@@ -7,9 +7,7 @@
     {
       "name": "Scene",
       "nodes": [
-        0,
-        19,
-        20
+        0
       ]
     }
   ],
@@ -30,7 +28,7 @@
         1,
         0,
         0,
-        2.560107049487899,
+        -0.6072407152427097,
         0,
         1
       ],
@@ -41,7 +39,9 @@
         7,
         10,
         13,
-        16
+        16,
+        19,
+        20
       ]
     },
     {
@@ -455,7 +455,7 @@
         2.220446049250313e-16,
         0,
         0,
-        3.1542768579671283,
+        0.5803190742979543,
         0,
         1
       ],
@@ -477,7 +477,7 @@
         1,
         0,
         0,
-        3.15903648400877,
+        0.5835447383137113,
         0,
         1
       ],
@@ -1610,11 +1610,13 @@
           1
         ],
         "metallicFactor": 0,
-        "roughnessFactor": 0.9
+        "roughnessFactor": 1
       },
-      "extensions": {
-        "KHR_materials_unlit": {}
-      }
+      "emissiveFactor": [
+        0.19461783043107173,
+        0.8879231178794776,
+        1
+      ]
     },
     {
       "pbrMetallicRoughness": {
@@ -1625,11 +1627,13 @@
           1
         ],
         "metallicFactor": 0,
-        "roughnessFactor": 0.9
+        "roughnessFactor": 1
       },
-      "extensions": {
-        "KHR_materials_unlit": {}
-      }
+      "emissiveFactor": [
+        0.19461783043107173,
+        0.8879231178794776,
+        1
+      ]
     },
     {
       "pbrMetallicRoughness": {
@@ -1662,11 +1666,13 @@
           1
         ],
         "metallicFactor": 0,
-        "roughnessFactor": 0.9
+        "roughnessFactor": 1
       },
-      "extensions": {
-        "KHR_materials_unlit": {}
-      }
+      "emissiveFactor": [
+        0.19461783043107173,
+        0.8879231178794776,
+        1
+      ]
     },
     {
       "pbrMetallicRoughness": {
@@ -1677,11 +1683,13 @@
           1
         ],
         "metallicFactor": 0,
-        "roughnessFactor": 0.9
+        "roughnessFactor": 1
       },
-      "extensions": {
-        "KHR_materials_unlit": {}
-      }
+      "emissiveFactor": [
+        0.19461783043107173,
+        0.8879231178794776,
+        1
+      ]
     },
     {
       "pbrMetallicRoughness": {
@@ -1692,11 +1700,13 @@
           1
         ],
         "metallicFactor": 0,
-        "roughnessFactor": 0.9
+        "roughnessFactor": 1
       },
-      "extensions": {
-        "KHR_materials_unlit": {}
-      }
+      "emissiveFactor": [
+        0.19461783043107173,
+        0.8879231178794776,
+        1
+      ]
     },
     {
       "pbrMetallicRoughness": {
@@ -1707,11 +1717,13 @@
           1
         ],
         "metallicFactor": 0,
-        "roughnessFactor": 0.9
+        "roughnessFactor": 1
       },
-      "extensions": {
-        "KHR_materials_unlit": {}
-      }
+      "emissiveFactor": [
+        0.19461783043107173,
+        0.8879231178794776,
+        1
+      ]
     },
     {
       "pbrMetallicRoughness": {
@@ -1722,11 +1734,13 @@
           1
         ],
         "metallicFactor": 0,
-        "roughnessFactor": 0.9
+        "roughnessFactor": 1
       },
-      "extensions": {
-        "KHR_materials_unlit": {}
-      }
+      "emissiveFactor": [
+        0.19461783043107173,
+        0.8879231178794776,
+        1
+      ]
     },
     {
       "pbrMetallicRoughness": {
@@ -1737,11 +1751,13 @@
           1
         ],
         "metallicFactor": 0,
-        "roughnessFactor": 0.9
+        "roughnessFactor": 1
       },
-      "extensions": {
-        "KHR_materials_unlit": {}
-      }
+      "emissiveFactor": [
+        0.19461783043107173,
+        0.8879231178794776,
+        1
+      ]
     },
     {
       "pbrMetallicRoughness": {
@@ -1752,11 +1768,13 @@
           1
         ],
         "metallicFactor": 0,
-        "roughnessFactor": 0.9
+        "roughnessFactor": 1
       },
-      "extensions": {
-        "KHR_materials_unlit": {}
-      }
+      "emissiveFactor": [
+        0.19461783043107173,
+        0.8879231178794776,
+        1
+      ]
     },
     {
       "pbrMetallicRoughness": {
@@ -1767,11 +1785,13 @@
           1
         ],
         "metallicFactor": 0,
-        "roughnessFactor": 0.9
+        "roughnessFactor": 1
       },
-      "extensions": {
-        "KHR_materials_unlit": {}
-      }
+      "emissiveFactor": [
+        0.19461783043107173,
+        0.8879231178794776,
+        1
+      ]
     },
     {
       "pbrMetallicRoughness": {
@@ -1993,7 +2013,6 @@
     }
   ],
   "extensionsUsed": [
-    "KHR_materials_unlit",
     "KHR_materials_emissive_strength"
   ]
 }
