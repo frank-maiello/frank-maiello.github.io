@@ -179,7 +179,7 @@ var gDuckStartY = -8; // Starting Y position (below floor)
 var gTeapot = null; // Teapot model reference
 var gTeapotAnimating = true; // Is teapot currently animating
 var gTeapotAnimationTimer = 0; // Timer for teapot slide animation
-var gTeapotStartZ = 25; // Starting Z position
+var gTeapotStartZ = 40; // Starting Z position
 var gTeapotTargetZ = 10; // Target Z position
 var gTeapotObstacle = null; // Teapot obstacle for boid avoidance
 var gDraggingTeapot = false; // Track if dragging the teapot
@@ -221,11 +221,15 @@ var gSpotlight2Saturation = 0; // Spotlight 2 saturation (0-100)
 var gMiroPaintingGroup = null; // Reference to Miro painting + frame group
 var gDaliPaintingGroup = null; // Reference to Dali painting + frame group
 var gDuchampPaintingGroup = null; // Reference to Duchamp painting + frame group
+var gDuchampBridePaintingGroup = null; // Reference to Duchamp Bride painting + frame group
+var gDuchampGrinderPaintingGroup = null; // Reference to Duchamp Grinder painting + frame group
+var gDuchampBrideTopPaintingGroup = null; // Reference to Duchamp Bride (top) painting + frame group
 var gCurrentPainting = 'miro'; // Current painting displayed: 'miro', 'dali', or 'duchamp'
 var gTargetPainting = 'miro'; // Target painting to display
 var gPaintingAnimState = 'idle'; // States: idle, exiting, entering
 var gPaintingAnimTimer = 0; // Timer for painting animation
 var gPaintingBaseY = 0; // Base Y position for paintings in frame
+var gDuchampPaintingBaseY = 0; // Base Y position for Duchamp painting specifically
 var gPaintingExitY = 50; // Y position when painting exits (above frame)
 var gLeftWallPainting = null; // Reference to Duchamp painting on left wall
 var gLeftWallFramePieces = []; // Frame pieces for left wall painting
@@ -236,6 +240,12 @@ var gPaintingDropStartY = 50; // Starting Y position for painting drop
 var gPaintingDropTimer = 0; // Timer for painting drop animation
 var gPaintingDropDelay = 1.8; // Delay after walls finish before paintings drop
 var gPaintingDropDuration = 1.5; // Duration of painting drop animation
+var gDuchampExtraPaintingsActive = false; // Track if extra Duchamp paintings should be visible
+var gDuchampExtraPaintingsDropping = false; // Track if extra paintings are descending
+var gDuchampExtraPaintingsDropTimer = 0; // Timer for extra paintings drop animation
+var gDuchampBrideTopActive = false; // Track if Duchamp Bride top painting should be visible
+var gDuchampBrideTopDropping = false; // Track if Duchamp Bride top painting is descending
+var gDuchampBrideTopDropTimer = 0; // Timer for Duchamp Bride top painting drop animation
 var gSpotlightPenumbra = 0.2; // Spotlight penumbra (0-1)
 var gGlobeLampIntensity = 0; // Globe lamp point light intensity (0-3)
 var gGlobeLampHue = 0; // Globe lamp hue (0-360)
@@ -250,6 +260,10 @@ var gColumnDropTimer = 0; // Timer for column drop animation
 var gColumnDropDelay = 0.0; // Delay after pedestals finish before column drops
 var gColumnDropDuration = 1.5; // Duration of column drop animation
 var gColumnStartY = 60; // Starting Y offset for column drop
+var gColumnBaseSliding = true; // Flag for column base slide animation
+var gColumnBaseSlideTimer = 0; // Timer for column base slide animation
+var gColumnBaseStartZ = 35; // Starting Z offset for column base slide
+var gColumnBaseTargetZ = -9; // Target Z position for column base
 
 var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all separation
 var SpatialGrid; // Global spatial grid instance
@@ -924,6 +938,10 @@ class CylinderObstacle {
         });
         this.conicalPedestalMesh = new THREE.Mesh(conicalPedestalGeometry, conicalPedestalMaterial);
         this.conicalPedestalMesh.position.copy(this.position);
+        // Start conical pedestal at offset Z position for slide animation
+        if (Math.abs(this.position.x - 9) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
+            this.conicalPedestalMesh.position.z = gColumnBaseStartZ;
+        }
         this.conicalPedestalMesh.position.y = (this.position.y - this.height / 2) + 0.5 * conicalPedestalHeight + 0.28; // Bottom at y=0
         this.conicalPedestalMesh.rotation.copy(this.mesh.rotation);
         this.conicalPedestalMesh.castShadow = true;
@@ -942,6 +960,10 @@ class CylinderObstacle {
         });
         this.discMesh = new THREE.Mesh(discGeometry, discMaterial);
         this.discMesh.position.copy(this.position);
+        // Start disc at offset Z position for slide animation
+        if (Math.abs(this.position.x - 9) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
+            this.discMesh.position.z = gColumnBaseStartZ;
+        }
         this.discMesh.position.y = (this.position.y - this.height / 2) + 1.3; // On top of pedestal
         this.discMesh.rotation.copy(this.mesh.rotation);
         this.discMesh.castShadow = true;
@@ -960,6 +982,10 @@ class CylinderObstacle {
         });
         this.pedestalMesh = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
         this.pedestalMesh.position.copy(this.position);
+        // Start pedestal at offset Z position for slide animation
+        if (Math.abs(this.position.x - 9) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
+            this.pedestalMesh.position.z = gColumnBaseStartZ;
+        }
         this.pedestalMesh.position.y = 0.5 * pedestalHeight; // Bottom at y=0
         this.pedestalMesh.rotation.copy(this.mesh.rotation);
         this.pedestalMesh.castShadow = true;
@@ -2169,7 +2195,7 @@ class BOID {
                 this.spinAngle += spinRate * deltaT;*/
 
                 // Update spin angle continuously
-                this.spinAngle += 5.0 * deltaT; // Spin speed in radians per second
+                this.spinAngle += 10.0 * deltaT; // Spin speed in radians per second
                 
                 if (horizSpeed > 0.01) {
                     horizDir.normalize();
@@ -5464,8 +5490,8 @@ function initThreeScene() {
             // Create hanging ornaments with random properties
             var numStars = 24;
             var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
-            var minY = WORLD_HEIGHT * 0.7; // Upper part of room
-            var maxY = WORLD_HEIGHT * 1.3; // Slightly below ceiling
+            var minY = WORLD_HEIGHT * 0.8; // Upper part of room
+            var maxY = WORLD_HEIGHT * 1.5; // Slightly below ceiling
             var startYAboveCeiling = WORLD_HEIGHT + 12; // Start above ceiling
             var minStarDistance = 6; // Minimum distance between stars (about 2 object sizes)
             var starPositions = []; // Track placed star positions
@@ -6163,11 +6189,13 @@ function initThreeScene() {
     
     // Add framed paintings on right wall (Miro and Dali with different aspect ratios)
     var paintingY = boxSize.y / 2 + 2; // Vertical position
+    var duchampPaintingY = boxSize.y / 2; // Lower position for Duchamp paintings
     var frameThickness = 0.3;
     var frameDepth = 0.15;
     var paintingWallX = boxSize.x - 0.3; // X position on right wall
     
     gPaintingBaseY = paintingY; // Store base Y position
+    gDuchampPaintingBaseY = duchampPaintingY; // Store Duchamp base Y position
     
     // Create frame material (wood-like)
     var frameMaterial = new THREE.MeshStandardMaterial({ 
@@ -6370,7 +6398,7 @@ function initThreeScene() {
     
     // Load Duchamp painting texture
     var duchampPaintingTexture = new THREE.TextureLoader().load(
-        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Duchamp_Grinder_Sketch_Crop.jpg',
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Duchamp_Glass_Bachelors.jpg',
         function(texture) {
             duchampPaintingMaterial.map = texture;
             duchampPaintingMaterial.emissiveMap = texture;
@@ -6381,7 +6409,7 @@ function initThreeScene() {
         },
         undefined,
         function(err) {
-            console.error('Error loading Duchamp_Grinder_Sketch_Crop.jpg:', err);
+            console.error('Error loading Duchamp_Glass_Bachelors.jpg:', err);
             console.log('Using fallback color for Duchamp painting');
         }
     );
@@ -6433,9 +6461,274 @@ function initThreeScene() {
     gDuchampPaintingGroup.add(duchampFrameRight);
     
     // Position and orient group on wall (start high above frame)
-    gDuchampPaintingGroup.position.set(paintingWallX, paintingY + 50, 0);
+    gDuchampPaintingGroup.position.set(paintingWallX, duchampPaintingY + 50, 0);
     gDuchampPaintingGroup.rotation.y = -Math.PI / 2;
     gThreeScene.add(gDuchampPaintingGroup);
+    
+    // ===== DUCHAMP BRIDE PAINTING GROUP (Portrait 10x14) - Left Position =====
+    gDuchampBridePaintingGroup = new THREE.Group();
+    var duchampBrideWidth = 7;
+    var duchampBrideHeight = 9.8;
+    
+    // Create Duchamp Bride painting plane
+    var duchampBridePaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    // Load Duchamp Bride painting texture
+    var duchampBridePaintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/duchampBride.jpg',
+        function(texture) {
+            duchampBridePaintingMaterial.map = texture;
+            duchampBridePaintingMaterial.emissiveMap = texture;
+            duchampBridePaintingMaterial.color.setHex(0xffffff);
+            duchampBridePaintingMaterial.emissive.setHex(0xffffff);
+            duchampBridePaintingMaterial.emissiveIntensity = 0.3;
+            duchampBridePaintingMaterial.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading duchampBride.jpg:', err);
+            console.log('Using fallback color for Duchamp Bride painting');
+        }
+    );
+    
+    var duchampBridePainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(duchampBrideWidth, duchampBrideHeight),
+        duchampBridePaintingMaterial
+    );
+    duchampBridePainting.position.set(0, 0, -frameDepth / 2);
+    duchampBridePainting.receiveShadow = true;
+    duchampBridePainting.castShadow = true;
+    gDuchampBridePaintingGroup.add(duchampBridePainting);
+    
+    // Duchamp Bride frame pieces
+    var duchampBrideFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(duchampBrideWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    duchampBrideFrameTop.position.set(0, duchampBrideHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    duchampBrideFrameTop.castShadow = true;
+    duchampBrideFrameTop.receiveShadow = true;
+    gDuchampBridePaintingGroup.add(duchampBrideFrameTop);
+    
+    var duchampBrideFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(duchampBrideWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    duchampBrideFrameBottom.position.set(0, -duchampBrideHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    duchampBrideFrameBottom.castShadow = true;
+    duchampBrideFrameBottom.receiveShadow = true;
+    gDuchampBridePaintingGroup.add(duchampBrideFrameBottom);
+    
+    var duchampBrideFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, duchampBrideHeight, frameDepth),
+        frameMaterial
+    );
+    duchampBrideFrameLeft.position.set(-duchampBrideWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+    duchampBrideFrameLeft.castShadow = true;
+    duchampBrideFrameLeft.receiveShadow = true;
+    gDuchampBridePaintingGroup.add(duchampBrideFrameLeft);
+    
+    var duchampBrideFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, duchampBrideHeight, frameDepth),
+        frameMaterial
+    );
+    duchampBrideFrameRight.position.set(duchampBrideWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+    duchampBrideFrameRight.castShadow = true;
+    duchampBrideFrameRight.receiveShadow = true;
+    gDuchampBridePaintingGroup.add(duchampBrideFrameRight);
+    
+    // Position and orient group on wall (start high above frame, initially hidden)
+    gDuchampBridePaintingGroup.position.set(-boxSize.x + 0.3, paintingY + 50, -15);
+    gDuchampBridePaintingGroup.rotation.y = Math.PI / 2;
+    gDuchampBridePaintingGroup.visible = false; // Initially hidden
+    gThreeScene.add(gDuchampBridePaintingGroup);
+    
+    // ===== DUCHAMP GRINDER PAINTING GROUP (Portrait 10x14) - Right Position =====
+    gDuchampGrinderPaintingGroup = new THREE.Group();
+    var duchampGrinderWidth = 7;
+    var duchampGrinderHeight = 9.8;
+    
+    // Create Duchamp Grinder painting plane
+    var duchampGrinderPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    // Load Duchamp Grinder painting texture
+    var duchampGrinderPaintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/duchampGrinder.jpg',
+        function(texture) {
+            duchampGrinderPaintingMaterial.map = texture;
+            duchampGrinderPaintingMaterial.emissiveMap = texture;
+            duchampGrinderPaintingMaterial.color.setHex(0xffffff);
+            duchampGrinderPaintingMaterial.emissive.setHex(0xffffff);
+            duchampGrinderPaintingMaterial.emissiveIntensity = 0.3;
+            duchampGrinderPaintingMaterial.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading duchampGrinder.jpg:', err);
+            console.log('Using fallback color for Duchamp Grinder painting');
+        }
+    );
+    
+    var duchampGrinderPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(duchampGrinderWidth, duchampGrinderHeight),
+        duchampGrinderPaintingMaterial
+    );
+    duchampGrinderPainting.position.set(0, 0, -frameDepth / 2);
+    duchampGrinderPainting.receiveShadow = true;
+    duchampGrinderPainting.castShadow = true;
+    gDuchampGrinderPaintingGroup.add(duchampGrinderPainting);
+    
+    // Duchamp Grinder frame pieces
+    var duchampGrinderFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(duchampGrinderWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    duchampGrinderFrameTop.position.set(0, duchampGrinderHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    duchampGrinderFrameTop.castShadow = true;
+    duchampGrinderFrameTop.receiveShadow = true;
+    gDuchampGrinderPaintingGroup.add(duchampGrinderFrameTop);
+    
+    var duchampGrinderFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(duchampGrinderWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    duchampGrinderFrameBottom.position.set(0, -duchampGrinderHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    duchampGrinderFrameBottom.castShadow = true;
+    duchampGrinderFrameBottom.receiveShadow = true;
+    gDuchampGrinderPaintingGroup.add(duchampGrinderFrameBottom);
+    
+    var duchampGrinderFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, duchampGrinderHeight, frameDepth),
+        frameMaterial
+    );
+    duchampGrinderFrameLeft.position.set(-duchampGrinderWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+    duchampGrinderFrameLeft.castShadow = true;
+    duchampGrinderFrameLeft.receiveShadow = true;
+    gDuchampGrinderPaintingGroup.add(duchampGrinderFrameLeft);
+    
+    var duchampGrinderFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, duchampGrinderHeight, frameDepth),
+        frameMaterial
+    );
+    duchampGrinderFrameRight.position.set(duchampGrinderWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+    duchampGrinderFrameRight.castShadow = true;
+    duchampGrinderFrameRight.receiveShadow = true;
+    gDuchampGrinderPaintingGroup.add(duchampGrinderFrameRight);
+    
+    // Position and orient group on wall (start high above frame, initially hidden)
+    gDuchampGrinderPaintingGroup.position.set(-boxSize.x + 0.3, paintingY + 50, 15);
+    gDuchampGrinderPaintingGroup.rotation.y = Math.PI / 2;
+    gDuchampGrinderPaintingGroup.visible = false; // Initially hidden
+    gThreeScene.add(gDuchampGrinderPaintingGroup);
+    
+    // ===== DUCHAMP BRIDE TOP PAINTING GROUP (Landscape 16x12) - Above Duchamp painting =====
+    gDuchampBrideTopPaintingGroup = new THREE.Group();
+    var duchampBrideTopWidth = 16;
+    var duchampBrideTopHeight = 12;
+    
+    // Create Duchamp Bride Top painting plane
+    var duchampBrideTopPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    // Load Duchamp Bride Top painting texture
+    var duchampBrideTopPaintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Duchamp_Glass_Bride.jpg',
+        function(texture) {
+            duchampBrideTopPaintingMaterial.map = texture;
+            duchampBrideTopPaintingMaterial.emissiveMap = texture;
+            duchampBrideTopPaintingMaterial.color.setHex(0xffffff);
+            duchampBrideTopPaintingMaterial.emissive.setHex(0xffffff);
+            duchampBrideTopPaintingMaterial.emissiveIntensity = 0.3;
+            duchampBrideTopPaintingMaterial.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading Duchamp_Glass_Bride.jpg:', err);
+            console.log('Using fallback color for Duchamp Bride Top painting');
+        }
+    );
+    
+    var duchampBrideTopPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(duchampBrideTopWidth, duchampBrideTopHeight),
+        duchampBrideTopPaintingMaterial
+    );
+    duchampBrideTopPainting.position.set(0, 0, -frameDepth / 2);
+    duchampBrideTopPainting.receiveShadow = true;
+    duchampBrideTopPainting.castShadow = true;
+    gDuchampBrideTopPaintingGroup.add(duchampBrideTopPainting);
+    
+    // Duchamp Bride Top frame pieces
+    var duchampBrideTopFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(duchampBrideTopWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    duchampBrideTopFrameTop.position.set(0, duchampBrideTopHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    duchampBrideTopFrameTop.castShadow = true;
+    duchampBrideTopFrameTop.receiveShadow = true;
+    gDuchampBrideTopPaintingGroup.add(duchampBrideTopFrameTop);
+    
+    var duchampBrideTopFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(duchampBrideTopWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    duchampBrideTopFrameBottom.position.set(0, -duchampBrideTopHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    duchampBrideTopFrameBottom.castShadow = true;
+    duchampBrideTopFrameBottom.receiveShadow = true;
+    gDuchampBrideTopPaintingGroup.add(duchampBrideTopFrameBottom);
+    
+    var duchampBrideTopFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, duchampBrideTopHeight, frameDepth),
+        frameMaterial
+    );
+    duchampBrideTopFrameLeft.position.set(-duchampBrideTopWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+    duchampBrideTopFrameLeft.castShadow = true;
+    duchampBrideTopFrameLeft.receiveShadow = true;
+    gDuchampBrideTopPaintingGroup.add(duchampBrideTopFrameLeft);
+    
+    var duchampBrideTopFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, duchampBrideTopHeight, frameDepth),
+        frameMaterial
+    );
+    duchampBrideTopFrameRight.position.set(duchampBrideTopWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+    duchampBrideTopFrameRight.castShadow = true;
+    duchampBrideTopFrameRight.receiveShadow = true;
+    gDuchampBrideTopPaintingGroup.add(duchampBrideTopFrameRight);
+    
+    // Position and orient group on wall (start high above frame, initially hidden)
+    // Position directly above gDuchampPaintingGroup: offset by duchampHeight + frameThickness = 12.3
+    gDuchampBrideTopPaintingGroup.position.set(paintingWallX, paintingY + 50, 0);
+    gDuchampBrideTopPaintingGroup.rotation.y = -Math.PI / 2;
+    gDuchampBrideTopPaintingGroup.visible = false; // Initially hidden
+    gThreeScene.add(gDuchampBrideTopPaintingGroup);
     
     // Add baseboard around perimeter walls
     var baseboardHeight = 0.3;
@@ -9489,7 +9782,8 @@ function update() {
             // Move the current painting up
             var currentGroup = gCurrentPainting === 'miro' ? gMiroPaintingGroup : 
                              (gCurrentPainting === 'dali' ? gDaliPaintingGroup : gDuchampPaintingGroup);
-            currentGroup.position.y = gPaintingBaseY + eased * (gPaintingExitY - gPaintingBaseY);
+            var currentBaseY = gCurrentPainting === 'duchamp' ? gDuchampPaintingBaseY : gPaintingBaseY;
+            currentGroup.position.y = currentBaseY + eased * (gPaintingExitY - currentBaseY);
             
             if (t >= 1.0) {
                 gPaintingAnimState = 'entering';
@@ -9502,12 +9796,13 @@ function update() {
             var t = Math.min(gPaintingAnimTimer / duration, 1.0);
             // Cubic ease-out: starts fast, decelerates (y = 1 - (1-x)^3)
             var eased = 1 - Math.pow(1 - t, 3);
-            var startY = gPaintingBaseY + gPaintingExitY;
+            var targetBaseY = gTargetPainting === 'duchamp' ? gDuchampPaintingBaseY : gPaintingBaseY;
+            var startY = targetBaseY + gPaintingExitY;
             
             // Move the target painting down
             var targetGroup = gTargetPainting === 'miro' ? gMiroPaintingGroup : 
                             (gTargetPainting === 'dali' ? gDaliPaintingGroup : gDuchampPaintingGroup);
-            targetGroup.position.y = startY - eased * (startY - gPaintingBaseY);
+            targetGroup.position.y = startY - eased * (startY - targetBaseY);
             
             if (t >= 1.0) {
                 gPaintingAnimState = 'idle';
@@ -9522,6 +9817,97 @@ function update() {
         gMiroPaintingGroup.visible = gMiroPaintingGroup.position.y < storageThreshold;
         gDaliPaintingGroup.visible = gDaliPaintingGroup.position.y < storageThreshold;
         gDuchampPaintingGroup.visible = gDuchampPaintingGroup.position.y < storageThreshold;
+    }
+    
+    // Update Duchamp Bride and Grinder painting visibility based on world size
+    if (gPhysicsScene.worldSize.z >= 30 && !gDuchampExtraPaintingsActive) {
+        // Activate extra paintings
+        gDuchampExtraPaintingsActive = true;
+        gDuchampExtraPaintingsDropping = true;
+        gDuchampExtraPaintingsDropTimer = 0; // Reset timer
+        
+        // Position at 1/4 and 3/4 of the wall dimension
+        // Wall goes from -worldSize.z to +worldSize.z
+        if (gDuchampBridePaintingGroup) {
+            gDuchampBridePaintingGroup.visible = true;
+            gDuchampBridePaintingGroup.position.z = gPhysicsScene.worldSize.z / 1.7; // At 3/4 from left (right side)
+            gDuchampBridePaintingGroup.position.y = gPaintingBaseY + gPaintingDropStartY;
+        }
+        if (gDuchampGrinderPaintingGroup) {
+            gDuchampGrinderPaintingGroup.visible = true;
+            gDuchampGrinderPaintingGroup.position.z = -gPhysicsScene.worldSize.z / 1.7; // At 1/4 from left (left side)
+            gDuchampGrinderPaintingGroup.position.y = gPaintingBaseY + gPaintingDropStartY;
+        }
+        // Center painting is at z=0
+    }
+    
+    // Update positioning when world size changes
+    if (gDuchampExtraPaintingsActive && gPhysicsScene.worldSize.z >= 30) {
+        if (gDuchampBridePaintingGroup) {
+            gDuchampBridePaintingGroup.position.z = gPhysicsScene.worldSize.z / 1.7;
+        }
+        if (gDuchampGrinderPaintingGroup) {
+            gDuchampGrinderPaintingGroup.position.z = -gPhysicsScene.worldSize.z / 1.7;
+        }
+    }
+    
+    // Hide if world size becomes too small
+    if (gPhysicsScene.worldSize.z < 30 && gDuchampExtraPaintingsActive) {
+        if (gDuchampBridePaintingGroup) {
+            gDuchampBridePaintingGroup.visible = false;
+        }
+        if (gDuchampGrinderPaintingGroup) {
+            gDuchampGrinderPaintingGroup.visible = false;
+        }
+        gDuchampExtraPaintingsActive = false;
+        gDuchampExtraPaintingsDropping = false;
+        gDuchampExtraPaintingsDropTimer = 0;
+    }
+    
+    // Update Duchamp Bride Top painting visibility based on world size Y and boid type
+    // Only show if world size Y >= 30 AND boid type is Cone (1) or Cylinder (2)
+    if (gPhysicsScene.worldSize.y >= 30 && (gBoidGeometryType === 1 || gBoidGeometryType === 2) && !gDuchampBrideTopActive) {
+        // Activate top painting
+        gDuchampBrideTopActive = true;
+        gDuchampBrideTopDropping = true;
+        gDuchampBrideTopDropTimer = 0; // Reset timer
+        
+        // Position directly above gDuchampPaintingGroup
+        if (gDuchampBrideTopPaintingGroup) {
+            gDuchampBrideTopPaintingGroup.visible = true;
+            // Target Y position = duchampPaintingY + duchampHeight + frameThickness = duchampPaintingY + 12.3
+            gDuchampBrideTopPaintingGroup.position.y = gDuchampPaintingBaseY + 12.3 + gPaintingDropStartY;
+        }
+    }
+    
+    // Hide if world size becomes too small or boid type is not cone/cylinder
+    if ((gPhysicsScene.worldSize.y < 30 || (gBoidGeometryType !== 1 && gBoidGeometryType !== 2)) && gDuchampBrideTopActive) {
+        if (gDuchampBrideTopPaintingGroup) {
+            gDuchampBrideTopPaintingGroup.visible = false;
+        }
+        gDuchampBrideTopActive = false;
+        gDuchampBrideTopDropping = false;
+        gDuchampBrideTopDropTimer = 0;
+    }
+    
+    // Update Duchamp Bride and Grinder painting visibility
+    if (gDuchampBridePaintingGroup) {
+        var storageThreshold = gPaintingBaseY + gPaintingExitY * 0.5;
+        // Only visible if world size is sufficient AND position is below threshold
+        if (gDuchampExtraPaintingsActive) {
+            gDuchampBridePaintingGroup.visible = gDuchampBridePaintingGroup.position.y < storageThreshold;
+        } else {
+            gDuchampBridePaintingGroup.visible = false;
+        }
+    }
+    if (gDuchampGrinderPaintingGroup) {
+        var storageThreshold = gPaintingBaseY + gPaintingExitY * 0.5;
+        // Only visible if world size is sufficient AND position is below threshold
+        if (gDuchampExtraPaintingsActive) {
+            gDuchampGrinderPaintingGroup.visible = gDuchampGrinderPaintingGroup.position.y < storageThreshold;
+        } else {
+            gDuchampGrinderPaintingGroup.visible = false;
+        }
     }
     
     // Teapot slide animation
@@ -9581,6 +9967,47 @@ function update() {
                     gStoolTargetY + gStoolObstacle.height / 2,
                     gStool.position.z
                 ));
+            }
+        }
+    }
+    
+    // Column base slide animation
+    if (gColumnBaseSliding && gColumnObstacle) {
+        gColumnBaseSlideTimer += deltaT;
+        
+        // Slide from Z=25 to Z=-9 over 2 seconds with ease-out (deceleration)
+        var duration = 2.0;
+        var t = Math.min(gColumnBaseSlideTimer / duration, 1.0);
+        
+        // Cubic ease-out: y = 1 - (1-x)^3 (starts fast, ends slow - deceleration)
+        var eased = 1 - Math.pow(1 - t, 3);
+        
+        // Interpolate Z position
+        var currentZ = gColumnBaseStartZ + (gColumnBaseTargetZ - gColumnBaseStartZ) * eased;
+        
+        // Update all base component positions
+        if (gColumnObstacle.conicalPedestalMesh) {
+            gColumnObstacle.conicalPedestalMesh.position.z = currentZ;
+        }
+        if (gColumnObstacle.discMesh) {
+            gColumnObstacle.discMesh.position.z = currentZ;
+        }
+        if (gColumnObstacle.pedestalMesh) {
+            gColumnObstacle.pedestalMesh.position.z = currentZ;
+        }
+        
+        // Stop animation when complete
+        if (t >= 1.0) {
+            gColumnBaseSliding = false;
+            // Ensure final position is exact
+            if (gColumnObstacle.conicalPedestalMesh) {
+                gColumnObstacle.conicalPedestalMesh.position.z = gColumnBaseTargetZ;
+            }
+            if (gColumnObstacle.discMesh) {
+                gColumnObstacle.discMesh.position.z = gColumnBaseTargetZ;
+            }
+            if (gColumnObstacle.pedestalMesh) {
+                gColumnObstacle.pedestalMesh.position.z = gColumnBaseTargetZ;
             }
         }
     }
@@ -9755,10 +10182,27 @@ function update() {
                 // Update column position (this will update all parts)
                 gColumnObstacle.updatePosition(new THREE.Vector3(9, currentY, -9));
                 
+                // Update base components to descend with the column
+                if (gColumnObstacle.conicalPedestalMesh) {
+                    const conicalPedestalHeight = 3;
+                    gColumnObstacle.conicalPedestalMesh.position.y = (currentY - gColumnObstacle.height / 2) + 0.5 * conicalPedestalHeight + 0.28;
+                }
+                if (gColumnObstacle.discMesh) {
+                    gColumnObstacle.discMesh.position.y = (currentY - gColumnObstacle.height / 2) + 1.3;
+                }
+                
                 // End animation when complete
                 if (progress >= 1) {
                     gColumnDropping = false;
                     gColumnObstacle.updatePosition(new THREE.Vector3(9, targetY, -9));
+                    // Ensure final positions are exact
+                    if (gColumnObstacle.conicalPedestalMesh) {
+                        const conicalPedestalHeight = 3;
+                        gColumnObstacle.conicalPedestalMesh.position.y = (targetY - gColumnObstacle.height / 2) + 0.5 * conicalPedestalHeight + 0.28;
+                    }
+                    if (gColumnObstacle.discMesh) {
+                        gColumnObstacle.discMesh.position.y = (targetY - gColumnObstacle.height / 2) + 1.3;
+                    }
                 }
             }
         }
@@ -9916,8 +10360,8 @@ function update() {
                 }
                 
                 // Update Duchamp painting group (already high from swap system)
-                if (gDuchampPaintingGroup && gDuchampPaintingGroup.position.y > gPaintingBaseY + gPaintingDropStartY) {
-                    gDuchampPaintingGroup.position.y = gPaintingBaseY + gPaintingExitY + currentOffset;
+                if (gDuchampPaintingGroup && gDuchampPaintingGroup.position.y > gDuchampPaintingBaseY + gPaintingDropStartY) {
+                    gDuchampPaintingGroup.position.y = gDuchampPaintingBaseY + gPaintingExitY + currentOffset;
                 }
                 
                 // Update left wall painting and frame
@@ -9953,6 +10397,59 @@ function update() {
                     gPaintingsDropping = false;
                 }
             }
+        }
+    }
+    
+    // Separate animation for Duchamp extra paintings (can drop independently)
+    if (gDuchampExtraPaintingsDropping && gDuchampExtraPaintingsActive) {
+        gDuchampExtraPaintingsDropTimer += deltaT;
+        
+        const elapsed = gDuchampExtraPaintingsDropTimer;
+        const progress = Math.min(1, elapsed / gPaintingDropDuration);
+        
+        // Cubic ease-out: starts fast, decelerates (y = 1 - (1-x)^3)
+        const easedProgress = 1 - Math.pow(1 - progress, 3);
+        
+        // Calculate current Y offset
+        const currentOffset = gPaintingDropStartY * (1 - easedProgress);
+        
+        // Update Duchamp Bride painting group
+        if (gDuchampBridePaintingGroup) {
+            gDuchampBridePaintingGroup.position.y = gPaintingBaseY + currentOffset;
+        }
+        
+        // Update Duchamp Grinder painting group
+        if (gDuchampGrinderPaintingGroup) {
+            gDuchampGrinderPaintingGroup.position.y = gPaintingBaseY + currentOffset;
+        }
+        
+        // End animation when complete
+        if (progress >= 1) {
+            gDuchampExtraPaintingsDropping = false;
+        }
+    }
+    
+    // Separate animation for Duchamp Bride Top painting (can drop independently)
+    if (gDuchampBrideTopDropping && gDuchampBrideTopActive) {
+        gDuchampBrideTopDropTimer += deltaT;
+        
+        const elapsed = gDuchampBrideTopDropTimer;
+        const progress = Math.min(1, elapsed / gPaintingDropDuration);
+        
+        // Cubic ease-out: starts fast, decelerates (y = 1 - (1-x)^3)
+        const easedProgress = 1 - Math.pow(1 - progress, 3);
+        
+        // Calculate current Y offset from target position
+        const currentOffset = gPaintingDropStartY * (1 - easedProgress);
+        
+        // Update Duchamp Bride Top painting group (target = duchampPaintingY + 12.3)
+        if (gDuchampBrideTopPaintingGroup) {
+            gDuchampBrideTopPaintingGroup.position.y = gDuchampPaintingBaseY + 12.3 + currentOffset;
+        }
+        
+        // End animation when complete
+        if (progress >= 1) {
+            gDuchampBrideTopDropping = false;
         }
     }
     
