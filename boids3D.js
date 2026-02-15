@@ -196,10 +196,17 @@ var gStoolInitialX = -9; // Initial X position for world resize scaling
 var gStoolInitialZ = -6; // Initial Z position for world resize scaling
 var gDuckInitialX = 18; // Initial X position for world resize scaling
 var gDuckInitialZ = 7; // Initial Z position for world resize scaling
-var gTeapotInitialX = -17; // Initial X position for world resize scaling
-var gTeapotInitialZ = 10; // Initial Z position for world resize scaling (final position after animation)
-var gColumnInitialX = 9; // Initial X position for world resize scaling
-var gColumnInitialZ = -9; // Initial Z position for world resize scaling
+var gTeapotInitialX = -23; // Initial X position for world resize scaling
+var gTeapotInitialZ = 0; // Initial Z position for world resize scaling (final position after animation)
+var gColumnInitialX = 15; // Initial X position for world resize scaling
+var gColumnInitialZ = -10; // Initial Z position for world resize scaling
+var gBird = null; // Brancusi Bird model reference
+var gBirdObstacle = null; // Cylinder obstacle for boid avoidance
+var gDraggingBird = false; // Track if dragging the bird
+var gBirdDragOffset = null; // Store offset from click point to bird center
+var gBirdDragPlaneHeight = 0; // Store the Y height where bird was grabbed
+var gBirdInitialX = 0; // Initial X position for world resize scaling
+var gBirdInitialZ = 0; // Initial Z position for world resize scaling
 var gGlobeLamp = null; // Globe lamp model reference
 var gGlobeLampLight = null; // Point light at center of globe lamp
 var gGlobeLampObstacle = null; // Sphere obstacle for boid avoidance
@@ -290,7 +297,7 @@ var gFadeInDuration = 1.0; // Fade in over 1 second
 //var WORLD_DEPTH = 31 * 0.5;   // Z dimension Parthenon
 var WORLD_WIDTH = 30;   // X dimension
 var WORLD_HEIGHT = 20;  // Y dimension  
-var WORLD_DEPTH = 20;   // Z dimension
+var WORLD_DEPTH = 30;   // Z dimension
 
 // Individual world size controls (for menu knobs)
 var gWorldSizeX = WORLD_WIDTH;
@@ -372,6 +379,7 @@ class BoxObstacle {
         this.position = position.clone();
         this.rotation = rotation || { x: 0, y: 0, z: 0 };
         this.mesh = null;
+        this.enabled = true;
         this.createMesh();
     }
     
@@ -806,17 +814,30 @@ class SphereObstacle {
 }
 
 class CylinderObstacle {
-    constructor(radius, height, position, rotation, skipTori) {
+    constructor(radius, height, position, rotation, skipTori, collisionOnly) {
         this.radius = radius;
         this.height = height;
         this.position = position.clone();
         this.rotation = rotation || { x: 0, y: 0, z: 0 };
         this.skipTori = skipTori || false; // Flag to skip creating decorative tori
+        this.collisionOnly = collisionOnly || false; // Flag to skip all visual geometry
         this.mesh = null;
         this.enabled = true;
         
-        // Create the cylinder mesh
-        this.createMesh();
+        this.columnSections = [];
+        this.groutLayers = [];
+        
+        // Calculate section height for collision detection
+        if (this.collisionOnly) {
+            // Skip mesh creation, just set up collision properties
+            const numSections = 3;
+            const groutThickness = 0.05;
+            const totalGroutHeight = groutThickness * (numSections - 1);
+            this.sectionHeight = (this.height - totalGroutHeight) / numSections;
+        } else {
+            // Create the cylinder mesh
+            this.createMesh();
+        }
     }
     
     createMesh() {
@@ -1210,6 +1231,11 @@ class CylinderObstacle {
     // Update cylinder position
     updatePosition(newPosition) {
         this.position.copy(newPosition);
+        
+        // Only update visual components if they exist
+        if (this.collisionOnly || this.columnSections.length === 0) {
+            return;
+        }
         
         // Update all column sections and grout layers
         const numSections = this.columnSections.length;
@@ -5021,6 +5047,25 @@ function updateWorldGeometry(changedDimension) {
             
             gColumnObstacle.updatePosition(new THREE.Vector3(newX, gColumnObstacle.position.y, newZ));
         }
+        
+        // Update bird position
+        if (gBird) {
+            if (changedDimension === 'x') {
+                const xRatio = gBirdInitialX / initialWorldWidth;
+                const newX = xRatio * boxSize.x;
+                gBird.position.x = newX;
+            }
+            if (changedDimension === 'z') {
+                const zRatio = gBirdInitialZ / initialWorldDepth;
+                const newZ = zRatio * boxSize.z;
+                gBird.position.z = newZ;
+            }
+            
+            // Update bird obstacle position
+            if (gBirdObstacle) {
+                gBirdObstacle.updatePosition(new THREE.Vector3(gBird.position.x, gBirdObstacle.position.y, gBird.position.z));
+            }
+        }
     }
 }
 
@@ -5800,6 +5845,69 @@ function initThreeScene() {
             },
             function(error) {
                 console.error('Error loading Globe Lamp model:', error);
+            }
+        );
+    }
+    
+    // Load Brancusi Bird model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var birdLoader = new THREE.GLTFLoader();
+        birdLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Brancusi_Bird.gltf',
+            function(gltf) {
+                var bird = gltf.scene;
+                
+                // Position object on the floor
+                bird.position.set(gBirdInitialX, 0, gBirdInitialZ);
+                
+                // Scale appropriately
+                bird.scale.set(1, 1, 1);
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                bird.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and mark as draggable for all meshes
+                bird.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.userData.isDraggableBird = true;
+                    }
+                });
+                
+                gThreeScene.add(bird);
+                gBird = bird; // Store global reference
+                
+                // Create cylinder obstacle for boid avoidance (collision only, no visuals)
+                var birdObstacleRadius = 1.5; // Radius of cylinder
+                var birdObstacleHeight = 8.0; // Height of cylinder
+                gBirdObstacle = new CylinderObstacle(
+                    birdObstacleRadius,
+                    birdObstacleHeight,
+                    new THREE.Vector3(bird.position.x, bird.position.y + birdObstacleHeight / 2, bird.position.z),
+                    { x: 0, y: 0, z: 0 },
+                    false, // skipTori
+                    true // collisionOnly - no visual geometry
+                );
+                gObstacles.push(gBirdObstacle);
+                
+                console.log('Brancusi Bird model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Brancusi Bird model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Brancusi Bird model:', error);
             }
         );
     }
@@ -7379,14 +7487,12 @@ function initThreeScene() {
     gTorusObstacle = new TorusObstacle(
         6,  // major radius
         1,  // minor radius (tube radius)
-        new THREE.Vector3(5, 10, 5),  // position
+        new THREE.Vector3(5, 10, 23),  // position
         { x: 0, y: 0.5 * Math.PI, z: 0 }  // rotation
     );
     gObstacles.push(gTorusObstacle);
 
     // Create cylinder obstacle (start high for drop animation)
-    gColumnInitialX = 9;
-    gColumnInitialZ = -9;
     gColumnObstacle = new CylinderObstacle(
         2.5,  // radius
         12,  // height
@@ -7862,6 +7968,7 @@ function onPointer(evt) {
         var hitTorusObstacle = null;
         var hitLampId = 1; // Default to lamp 1
         var hitStool = false;
+        var hitBird = false;
         var hitStoolLeg = false;
         var hitDuck = false;
         var hitDuckBeak = false;
@@ -7936,6 +8043,19 @@ function onPointer(evt) {
                 );
                 // Don't break - check if other objects are also hit
             }
+            if (intersects[i].object.userData.isDraggableBird && !hitBird) {
+                hitBird = true;
+                var actualClickPoint = intersects[i].point;
+                gBirdDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to bird center (X and Z only)
+                gBirdDragOffset = new THREE.Vector3(
+                    gBird.position.x - actualClickPoint.x,
+                    0,
+                    gBird.position.z - actualClickPoint.z
+                );
+                // Don't break - check if other objects are also hit
+            }
             if (intersects[i].object.userData.isDraggableSphere && !hitSphere) {
                 hitSphere = true;
                 hitSphereObstacle = intersects[i].object.userData.sphereObstacle;
@@ -7971,17 +8091,6 @@ function onPointer(evt) {
             if (intersects[i].object.userData.isDraggableTorus && !hitTorus) {
                 hitTorus = true;
                 hitTorusObstacle = intersects[i].object.userData.torusObstacle;
-                
-                // Store the actual 3D point where the torus was clicked
-                var actualClickPoint = intersects[i].point;
-                gTorusDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to torus center (full 3D)
-                gTorusDragOffset = new THREE.Vector3(
-                    hitTorusObstacle.position.x - actualClickPoint.x,
-                    hitTorusObstacle.position.y - actualClickPoint.y,
-                    hitTorusObstacle.position.z - actualClickPoint.z
-                );
                 // Don't break - check if lamp components are also hit
             }
             if (intersects[i].object.userData.isLampCone) {
@@ -8115,6 +8224,17 @@ function onPointer(evt) {
             return;
         }
         
+        if (hitBird && gBird) {
+            gDraggingBird = true;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging bird
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
         if (hitSphere && hitSphereObstacle) {
             gDraggingSphere = true;
             window.draggingSphereObstacle = hitSphereObstacle; // Store reference globally
@@ -8158,6 +8278,37 @@ function onPointer(evt) {
             var cameraDirection = new THREE.Vector3();
             gCamera.getWorldDirection(cameraDirection);
             gTorusDragPlaneDistance = cameraToTorus.dot(cameraDirection);
+            
+            // Calculate initial offset by finding where mouse ray hits the drag plane
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Create the drag plane
+            var planePoint = new THREE.Vector3();
+            planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gTorusDragPlaneDistance));
+            var dragPlane = new THREE.Plane();
+            dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+            
+            // Find where ray intersects drag plane
+            var planeIntersection = new THREE.Vector3();
+            raycaster.ray.intersectPlane(dragPlane, planeIntersection);
+            
+            if (planeIntersection) {
+                // Store offset from plane intersection to torus center
+                gTorusDragOffset = new THREE.Vector3(
+                    hitTorusObstacle.position.x - planeIntersection.x,
+                    hitTorusObstacle.position.y - planeIntersection.y,
+                    hitTorusObstacle.position.z - planeIntersection.z
+                );
+            } else {
+                // Fallback to zero offset if plane intersection fails
+                gTorusDragOffset = new THREE.Vector3(0, 0, 0);
+            }
             
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
@@ -8960,6 +9111,46 @@ function onPointer(evt) {
             return;
         }
         
+        if (gDraggingBird && gBird) {
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Define plane at the height where the bird was grabbed
+            var birdPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gBirdDragPlaneHeight);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(birdPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                // Keep the bird's Y position constant, only move X and Z
+                var newX = intersectionPoint.x + (gBirdDragOffset ? gBirdDragOffset.x : 0);
+                var newZ = intersectionPoint.z + (gBirdDragOffset ? gBirdDragOffset.z : 0);
+                
+                // Clamp to room boundaries
+                var minBoundX = -gPhysicsScene.worldSize.x + 2;
+                var maxBoundX = gPhysicsScene.worldSize.x - 2;
+                var minBoundZ = -gPhysicsScene.worldSize.z + 2;
+                var maxBoundZ = gPhysicsScene.worldSize.z - 2;
+                
+                newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
+                newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
+                
+                gBird.position.x = newX;
+                gBird.position.z = newZ;
+                
+                // Update obstacle position
+                if (gBirdObstacle) {
+                    var obstacleHeight = gBirdObstacle.height;
+                    gBirdObstacle.updatePosition(new THREE.Vector3(newX, obstacleHeight / 2, newZ));
+                }
+            }
+            return;
+        }
+        
         // Handle sphere dragging (translation in 3D)
         if (gDraggingSphere && window.draggingSphereObstacle) {
             var sphereObstacle = window.draggingSphereObstacle;
@@ -9084,8 +9275,8 @@ function onPointer(evt) {
                     intersectionPoint.z + gTorusDragOffset.z
                 );
                 
-                // Clamp to room boundaries
-                var margin = torusObstacle.majorRadius + torusObstacle.minorRadius;
+                // Clamp to room boundaries (allow torus to get one major radius closer to walls)
+                var margin = torusObstacle.minorRadius;
                 var minBoundX = -gPhysicsScene.worldSize.x + margin;
                 var maxBoundX = gPhysicsScene.worldSize.x - margin;
                 var minBoundY = margin;
@@ -9323,6 +9514,16 @@ function onPointer(evt) {
         if (gDraggingStool) {
             gDraggingStool = false;
             gStoolDragOffset = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingBird) {
+            gDraggingBird = false;
+            gBirdDragOffset = null;
             // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
@@ -10370,10 +10571,28 @@ function update() {
         var currentZ = gTeapotStartZ + (gTeapotTargetZ - gTeapotStartZ) * eased;
         gTeapot.position.z = currentZ;
         
+        // Update obstacle position during animation
+        if (gTeapotObstacle) {
+            gTeapotObstacle.updatePosition(new THREE.Vector3(
+                gTeapot.position.x,
+                gTeapot.position.y + gTeapotObstacle.height / 2,
+                currentZ
+            ));
+        }
+        
         // Stop animation when complete
         if (t >= 1.0) {
             gTeapotAnimating = false;
             gTeapot.position.z = gTeapotTargetZ; // Ensure final position is exact
+            
+            // Final obstacle position update
+            if (gTeapotObstacle) {
+                gTeapotObstacle.updatePosition(new THREE.Vector3(
+                    gTeapot.position.x,
+                    gTeapot.position.y + gTeapotObstacle.height / 2,
+                    gTeapotTargetZ
+                ));
+            }
         }
     }
     
@@ -10625,7 +10844,7 @@ function update() {
                 const currentY = targetY + currentOffset;
                 
                 // Update column position (this will update all parts)
-                gColumnObstacle.updatePosition(new THREE.Vector3(9, currentY, -9));
+                gColumnObstacle.updatePosition(new THREE.Vector3(gColumnInitialX, currentY, gColumnInitialZ));
                 
                 // Update base components to descend with the column
                 if (gColumnObstacle.conicalPedestalMesh) {
@@ -10639,7 +10858,7 @@ function update() {
                 // End animation when complete
                 if (progress >= 1) {
                     gColumnDropping = false;
-                    gColumnObstacle.updatePosition(new THREE.Vector3(9, targetY, -9));
+                    gColumnObstacle.updatePosition(new THREE.Vector3(gColumnInitialX, targetY, gColumnInitialZ));
                     // Ensure final positions are exact
                     if (gColumnObstacle.conicalPedestalMesh) {
                         const conicalPedestalHeight = 3;
