@@ -51,6 +51,10 @@ var gDraggingSphere = false; // Track if dragging the sphere obstacle
 var gSphereDragOffset = null; // Store offset from click point to sphere center
 var gSphereDragPlaneHeight = 0; // Store the Y height where the sphere was grabbed
 var gSphereHue = 90; // Current hue value for sphere obstacle (0-360)
+var gDraggingTorus = false; // Track if dragging the torus obstacle
+var gTorusDragOffset = null; // Store offset from click point to torus center
+var gTorusDragPlaneHeight = 0; // Store the Y height where the torus was grabbed
+var gTorusDragPlaneDistance = 0; // Store the distance from camera for fixed plane dragging
 var gActiveLampId = 1; // Track which lamp is currently being interacted with (1 or 2)
 var gLampAngle = -0.0435; // Current lamp angle in radians (-2.49 degrees)
 var gLampAssemblyRotation = 0.0; // Current lamp assembly rotation around Y axis
@@ -188,6 +192,14 @@ var gTeapotDragPlaneHeight = 0; // Store the Y height where the teapot was grabb
 var gStoolAnimating = true; // Is stool currently animating
 var gStoolAnimationTimer = 0; // Timer for stool lowering animation
 var gStoolStartY = 30; // Starting Y position (high above floor)
+var gStoolInitialX = -9; // Initial X position for world resize scaling
+var gStoolInitialZ = -6; // Initial Z position for world resize scaling
+var gDuckInitialX = 18; // Initial X position for world resize scaling
+var gDuckInitialZ = 7; // Initial Z position for world resize scaling
+var gTeapotInitialX = -17; // Initial X position for world resize scaling
+var gTeapotInitialZ = 10; // Initial Z position for world resize scaling (final position after animation)
+var gColumnInitialX = 9; // Initial X position for world resize scaling
+var gColumnInitialZ = -9; // Initial Z position for world resize scaling
 var gGlobeLamp = null; // Globe lamp model reference
 var gGlobeLampLight = null; // Point light at center of globe lamp
 var gGlobeLampObstacle = null; // Sphere obstacle for boid avoidance
@@ -255,6 +267,7 @@ var gStarAnimData = []; // Animation data for each star {star, wire, targetY, st
 var gEnableStarSwayAndTwist = true; // Enable/disable star swaying and twisting motion
 var gPedestalAnimData = []; // Animation data for pedestals {pedestal, solidGroup, targetPedestalY, targetSolidY, startY, timer, delay, animating}
 var gColumnObstacle = null; // Reference to the column cylinder obstacle
+var gTorusObstacle = null; // Reference to the torus obstacle
 var gColumnDropping = false; // Flag for column drop animation
 var gColumnDropTimer = 0; // Timer for column drop animation
 var gColumnDropDelay = 0.0; // Delay after pedestals finish before column drops
@@ -491,6 +504,7 @@ class TorusObstacle {
         this.position = position.clone();
         this.rotation = rotation || { x: 0, y: 0, z: 0 };
         this.mesh = null;
+        this.enabled = true;
         
         // Create the torus mesh
         this.createMesh();
@@ -506,33 +520,44 @@ class TorusObstacle {
         this.mesh.rotation.z = this.rotation.z;
         this.mesh.castShadow = true;
         this.mesh.receiveShadow = true;
+        this.mesh.userData.isDraggableTorus = true;
+        this.mesh.userData.torusObstacle = this;
         gThreeScene.add(this.mesh);
+        
+        // Force update of matrix world before using it
+        this.mesh.updateMatrixWorld(true);
+    }
+    
+    updateRotationMatrices() {
+        // Not needed anymore - we read directly from mesh
     }
     
     // Check if a point is inside the solid part of the torus
     // Returns distance to surface (negative if inside solid)
     getDistanceToSurface(point) {
-        // Transform point to torus local space
-        const localPoint = point.clone().sub(this.position);
+        if (!this.mesh) return 1000; // Far away if no mesh
         
-        // Apply inverse rotation (assuming rotation around Y axis for now)
-        const cosY = Math.cos(-this.rotation.y);
-        const sinY = Math.sin(-this.rotation.y);
-        const rotatedX = localPoint.x * cosY - localPoint.z * sinY;
-        const rotatedZ = localPoint.x * sinY + localPoint.z * cosY;
-        localPoint.x = rotatedX;
-        localPoint.z = rotatedZ;
+        // Update matrix to ensure we have latest transform
+        this.mesh.updateMatrixWorld(true);
+        
+        // Create inverse world matrix
+        const inverseWorldMatrix = new THREE.Matrix4();
+        inverseWorldMatrix.copy(this.mesh.matrixWorld).invert();
+        
+        // Transform point to torus local space
+        const localPoint = point.clone();
+        localPoint.applyMatrix4(inverseWorldMatrix);
         
         // Signed distance to torus
-        // First, find distance from point to the major circle in the XZ plane
-        const distToCenter = Math.sqrt(localPoint.x * localPoint.x + localPoint.z * localPoint.z);
+        // THREE.TorusGeometry: major circle in XY plane, tube extends along Z
+        const distToCenter = Math.sqrt(localPoint.x * localPoint.x + localPoint.y * localPoint.y);
         
         // Vector from major circle to point (in the tube cross-section)
         const qx = distToCenter - this.majorRadius;
-        const qy = localPoint.y;
+        const qz = localPoint.z;
         
         // Distance in the tube cross-section plane
-        const tubeDistance = Math.sqrt(qx * qx + qy * qy);
+        const tubeDistance = Math.sqrt(qx * qx + qz * qz);
         
         // Return signed distance (negative if inside the solid tube)
         return tubeDistance - this.minorRadius;
@@ -541,24 +566,30 @@ class TorusObstacle {
     // Apply avoidance force to a boid
     applyAvoidance(boid, avoidanceStrength = 1.5) {
         const distance = this.getDistanceToSurface(boid.pos);
-        const threshold = 5.0; // Start avoiding when within this distance
+        const threshold = 2.0; // Start avoiding when within this distance (reduced to allow free passage through center hole)
         
         if (distance < threshold) {
-            // Transform point to torus local space for gradient calculation
-            const localPoint = boid.pos.clone().sub(this.position);
+            if (!this.mesh) return;
             
-            // Apply inverse rotation (around Y axis)
-            const cosY = Math.cos(-this.rotation.y);
-            const sinY = Math.sin(-this.rotation.y);
-            const rotatedX = localPoint.x * cosY - localPoint.z * sinY;
-            const rotatedZ = localPoint.x * sinY + localPoint.z * cosY;
+            // Create inverse world matrix
+            const inverseWorldMatrix = new THREE.Matrix4();
+            inverseWorldMatrix.copy(this.mesh.matrixWorld).invert();
+            
+            // Transform point to torus local space for gradient calculation
+            const localPoint = boid.pos.clone();
+            localPoint.applyMatrix4(inverseWorldMatrix);
             
             // Calculate analytical gradient in local space
-            const distToCenter = Math.sqrt(rotatedX * rotatedX + rotatedZ * rotatedZ);
+            // THREE.TorusGeometry: major circle in XY plane, tube extends along Z
+            const distToCenter = Math.sqrt(localPoint.x * localPoint.x + localPoint.y * localPoint.y);
             
             if (distToCenter < 0.001) {
-                // Special case: near the center axis - push radially outward
+                // Special case: near the center axis - push radially outward in XY plane
                 const gradient = new THREE.Vector3(1, 0, 0);
+                // Transform gradient back to world space using rotation part of world matrix
+                const rotationMatrix = new THREE.Matrix3();
+                rotationMatrix.setFromMatrix4(this.mesh.matrixWorld);
+                gradient.applyMatrix3(rotationMatrix);
                 boid.vel.x += gradient.x * avoidanceStrength * 5.0;
                 boid.vel.y += gradient.y * avoidanceStrength * 5.0;
                 boid.vel.z += gradient.z * avoidanceStrength * 5.0;
@@ -566,31 +597,36 @@ class TorusObstacle {
             }
             
             const qx = distToCenter - this.majorRadius;
-            const qy = localPoint.y;
-            const tubeDistance = Math.sqrt(qx * qx + qy * qy);
+            const qz = localPoint.z;
+            const tubeDistance = Math.sqrt(qx * qx + qz * qz);
             
             if (tubeDistance < 0.001) {
-                // Special case: exactly on major circle - push radially
-                const gradient = new THREE.Vector3(rotatedX / distToCenter, 0, rotatedZ / distToCenter);
-                const gradWorldX = gradient.x * cosY + gradient.z * sinY;
-                const gradWorldZ = -gradient.x * sinY + gradient.z * cosY;
-                boid.vel.x += gradWorldX * avoidanceStrength * 5.0;
-                boid.vel.z += gradWorldZ * avoidanceStrength * 5.0;
+                // Special case: exactly on major circle - push radially in XY plane
+                const gradient = new THREE.Vector3(localPoint.x / distToCenter, localPoint.y / distToCenter, 0);
+                // Transform gradient back to world space using rotation part of world matrix
+                const rotationMatrix = new THREE.Matrix3();
+                rotationMatrix.setFromMatrix4(this.mesh.matrixWorld);
+                gradient.applyMatrix3(rotationMatrix);
+                boid.vel.x += gradient.x * avoidanceStrength * 5.0;
+                boid.vel.y += gradient.y * avoidanceStrength * 5.0;
+                boid.vel.z += gradient.z * avoidanceStrength * 5.0;
                 return;
             }
             
             // Analytical gradient in local space
             const factor = qx / (distToCenter * tubeDistance);
-            const gradLocalX = rotatedX * factor;
-            const gradLocalZ = rotatedZ * factor;
-            const gradLocalY = qy / tubeDistance;
+            const gradLocalX = localPoint.x * factor;
+            const gradLocalY = localPoint.y * factor;
+            const gradLocalZ = qz / tubeDistance;
             
-            // Rotate gradient back to world space
-            const gradWorldX = gradLocalX * cosY + gradLocalZ * sinY;
-            const gradWorldZ = -gradLocalX * sinY + gradLocalZ * cosY;
-            const gradWorldY = gradLocalY;
+            // Create gradient vector in local space
+            const gradient = new THREE.Vector3(gradLocalX, gradLocalY, gradLocalZ);
             
-            const gradient = new THREE.Vector3(gradWorldX, gradWorldY, gradWorldZ);
+            // Transform gradient back to world space using rotation part of world matrix
+            const rotationMatrix = new THREE.Matrix3();
+            rotationMatrix.setFromMatrix4(this.mesh.matrixWorld);
+            gradient.applyMatrix3(rotationMatrix);
+            
             const gradLen = gradient.length();
             if (gradLen > 0.001) {
                 gradient.normalize();
@@ -615,6 +651,72 @@ class TorusObstacle {
             boid.vel.x += gradient.x * strength;
             boid.vel.y += gradient.y * strength;
             boid.vel.z += gradient.z * strength;
+        }
+    }
+    
+    // Create debug spheres to visualize the torus surface
+    createDebugSpheres() {
+        const numMajorSegments = 32; // Points around major circle
+        const numMinorSegments = 16; // Points around tube
+        const debugSphereRadius = 0.15;
+        
+        this.debugSpheres = [];
+        
+        if (!this.mesh) return;
+        
+        // Ensure mesh matrices are up to date
+        this.mesh.updateMatrixWorld(true);
+        
+        for (let i = 0; i < numMajorSegments; i++) {
+            // Angle around major circle (THREE.TorusGeometry uses XY plane, not XZ!)
+            const theta = (i / numMajorSegments) * Math.PI * 2;
+            
+            for (let j = 0; j < numMinorSegments; j++) {
+                // Angle around tube cross-section
+                const phi = (j / numMinorSegments) * Math.PI * 2;
+                
+                // Point on torus surface in local space
+                // THREE.TorusGeometry parametric: major circle in XY plane!
+                const localX = (this.majorRadius + this.minorRadius * Math.cos(phi)) * Math.cos(theta);
+                const localY = (this.majorRadius + this.minorRadius * Math.cos(phi)) * Math.sin(theta);
+                const localZ = this.minorRadius * Math.sin(phi);
+                
+                // Transform to world space using the mesh's transformation
+                const localPoint = new THREE.Vector3(localX, localY, localZ);
+                const worldPoint = localPoint.applyMatrix4(this.mesh.matrixWorld);
+                
+                // Create small sphere at this point
+                const sphereGeometry = new THREE.SphereGeometry(debugSphereRadius, 8, 8);
+                const sphereMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xff0000,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+                sphere.position.copy(worldPoint);
+                gThreeScene.add(sphere);
+                this.debugSpheres.push(sphere);
+            }
+        }
+    }
+    
+    // Remove debug spheres
+    removeDebugSpheres() {
+        if (this.debugSpheres) {
+            this.debugSpheres.forEach(sphere => {
+                gThreeScene.remove(sphere);
+                sphere.geometry.dispose();
+                sphere.material.dispose();
+            });
+            this.debugSpheres = [];
+        }
+    }
+    
+    // Update torus position
+    updatePosition(newPosition) {
+        this.position.copy(newPosition);
+        if (this.mesh) {
+            this.mesh.position.copy(newPosition);
         }
     }
 }
@@ -4547,7 +4649,7 @@ function initColorWheel() {
 }
 
 // Function to update world geometry when size changes
-function updateWorldGeometry() {
+function updateWorldGeometry(changedDimension) {
     const boxSize = gPhysicsScene.worldSize;
     
     // Update floor
@@ -4692,6 +4794,233 @@ function updateWorldGeometry() {
         gBaseboards.right.geometry.dispose();
         gBaseboards.right.geometry = new THREE.BoxGeometry(baseboardDepth, baseboardHeight, boxSize.z * 2);
         gBaseboards.right.position.set(boxSize.x - baseboardDepth / 2, baseboardHeight / 2, 0);
+    }
+    
+    // Update painting positions to follow walls
+    const paintingWallX = boxSize.x - 0.3; // X position on right wall
+    const leftWallX = -boxSize.x + 0.3; // X position on left wall
+    const backWallZ = -boxSize.z + 0.1; // Z position on back wall
+    
+    // Right wall paintings (Miro, Dali, Duchamp main, Duchamp Bride Top)
+    if (gMiroPaintingGroup) {
+        gMiroPaintingGroup.position.x = paintingWallX;
+    }
+    if (gDaliPaintingGroup) {
+        gDaliPaintingGroup.position.x = paintingWallX;
+    }
+    if (gDuchampPaintingGroup) {
+        gDuchampPaintingGroup.position.x = paintingWallX;
+    }
+    if (gDuchampBrideTopPaintingGroup) {
+        gDuchampBrideTopPaintingGroup.position.x = paintingWallX;
+    }
+    
+    // Left wall paintings
+    if (gLeftWallPainting) {
+        gLeftWallPainting.position.x = leftWallX;
+    }
+    // Update left wall frame pieces
+    const frameDepth = 0.15;
+    if (gLeftWallFramePieces) {
+        gLeftWallFramePieces.forEach(function(framePiece) {
+            framePiece.position.x = leftWallX + frameDepth / 2;
+        });
+    }
+    if (gDuchampBridePaintingGroup) {
+        gDuchampBridePaintingGroup.position.x = leftWallX;
+    }
+    if (gDuchampGrinderPaintingGroup) {
+        gDuchampGrinderPaintingGroup.position.x = leftWallX;
+    }
+    
+    // Back wall paintings (Oval painting)
+    if (gOvalPainting) {
+        gOvalPainting.position.z = backWallZ + 0.05;
+    }
+    if (gOvalFrame) {
+        gOvalFrame.position.z = backWallZ + frameDepth / 2;
+    }
+    
+    // Update hanging star ornaments positions based on world size changes
+    if (gStarAnimData && gStarAnimData.length > 0) {
+        const ceilingY = 2 * boxSize.y; // Wire extends to 2x world height
+        const initialWorldWidth = WORLD_WIDTH;
+        const initialWorldDepth = WORLD_DEPTH;
+        const initialWorldHeight = WORLD_HEIGHT;
+        const initialMinY = initialWorldHeight * 0.8;
+        const initialMaxY = initialWorldHeight * 1.5;
+        const newMinY = boxSize.y * 0.8;
+        const newMaxY = boxSize.y * 1.5;
+        const initialStartY = initialWorldHeight + 12;
+        const newStartY = boxSize.y + 12;
+        
+        for (let i = 0; i < gStarAnimData.length; i++) {
+            const starData = gStarAnimData[i];
+            
+            // Only update X when X dimension changes
+            if (changedDimension === 'x') {
+                const baseX = starData.initialX !== undefined ? starData.initialX : starData.x;
+                const xRatio = baseX / (initialWorldWidth - 3);
+                const newX = xRatio * (boxSize.x - 3);
+                starData.x = newX;
+                
+                if (starData.star) {
+                    starData.star.position.x = newX + (starData.offsetX || 0);
+                }
+                if (starData.wire) {
+                    starData.wire.position.x = newX;
+                }
+                if (starData.cone) {
+                    starData.cone.position.x = newX;
+                }
+            }
+            
+            // Only update Z when Z dimension changes
+            if (changedDimension === 'z') {
+                const baseZ = starData.initialZ !== undefined ? starData.initialZ : starData.z;
+                const zRatio = baseZ / (initialWorldDepth - 3);
+                const newZ = zRatio * (boxSize.z - 3);
+                starData.z = newZ;
+                
+                if (starData.star) {
+                    starData.star.position.z = newZ + (starData.offsetZ || 0);
+                }
+                if (starData.wire) {
+                    starData.wire.position.z = newZ;
+                }
+                if (starData.cone) {
+                    starData.cone.position.z = newZ;
+                }
+            }
+            
+            // Only update Y when Y dimension changes
+            if (changedDimension === 'y') {
+                const baseTargetY = starData.initialTargetY !== undefined ? starData.initialTargetY : starData.targetY;
+                const yRatio = (baseTargetY - initialMinY) / (initialMaxY - initialMinY);
+                const newTargetY = newMinY + yRatio * (newMaxY - newMinY);
+                starData.targetY = newTargetY;
+                starData.startY = newStartY;
+                
+                // If star is currently animating (dropping), maintain its relative progress
+                if (starData.animating && starData.star) {
+                    const currentProgress = (starData.star.position.y - initialStartY) / (baseTargetY - initialStartY);
+                    const newCurrentY = newStartY + currentProgress * (newTargetY - newStartY);
+                    starData.star.position.y = newCurrentY;
+                } else if (starData.star) {
+                    // Star has finished animating, move to new target position
+                    starData.star.position.y = newTargetY;
+                }
+                
+                // Update wire position and length
+                if (starData.wire && starData.star) {
+                    const currentStarY = starData.star.position.y;
+                    const wireLength = ceilingY - currentStarY;
+                    starData.wire.position.y = currentStarY + wireLength / 2;
+                    starData.wire.scale.set(1, wireLength, 1);
+                }
+                
+                // Update cone position (support at ceiling)
+                if (starData.cone) {
+                    const coneHeight = starData.coneHeight || 0.5;
+                    starData.cone.position.y = ceilingY + coneHeight / 2;
+                }
+            }
+        }
+    }
+    
+    // Update object positions (stool, duck, teapot, column) based on world size changes
+    // Only update positions when X or Z dimensions change, not Y
+    if (changedDimension === 'x' || changedDimension === 'z') {
+        const initialWorldWidth = WORLD_WIDTH;
+        const initialWorldDepth = WORLD_DEPTH;
+        
+        // Update stool position
+        if (gStool) {
+            if (changedDimension === 'x') {
+                const xRatio = gStoolInitialX / initialWorldWidth;
+                const newX = xRatio * boxSize.x;
+                gStool.position.x = newX;
+            }
+            if (changedDimension === 'z') {
+                const zRatio = gStoolInitialZ / initialWorldDepth;
+                const newZ = zRatio * boxSize.z;
+                gStool.position.z = newZ;
+            }
+            
+            // Update stool obstacle position
+            if (gStoolObstacle) {
+                gStoolObstacle.updatePosition(new THREE.Vector3(gStool.position.x, gStoolObstacle.position.y, gStool.position.z));
+            }
+        }
+        
+        // Update duck position
+        if (gDuck) {
+            if (changedDimension === 'x') {
+                const xRatio = gDuckInitialX / initialWorldWidth;
+                const newX = xRatio * boxSize.x;
+                gDuck.position.x = newX;
+                // Update duck entrance disc positions
+                if (gDuckEntranceDisc) {
+                    gDuckEntranceDisc.position.x = newX;
+                }
+                if (gDuckEntranceDiscOutline) {
+                    gDuckEntranceDiscOutline.position.x = newX;
+                }
+            }
+            if (changedDimension === 'z') {
+                const zRatio = gDuckInitialZ / initialWorldDepth;
+                const newZ = zRatio * boxSize.z;
+                gDuck.position.z = newZ;
+                // Update duck entrance disc positions
+                if (gDuckEntranceDisc) {
+                    gDuckEntranceDisc.position.z = newZ;
+                }
+                if (gDuckEntranceDiscOutline) {
+                    gDuckEntranceDiscOutline.position.z = newZ;
+                }
+            }
+            
+            // Update duck obstacle position
+            if (gDuckObstacle) {
+                gDuckObstacle.updatePosition(new THREE.Vector3(gDuck.position.x, gDuckObstacle.position.y, gDuck.position.z));
+            }
+        }
+        
+        // Update teapot position
+        if (gTeapot) {
+            if (changedDimension === 'x') {
+                const xRatio = gTeapotInitialX / initialWorldWidth;
+                const newX = xRatio * boxSize.x;
+                gTeapot.position.x = newX;
+            }
+            if (changedDimension === 'z') {
+                const zRatio = gTeapotInitialZ / initialWorldDepth;
+                const newZ = zRatio * boxSize.z;
+                gTeapot.position.z = newZ;
+            }
+            
+            // Update teapot obstacle position
+            if (gTeapotObstacle) {
+                gTeapotObstacle.updatePosition(new THREE.Vector3(gTeapot.position.x, gTeapotObstacle.position.y, gTeapot.position.z));
+            }
+        }
+        
+        // Update column position
+        if (gColumnObstacle) {
+            let newX = gColumnObstacle.position.x;
+            let newZ = gColumnObstacle.position.z;
+            
+            if (changedDimension === 'x') {
+                const xRatio = gColumnInitialX / initialWorldWidth;
+                newX = xRatio * boxSize.x;
+            }
+            if (changedDimension === 'z') {
+                const zRatio = gColumnInitialZ / initialWorldDepth;
+                newZ = zRatio * boxSize.z;
+            }
+            
+            gColumnObstacle.updatePosition(new THREE.Vector3(newX, gColumnObstacle.position.y, newZ));
+        }
     }
 }
 
@@ -4852,7 +5181,9 @@ function initThreeScene() {
                 var stool = gltf.scene;
                 
                 // Position on floor in center of room - start high for animation
-                stool.position.set(-9, 30, -6);
+                gStoolInitialX = -9;
+                gStoolInitialZ = -6;
+                stool.position.set(gStoolInitialX, 30, gStoolInitialZ);
                 stool.rotation.y = -Math.PI / 8; // Rotate 45 degrees
                 
                 // Scale if needed (adjust this value to make it bigger/smaller)
@@ -5062,7 +5393,7 @@ function initThreeScene() {
                 var duck = gltf.scene;
                 
                 // Position below floor initially for entrance animation
-                duck.position.set(18, gDuckStartY, 7);
+                duck.position.set(gDuckInitialX, gDuckStartY, gDuckInitialZ);
                 
                 // Scale if needed (adjust this value to make it bigger/smaller)
                 duck.scale.set(4, 4, 4);
@@ -5338,7 +5669,7 @@ function initThreeScene() {
                 var teapot = gltf.scene;
                 
                 // Position object at starting position
-                teapot.position.set(-17, 0, 25);
+                teapot.position.set(gTeapotInitialX, 0, gTeapotInitialZ);
                 
                 // Scale teapot appropriately
                 teapot.scale.set(.25, .25, .25);
@@ -5662,7 +5993,10 @@ function initThreeScene() {
                     cone: cone,
                     x: x,
                     z: z,
+                    initialX: x, // Store initial position for world resize scaling
+                    initialZ: z, // Store initial position for world resize scaling
                     targetY: targetY,
+                    initialTargetY: targetY, // Store initial Y for world resize scaling
                     startY: startYAboveCeiling,
                     timer: 0,
                     delay: 5 + i * 0.15, // Wait 10 seconds, then stagger by 0.15 seconds each
@@ -7041,20 +7375,22 @@ function initThreeScene() {
     );
     gObstacles.push(sphereObstacle);
 
-    /*// Create torus obstacle
-    var torusObstacle = new TorusObstacle(
-        5,  // major radius
+    // Create torus obstacle
+    gTorusObstacle = new TorusObstacle(
+        6,  // major radius
         1,  // minor radius (tube radius)
-        new THREE.Vector3(10, 10, 0),  // position
+        new THREE.Vector3(5, 10, 5),  // position
         { x: 0, y: 0.5 * Math.PI, z: 0 }  // rotation
     );
-    gObstacles.push(torusObstacle);*/
+    gObstacles.push(gTorusObstacle);
 
     // Create cylinder obstacle (start high for drop animation)
+    gColumnInitialX = 9;
+    gColumnInitialZ = -9;
     gColumnObstacle = new CylinderObstacle(
         2.5,  // radius
         12,  // height
-        new THREE.Vector3(9, 6.03 + gColumnStartY, -9),  // position (start high)
+        new THREE.Vector3(gColumnInitialX, 6.03 + gColumnStartY, gColumnInitialZ),  // position (start high)
         { x: 0, y: 0, z: 0 }  // rotation
     );
     gObstacles.push(gColumnObstacle);
@@ -7522,6 +7858,8 @@ function onPointer(evt) {
         var hitCylinderObstacle = null;
         var hitSphere = false;
         var hitSphereObstacle = null;
+        var hitTorus = false;
+        var hitTorusObstacle = null;
         var hitLampId = 1; // Default to lamp 1
         var hitStool = false;
         var hitStoolLeg = false;
@@ -7630,6 +7968,22 @@ function onPointer(evt) {
                 );
                 // Don't break - check if lamp components are also hit
             }
+            if (intersects[i].object.userData.isDraggableTorus && !hitTorus) {
+                hitTorus = true;
+                hitTorusObstacle = intersects[i].object.userData.torusObstacle;
+                
+                // Store the actual 3D point where the torus was clicked
+                var actualClickPoint = intersects[i].point;
+                gTorusDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to torus center (full 3D)
+                gTorusDragOffset = new THREE.Vector3(
+                    hitTorusObstacle.position.x - actualClickPoint.x,
+                    hitTorusObstacle.position.y - actualClickPoint.y,
+                    hitTorusObstacle.position.z - actualClickPoint.z
+                );
+                // Don't break - check if lamp components are also hit
+            }
             if (intersects[i].object.userData.isLampCone) {
                 hitLampCone = true;
                 hitLampId = intersects[i].object.userData.lampId || 1;
@@ -7662,6 +8016,7 @@ function onPointer(evt) {
             // Clear obstacle hits if lamp was hit
             hitSphere = false;
             hitCylinder = false;
+            hitTorus = false;
         }
         
         // Handle double-click on any lamp part to toggle light
@@ -7787,6 +8142,26 @@ function onPointer(evt) {
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             // Disable orbit controls while dragging cylinder
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
+        if (hitTorus && hitTorusObstacle) {
+            gDraggingTorus = true;
+            window.draggingTorusObstacle = hitTorusObstacle; // Store reference globally
+            
+            // Store the distance from camera to torus center (for fixed plane)
+            var cameraToTorus = new THREE.Vector3();
+            cameraToTorus.subVectors(hitTorusObstacle.position, gCamera.position);
+            var cameraDirection = new THREE.Vector3();
+            gCamera.getWorldDirection(cameraDirection);
+            gTorusDragPlaneDistance = cameraToTorus.dot(cameraDirection);
+            
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging torus
             if (gCameraControl) {
                 gCameraControl.enabled = false;
             }
@@ -8359,19 +8734,28 @@ function onPointer(evt) {
                 case 8: boidProps.turnFactor = newValue; break;
                 case 9: boidProps.margin = newValue; break;
                 case 10: // World Size X
+                    const oldWorldSizeX = gWorldSizeX;
                     gWorldSizeX = Math.round(newValue / 10) * 10;
-                    gPhysicsScene.worldSize.x = gWorldSizeX;
-                    updateWorldGeometry();
+                    if (gWorldSizeX !== oldWorldSizeX) {
+                        gPhysicsScene.worldSize.x = gWorldSizeX;
+                        updateWorldGeometry('x');
+                    }
                     break;
                 case 11: // World Size Y
+                    const oldWorldSizeY = gWorldSizeY;
                     gWorldSizeY = Math.round(newValue / 10) * 10;
-                    gPhysicsScene.worldSize.y = gWorldSizeY;
-                    updateWorldGeometry();
+                    if (gWorldSizeY !== oldWorldSizeY) {
+                        gPhysicsScene.worldSize.y = gWorldSizeY;
+                        updateWorldGeometry('y');
+                    }
                     break;
                 case 12: // World Size Z
+                    const oldWorldSizeZ = gWorldSizeZ;
                     gWorldSizeZ = Math.round(newValue / 10) * 10;
-                    gPhysicsScene.worldSize.z = gWorldSizeZ;
-                    updateWorldGeometry();
+                    if (gWorldSizeZ !== oldWorldSizeZ) {
+                        gPhysicsScene.worldSize.z = gWorldSizeZ;
+                        updateWorldGeometry('z');
+                    }
                     break;
             }
             return;
@@ -8668,6 +9052,56 @@ function onPointer(evt) {
             return;
         }
         
+        // Handle torus dragging (translation in 3D)
+        if (gDraggingTorus && window.draggingTorusObstacle) {
+            var torusObstacle = window.draggingTorusObstacle;
+            
+            // Move torus in 3D space along a fixed plane perpendicular to camera view
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Use fixed plane at the distance established when drag started
+            var cameraDirection = new THREE.Vector3();
+            gCamera.getWorldDirection(cameraDirection);
+            var planePoint = new THREE.Vector3();
+            planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gTorusDragPlaneDistance));
+            var torusPlane = new THREE.Plane();
+            torusPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+            
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(torusPlane, intersectionPoint);
+            
+            if (intersectionPoint && gTorusDragOffset) {
+                // Apply the offset to maintain grab point
+                var newPosition = new THREE.Vector3(
+                    intersectionPoint.x + gTorusDragOffset.x,
+                    intersectionPoint.y + gTorusDragOffset.y,
+                    intersectionPoint.z + gTorusDragOffset.z
+                );
+                
+                // Clamp to room boundaries
+                var margin = torusObstacle.majorRadius + torusObstacle.minorRadius;
+                var minBoundX = -gPhysicsScene.worldSize.x + margin;
+                var maxBoundX = gPhysicsScene.worldSize.x - margin;
+                var minBoundY = margin;
+                var maxBoundY = gPhysicsScene.worldSize.y - margin;
+                var minBoundZ = -gPhysicsScene.worldSize.z + margin;
+                var maxBoundZ = gPhysicsScene.worldSize.z - margin;
+                
+                newPosition.x = Math.max(minBoundX, Math.min(maxBoundX, newPosition.x));
+                newPosition.y = Math.max(minBoundY, Math.min(maxBoundY, newPosition.y));
+                newPosition.z = Math.max(minBoundZ, Math.min(maxBoundZ, newPosition.z));
+                
+                torusObstacle.updatePosition(newPosition);
+            }
+            return;
+        }
+        
         // Handle lamp base dragging (translation)
         if (gDraggingLampBase) {
             // Raycast to find where cursor intersects ground plane
@@ -8911,6 +9345,17 @@ function onPointer(evt) {
             gDraggingCylinder = false;
             gCylinderDragOffset = null;
             window.draggingCylinderObstacle = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingTorus) {
+            gDraggingTorus = false;
+            gTorusDragOffset = null;
+            window.draggingTorusObstacle = null;
             // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
@@ -10030,7 +10475,7 @@ function update() {
                 starData.star.position.y = currentY;
                 
                 // Update wire position and length
-                var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
+                var ceilingY = 2 * gPhysicsScene.worldSize.y; // Wire extends to 2x world height
                 var starTop = currentY; // Connect to model origin
                 var wireLength = ceilingY - starTop;
                 
@@ -10076,7 +10521,7 @@ function update() {
             // Update wire to connect fixed ceiling point to moving star (optimized)
             var currentY = starData.targetY;
             var starTop = currentY; // Connect to model origin
-            var ceilingY = 2 * WORLD_HEIGHT;
+            var ceilingY = 2 * gPhysicsScene.worldSize.y;
             
             // Fixed ceiling attachment point (bottom of cone)
             var ceilingX = starData.x;
