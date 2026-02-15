@@ -207,6 +207,11 @@ var gBirdDragOffset = null; // Store offset from click point to bird center
 var gBirdDragPlaneHeight = 0; // Store the Y height where bird was grabbed
 var gBirdInitialX = 0; // Initial X position for world resize scaling
 var gBirdInitialZ = 0; // Initial Z position for world resize scaling
+var gBirdDropping = false; // Flag for bird drop animation
+var gBirdDropTimer = 0; // Timer for bird drop animation
+var gBirdDropDelay = 0.0; // Delay before bird drops
+var gBirdDropDuration = 1.5; // Duration of bird drop animation
+var gBirdStartY = 60; // Starting Y offset for bird drop
 var gGlobeLamp = null; // Globe lamp model reference
 var gGlobeLampLight = null; // Point light at center of globe lamp
 var gGlobeLampObstacle = null; // Sphere obstacle for boid avoidance
@@ -5857,8 +5862,8 @@ function initThreeScene() {
             function(gltf) {
                 var bird = gltf.scene;
                 
-                // Position object on the floor
-                bird.position.set(gBirdInitialX, 0, gBirdInitialZ);
+                // Position object high for drop animation
+                bird.position.set(gBirdInitialX, gBirdStartY, gBirdInitialZ);
                 
                 // Scale appropriately
                 bird.scale.set(1, 1, 1);
@@ -5900,6 +5905,7 @@ function initThreeScene() {
                     true // collisionOnly - no visual geometry
                 );
                 gObstacles.push(gBirdObstacle);
+                gBirdDropping = true; // Enable drop animation
                 
                 console.log('Brancusi Bird model loaded successfully');
             },
@@ -10867,6 +10873,52 @@ function update() {
                     if (gColumnObstacle.discMesh) {
                         gColumnObstacle.discMesh.position.y = (targetY - gColumnObstacle.height / 2) + 1.3;
                     }
+                }
+            }
+        }
+    }
+    
+    // Animate Brancusi Bird dropping after pedestals finish
+    if (gBirdDropping && gBird && gBirdObstacle) {
+        // Check if all pedestals have finished animating
+        const allPedestalsDone = gPedestalAnimData.every(function(data) {
+            return !data.animating;
+        });
+        
+        if (allPedestalsDone) {
+            gBirdDropTimer += deltaT;
+            
+            if (gBirdDropTimer >= gBirdDropDelay) {
+                const elapsed = gBirdDropTimer - gBirdDropDelay;
+                const progress = Math.min(1, elapsed / gBirdDropDuration);
+                
+                // Cubic ease-out: starts fast, decelerates
+                const easedProgress = 1 - Math.pow(1 - progress, 3);
+                
+                // Calculate current Y offset
+                const currentOffset = gBirdStartY * (1 - easedProgress);
+                const targetY = 0;
+                const currentY = targetY + currentOffset;
+                
+                // Update bird position
+                gBird.position.y = currentY;
+                
+                // Update obstacle position
+                gBirdObstacle.updatePosition(new THREE.Vector3(
+                    gBird.position.x,
+                    currentY + gBirdObstacle.height / 2,
+                    gBird.position.z
+                ));
+                
+                // End animation when complete
+                if (progress >= 1) {
+                    gBirdDropping = false;
+                    gBird.position.y = targetY;
+                    gBirdObstacle.updatePosition(new THREE.Vector3(
+                        gBird.position.x,
+                        targetY + gBirdObstacle.height / 2,
+                        gBird.position.z
+                    ));
                 }
             }
         }
