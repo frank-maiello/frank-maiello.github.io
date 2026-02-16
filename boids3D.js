@@ -5918,11 +5918,11 @@ function initThreeScene() {
         );
     }
     
-    // Load Tube Star, Heart, and Moon models using GLTFLoader for hanging decorations
+    // Load Tube Star, Heart, Moon, Clover, and Diamond models using GLTFLoader for hanging decorations
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var starTemplate, heartTemplate, moonTemplate;
+        var starTemplate, heartTemplate, moonTemplate, cloverTemplate, diamondTemplate;
         var modelsLoaded = 0;
-        var totalModels = 3;
+        var totalModels = 5;
         
         function onModelLoaded() {
             modelsLoaded++;
@@ -5956,22 +5956,11 @@ function initThreeScene() {
             });
             
             // Create array to determine which model to use for each ornament
-            // 1 moon, ~8 hearts (1/3), rest stars
+            // Random distribution of all 5 types
             var ornamentTypes = [];
-            ornamentTypes[0] = 'moon'; // First one is moon
-            var heartsCount = Math.floor(numStars / 3);
-            for (var i = 1; i <= heartsCount; i++) {
-                ornamentTypes[i] = 'heart';
-            }
-            for (var i = heartsCount + 1; i < numStars; i++) {
-                ornamentTypes[i] = 'star';
-            }
-            // Shuffle the array (except first element which is moon)
-            for (var i = numStars - 1; i > 1; i--) {
-                var j = Math.floor(Math.random() * (i - 1)) + 1; // Don't include index 0
-                var temp = ornamentTypes[i];
-                ornamentTypes[i] = ornamentTypes[j];
-                ornamentTypes[j] = temp;
+            var modelTypes = ['star', 'heart', 'moon', 'clover', 'diamond'];
+            for (var i = 0; i < numStars; i++) {
+                ornamentTypes[i] = modelTypes[Math.floor(Math.random() * modelTypes.length)];
             }
             
             for (var i = 0; i < numStars; i++) {
@@ -5981,9 +5970,19 @@ function initThreeScene() {
                     template = moonTemplate;
                 } else if (ornamentTypes[i] === 'heart') {
                     template = heartTemplate;
+                } else if (ornamentTypes[i] === 'clover') {
+                    template = cloverTemplate;
+                } else if (ornamentTypes[i] === 'diamond') {
+                    template = diamondTemplate;
                 } else {
                     template = starTemplate;
                 }
+                
+                // Safety check: if template is undefined, skip this ornament
+                if (!template) {
+                    continue;
+                }
+                
                 var star = template.clone();
                 
                 // Find a position that doesn't overlap with existing stars
@@ -6131,7 +6130,7 @@ function initThreeScene() {
                 });
             }
             
-            console.log('Hanging ornaments created successfully - ' + numStars + ' ornaments (stars, hearts, and moon)');
+            console.log('Hanging ornaments created successfully - ' + numStars + ' ornaments (stars, hearts, moons, clovers, and diamonds)');
         }
         
         // Load Tube Star model
@@ -6248,6 +6247,84 @@ function initThreeScene() {
             },
             function(error) {
                 console.error('Error loading Tube Moon model:', error);
+            }
+        );
+        
+        // Load Tube Clover model
+        var cloverLoader = new THREE.GLTFLoader();
+        cloverLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeClover.gltf',
+            function(gltf) {
+                cloverTemplate = gltf.scene;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                cloverTemplate.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows for template
+                cloverTemplate.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                console.log('Tube Clover model loaded successfully');
+                onModelLoaded();
+            },
+            function(xhr) {
+                console.log('Tube Clover model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Tube Clover model:', error);
+            }
+        );
+        
+        // Load Tube Diamond model
+        var diamondLoader = new THREE.GLTFLoader();
+        diamondLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeDiamond.gltf',
+            function(gltf) {
+                diamondTemplate = gltf.scene;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                diamondTemplate.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows for template
+                diamondTemplate.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                console.log('Tube Diamond model loaded successfully');
+                onModelLoaded();
+            },
+            function(xhr) {
+                console.log('Tube Diamond model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Tube Diamond model:', error);
             }
         );
     }
