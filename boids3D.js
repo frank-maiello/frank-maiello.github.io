@@ -368,7 +368,7 @@ var gTrailUpdateFrequency = 1; // Update trail every N frames
 var gTrailColorMode = 3; // 0=White, 1=Black, 2=B&W, 3=Color
 
 // Boid geometry type
-var gBoidGeometryType = 1; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter
+var gBoidGeometryType = 3; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter
 var gDuckTemplate = null; // Template duck model for boid geometry
 var gFishTemplate = null; // Template fish model for boid geometry
 var gAvocadoTemplate = null; // Template avocado model for boid geometry
@@ -2156,7 +2156,38 @@ class BOID {
                     shininess: 100, 
                     wireframe: boidProps.wireframe});
             }
-            var geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
+            
+            // Create geometry based on gBoidGeometryType
+            var geometry;
+            if (gBoidGeometryType === 0) {
+                geometry = new THREE.SphereGeometry(rad, geometrySegments, geometrySegments);
+            } else if (gBoidGeometryType === 1) {
+                geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
+            } else if (gBoidGeometryType === 2) {
+                geometry = new THREE.CylinderGeometry(rad, rad, 3 * rad, geometrySegments);
+            } else if (gBoidGeometryType === 3) {
+                geometry = new THREE.BoxGeometry(2 * rad, 2 * rad, 2 * rad);
+            } else if (gBoidGeometryType === 4) {
+                geometry = new THREE.TetrahedronGeometry(rad * 1.5);
+            } else if (gBoidGeometryType === 5) {
+                geometry = new THREE.OctahedronGeometry(rad * 1.5);
+            } else if (gBoidGeometryType === 6) {
+                geometry = new THREE.DodecahedronGeometry(rad * 1.5);
+            } else if (gBoidGeometryType === 7) {
+                geometry = new THREE.IcosahedronGeometry(rad * 1.5);
+            } else if (gBoidGeometryType === 8) {
+                geometry = new THREE.CapsuleGeometry(rad * 0.5, 2 * rad, 4, geometrySegments);
+            } else if (gBoidGeometryType === 9) {
+                geometry = new THREE.TorusGeometry(rad, rad * 0.4, geometrySegments, geometrySegments);
+            } else if (gBoidGeometryType === 10) {
+                geometry = new THREE.TorusKnotGeometry(rad, rad * 0.3, geometrySegments * 4, geometrySegments);
+            } else if (gBoidGeometryType === 11) {
+                geometry = new THREE.PlaneGeometry(2 * rad, 3 * rad, 1, 1);
+            } else {
+                // Default to cone
+                geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
+            }
+            
             this.visMesh = new THREE.Mesh(geometry, material);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
