@@ -159,7 +159,6 @@ var mouseAttached = false;
 // Lighting control variables
 var gAmbientLight = null;
 
-// Bicycle wheel physics variables
 var gBicycleWheel = null; // Group containing wheel parts
 var gWheelParts = []; // Array of wheel meshes (tire, spokes, valve)
 var gStool = null; // Reference to entire stool model
@@ -180,33 +179,34 @@ var gDuckEntranceState = 'waiting'; // States: waiting, expanding, rising, shrin
 var gDuckEntranceTimer = 0; // Timer for animation
 var gDuckTargetY = -0.4; // Target Y position for duck
 var gDuckStartY = -8; // Starting Y position (below floor)
+var gDuckInitialX = 18; // Initial X position for world resize scaling
+var gDuckInitialZ = 12; // Initial Z position for world resize scaling
 var gTeapot = null; // Teapot model reference
 var gTeapotAnimating = true; // Is teapot currently animating
 var gTeapotAnimationTimer = 0; // Timer for teapot slide animation
 var gTeapotStartZ = 40; // Starting Z position
-var gTeapotTargetZ = 10; // Target Z position
+var gTeapotTargetZ = 0; // Target Z position
 var gTeapotObstacle = null; // Teapot obstacle for boid avoidance
 var gDraggingTeapot = false; // Track if dragging the teapot
 var gTeapotDragOffset = null; // Store offset from click point to teapot center
 var gTeapotDragPlaneHeight = 0; // Store the Y height where the teapot was grabbed
+var gTeapotInitialX = -10; // sets final x Initial X position for world resize scaling
+var gTeapotInitialZ = 0; // does nothing Initial Z position for world resize scaling (final position after animation)
 var gStoolAnimating = true; // Is stool currently animating
 var gStoolAnimationTimer = 0; // Timer for stool lowering animation
 var gStoolStartY = 30; // Starting Y position (high above floor)
-var gStoolInitialX = -9; // Initial X position for world resize scaling
-var gStoolInitialZ = -6; // Initial Z position for world resize scaling
-var gDuckInitialX = 18; // Initial X position for world resize scaling
-var gDuckInitialZ = 7; // Initial Z position for world resize scaling
-var gTeapotInitialX = -23; // Initial X position for world resize scaling
-var gTeapotInitialZ = 0; // Initial Z position for world resize scaling (final position after animation)
-var gColumnInitialX = 15; // Initial X position for world resize scaling
-var gColumnInitialZ = -10; // Initial Z position for world resize scaling
+var gStoolInitialX = -20;
+var gStoolInitialZ = -9;
+
+var gColumnInitialX = 26; // Initial X position for world resize scaling
+var gColumnInitialZ = -26; // Initial Z position for world resize scaling
 var gBird = null; // Brancusi Bird model reference
 var gBirdObstacle = null; // Cylinder obstacle for boid avoidance
 var gDraggingBird = false; // Track if dragging the bird
 var gBirdDragOffset = null; // Store offset from click point to bird center
 var gBirdDragPlaneHeight = 0; // Store the Y height where bird was grabbed
-var gBirdInitialX = 0; // Initial X position for world resize scaling
-var gBirdInitialZ = 0; // Initial Z position for world resize scaling
+var gBirdInitialX = -20; // Initial X position for world resize scaling
+var gBirdInitialZ = 18; // Initial Z position for world resize scaling
 var gBirdDropping = false; // Flag for bird drop animation
 var gBirdDropTimer = 0; // Timer for bird drop animation
 var gBirdDropDelay = 0.0; // Delay before bird drops
@@ -218,6 +218,17 @@ var gGlobeLampObstacle = null; // Sphere obstacle for boid avoidance
 var gDraggingGlobeLamp = false; // Track if dragging the globe lamp
 var gGlobeLampDragOffset = null; // Store offset from click point to globe lamp center
 var gGlobeLampDragPlaneDistance = 0; // Store the distance from camera for fixed plane dragging
+var gChair = null; // Sheen chair model reference
+var gChairObstacle = null; // Box obstacle for boid avoidance
+var gDraggingChair = false; // Track if dragging the chair
+var gChairDragOffset = null; // Store offset from click point to chair center
+var gChairDragPlaneHeight = 0; // Store the Y height where chair was grabbed
+var gChairInitialX = -2; // Initial X position for world resize scaling
+var gChairInitialZ = 0; // Initial Z position for world resize scaling
+var gChairSliding = true; // Flag for chair slide animation
+var gChairSlideTimer = 0; // Timer for chair slide animation
+var gChairStartX = 60; // Starting X position for chair slide
+var gChairTargetX = -2; // Target X position for chair
 var gStoolTargetY = 0; // Target Y position (on floor)
 var gWheelAngularVelocity = 10; // Current rotation speed (radians per second) - starts at maximum
 var gWheelAngularAcceleration = 4.0; // Acceleration when spinning (rad/s²)
@@ -262,7 +273,7 @@ var gOvalFrame = null; // Reference to oval frame on back wall
 var gPaintingsDropping = true; // Flag for painting drop animation
 var gPaintingDropStartY = 50; // Starting Y position for painting drop
 var gPaintingDropTimer = 0; // Timer for painting drop animation
-var gPaintingDropDelay = 1.8; // Delay after walls finish before paintings drop
+var gPaintingDropDelay = 0; // Delay after walls finish before paintings drop
 var gPaintingDropDuration = 1.5; // Duration of painting drop animation
 var gDuchampExtraPaintingsActive = false; // Track if extra Duchamp paintings should be visible
 var gDuchampExtraPaintingsDropping = false; // Track if extra paintings are descending
@@ -285,10 +296,16 @@ var gColumnDropTimer = 0; // Timer for column drop animation
 var gColumnDropDelay = 0.0; // Delay after pedestals finish before column drops
 var gColumnDropDuration = 1.5; // Duration of column drop animation
 var gColumnStartY = 60; // Starting Y offset for column drop
+var gTorusDropping = true; // Flag for torus drop animation
+var gTorusDropTimer = 0; // Timer for torus drop animation
+var gTorusDropDelay = 0.0; // Delay after paintings finish before torus drops
+var gTorusDropDuration = 1.5; // Duration of torus drop animation
+var gTorusStartY = 50; // Starting Y offset for torus drop
+var gTorusTargetY = 10; // Target Y position for torus
 var gColumnBaseSliding = true; // Flag for column base slide animation
 var gColumnBaseSlideTimer = 0; // Timer for column base slide animation
 var gColumnBaseStartZ = 35; // Starting Z offset for column base slide
-var gColumnBaseTargetZ = -9; // Target Z position for column base
+var gColumnBaseTargetZ = -26; // Target Z position for column base
 
 var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all separation
 var SpatialGrid; // Global spatial grid instance
@@ -313,7 +330,7 @@ var gPhysicsScene = {
     gravity : new THREE.Vector3(0.0, 0.0, 0.0),
     dt : 1.0 / 60.0,
     worldSize : {x: gWorldSizeX, y: gWorldSizeY, z: gWorldSizeZ},
-    paused: false,
+    paused: true,
     objects: [],				
 };
 
@@ -324,13 +341,16 @@ var gFloor = null;
 
 // Wall animation state
 var gWallAnimation = {
-    front: { timer: 0, delay: 0.3, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
-    back: { timer: 0, delay: 0.45, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 },
-    left: { timer: 0, delay: 0.15, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
-    right: { timer: 0, delay: 0.6, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 }
+    front: { timer: 0, delay: 1.3, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
+    back: { timer: 0, delay: 1.45, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 },
+    left: { timer: 0, delay: 1.15, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
+    right: { timer: 0, delay: 1.6, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 }
 };
 
-var gRunning = true; // Track if simulation is running
+var gRunning = false; // Track if simulation is running (start paused)
+var gBoidStartDelay = 10.0; // Delay in seconds before boids start animating
+var gBoidStartTimer = 0; // Timer for boid start delay
+var gBoidsStarted = false; // Track if boids have started animating
 
 var restitution = {
     ball: 0,
@@ -1067,7 +1087,7 @@ class CylinderObstacle {
         this.conicalPedestalMesh = new THREE.Mesh(conicalPedestalGeometry, conicalPedestalMaterial);
         this.conicalPedestalMesh.position.copy(this.position);
         // Start conical pedestal at offset Z position for slide animation
-        if (Math.abs(this.position.x - 9) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
+        if (Math.abs(this.position.x - gColumnInitialX) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
             this.conicalPedestalMesh.position.z = gColumnBaseStartZ;
         }
         this.conicalPedestalMesh.position.y = (this.position.y - this.height / 2) + 0.5 * conicalPedestalHeight + 0.28; // Bottom at y=0
@@ -1089,7 +1109,7 @@ class CylinderObstacle {
         this.discMesh = new THREE.Mesh(discGeometry, discMaterial);
         this.discMesh.position.copy(this.position);
         // Start disc at offset Z position for slide animation
-        if (Math.abs(this.position.x - 9) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
+        if (Math.abs(this.position.x - gColumnInitialX) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
             this.discMesh.position.z = gColumnBaseStartZ;
         }
         this.discMesh.position.y = (this.position.y - this.height / 2) + 1.3; // On top of pedestal
@@ -1111,7 +1131,7 @@ class CylinderObstacle {
         this.pedestalMesh = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
         this.pedestalMesh.position.copy(this.position);
         // Start pedestal at offset Z position for slide animation
-        if (Math.abs(this.position.x - 9) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
+        if (Math.abs(this.position.x - gColumnInitialX) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
             this.pedestalMesh.position.z = gColumnBaseStartZ;
         }
         this.pedestalMesh.position.y = 0.5 * pedestalHeight; // Bottom at y=0
@@ -2209,6 +2229,68 @@ class BOID {
         gThreeScene.add(this.visMesh2);*/
     }
     
+    updateOrientation() {
+        // Update visual orientation based on velocity vector
+        const speed = Math.sqrt(this.vel.x * this.vel.x + this.vel.y * this.vel.y + this.vel.z * this.vel.z);
+        if (speed > 0.01) { // Only update orientation if has meaningful velocity
+            const direction = new THREE.Vector3(this.vel.x, this.vel.y, this.vel.z).normalize();
+            const up = new THREE.Vector3(0, 1, 0);
+            
+            // Create target point in direction of velocity
+            const target = new THREE.Vector3(
+                this.pos.x + direction.x,
+                this.pos.y + direction.y,
+                this.pos.z + direction.z
+            );
+            
+            // Make mesh look at target (skip for helicopters which handle their own rotation)
+            if (gBoidGeometryType !== 15) {
+                this.visMesh.lookAt(target);
+            }
+            // Adjust for default orientation based on geometry type
+            if (gBoidGeometryType === 1 || gBoidGeometryType === 2 || gBoidGeometryType === 8) {
+                this.visMesh.rotateX(Math.PI / 2);
+            } else if (gBoidGeometryType === 4) {
+                this.visMesh.rotateX(-Math.PI / 4);
+                this.visMesh.rotateY(-Math.PI / 4);
+                this.visMesh.rotateZ(-Math.PI / 2);
+            } else if (gBoidGeometryType === 5) {
+                this.visMesh.rotateX(Math.PI / 2);
+            } else if (gBoidGeometryType === 11) {
+                this.visMesh.rotateX(Math.PI / 2);
+            } else if (gBoidGeometryType === 12) {
+                this.visMesh.rotateY(-Math.PI / 2);
+            } else if (gBoidGeometryType === 14) {
+                // Avocado - orient upside-down with spin
+                this.visMesh.rotateX(-Math.PI / 2);
+                this.visMesh.rotateY(this.spinAngle || 0);
+            } else if (gBoidGeometryType === 15) {
+                // Helicopter - calculate horizontal direction
+                const horizDir = new THREE.Vector3(direction.x, 0, direction.z);
+                const horizSpeed = horizDir.length();
+                
+                if (horizSpeed > 0.01) {
+                    horizDir.normalize();
+                    const yaw = Math.atan2(horizDir.x, horizDir.z);
+                    this.visMesh.rotation.y = yaw + (this.spinAngle || 0);
+                    const pitchAmount = Math.min(horizSpeed / boidProps.maxSpeed, 1.0) * 0.35;
+                    this.visMesh.rotation.x = -pitchAmount;
+                    
+                    // Add roll based on turning
+                    if (this.lastHorizDir) {
+                        const turnDir = new THREE.Vector3().crossVectors(this.lastHorizDir, horizDir);
+                        const turnAmount = turnDir.y * 3.0;
+                        this.visMesh.rotation.z = Math.max(-0.5, Math.min(0.5, turnAmount));
+                    }
+                } else {
+                    this.visMesh.rotation.y = this.spinAngle || 0;
+                    this.visMesh.rotation.x = 0;
+                    this.visMesh.rotation.z = 0;
+                }
+            }
+        }
+    }
+    
     simulate() {
         if (this.grabbed) return;
         
@@ -2296,112 +2378,25 @@ class BOID {
         // Update visual mesh position
         this.visMesh.position.copy(this.pos);
         
-        // Orient cone to point in direction of movement
-        speed = Math.sqrt(this.vel.x * this.vel.x + this.vel.y * this.vel.y + this.vel.z * this.vel.z);
-        if (speed > 0.01) { // Only update orientation if moving
-            const direction = new THREE.Vector3(this.vel.x, this.vel.y, this.vel.z).normalize();
-            const up = new THREE.Vector3(0, 1, 0);
+        // Update spin angles for animated boids (avocado and helicopter)
+        if (gBoidGeometryType === 14) {
+            // Avocado - update spin angle
+            this.spinAngle += 2.0 * deltaT;
+        } else if (gBoidGeometryType === 15) {
+            // Helicopter - update rotor spin angle
+            this.spinAngle += 10.0 * deltaT;
             
-            // Create target point in direction of velocity
-            const target = new THREE.Vector3(
-                this.pos.x + direction.x,
-                this.pos.y + direction.y,
-                this.pos.z + direction.z
-            );
-            
-            // Make mesh look at target (skip for helicopters which handle their own rotation)
-            if (gBoidGeometryType !== 15) {
-                this.visMesh.lookAt(target);
-            }
-            // Adjust for default orientation based on geometry type
-            // Cone points along Y axis by default, needs rotation
-            if (gBoidGeometryType === 1 || gBoidGeometryType === 2 || gBoidGeometryType === 8) {
-                // Cone, Cylinder, Capsule - point along Y axis
-                this.visMesh.rotateX(Math.PI / 2);
-            } else if (gBoidGeometryType === 4) {
-                // Tetrahedron - try negative Z rotation
-                this.visMesh.rotateX(-Math.PI / 4);
-                this.visMesh.rotateY(-Math.PI / 4);
-                this.visMesh.rotateZ(-Math.PI / 2);
-            } else if (gBoidGeometryType === 5) {
-                // Octahedron - rotate 90 degrees about horizontal axis
-                this.visMesh.rotateX(Math.PI / 2);
-            } else if (gBoidGeometryType === 11) {
-                // Plane - rotate to be parallel to direction of movement
-                this.visMesh.rotateX(Math.PI / 2);
-            } else if (gBoidGeometryType === 12) {
-                // Duck - beak points along positive X axis in local space
-                // Rotate so beak points in direction of travel (forward = -Z after lookAt)
-                this.visMesh.rotateY(-Math.PI / 2);
-            } else if (gBoidGeometryType === 13) {
-                // Fish - orient to swim in direction of travel
-                // No rotation needed - fish model is already oriented correctly
-            } else if (gBoidGeometryType === 14) {
-                // Avocado - orient to lead with bottom, upside-down
-                this.visMesh.rotateX(-Math.PI / 2);
-                // Add spin around the long axis (Y axis after rotateX)
-                this.spinAngle += 2.0 * deltaT; // Spin speed in radians per second
-                this.visMesh.rotateY(this.spinAngle);
-            } else if (gBoidGeometryType === 15) {
-                // Helicopter - stay mostly vertical with slight tilt toward motion direction
-                // Calculate horizontal direction (ignore vertical component for yaw)
+            // Store horizontal direction for turning calculations
+            const speed = Math.sqrt(this.vel.x * this.vel.x + this.vel.y * this.vel.y + this.vel.z * this.vel.z);
+            if (speed > 0.01) {
+                const direction = new THREE.Vector3(this.vel.x, this.vel.y, this.vel.z).normalize();
                 const horizDir = new THREE.Vector3(direction.x, 0, direction.z);
                 const horizSpeed = horizDir.length();
                 
-                /*// Update spin angle continuously - spin rate proportional to vertical velocity
-                // More positive y velocity (ascending) = faster spin
-                // More negative y velocity (descending) = slower spin, but never stops
-                const baseSpinRate = 1.0; // rad/s - minimum spin when descending
-                const maxSpinRate = 20.0; // rad/s - maximum spin when ascending
-                // Normalize y velocity: -maxSpeed to +maxSpeed becomes 0 to 1
-                const normalizedYVel = Math.max(0, Math.min(1, (this.vel.y + boidProps.maxSpeed) / (2 * boidProps.maxSpeed)));
-                const spinRate = baseSpinRate + normalizedYVel * (maxSpinRate - baseSpinRate);
-                this.spinAngle += spinRate * deltaT;*/
-
-                // Update spin angle continuously
-                this.spinAngle += 10.0 * deltaT; // Spin speed in radians per second
-                
                 if (horizSpeed > 0.01) {
                     horizDir.normalize();
-                    
-                    // Yaw to face horizontal direction of travel, plus rotor spin
-                    const yaw = Math.atan2(horizDir.x, horizDir.z);
-                    this.visMesh.rotation.y = yaw + this.spinAngle;
-                    
-                    // Add forward pitch based on speed (max ~20 degrees for visibility)
-                    const pitchAmount = Math.min(horizSpeed / boidProps.maxSpeed, 1.0) * 0.35; // 0.35 rad ≈ 20°
-                    this.visMesh.rotation.x = -pitchAmount;
-                    
-                    // Add roll based on turning
-                    if (this.lastHorizDir) {
-                        const turnDir = new THREE.Vector3().crossVectors(this.lastHorizDir, horizDir);
-                        const turnAmount = turnDir.y * 3.0; // Increase sensitivity
-                        this.visMesh.rotation.z = Math.max(-0.5, Math.min(0.5, turnAmount)); // Clamp to ±28°
-                    }
                     this.lastHorizDir = horizDir.clone();
-                } else {
-                    // Not moving horizontally, just spin in place
-                    this.visMesh.rotation.y = this.spinAngle;
-                    this.visMesh.rotation.x = 0;
-                    this.visMesh.rotation.z = 0;
                 }
-            }
-            // Torus and TorusKnot default orientation works correctly with lookAt (hole perpendicular to movement)
-            
-            // Position hemisphere at the flat base of the cone (back end)
-            if (this.visMesh2) {
-                // Cone base is at pos - direction * 1.5 * rad
-                const hemisphereOffset = direction.clone().multiplyScalar(-3 * this.rad);
-                this.visMesh2.position.copy(this.pos).add(hemisphereOffset);
-                
-                // Orient hemisphere to look backward (opposite of cone direction)
-                const backwardTarget = new THREE.Vector3(
-                    this.visMesh2.position.x - direction.x,
-                    this.visMesh2.position.y - direction.y,
-                    this.visMesh2.position.z - direction.z
-                );
-                this.visMesh2.lookAt(backwardTarget);
-                this.visMesh2.rotateX(Math.PI / 2);
             }
         }
     }
@@ -2679,6 +2674,12 @@ function handleBoidRules(boid) {
 
 // ------------------------------------------------------------------
 function simulate() {
+    // Always update orientations so paused boids show correct facing
+    for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+        var boid = gPhysicsScene.objects[i];
+        boid.updateOrientation();
+    }
+    
     if (gPhysicsScene.paused)
         return;
         
@@ -5262,8 +5263,7 @@ function initThreeScene() {
                 var stool = gltf.scene;
                 
                 // Position on floor in center of room - start high for animation
-                gStoolInitialX = -9;
-                gStoolInitialZ = -6;
+                
                 stool.position.set(gStoolInitialX, 30, gStoolInitialZ);
                 stool.rotation.y = -Math.PI / 8; // Rotate 45 degrees
                 
@@ -5808,7 +5808,77 @@ function initThreeScene() {
         );
     }
     
-    // Load Globe Lamp model using GLTFLoader
+    // Load Sheen Chair model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var chairLoader = new THREE.GLTFLoader();
+        chairLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/sheenChair.gltf',
+            function(gltf) {
+                var chair = gltf.scene;
+                
+                // Position on floor - start at slide-in position
+                chair.position.set(gChairStartX, 0, gChairInitialZ);
+                
+                // Scale appropriately
+                chair.scale.set(1.5, 1, 1);
+
+                // Rotate 90-degrees 
+                chair.rotation.y = 3 * Math.PI / 2;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                chair.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and mark as draggable for all meshes
+                chair.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.userData.isDraggableChair = true;
+                    }
+                });
+                
+                gThreeScene.add(chair);
+                gChair = chair; // Store global reference
+                
+                // Create box obstacle for boid avoidance
+                var chairObstacleWidth = 2.0;  // X dimension
+                var chairObstacleHeight = 3.5; // Y dimension
+                var chairObstacleDepth = 2.0;  // Z dimension
+                gChairObstacle = new BoxObstacle(
+                    chairObstacleWidth,
+                    chairObstacleHeight,
+                    chairObstacleDepth,
+                    new THREE.Vector3(chair.position.x, chair.position.y + chairObstacleHeight / 2, chair.position.z),
+                    { x: 0, y: chair.rotation.y, z: 0 }
+                );
+                // Make the obstacle invisible
+                if (gChairObstacle.mesh) {
+                    gChairObstacle.mesh.visible = false;
+                }
+                gObstacles.push(gChairObstacle);
+                
+                console.log('Sheen Chair model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Sheen Chair model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Sheen Chair model:', error);
+            }
+        );
+    }
+    
+    // Load Sheen Chair model using GLTFLoader\n    if (typeof THREE.GLTFLoader !== 'undefined') {\n        var chairLoader = new THREE.GLTFLoader();\n        chairLoader.load(\n            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/sheenChair.gltf',\n            function(gltf) {\n                var chair = gltf.scene;\n                \n                // Position on floor\n                chair.position.set(gChairInitialX, 0, gChairInitialZ);\n                \n                // Scale appropriately\n                chair.scale.set(1, 1, 1);\n                \n                // Remove any imported lights\n                var lightsToRemove = [];\n                chair.traverse(function(child) {\n                    if (child.isLight) {\n                        lightsToRemove.push(child);\n                    }\n                });\n                lightsToRemove.forEach(function(light) {\n                    if (light.parent) {\n                        light.parent.remove(light);\n                    }\n                });\n                \n                // Enable shadows and mark as draggable for all meshes\n                chair.traverse(function(child) {\n                    if (child.isMesh) {\n                        child.castShadow = true;\n                        child.receiveShadow = true;\n                        child.userData.isDraggableChair = true;\n                    }\n                });\n                \n                gThreeScene.add(chair);\n                gChair = chair; // Store global reference\n                \n                // Create box obstacle for boid avoidance\n                var chairObstacleWidth = 2.0;  // X dimension\n                var chairObstacleHeight = 3.5; // Y dimension\n                var chairObstacleDepth = 2.0;  // Z dimension\n                gChairObstacle = new BoxObstacle(\n                    chairObstacleWidth,\n                    chairObstacleHeight,\n                    chairObstacleDepth,\n                    new THREE.Vector3(chair.position.x, chair.position.y + chairObstacleHeight / 2, chair.position.z),\n                    { x: 0, y: chair.rotation.y, z: 0 }\n                );\n                // Make the obstacle invisible\n                if (gChairObstacle.mesh) {\n                    gChairObstacle.mesh.visible = false;\n                }\n                gObstacles.push(gChairObstacle);\n                \n                console.log('Sheen Chair model loaded successfully');\n            },\n            function(xhr) {\n                console.log('Sheen Chair model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');\n            },\n            function(error) {\n                console.error('Error loading Sheen Chair model:', error);\n            }\n        );\n    }\n    \n    // Load Globe Lamp model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
         var globeLampLoader = new THREE.GLTFLoader();
         globeLampLoader.load(
@@ -7597,11 +7667,11 @@ function initThreeScene() {
     );
     gObstacles.push(sphereObstacle);
 
-    // Create torus obstacle
+    // Create torus obstacle (start high for drop animation)
     gTorusObstacle = new TorusObstacle(
         6,  // major radius
         1,  // minor radius (tube radius)
-        new THREE.Vector3(5, 10, 23),  // position
+        new THREE.Vector3(11, gTorusTargetY + gTorusStartY, 0),  // position (start high)
         { x: 0, y: 0.5 * Math.PI, z: 0 }  // rotation
     );
     gObstacles.push(gTorusObstacle);
@@ -7925,9 +7995,11 @@ function onPointer(evt) {
             // Check Run/Pause menu item (now first)
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
                 evt.clientY >= itemY && evt.clientY <= itemY + itemHeight) {
-                // Toggle running state
-                gRunning = !gRunning;
-                gPhysicsScene.paused = !gRunning;
+                // Toggle running state (only if boids have started or user is trying to unpause after auto-start)
+                if (gBoidsStarted) {
+                    gRunning = !gRunning;
+                    gPhysicsScene.paused = !gRunning;
+                }
                 return;
             }
             
@@ -8087,6 +8159,7 @@ function onPointer(evt) {
         var hitDuck = false;
         var hitDuckBeak = false;
         var hitTeapot = false;
+        var hitChair = false;
         var hitGlobeLamp = false;
         
         for (var i = 0; i < intersects.length; i++) {
@@ -8129,6 +8202,32 @@ function onPointer(evt) {
                     gTeapot.position.x - actualClickPoint.x,
                     0,
                     gTeapot.position.z - actualClickPoint.z
+                );
+                // Don't break - check if other objects are also hit
+            }
+            if (intersects[i].object.userData.isDraggableChair && !hitChair) {
+                hitChair = true;
+                var actualClickPoint = intersects[i].point;
+                gChairDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to chair center (X and Z only)
+                gChairDragOffset = new THREE.Vector3(
+                    gChair.position.x - actualClickPoint.x,
+                    0,
+                    gChair.position.z - actualClickPoint.z
+                );
+                // Don't break - check if other objects are also hit
+            }
+            if (intersects[i].object.userData.isDraggableChair && !hitChair) {
+                hitChair = true;
+                var actualClickPoint = intersects[i].point;
+                gChairDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to chair center (X and Z only)
+                gChairDragOffset = new THREE.Vector3(
+                    gChair.position.x - actualClickPoint.x,
+                    0,
+                    gChair.position.z - actualClickPoint.z
                 );
                 // Don't break - check if other objects are also hit
             }
@@ -8302,6 +8401,39 @@ function onPointer(evt) {
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             // Disable orbit controls while dragging teapot
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
+        if (hitChair && gChair) {
+            gDraggingChair = true;
+            gChairDragPlaneHeight = gChair.position.y;
+            
+            // Calculate drag offset from click point to chair center
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            var chairPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gChairDragPlaneHeight);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(chairPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                gChairDragOffset = new THREE.Vector3(
+                    gChair.position.x - intersectionPoint.x,
+                    0,
+                    gChair.position.z - intersectionPoint.z
+                );
+            }
+            
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging chair
             if (gCameraControl) {
                 gCameraControl.enabled = false;
             }
@@ -9128,6 +9260,46 @@ function onPointer(evt) {
             return;
         }
         
+        // Handle chair dragging (translation along ground, horizontal only)
+        if (gDraggingChair && gChair) {
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Define plane at the height where the chair was grabbed
+            var chairPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gChairDragPlaneHeight);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(chairPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                // Keep the chair's Y position constant, only move X and Z
+                var newX = intersectionPoint.x + (gChairDragOffset ? gChairDragOffset.x : 0);
+                var newZ = intersectionPoint.z + (gChairDragOffset ? gChairDragOffset.z : 0);
+                
+                // Clamp to room boundaries
+                var minBoundX = -gPhysicsScene.worldSize.x + 2;
+                var maxBoundX = gPhysicsScene.worldSize.x - 2;
+                var minBoundZ = -gPhysicsScene.worldSize.z + 2;
+                var maxBoundZ = gPhysicsScene.worldSize.z - 2;
+                
+                newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
+                newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
+                
+                gChair.position.x = newX;
+                gChair.position.z = newZ;
+                
+                // Update obstacle position
+                if (gChairObstacle) {
+                    gChairObstacle.updatePosition(new THREE.Vector3(newX, gChair.position.y + gChairObstacle.height / 2, newZ));
+                }
+            }
+            return;
+        }
+        
         // Handle globe lamp dragging (3D movement in space)
         if (gDraggingGlobeLamp && gGlobeLamp) {
             var rect = gRenderer.domElement.getBoundingClientRect();
@@ -9608,6 +9780,16 @@ function onPointer(evt) {
         if (gDraggingTeapot) {
             gDraggingTeapot = false;
             gTeapotDragOffset = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingChair) {
+            gDraggingChair = false;
+            gChairDragOffset = null;
             // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
@@ -10314,7 +10496,11 @@ function onWindowResize() {
 }
 
 function run() {
-    gPhysicsScene.paused = !gPhysicsScene.paused;
+    // Only allow toggling if boids have started
+    if (gBoidsStarted) {
+        gPhysicsScene.paused = !gPhysicsScene.paused;
+        gRunning = !gPhysicsScene.paused;
+    }
 }
 
 /*function restart() {
@@ -10406,6 +10592,16 @@ function run() {
 //  RUN -----------------------------------
 function update() {
     simulate();
+    
+    // Boid start delay - unpause after 10 seconds
+    if (!gBoidsStarted) {
+        gBoidStartTimer += deltaT;
+        if (gBoidStartTimer >= gBoidStartDelay) {
+            gBoidsStarted = true;
+            gRunning = true;
+            gPhysicsScene.paused = false;
+        }
+    }
     
     // Update fade-in effect
     if (gFadeInTime < gFadeInDuration) {
@@ -10786,6 +10982,39 @@ function update() {
             }
             if (gColumnObstacle.pedestalMesh) {
                 gColumnObstacle.pedestalMesh.position.z = gColumnBaseTargetZ;
+            }
+        }
+    }
+    
+    // Chair slide animation
+    if (gChairSliding && gChair) {
+        gChairSlideTimer += deltaT;
+        
+        // Slide from X=60 to X=-2 over 2 seconds with ease-out (deceleration)
+        var duration = 2.0;
+        var t = Math.min(gChairSlideTimer / duration, 1.0);
+        
+        // Cubic ease-out: y = 1 - (1-x)^3 (starts fast, ends slow - deceleration)
+        var eased = 1 - Math.pow(1 - t, 3);
+        
+        // Interpolate X position
+        var currentX = gChairStartX + (gChairTargetX - gChairStartX) * eased;
+        
+        // Update chair position
+        gChair.position.x = currentX;
+        
+        // Update obstacle position
+        if (gChairObstacle) {
+            gChairObstacle.updatePosition(new THREE.Vector3(currentX, gChair.position.y + gChairObstacle.height / 2, gChair.position.z));
+        }
+        
+        // Stop animation when complete
+        if (t >= 1.0) {
+            gChairSliding = false;
+            // Ensure final position is exact
+            gChair.position.x = gChairTargetX;
+            if (gChairObstacle) {
+                gChairObstacle.updatePosition(new THREE.Vector3(gChairTargetX, gChair.position.y + gChairObstacle.height / 2, gChair.position.z));
             }
         }
     }
@@ -11219,6 +11448,35 @@ function update() {
                 // End animation when complete
                 if (progress >= 1) {
                     gPaintingsDropping = false;
+                }
+            }
+        }
+    }
+    
+    // Torus drop animation after paintings finish
+    if (gTorusDropping && gTorusObstacle) {
+        // Check if paintings have finished dropping
+        if (!gPaintingsDropping) {
+            gTorusDropTimer += deltaT;
+            
+            if (gTorusDropTimer >= gTorusDropDelay) {
+                const elapsed = gTorusDropTimer - gTorusDropDelay;
+                const progress = Math.min(1, elapsed / gTorusDropDuration);
+                
+                // Cubic ease-out: starts fast, decelerates
+                const easedProgress = 1 - Math.pow(1 - progress, 3);
+                
+                // Calculate current Y position
+                const currentY = (gTorusTargetY + gTorusStartY) + (gTorusTargetY - (gTorusTargetY + gTorusStartY)) * easedProgress;
+                
+                // Update torus position
+                gTorusObstacle.updatePosition(new THREE.Vector3(11, currentY, 0));
+                
+                // End animation when complete
+                if (progress >= 1) {
+                    gTorusDropping = false;
+                    // Ensure final position is exact
+                    gTorusObstacle.updatePosition(new THREE.Vector3(11, gTorusTargetY, 0));
                 }
             }
         }
