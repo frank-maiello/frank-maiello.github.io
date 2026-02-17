@@ -428,8 +428,8 @@ var gTrailUpdateCounter = 0; // Counter to limit trail updates
 var gTrailUpdateFrequency = 1; // Update trail every N frames
 var gTrailColorMode = 3; // 0=White, 1=Black, 2=B&W, 3=Color
 
-// Boid geometry type
-var gBoidGeometryType = 3; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter, 16=PaperPlane
+// Boid geometry types (multiple can be selected)
+var gSelectedBoidTypes = [3]; // Array of selected geometry types: 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter, 16=PaperPlane
 var gDuckTemplate = null; // Template duck model for boid geometry
 var gFishTemplate = null; // Template fish model for boid geometry
 var gAvocadoTemplate = null; // Template avocado model for boid geometry
@@ -2136,7 +2136,7 @@ class Lamp {
 }
 
 class BOID {
-    constructor(pos, rad, vel, hue, sat, light) {
+    constructor(pos, rad, vel, hue, sat, light, geometryType) {
         this.pos = pos.clone();
         this.rad = rad;
         this.vel = vel.clone();
@@ -2146,11 +2146,23 @@ class BOID {
         this.grabbed = false;
         this.spinAngle = 0; // For rotating models like avocado along travel axis
         
+        // Determine geometry type from parameter or distribution
+        if (geometryType !== undefined) {
+            this.geometryType = geometryType;
+        } else {
+            // No specific type provided, pick from selected types
+            if (gSelectedBoidTypes.length > 0) {
+                this.geometryType = gSelectedBoidTypes[Math.floor(Math.random() * gSelectedBoidTypes.length)];
+            } else {
+                this.geometryType = 3; // Default to box if no types selected
+            }
+        }
+        
         // Create front cone mesh
         let material;
         
         // Handle duck and fish geometry specially
-        if (gBoidGeometryType === 12 && gDuckTemplate) {
+        if (this.geometryType === 12 && gDuckTemplate) {
             // Clone duck template for this boid
             this.visMesh = gDuckTemplate.clone();
             this.visMesh.scale.set(0.3, 0.3, 0.3);
@@ -2159,7 +2171,7 @@ class BOID {
             this.visMesh.castShadow = true;
             this.visMesh.receiveShadow = true;
             gThreeScene.add(this.visMesh);
-        } else if (gBoidGeometryType === 13 && gFishTemplate) {
+        } else if (this.geometryType === 13 && gFishTemplate) {
             // Clone fish template for this boid
             this.visMesh = gFishTemplate.clone();
             this.visMesh.scale.set(2.0, 2.0, 2.0);
@@ -2168,7 +2180,7 @@ class BOID {
             this.visMesh.castShadow = true;
             this.visMesh.receiveShadow = true;
             gThreeScene.add(this.visMesh);
-        } else if (gBoidGeometryType === 14 && gAvocadoTemplate) {
+        } else if (this.geometryType === 14 && gAvocadoTemplate) {
             // Clone avocado template for this boid
             this.visMesh = gAvocadoTemplate.clone();
             this.visMesh.scale.set(10.0, 10.0, 6.0);
@@ -2177,7 +2189,7 @@ class BOID {
             this.visMesh.castShadow = true;
             this.visMesh.receiveShadow = true;
             gThreeScene.add(this.visMesh);
-        } else if (gBoidGeometryType === 15 && gHelicopterTemplate) {
+        } else if (this.geometryType === 15 && gHelicopterTemplate) {
             // Clone helicopter template for this boid
             this.visMesh = gHelicopterTemplate.clone();
             this.visMesh.scale.set(1.5, 1.5, 1.5);
@@ -2188,7 +2200,7 @@ class BOID {
             // Give each helicopter a random initial rotation
             this.spinAngle = Math.random() * Math.PI * 2;
             gThreeScene.add(this.visMesh);
-        } else if (gBoidGeometryType === 16 && gPaperPlaneTemplate) {
+        } else if (this.geometryType === 16 && gPaperPlaneTemplate) {
             // Clone paper plane template for this boid
             this.visMesh = gPaperPlaneTemplate.clone();
             this.visMesh.scale.set(0.5, 0.5, 0.5);
@@ -2229,31 +2241,31 @@ class BOID {
                     wireframe: boidProps.wireframe});
             }
             
-            // Create geometry based on gBoidGeometryType
+            // Create geometry based on this.geometryType
             var geometry;
-            if (gBoidGeometryType === 0) {
+            if (this.geometryType === 0) {
                 geometry = new THREE.SphereGeometry(rad, geometrySegments, geometrySegments);
-            } else if (gBoidGeometryType === 1) {
+            } else if (this.geometryType === 1) {
                 geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
-            } else if (gBoidGeometryType === 2) {
+            } else if (this.geometryType === 2) {
                 geometry = new THREE.CylinderGeometry(rad, rad, 3 * rad, geometrySegments);
-            } else if (gBoidGeometryType === 3) {
+            } else if (this.geometryType === 3) {
                 geometry = new THREE.BoxGeometry(2 * rad, 2 * rad, 2 * rad);
-            } else if (gBoidGeometryType === 4) {
+            } else if (this.geometryType === 4) {
                 geometry = new THREE.TetrahedronGeometry(rad * 1.5);
-            } else if (gBoidGeometryType === 5) {
+            } else if (this.geometryType === 5) {
                 geometry = new THREE.OctahedronGeometry(rad * 1.5);
-            } else if (gBoidGeometryType === 6) {
+            } else if (this.geometryType === 6) {
                 geometry = new THREE.DodecahedronGeometry(rad * 1.5);
-            } else if (gBoidGeometryType === 7) {
+            } else if (this.geometryType === 7) {
                 geometry = new THREE.IcosahedronGeometry(rad * 1.5);
-            } else if (gBoidGeometryType === 8) {
+            } else if (this.geometryType === 8) {
                 geometry = new THREE.CapsuleGeometry(rad * 0.5, 2 * rad, 4, geometrySegments);
-            } else if (gBoidGeometryType === 9) {
+            } else if (this.geometryType === 9) {
                 geometry = new THREE.TorusGeometry(rad, rad * 0.4, geometrySegments, geometrySegments);
-            } else if (gBoidGeometryType === 10) {
+            } else if (this.geometryType === 10) {
                 geometry = new THREE.TorusKnotGeometry(rad, rad * 0.3, geometrySegments * 4, geometrySegments);
-            } else if (gBoidGeometryType === 11) {
+            } else if (this.geometryType === 11) {
                 geometry = new THREE.PlaneGeometry(2 * rad, 3 * rad, 1, 1);
             } else {
                 // Default to cone
@@ -2296,27 +2308,27 @@ class BOID {
             );
             
             // Make mesh look at target (skip for helicopters and paper planes which handle their own rotation)
-            if (gBoidGeometryType !== 15 && gBoidGeometryType !== 16) {
+            if (this.geometryType !== 15 && this.geometryType !== 16) {
                 this.visMesh.lookAt(target);
             }
             // Adjust for default orientation based on geometry type
-            if (gBoidGeometryType === 1 || gBoidGeometryType === 2 || gBoidGeometryType === 8) {
+            if (this.geometryType === 1 || this.geometryType === 2 || this.geometryType === 8) {
                 this.visMesh.rotateX(Math.PI / 2);
-            } else if (gBoidGeometryType === 4) {
+            } else if (this.geometryType === 4) {
                 this.visMesh.rotateX(-Math.PI / 4);
                 this.visMesh.rotateY(-Math.PI / 4);
                 this.visMesh.rotateZ(-Math.PI / 2);
-            } else if (gBoidGeometryType === 5) {
+            } else if (this.geometryType === 5) {
                 this.visMesh.rotateX(Math.PI / 2);
-            } else if (gBoidGeometryType === 11) {
+            } else if (this.geometryType === 11) {
                 this.visMesh.rotateX(Math.PI / 2);
-            } else if (gBoidGeometryType === 12) {
+            } else if (this.geometryType === 12) {
                 this.visMesh.rotateY(-Math.PI / 2);
-            } else if (gBoidGeometryType === 14) {
+            } else if (this.geometryType === 14) {
                 // Avocado - orient upside-down with spin
                 this.visMesh.rotateX(-Math.PI / 2);
                 this.visMesh.rotateY(this.spinAngle || 0);
-            } else if (gBoidGeometryType === 15) {
+            } else if (this.geometryType === 15) {
                 // Helicopter - calculate horizontal direction
                 const horizDir = new THREE.Vector3(direction.x, 0, direction.z);
                 const horizSpeed = horizDir.length();
@@ -2339,7 +2351,7 @@ class BOID {
                     this.visMesh.rotation.x = 0;
                     this.visMesh.rotation.z = 0;
                 }
-            } else if (gBoidGeometryType === 16) {
+            } else if (this.geometryType === 16) {
                 // Paper plane - calculate direction and orient
                 const speed = direction.length();
                 
@@ -2450,10 +2462,10 @@ class BOID {
         this.visMesh.position.copy(this.pos);
         
         // Update spin angles for animated boids (avocado and helicopter)
-        if (gBoidGeometryType === 14) {
+        if (this.geometryType === 14) {
             // Avocado - update spin angle
             this.spinAngle += 2.0 * deltaT;
-        } else if (gBoidGeometryType === 15) {
+        } else if (this.geometryType === 15) {
             // Helicopter - update rotor spin angle
             this.spinAngle += 10.0 * deltaT;
             
@@ -2594,8 +2606,8 @@ function makeBoids() {
         vel.multiplyScalar(speed);
         if (i == 0) {
             hue = Math.round(180 + (2 * (-0.5 + Math.random())) * 20);
-            sat = Math.round(40 + Math.random() * 60); 
-            light = Math.round(30 + Math.random() * 40); 
+            sat = 0; 
+            light = 100; 
         } else if (i < 101) {
             hue = Math.round(180 + (2 * (-0.5 + Math.random())) * 20);
             sat = Math.round(40 + Math.random() * 60); 
@@ -2863,7 +2875,7 @@ function updateBoidTrail() {
             // Color mode - use boid's color
             const boid = gPhysicsScene.objects[gTrailBoidIndex];
             if (boid) {
-                color = new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, 50%)`);
+                color = new THREE.Color(`hsl(${boid.hue}, 50%, 50%)`);
             } else {
                 color = 0xffffff;
             }
@@ -2919,9 +2931,16 @@ function clearBoidTrail() {
 }
 
 function recreateBoidGeometries() {
+    // Distribute types evenly across all boids
+    const numBoids = gPhysicsScene.objects.length;
+    const numTypes = gSelectedBoidTypes.length;
+    
     // Recreate geometry for all boids
-    for (let i = 0; i < gPhysicsScene.objects.length; i++) {
+    for (let i = 0; i < numBoids; i++) {
         const boid = gPhysicsScene.objects[i];
+        
+        // Assign geometry type based on even distribution
+        boid.geometryType = gSelectedBoidTypes[i % numTypes];
         
         // Remove old meshes
         gThreeScene.remove(boid.visMesh);
@@ -2935,12 +2954,12 @@ function recreateBoidGeometries() {
             boid.visMesh2 = null;
         }
         
-        // Create new geometry based on type
+        // Create new geometry based on boid's assigned type
         let geometry;
         var siding = 'THREE.FrontSide';
         const rad = boid.rad;
         
-        switch (gBoidGeometryType) {
+        switch (boid.geometryType) {
             case 0: // Sphere
                 geometry = new THREE.SphereGeometry(rad, geometrySegments, geometrySegments);
                 break;
@@ -2993,7 +3012,7 @@ function recreateBoidGeometries() {
         }
 
         let material;
-        if (gBoidGeometryType === 12 && gDuckTemplate) {
+        if (boid.geometryType === 12 && gDuckTemplate) {
             // For duck geometry, clone the duck template
             boid.visMesh = gDuckTemplate.clone();
             boid.visMesh.scale.set(0.3, 0.3, 0.3); // Scale down for boid size
@@ -3004,7 +3023,7 @@ function recreateBoidGeometries() {
             boid.visMesh.receiveShadow = true;
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
-        } else if (gBoidGeometryType === 13 && gFishTemplate) {
+        } else if (boid.geometryType === 13 && gFishTemplate) {
             // For fish geometry, clone the fish template
             boid.visMesh = gFishTemplate.clone();
             boid.visMesh.scale.set(2.0, 2.0, 2.0); // Scale down for boid size
@@ -3015,7 +3034,7 @@ function recreateBoidGeometries() {
             boid.visMesh.receiveShadow = true;
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
-        } else if (gBoidGeometryType === 14 && gAvocadoTemplate) {
+        } else if (boid.geometryType === 14 && gAvocadoTemplate) {
             // For avocado geometry, clone the avocado template
             boid.visMesh = gAvocadoTemplate.clone();
             boid.visMesh.scale.set(12.0, 12.0, 12.0); // Scale down for boid size
@@ -3026,7 +3045,7 @@ function recreateBoidGeometries() {
             boid.visMesh.receiveShadow = true;
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
-        } else if (gBoidGeometryType === 15 && gHelicopterTemplate) {
+        } else if (boid.geometryType === 15 && gHelicopterTemplate) {
             // For helicopter geometry, clone the helicopter template
             boid.visMesh = gHelicopterTemplate.clone();
             boid.visMesh.scale.set(1.5, 1.5, 1.5); // Scale for boid size
@@ -3039,7 +3058,7 @@ function recreateBoidGeometries() {
             boid.spinAngle = Math.random() * Math.PI * 2;
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
-        } else if (gBoidGeometryType === 16 && gPaperPlaneTemplate) {
+        } else if (boid.geometryType === 16 && gPaperPlaneTemplate) {
             // For paper plane geometry, clone the paper plane template
             boid.visMesh = gPaperPlaneTemplate.clone();
             boid.visMesh.scale.set(0.2, 0.2, 0.2); // Scale for boid size
@@ -3050,7 +3069,7 @@ function recreateBoidGeometries() {
             boid.visMesh.receiveShadow = true;
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
-        } else if (gBoidGeometryType != 11 && gBoidGeometryType != 12 && gBoidGeometryType != 13 && gBoidGeometryType != 14 && gBoidGeometryType != 15 && gBoidGeometryType != 16) {
+        } else if (boid.geometryType != 11 && boid.geometryType != 12 && boid.geometryType != 13 && boid.geometryType != 14 && boid.geometryType != 15 && boid.geometryType != 16) {
             if (boidProps.material === 'standard') {
                 material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
@@ -4363,7 +4382,7 @@ function drawStylingMenu() {
         // Draw button
         ctx.beginPath();
         ctx.roundRect(btnX, btnY, buttonWidth, buttonHeight, 4);
-        if (gBoidGeometryType === i) {
+        if (gSelectedBoidTypes.includes(i)) {
             ctx.fillStyle = `hsla(30, 30%, 50%, ${0.8 * stylingMenuOpacity})`;
         } else {
             ctx.fillStyle = `hsla(30, 30%, 20%, ${0.6 * stylingMenuOpacity})`;
@@ -6704,7 +6723,7 @@ function initThreeScene() {
             var spherePos = {x: -10, y: 15, z: 18}; // Sphere obstacle position (updated)
             var sphereRadius = 3;
             var sphereAvoidRadius = 5; // Avoid area near sphere
-            var torusPos = {x: 11, y: 15, z: 0}; // Torus obstacle position
+            var torusPos = {x: 11, y: 10, z: 0}; // Torus obstacle position
             var torusMajorRadius = 6;
             var torusAvoidRadius = 8; // Avoid area near torus
             
@@ -10214,7 +10233,7 @@ function onPointer(evt) {
                             
                             let geometry;
                             const rad = boid.rad;
-                            switch (gBoidGeometryType) {
+                            switch (boid.geometryType) {
                                 case 0: geometry = new THREE.SphereGeometry(rad, geometrySegments, 16); break;
                                 case 1: geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1); break;
                                 case 2: geometry = new THREE.CylinderGeometry(rad, rad, 3 * rad, geometrySegments); break;
@@ -10256,7 +10275,7 @@ function onPointer(evt) {
                                     wireframe: boidProps.wireframe});
                             }
                             
-                            if (gBoidGeometryType === 11) {
+                            if (boid.geometryType === 11) {
                                 material = new THREE.MeshStandardMaterial({
                                 color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`),
                                 side: THREE.DoubleSide});
@@ -11300,16 +11319,30 @@ function checkStylingMenuClick(clientX, clientY) {
         
         if (clientX >= btnX && clientX <= btnX + buttonWidth &&
             clientY >= btnY && clientY <= btnY + buttonHeight) {
-            var previousType = gBoidGeometryType;
-            gBoidGeometryType = i;
+            // Toggle type selection
+            const typeIndex = gSelectedBoidTypes.indexOf(i);
+            if (typeIndex === -1) {
+                // Type not selected, add it
+                gSelectedBoidTypes.push(i);
+            } else {
+                // Type already selected, remove it (but keep at least one type selected)
+                if (gSelectedBoidTypes.length > 1) {
+                    gSelectedBoidTypes.splice(typeIndex, 1);
+                }
+            }
             
-            // Determine which painting should be shown for this boid type
+            // Sort selected types for consistent ordering
+            gSelectedBoidTypes.sort((a, b) => a - b);
+            
+            // Determine which painting should be shown based on selected types
             var desiredPainting = 'miro'; // Default for most types
-            if (i === 0) {
+            const hasTypes = (types) => types.some(t => gSelectedBoidTypes.includes(t));
+            
+            if (hasTypes([0])) {
                 desiredPainting = 'dali'; // Sphere → Dali
-            } else if (i === 1 || i === 2) {
+            } else if (hasTypes([1, 2])) {
                 desiredPainting = 'duchamp'; // Cone or Cylinder → Duchamp
-            } else if (i === 12 || i === 13 || i === 14) {
+            } else if (hasTypes([12, 13, 14])) {
                 desiredPainting = 'bosch'; // Duck, Fish (Barramundi), or Avocado → Bosch
             }
             
@@ -11320,7 +11353,7 @@ function checkStylingMenuClick(clientX, clientY) {
                 gPaintingAnimTimer = 0;
             }
             
-            // Recreate all boid geometries
+            // Recreate all boid geometries with new type distribution
             recreateBoidGeometries();
             return true;
         }
@@ -12113,9 +12146,9 @@ function update() {
         gDuchampExtraPaintingsDropTimer = 0;
     }
     
-    // Update Duchamp Bride Top painting visibility based on world size Y and boid type
-    // Only show if world size Y >= 30 AND boid type is Cone (1) or Cylinder (2)
-    if (gPhysicsScene.worldSize.y >= 30 && (gBoidGeometryType === 1 || gBoidGeometryType === 2) && !gDuchampBrideTopActive) {
+    // Update Duchamp Bride Top painting visibility based on world size Y and boid types
+    // Only show if world size Y >= 30 AND any selected boid type is Cone (1) or Cylinder (2)
+    if (gPhysicsScene.worldSize.y >= 30 && (gSelectedBoidTypes.includes(1) || gSelectedBoidTypes.includes(2)) && !gDuchampBrideTopActive) {
         // Activate top painting
         gDuchampBrideTopActive = true;
         gDuchampBrideTopDropping = true;
@@ -12129,8 +12162,8 @@ function update() {
         }
     }
     
-    // Hide if world size becomes too small or boid type is not cone/cylinder
-    if ((gPhysicsScene.worldSize.y < 30 || (gBoidGeometryType !== 1 && gBoidGeometryType !== 2)) && gDuchampBrideTopActive) {
+    // Hide if world size becomes too small or no cone/cylinder types selected
+    if ((gPhysicsScene.worldSize.y < 30 || (!gSelectedBoidTypes.includes(1) && !gSelectedBoidTypes.includes(2))) && gDuchampBrideTopActive) {
         if (gDuchampBrideTopPaintingGroup) {
             gDuchampBrideTopPaintingGroup.visible = false;
         }
@@ -12844,13 +12877,26 @@ function update() {
                     gTorusDropping = false;
                     // Set final collision properties
                     gTorusObstacle.updatePosition(new THREE.Vector3(11, gTorusTargetY, 0));
-                    gTorusObstacle.majorRadius = gTorusTargetMajorRadius;
-                    gTorusObstacle.minorRadius = gTorusTargetMinorRadius;
-                    gTorusObstacle.enabled = true;  // Enable collision after animation
+                    
+                    // Calculate actual final radii based on uniform scaling
+                    const finalScale = gTorusTargetMajorRadius / gTorusStartMajorRadius;
+                    const actualFinalMajorRadius = gTorusStartMajorRadius * finalScale;  // = 6
+                    const actualFinalMinorRadius = gTorusStartMinorRadius * finalScale;  // = 1.2
+                    
+                    gTorusObstacle.majorRadius = actualFinalMajorRadius;
+                    gTorusObstacle.minorRadius = actualFinalMinorRadius;
+                    
+                    // Recreate geometry at proper size instead of leaving it scaled
                     if (gTorusObstacle.mesh) {
-                        const finalScale = gTorusTargetMajorRadius / gTorusStartMajorRadius;
-                        gTorusObstacle.mesh.scale.set(finalScale, finalScale, finalScale);
+                        gThreeScene.remove(gTorusObstacle.mesh);
+                        gTorusObstacle.mesh.geometry.dispose();
+                        var newGeometry = new THREE.TorusGeometry(actualFinalMajorRadius, actualFinalMinorRadius, 16, 100);
+                        gTorusObstacle.mesh.geometry = newGeometry;
+                        gTorusObstacle.mesh.scale.set(1, 1, 1);  // Reset scale to 1
+                        gThreeScene.add(gTorusObstacle.mesh);
                     }
+                    
+                    gTorusObstacle.enabled = true;  // Enable collision after animation
                 }
             }
         }
