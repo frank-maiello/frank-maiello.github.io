@@ -7,6 +7,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
         
+// Asset loading management
+var gLoadingManager = null; // THREE.LoadingManager to track asset loading
+var gAssetsLoaded = false; // Flag tracking if all assets have finished loading
+
 var gThreeScene;
 var gRenderer;
 var gCamera;
@@ -62,6 +66,7 @@ var gDraggingTorus = false; // Track if dragging the torus obstacle
 var gTorusDragOffset = null; // Store offset from click point to torus center
 var gTorusDragPlaneHeight = 0; // Store the Y height where the torus was grabbed
 var gTorusDragPlaneDistance = 0; // Store the distance from camera for fixed plane dragging
+var gTorusHue = 90; // Current hue value for torus obstacle (0-360, same start as sphere)
 var gActiveLampId = 1; // Track which lamp is currently being interacted with (1 or 2)
 var gLampAngle = -0.0435; // Current lamp angle in radians (-2.49 degrees)
 var gLampAssemblyRotation = 0.0; // Current lamp assembly rotation around Y axis
@@ -232,7 +237,7 @@ var gChairDragOffset = null; // Store offset from click point to chair center
 var gChairDragPlaneHeight = 0; // Store the Y height where chair was grabbed
 var gChairInitialX = -2; // Initial X position for world resize scaling
 var gChairInitialZ = 0; // Initial Z position for world resize scaling
-var gChairSliding = true; // Flag for chair slide animation
+var gChairSliding = false; // Flag for chair slide animation (starts after loading)
 var gSofa = null; // Glam velvet sofa model reference
 var gSofaObstacle = null; // Box obstacle for boid avoidance
 var gDraggingSofa = false; // Track if dragging the sofa
@@ -243,7 +248,7 @@ var gSofaInitialZ = -11; // Initial Z position for world resize scaling
 var gChairSlideTimer = 0; // Timer for chair slide animation
 var gChairStartX = 60; // Starting X position for chair slide
 var gChairTargetX = -1; // Target X position for chair
-var gSofaSliding = true; // Flag for sofa slide animation
+var gSofaSliding = false; // Flag for sofa slide animation (starts after loading)
 var gSofaSlideTimer = 0; // Timer for sofa slide animation
 var gSofaStartX = -60; // Starting X position for sofa slide (off-screen to left)
 var gSofaTargetX = 19; // Target X position for sofa
@@ -260,10 +265,10 @@ var gWheelValveMass = 0.1; // Relative mass of valve (creates asymmetry)
 var gWheelRadius = 1.0; // Wheel radius for torque calculation
 var gDirectionalLight = null;
 var gSpawnPointLight = null; // Point light at boid spawn center
-var gAmbientIntensity = 1.0; // Ambient light intensity (0-2)
+var gAmbientIntensity = 1.2; // Ambient light intensity (0-2)
 var gAmbientHue = 0; // Ambient light hue (0-360)
 var gAmbientSaturation = 0; // Ambient light saturation (0-100)
-var gOverheadIntensity = 1.0; // Directional light intensity (0-2)
+var gOverheadIntensity = 0.9; // Directional light intensity (0-2)
 var gOverheadHue = 0; // Overhead light hue (0-360)
 var gOverheadSaturation = 0; // Overhead light saturation (0-100)
 var gSpotlight1Intensity = 0.8; // Spotlight 1 intensity (0-2)
@@ -290,7 +295,7 @@ var gLeftWallPainting = null; // Reference to Duchamp painting on left wall
 var gLeftWallFramePieces = []; // Frame pieces for left wall painting
 var gOvalPainting = null; // Reference to oval painting on back wall
 var gOvalFrame = null; // Reference to oval frame on back wall
-var gPaintingsDropping = true; // Flag for painting drop animation
+var gPaintingsDropping = false; // Flag for painting drop animation (starts after loading)
 var gPaintingDropStartY = 50; // Starting Y position for painting drop
 var gPaintingDropTimer = 0; // Timer for painting drop animation
 var gPaintingDropDelay = 0; // Delay after walls finish before paintings drop
@@ -319,13 +324,25 @@ var gColumnDropTimer = 0; // Timer for column drop animation
 var gColumnDropDelay = 0.0; // Delay after pedestals finish before column drops
 var gColumnDropDuration = 1.5; // Duration of column drop animation
 var gColumnStartY = 60; // Starting Y offset for column drop
-var gTorusDropping = true; // Flag for torus drop animation
+var gTorusDropping = false; // Flag for torus drop animation (starts after loading)
 var gTorusDropTimer = 0; // Timer for torus drop animation
 var gTorusDropDelay = 0.0; // Delay after paintings finish before torus drops
 var gTorusDropDuration = 1.5; // Duration of torus drop animation
-var gTorusStartY = 50; // Starting Y offset for torus drop
+var gTorusStartY = 20; // Starting Y offset for torus drop
 var gTorusTargetY = 10; // Target Y position for torus
-var gColumnBaseSliding = true; // Flag for column base slide animation
+var gTorusStartMajorRadius = 0.5; // Starting major radius for torus
+var gTorusTargetMajorRadius = 6; // Target major radius for torus
+var gTorusStartMinorRadius = 0.1; // Starting minor radius (tube) for torus
+var gTorusTargetMinorRadius = 1; // Target minor radius (tube) for torus
+var gSphereRising = false; // Flag for sphere rise animation (starts after loading)
+var gSphereRiseTimer = 0; // Timer for sphere rise animation
+var gSphereRiseDuration = 2.0; // Duration of sphere rise animation
+var gSphereStartY = 0; // Starting Y position for sphere (on floor)
+var gSphereTargetY = 15; // Target Y position for sphere
+var gSphereStartRadius = 0.1; // Starting radius for sphere
+var gSphereTargetRadius = 3; // Target radius for sphere
+var gSphereObstacle = null; // Reference to sphere obstacle
+var gColumnBaseSliding = false; // Flag for column base slide animation (starts after loading)
 var gColumnBaseSlideTimer = 0; // Timer for column base slide animation
 var gColumnBaseStartZ = 35; // Starting Z offset for column base slide
 var gColumnBaseTargetZ = -26; // Target Z position for column base
@@ -570,7 +587,8 @@ class TorusObstacle {
     
     createMesh() {
         var geometry = new THREE.TorusGeometry(this.majorRadius, this.minorRadius, 16, 100);
-        var material = new THREE.MeshPhongMaterial({color: 0x00ff00, shininess: 100});
+        var material = new THREE.MeshPhongMaterial({shininess: 100});
+        material.color.setHSL(gTorusHue / 360, 0.9, 0.5); // Initialize with current hue
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.position.copy(this.position);
         this.mesh.rotation.x = this.rotation.x;
@@ -789,7 +807,7 @@ class SphereObstacle {
     }
     
     createMesh() {
-        var geometry = new THREE.SphereGeometry(this.radius, 32, 32);
+        var geometry = new THREE.SphereGeometry(this.radius, 16, 16);
         //var geometry = new THREE.TorusKnotGeometry(this.radius, this.radius * 0.4, 100, 16, 2, 3);
         //var material = new THREE.MeshPhongMaterial({color: 0xc6b1aa, shininess: 100});
         /*var material = new THREE.MeshPhongMaterial({
@@ -5162,11 +5180,9 @@ function updateWorldGeometry(changedDimension) {
         canvas.height = tileRes;
         const ctx = canvas.getContext('2d');
         
-        ctx.fillStyle = 'hsl(0, 0%, 0%)';
+        ctx.fillStyle = 'hsl(0, 0%, 12%)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw checkerboard with circles
-        const tileSize = 512;
+        const tileSize = 256;
         for (let i = 0; i < tileRes; i++) {
             for (let j = 0; j < tileRes; j++) {
                 if ((i + j) % 2 === 0) {
@@ -5177,10 +5193,11 @@ function updateWorldGeometry(changedDimension) {
                         0.2 * tileSize, 
                         0, 
                         2 * Math.PI);
-                    ctx.fillStyle = 'hsl(296, 65%, 65%)';
+                    //ctx.fillStyle = 'hsl(296, 65%, 65%)';
+                    ctx.fillStyle = 'hsl(180, 30%, 15%)';
                     ctx.fill();
-                    ctx.strokeStyle = 'hsl(0, 0%, 50%)';
-                    ctx.lineWidth = 0.05 * tileSize;
+                    ctx.strokeStyle = 'hsl(0, 0%, 70%)';
+                    ctx.lineWidth = 0.03 * tileSize;
                     ctx.stroke();
                 } else {
                     ctx.beginPath();
@@ -5190,11 +5207,12 @@ function updateWorldGeometry(changedDimension) {
                         0.45 * tileSize, 
                         0, 
                         2 * Math.PI);
-                    ctx.fillStyle = 'hsl(0, 0%, 50%)';
+                    ctx.fillStyle = 'hsl(0, 0%, 0%)';
                     ctx.fill();
-                    ctx.strokeStyle = 'hsl(0, 0%, 90%)';
-                    ctx.lineWidth = 0.05 * tileSize;
+                    ctx.strokeStyle = 'hsl(0, 0%, 80%)';
+                    ctx.lineWidth = 0.04 * tileSize;
                     ctx.stroke();
+                    
                 }
             }
         }
@@ -5559,8 +5577,37 @@ function updateWorldGeometry(changedDimension) {
     }
 }
 
+// ------------------------------------------
+// Start all animations after assets are loaded
+function startAnimations() {
+    gChairSliding = true;
+    gSofaSliding = true;
+    gSphereRising = true;
+    gPaintingsDropping = true;
+    gTorusDropping = true;
+    gColumnBaseSliding = true;
+}
+
 // ------------------------------------------		
 function initThreeScene() {
+    // Create loading manager to track all asset loading
+    gLoadingManager = new THREE.LoadingManager();
+    
+    gLoadingManager.onLoad = function() {
+        console.log('All assets loaded. Starting animations...');
+        gAssetsLoaded = true;
+        startAnimations();
+    };
+    
+    gLoadingManager.onProgress = function(url, itemsLoaded, itemsTotal) {
+        const progress = (itemsLoaded / itemsTotal * 100).toFixed(0);
+        console.log('Loading assets: ' + progress + '% (' + itemsLoaded + '/' + itemsTotal + ')');
+    };
+    
+    gLoadingManager.onError = function(url) {
+        console.error('Error loading: ' + url);
+    };
+    
     gThreeScene = new THREE.Scene();
     
     // Get or create container element
@@ -5739,7 +5786,7 @@ function initThreeScene() {
     // Load stool model using GLTFLoader -----------------------------
     // Check if GLTFLoader is available
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var loader = new THREE.GLTFLoader();
+        var loader = new THREE.GLTFLoader(gLoadingManager);
         loader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/stool.gltf',
             function(gltf) {
@@ -5950,7 +5997,7 @@ function initThreeScene() {
     
     // Load Duck model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var duckLoader = new THREE.GLTFLoader();
+        var duckLoader = new THREE.GLTFLoader(gLoadingManager);
         duckLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Duck.gltf',
             function(gltf) {
@@ -6054,7 +6101,7 @@ function initThreeScene() {
     
     // Load Barramundi Fish model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var fishLoader = new THREE.GLTFLoader();
+        var fishLoader = new THREE.GLTFLoader(gLoadingManager);
         fishLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/BarramundiFish.gltf',
             function(gltf) {
@@ -6119,7 +6166,7 @@ function initThreeScene() {
     
     // Load Avocado model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var avocadoLoader = new THREE.GLTFLoader();
+        var avocadoLoader = new THREE.GLTFLoader(gLoadingManager);
         avocadoLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Avocado.gltf',
             function(gltf) {
@@ -6174,7 +6221,7 @@ function initThreeScene() {
     
     // Load Helicopter model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var helicopterLoader = new THREE.GLTFLoader();
+        var helicopterLoader = new THREE.GLTFLoader(gLoadingManager);
         helicopterLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/helicopter.gltf',
             function(gltf) {
@@ -6226,7 +6273,7 @@ function initThreeScene() {
     
     // Load Paper Plane model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var paperPlaneLoader = new THREE.GLTFLoader();
+        var paperPlaneLoader = new THREE.GLTFLoader(gLoadingManager);
         paperPlaneLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/paperPlane.gltf',
             function(gltf) {
@@ -6272,7 +6319,7 @@ function initThreeScene() {
     
     // Load Teapot model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var teapotLoader = new THREE.GLTFLoader();
+        var teapotLoader = new THREE.GLTFLoader(gLoadingManager);
         teapotLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/teapotTable.gltf',
             function(gltf) {
@@ -6339,7 +6386,7 @@ function initThreeScene() {
     
     // Load Sheen Chair model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var chairLoader = new THREE.GLTFLoader();
+        var chairLoader = new THREE.GLTFLoader(gLoadingManager);
         chairLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/sheenChair.gltf',
             function(gltf) {
@@ -6407,9 +6454,9 @@ function initThreeScene() {
         );
     }
     
-    // Load Sheen Chair model using GLTFLoader\n    if (typeof THREE.GLTFLoader !== 'undefined') {\n        var chairLoader = new THREE.GLTFLoader();\n        chairLoader.load(\n            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/sheenChair.gltf',\n            function(gltf) {\n                var chair = gltf.scene;\n                \n                // Position on floor\n                chair.position.set(gChairInitialX, 0, gChairInitialZ);\n                \n                // Scale appropriately\n                chair.scale.set(1, 1, 1);\n                \n                // Remove any imported lights\n                var lightsToRemove = [];\n                chair.traverse(function(child) {\n                    if (child.isLight) {\n                        lightsToRemove.push(child);\n                    }\n                });\n                lightsToRemove.forEach(function(light) {\n                    if (light.parent) {\n                        light.parent.remove(light);\n                    }\n                });\n                \n                // Enable shadows and mark as draggable for all meshes\n                chair.traverse(function(child) {\n                    if (child.isMesh) {\n                        child.castShadow = true;\n                        child.receiveShadow = true;\n                        child.userData.isDraggableChair = true;\n                    }\n                });\n                \n                gThreeScene.add(chair);\n                gChair = chair; // Store global reference\n                \n                // Create box obstacle for boid avoidance\n                var chairObstacleWidth = 2.0;  // X dimension\n                var chairObstacleHeight = 3.5; // Y dimension\n                var chairObstacleDepth = 2.0;  // Z dimension\n                gChairObstacle = new BoxObstacle(\n                    chairObstacleWidth,\n                    chairObstacleHeight,\n                    chairObstacleDepth,\n                    new THREE.Vector3(chair.position.x, chair.position.y + chairObstacleHeight / 2, chair.position.z),\n                    { x: 0, y: chair.rotation.y, z: 0 }\n                );\n                // Make the obstacle invisible\n                if (gChairObstacle.mesh) {\n                    gChairObstacle.mesh.visible = false;\n                }\n                gObstacles.push(gChairObstacle);\n                \n                console.log('Sheen Chair model loaded successfully');\n            },\n            function(xhr) {\n                console.log('Sheen Chair model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');\n            },\n            function(error) {\n                console.error('Error loading Sheen Chair model:', error);\n            }\n        );\n    }\n    \n    // Load Glam Velvet Sofa model using GLTFLoader
+    // Load Sheen Chair model using GLTFLoader\n    if (typeof THREE.GLTFLoader !== 'undefined') {\n        var chairLoader = new THREE.GLTFLoader(gLoadingManager);\n        chairLoader.load(\n            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/sheenChair.gltf',\n            function(gltf) {\n                var chair = gltf.scene;\n                \n                // Position on floor\n                chair.position.set(gChairInitialX, 0, gChairInitialZ);\n                \n                // Scale appropriately\n                chair.scale.set(1, 1, 1);\n                \n                // Remove any imported lights\n                var lightsToRemove = [];\n                chair.traverse(function(child) {\n                    if (child.isLight) {\n                        lightsToRemove.push(child);\n                    }\n                });\n                lightsToRemove.forEach(function(light) {\n                    if (light.parent) {\n                        light.parent.remove(light);\n                    }\n                });\n                \n                // Enable shadows and mark as draggable for all meshes\n                chair.traverse(function(child) {\n                    if (child.isMesh) {\n                        child.castShadow = true;\n                        child.receiveShadow = true;\n                        child.userData.isDraggableChair = true;\n                    }\n                });\n                \n                gThreeScene.add(chair);\n                gChair = chair; // Store global reference\n                \n                // Create box obstacle for boid avoidance\n                var chairObstacleWidth = 2.0;  // X dimension\n                var chairObstacleHeight = 3.5; // Y dimension\n                var chairObstacleDepth = 2.0;  // Z dimension\n                gChairObstacle = new BoxObstacle(\n                    chairObstacleWidth,\n                    chairObstacleHeight,\n                    chairObstacleDepth,\n                    new THREE.Vector3(chair.position.x, chair.position.y + chairObstacleHeight / 2, chair.position.z),\n                    { x: 0, y: chair.rotation.y, z: 0 }\n                );\n                // Make the obstacle invisible\n                if (gChairObstacle.mesh) {\n                    gChairObstacle.mesh.visible = false;\n                }\n                gObstacles.push(gChairObstacle);\n                \n                console.log('Sheen Chair model loaded successfully');\n            },\n            function(xhr) {\n                console.log('Sheen Chair model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');\n            },\n            function(error) {\n                console.error('Error loading Sheen Chair model:', error);\n            }\n        );\n    }\n    \n    // Load Glam Velvet Sofa model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var sofaLoader = new THREE.GLTFLoader();
+        var sofaLoader = new THREE.GLTFLoader(gLoadingManager);
         sofaLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/glamVelvetSofa.gltf',
             function(gltf) {
@@ -6419,7 +6466,7 @@ function initThreeScene() {
                 sofa.position.set(gSofaStartX, 0, gSofaInitialZ);
                 
                 // Scale appropriately
-                sofa.scale.set(10, 10, 10);
+                sofa.scale.set(9, 9, 9);
 
                 sofa.rotation.y = -0.25 * Math.PI; // Rotate 90 degrees to face forward
                 
@@ -6485,7 +6532,7 @@ function initThreeScene() {
     
     // Load Globe Lamp model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var globeLampLoader = new THREE.GLTFLoader();
+        var globeLampLoader = new THREE.GLTFLoader(gLoadingManager);
         globeLampLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/globeLamp.gltf',
             function(gltf) {
@@ -6562,7 +6609,7 @@ function initThreeScene() {
     
     // Load Brancusi Bird model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
-        var birdLoader = new THREE.GLTFLoader();
+        var birdLoader = new THREE.GLTFLoader(gLoadingManager);
         birdLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Brancusi_Bird.gltf',
             function(gltf) {
@@ -6857,7 +6904,7 @@ function initThreeScene() {
         }
         
         // Load Tube Star model
-        var starLoader = new THREE.GLTFLoader();
+        var starLoader = new THREE.GLTFLoader(gLoadingManager);
         starLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeStar.gltf',
             function(gltf) {
@@ -6896,7 +6943,7 @@ function initThreeScene() {
         );
         
         // Load Tube Heart model
-        var heartLoader = new THREE.GLTFLoader();
+        var heartLoader = new THREE.GLTFLoader(gLoadingManager);
         heartLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeHeart.gltf',
             function(gltf) {
@@ -6935,7 +6982,7 @@ function initThreeScene() {
         );
         
         // Load Tube Moon model
-        var moonLoader = new THREE.GLTFLoader();
+        var moonLoader = new THREE.GLTFLoader(gLoadingManager);
         moonLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeMoon.gltf',
             function(gltf) {
@@ -6974,7 +7021,7 @@ function initThreeScene() {
         );
         
         // Load Tube Clover model
-        var cloverLoader = new THREE.GLTFLoader();
+        var cloverLoader = new THREE.GLTFLoader(gLoadingManager);
         cloverLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeClover.gltf',
             function(gltf) {
@@ -7013,7 +7060,7 @@ function initThreeScene() {
         );
         
         // Load Tube Diamond model
-        var diamondLoader = new THREE.GLTFLoader();
+        var diamondLoader = new THREE.GLTFLoader(gLoadingManager);
         diamondLoader.load(
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeDiamond.gltf',
             function(gltf) {
@@ -8624,20 +8671,22 @@ function initThreeScene() {
     );
     */
     
-    // Create sphere obstacle
-    var sphereObstacle = new SphereObstacle(
-        3,  // radius
-        new THREE.Vector3(-10, 15, 18),  // position
+    // Create sphere obstacle (start on floor for rise animation)
+    gSphereObstacle = new SphereObstacle(
+        gSphereStartRadius,  // radius (start small)
+        new THREE.Vector3(-10, gSphereStartY, 18),  // position (start on floor)
     );
-    gObstacles.push(sphereObstacle);
+    gSphereObstacle.enabled = false;  // Disable collision during animation
+    gObstacles.push(gSphereObstacle);
 
-    // Create torus obstacle (start high for drop animation)
+    // Create torus obstacle (start high and small for drop animation)
     gTorusObstacle = new TorusObstacle(
-        6,  // major radius
-        1,  // minor radius (tube radius)
+        gTorusStartMajorRadius,  // major radius (start small)
+        gTorusStartMinorRadius,  // minor radius (tube radius, start small)
         new THREE.Vector3(11, gTorusTargetY + gTorusStartY, 0),  // position (start high)
         { x: 0, y: 0.5 * Math.PI, z: 0 }  // rotation
     );
+    gTorusObstacle.enabled = false;  // Disable collision during animation
     gObstacles.push(gTorusObstacle);
 
     // Create cylinder obstacle (start high for drop animation)
@@ -11855,6 +11904,13 @@ function update() {
         if (sphereObstacle && sphereObstacle.mesh && sphereObstacle.mesh.material) {
             sphereObstacle.mesh.material.color.setHSL(gSphereHue / 360, 0.9, 0.5);
         }
+        
+        // Animate torus obstacle hue (opposite direction, same rate)
+        gTorusHue = (gTorusHue - 1 * deltaT + 360) % 360; // Cycle in reverse at same rate
+        var torusObstacle = gObstacles.find(function(obs) { return obs instanceof TorusObstacle; });
+        if (torusObstacle && torusObstacle.mesh && torusObstacle.mesh.material) {
+            torusObstacle.mesh.material.color.setHSL(gTorusHue / 360, 0.9, 0.5);
+        }
     }
     
     // Duck entrance animation
@@ -12770,15 +12826,68 @@ function update() {
                 // Calculate current Y position
                 const currentY = (gTorusTargetY + gTorusStartY) + (gTorusTargetY - (gTorusTargetY + gTorusStartY)) * easedProgress;
                 
-                // Update torus position
-                gTorusObstacle.updatePosition(new THREE.Vector3(11, currentY, 0));
+                // Calculate current radii for visual scaling only
+                const currentMajorRadius = gTorusStartMajorRadius + (gTorusTargetMajorRadius - gTorusStartMajorRadius) * easedProgress;
+                const currentMinorRadius = gTorusStartMinorRadius + (gTorusTargetMinorRadius - gTorusStartMinorRadius) * easedProgress;
+                
+                // Update only visual mesh (not collision properties)
+                if (gTorusObstacle.mesh) {
+                    gTorusObstacle.mesh.position.set(11, currentY, 0);
+                    const majorScale = currentMajorRadius / gTorusStartMajorRadius;
+                    const minorScale = currentMinorRadius / gTorusStartMinorRadius;
+                    // Scale uniformly based on major radius growth
+                    gTorusObstacle.mesh.scale.set(majorScale, majorScale, majorScale);
+                }
                 
                 // End animation when complete
                 if (progress >= 1) {
                     gTorusDropping = false;
-                    // Ensure final position is exact
+                    // Set final collision properties
                     gTorusObstacle.updatePosition(new THREE.Vector3(11, gTorusTargetY, 0));
+                    gTorusObstacle.majorRadius = gTorusTargetMajorRadius;
+                    gTorusObstacle.minorRadius = gTorusTargetMinorRadius;
+                    gTorusObstacle.enabled = true;  // Enable collision after animation
+                    if (gTorusObstacle.mesh) {
+                        const finalScale = gTorusTargetMajorRadius / gTorusStartMajorRadius;
+                        gTorusObstacle.mesh.scale.set(finalScale, finalScale, finalScale);
+                    }
                 }
+            }
+        }
+    }
+    
+    // Sphere rise animation
+    if (gSphereRising && gSphereObstacle) {
+        gSphereRiseTimer += deltaT;
+        
+        const progress = Math.min(1, gSphereRiseTimer / gSphereRiseDuration);
+        
+        // Cubic ease-out: starts fast, decelerates
+        const easedProgress = 1 - Math.pow(1 - progress, 3);
+        
+        // Calculate current Y position
+        const currentY = gSphereStartY + (gSphereTargetY - gSphereStartY) * easedProgress;
+        
+        // Calculate current radius for visual scaling only
+        const currentRadius = gSphereStartRadius + (gSphereTargetRadius - gSphereStartRadius) * easedProgress;
+        
+        // Update only visual mesh (not collision properties)
+        if (gSphereObstacle.mesh) {
+            gSphereObstacle.mesh.position.set(-10, currentY, 18);
+            const scale = currentRadius / gSphereStartRadius;
+            gSphereObstacle.mesh.scale.set(scale, scale, scale);
+        }
+        
+        // End animation when complete
+        if (progress >= 1) {
+            gSphereRising = false;
+            // Set final collision properties
+            gSphereObstacle.updatePosition(new THREE.Vector3(-10, gSphereTargetY, 18));
+            gSphereObstacle.radius = gSphereTargetRadius;
+            gSphereObstacle.enabled = true;  // Enable collision after animation
+            if (gSphereObstacle.mesh) {
+                const finalScale = gSphereTargetRadius / gSphereStartRadius;
+                gSphereObstacle.mesh.scale.set(finalScale, finalScale, finalScale);
             }
         }
     }
@@ -12982,10 +13091,10 @@ function update() {
                 gWalkingCameraPosition.add(forward.clone().multiplyScalar(-walkSpeed * deltaT));
             }
             if (gKeysPressed.a || gKeysPressed.left) {
-                gWalkingCameraPosition.add(right.clone().multiplyScalar(-walkSpeed * deltaT));
+                gWalkingCameraPosition.add(right.clone().multiplyScalar(walkSpeed * deltaT));
             }
             if (gKeysPressed.d || gKeysPressed.right) {
-                gWalkingCameraPosition.add(right.clone().multiplyScalar(walkSpeed * deltaT));
+                gWalkingCameraPosition.add(right.clone().multiplyScalar(-walkSpeed * deltaT));
             }
             
             // Keep camera at elevated height (6.8m eye height)
