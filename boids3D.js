@@ -233,9 +233,20 @@ var gChairDragPlaneHeight = 0; // Store the Y height where chair was grabbed
 var gChairInitialX = -2; // Initial X position for world resize scaling
 var gChairInitialZ = 0; // Initial Z position for world resize scaling
 var gChairSliding = true; // Flag for chair slide animation
+var gSofa = null; // Glam velvet sofa model reference
+var gSofaObstacle = null; // Box obstacle for boid avoidance
+var gDraggingSofa = false; // Track if dragging the sofa
+var gSofaDragOffset = null; // Store offset from click point to sofa center
+var gSofaDragPlaneHeight = 0; // Store the Y height where sofa was grabbed
+var gSofaInitialX = 19; // Initial X position for world resize scaling (close to left wall)
+var gSofaInitialZ = -11; // Initial Z position for world resize scaling
 var gChairSlideTimer = 0; // Timer for chair slide animation
 var gChairStartX = 60; // Starting X position for chair slide
 var gChairTargetX = -1; // Target X position for chair
+var gSofaSliding = true; // Flag for sofa slide animation
+var gSofaSlideTimer = 0; // Timer for sofa slide animation
+var gSofaStartX = -60; // Starting X position for sofa slide (off-screen to left)
+var gSofaTargetX = 19; // Target X position for sofa
 var gStoolTargetY = 0; // Target Y position (on floor)
 var gWheelAngularVelocity = 10; // Current rotation speed (radians per second) - starts at maximum
 var gWheelAngularAcceleration = 4.0; // Acceleration when spinning (rad/s²)
@@ -4619,7 +4630,8 @@ function drawColorMenu() {
     const padding = 0.17 * menuScale;
     const menuHeight = 0.75 * colorWheelSize;
     const menuTopMargin = 0.33 * colorWheelSize; // Match other menus
-    const wheelCenterY = menuTopMargin; // Place center at top margin
+    const radioY = -0.03 * menuScale; // Place radio buttons at very top of menu
+    const wheelCenterY = 0.45 * colorWheelSize; // Place wheel center lower down
     
     // Position menu
     const menuUpperLeftX = colorMenuX * window.innerWidth;
@@ -4771,8 +4783,8 @@ function drawColorMenu() {
     
     // Draw two arcs with tapering widths in opposite directions
     const segmentCount = 32;
-    const maxWidth = 6;
-    const minWidth = 1;
+    const maxWidth = 10;
+    const minWidth = 0;
     
     for (let arcIdx = 0; arcIdx < 2; arcIdx++) {
         const arcRadius = arcRadii[arcIdx];
@@ -4822,8 +4834,7 @@ function drawColorMenu() {
     ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
     ctx.fillText('Mix', knobCenterX, knobCenterY + 0.6 * knobRadius);
     
-    // Draw radio buttons for coloration mode
-    const radioY = menuHeight + 0.01 * menuScale;
+    // Draw radio buttons for coloration mode (now above the color wheels)
     const radioRadius = knobRadius * 0.3;
     const radioSpacing = menuWidth / 3;
     const radioLabels = ['By Wheel', 'By Direction', 'By Speed'];
@@ -6396,7 +6407,83 @@ function initThreeScene() {
         );
     }
     
-    // Load Sheen Chair model using GLTFLoader\n    if (typeof THREE.GLTFLoader !== 'undefined') {\n        var chairLoader = new THREE.GLTFLoader();\n        chairLoader.load(\n            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/sheenChair.gltf',\n            function(gltf) {\n                var chair = gltf.scene;\n                \n                // Position on floor\n                chair.position.set(gChairInitialX, 0, gChairInitialZ);\n                \n                // Scale appropriately\n                chair.scale.set(1, 1, 1);\n                \n                // Remove any imported lights\n                var lightsToRemove = [];\n                chair.traverse(function(child) {\n                    if (child.isLight) {\n                        lightsToRemove.push(child);\n                    }\n                });\n                lightsToRemove.forEach(function(light) {\n                    if (light.parent) {\n                        light.parent.remove(light);\n                    }\n                });\n                \n                // Enable shadows and mark as draggable for all meshes\n                chair.traverse(function(child) {\n                    if (child.isMesh) {\n                        child.castShadow = true;\n                        child.receiveShadow = true;\n                        child.userData.isDraggableChair = true;\n                    }\n                });\n                \n                gThreeScene.add(chair);\n                gChair = chair; // Store global reference\n                \n                // Create box obstacle for boid avoidance\n                var chairObstacleWidth = 2.0;  // X dimension\n                var chairObstacleHeight = 3.5; // Y dimension\n                var chairObstacleDepth = 2.0;  // Z dimension\n                gChairObstacle = new BoxObstacle(\n                    chairObstacleWidth,\n                    chairObstacleHeight,\n                    chairObstacleDepth,\n                    new THREE.Vector3(chair.position.x, chair.position.y + chairObstacleHeight / 2, chair.position.z),\n                    { x: 0, y: chair.rotation.y, z: 0 }\n                );\n                // Make the obstacle invisible\n                if (gChairObstacle.mesh) {\n                    gChairObstacle.mesh.visible = false;\n                }\n                gObstacles.push(gChairObstacle);\n                \n                console.log('Sheen Chair model loaded successfully');\n            },\n            function(xhr) {\n                console.log('Sheen Chair model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');\n            },\n            function(error) {\n                console.error('Error loading Sheen Chair model:', error);\n            }\n        );\n    }\n    \n    // Load Globe Lamp model using GLTFLoader
+    // Load Sheen Chair model using GLTFLoader\n    if (typeof THREE.GLTFLoader !== 'undefined') {\n        var chairLoader = new THREE.GLTFLoader();\n        chairLoader.load(\n            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/sheenChair.gltf',\n            function(gltf) {\n                var chair = gltf.scene;\n                \n                // Position on floor\n                chair.position.set(gChairInitialX, 0, gChairInitialZ);\n                \n                // Scale appropriately\n                chair.scale.set(1, 1, 1);\n                \n                // Remove any imported lights\n                var lightsToRemove = [];\n                chair.traverse(function(child) {\n                    if (child.isLight) {\n                        lightsToRemove.push(child);\n                    }\n                });\n                lightsToRemove.forEach(function(light) {\n                    if (light.parent) {\n                        light.parent.remove(light);\n                    }\n                });\n                \n                // Enable shadows and mark as draggable for all meshes\n                chair.traverse(function(child) {\n                    if (child.isMesh) {\n                        child.castShadow = true;\n                        child.receiveShadow = true;\n                        child.userData.isDraggableChair = true;\n                    }\n                });\n                \n                gThreeScene.add(chair);\n                gChair = chair; // Store global reference\n                \n                // Create box obstacle for boid avoidance\n                var chairObstacleWidth = 2.0;  // X dimension\n                var chairObstacleHeight = 3.5; // Y dimension\n                var chairObstacleDepth = 2.0;  // Z dimension\n                gChairObstacle = new BoxObstacle(\n                    chairObstacleWidth,\n                    chairObstacleHeight,\n                    chairObstacleDepth,\n                    new THREE.Vector3(chair.position.x, chair.position.y + chairObstacleHeight / 2, chair.position.z),\n                    { x: 0, y: chair.rotation.y, z: 0 }\n                );\n                // Make the obstacle invisible\n                if (gChairObstacle.mesh) {\n                    gChairObstacle.mesh.visible = false;\n                }\n                gObstacles.push(gChairObstacle);\n                \n                console.log('Sheen Chair model loaded successfully');\n            },\n            function(xhr) {\n                console.log('Sheen Chair model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');\n            },\n            function(error) {\n                console.error('Error loading Sheen Chair model:', error);\n            }\n        );\n    }\n    \n    // Load Glam Velvet Sofa model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var sofaLoader = new THREE.GLTFLoader();
+        sofaLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/glamVelvetSofa.gltf',
+            function(gltf) {
+                var sofa = gltf.scene;
+                
+                // Position close to left wall, centered in Z - start at slide-in position
+                sofa.position.set(gSofaStartX, 0, gSofaInitialZ);
+                
+                // Scale appropriately
+                sofa.scale.set(10, 10, 10);
+
+                sofa.rotation.y = -0.25 * Math.PI; // Rotate 90 degrees to face forward
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                sofa.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and mark as draggable for all meshes
+                sofa.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.userData.isDraggableSofa = true;
+                    }
+                });
+                
+                gThreeScene.add(sofa);
+                gSofa = sofa; // Store global reference
+                
+                // Create box obstacle for boid avoidance
+                var sofaObstacleWidth = 22.0;  // X dimension (width)
+                var sofaObstacleHeight = 7.0; // Y dimension
+                var sofaObstacleDepth = 10.0;  // Z dimension (depth/length)
+                
+                // Calculate offset toward rear of sofa accounting for rotation
+                var sofaRotation = sofa.rotation.y; // -0.25 * Math.PI
+                var rearOffset = 1.2; // Move 1.2 units toward rear in local coordinates
+                var offsetX = -rearOffset * Math.sin(sofaRotation);
+                var offsetZ = -rearOffset * Math.cos(sofaRotation);
+                
+                gSofaObstacle = new BoxObstacle(
+                    sofaObstacleWidth,
+                    sofaObstacleHeight,
+                    sofaObstacleDepth,
+                    new THREE.Vector3(sofa.position.x + offsetX, sofa.position.y + sofaObstacleHeight / 2, sofa.position.z + offsetZ),
+                    { x: 0, y: sofa.rotation.y, z: 0 }
+                );
+                // Make the obstacle invisible
+                if (gSofaObstacle.mesh) {
+                    gSofaObstacle.mesh.visible = false;
+                }
+                gObstacles.push(gSofaObstacle);
+                
+                console.log('Glam Velvet Sofa model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Glam Velvet Sofa model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Glam Velvet Sofa model:', error);
+            }
+        );
+    }
+    
+    // Load Globe Lamp model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
         var globeLampLoader = new THREE.GLTFLoader();
         globeLampLoader.load(
@@ -6555,7 +6642,7 @@ function initThreeScene() {
         
         function createHangingOrnaments() {
             // Create hanging ornaments with random properties
-            var numStars = 24;
+            var numStars = 25;
             var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
             var minY = WORLD_HEIGHT * 0.8; // Upper part of room
             var maxY = WORLD_HEIGHT * 1.5; // Slightly below ceiling
@@ -6564,12 +6651,15 @@ function initThreeScene() {
             var starPositions = []; // Track placed star positions
             
             // Obstacle positions to avoid
-            var columnPos = {x: 9, z: -9}; // Column XZ position
+            var columnPos = {x: 26, z: -26}; // Column XZ position (updated to match gColumnInitialX/Z)
             var columnRadius = 2.5;
             var columnAvoidRadius = 4; // Avoid area above column
-            var spherePos = {x: -24, y: 15, z: 14}; // Sphere obstacle position
+            var spherePos = {x: -10, y: 15, z: 18}; // Sphere obstacle position (updated)
             var sphereRadius = 3;
             var sphereAvoidRadius = 5; // Avoid area near sphere
+            var torusPos = {x: 11, y: 15, z: 0}; // Torus obstacle position
+            var torusMajorRadius = 6;
+            var torusAvoidRadius = 8; // Avoid area near torus
             
             // Material for wires
             var wireMaterial = new THREE.MeshPhongMaterial({
@@ -6578,11 +6668,11 @@ function initThreeScene() {
             });
             
             // Create array to determine which model to use for each ornament
-            // Random distribution of all 5 types
+            // 5 of each type: stars (0-4), hearts (5-9), moons (10-14), clovers (15-19), diamonds (20-24)
             var ornamentTypes = [];
             var modelTypes = ['star', 'heart', 'moon', 'clover', 'diamond'];
             for (var i = 0; i < numStars; i++) {
-                ornamentTypes[i] = modelTypes[Math.floor(Math.random() * modelTypes.length)];
+                ornamentTypes[i] = modelTypes[Math.floor(i / 5)];
             }
             
             for (var i = 0; i < numStars; i++) {
@@ -6637,6 +6727,17 @@ function initThreeScene() {
                     var dzSphere = z - spherePos.z;
                     var distToSphere = Math.sqrt(dxSphere*dxSphere + dySphere*dySphere + dzSphere*dzSphere);
                     if (distToSphere < sphereAvoidRadius) {
+                        validPosition = false;
+                        attempt++;
+                        continue;
+                    }
+                    
+                    // Check if near torus obstacle (3D distance)
+                    var dxTorus = x - torusPos.x;
+                    var dyTorus = targetY - torusPos.y;
+                    var dzTorus = z - torusPos.z;
+                    var distToTorus = Math.sqrt(dxTorus*dxTorus + dyTorus*dyTorus + dzTorus*dzTorus);
+                    if (distToTorus < torusAvoidRadius) {
                         validPosition = false;
                         attempt++;
                         continue;
@@ -6752,7 +6853,7 @@ function initThreeScene() {
                 });
             }
             
-            console.log('Hanging ornaments created successfully - ' + numStars + ' ornaments (stars, hearts, moons, clovers, and diamonds)');
+            console.log('Hanging ornaments created successfully - ' + numStars + ' ornaments (5 stars, 5 hearts, 5 moons, 5 clovers, 5 diamonds)');
         }
         
         // Load Tube Star model
@@ -9099,6 +9200,7 @@ function onPointer(evt) {
         var hitDuckBeak = false;
         var hitTeapot = false;
         var hitChair = false;
+        var hitSofa = false;
         var hitGlobeLamp = false;
         
         for (var i = 0; i < intersects.length; i++) {
@@ -9167,6 +9269,19 @@ function onPointer(evt) {
                     gChair.position.x - actualClickPoint.x,
                     0,
                     gChair.position.z - actualClickPoint.z
+                );
+                // Don't break - check if other objects are also hit
+            }
+            if (intersects[i].object.userData.isDraggableSofa && !hitSofa) {
+                hitSofa = true;
+                var actualClickPoint = intersects[i].point;
+                gSofaDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to sofa center (X and Z only)
+                gSofaDragOffset = new THREE.Vector3(
+                    gSofa.position.x - actualClickPoint.x,
+                    0,
+                    gSofa.position.z - actualClickPoint.z
                 );
                 // Don't break - check if other objects are also hit
             }
@@ -9373,6 +9488,39 @@ function onPointer(evt) {
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             // Disable orbit controls while dragging chair
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
+        if (hitSofa && gSofa) {
+            gDraggingSofa = true;
+            gSofaDragPlaneHeight = gSofa.position.y;
+            
+            // Calculate drag offset from click point to sofa center
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            var sofaPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gSofaDragPlaneHeight);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(sofaPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                gSofaDragOffset = new THREE.Vector3(
+                    gSofa.position.x - intersectionPoint.x,
+                    0,
+                    gSofa.position.z - intersectionPoint.z
+                );
+            }
+            
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging sofa
             if (gCameraControl) {
                 gCameraControl.enabled = false;
             }
@@ -9659,11 +9807,11 @@ function onPointer(evt) {
         if (gDraggingPrimaryRing) {
             const colorWheelSize = 1.1 * menuScale;
             const menuWidth = 0.6 * menuScale;
-            const menuTopMargin = 0.33 * colorWheelSize;
+            const wheelCenterY = 0.45 * colorWheelSize; // Match drawing code
             const menuUpperLeftX = colorMenuX * window.innerWidth;
             const menuUpperLeftY = (colorMenuY + 0.1) * window.innerHeight;
             const centerX = menuUpperLeftX + menuWidth / 2;
-            const centerY = menuUpperLeftY + menuTopMargin;
+            const centerY = menuUpperLeftY + wheelCenterY;
             
             const dx = evt.clientX - centerX;
             const dy = evt.clientY - centerY;
@@ -9684,11 +9832,11 @@ function onPointer(evt) {
         if (gDraggingSecondaryRing) {
             const colorWheelSize = 1.1 * menuScale;
             const menuWidth = 0.6 * menuScale;
-            const menuTopMargin = 0.33 * colorWheelSize;
+            const wheelCenterY = 0.45 * colorWheelSize; // Match drawing code
             const menuUpperLeftX = colorMenuX * window.innerWidth;
             const menuUpperLeftY = (colorMenuY + 0.1) * window.innerHeight;
             const centerX = menuUpperLeftX + menuWidth / 2;
-            const centerY = menuUpperLeftY + menuTopMargin;
+            const centerY = menuUpperLeftY + wheelCenterY;
             
             const dx = evt.clientX - centerX;
             const dy = evt.clientY - centerY;
@@ -10286,6 +10434,50 @@ function onPointer(evt) {
             return;
         }
         
+        // Handle sofa dragging (translation along ground, horizontal only)
+        if (gDraggingSofa && gSofa) {
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Define plane at the height where the sofa was grabbed
+            var sofaPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gSofaDragPlaneHeight);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(sofaPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                // Keep the sofa's Y position constant, only move X and Z
+                var newX = intersectionPoint.x + (gSofaDragOffset ? gSofaDragOffset.x : 0);
+                var newZ = intersectionPoint.z + (gSofaDragOffset ? gSofaDragOffset.z : 0);
+                
+                // Clamp to room boundaries
+                var minBoundX = -gPhysicsScene.worldSize.x + 3;
+                var maxBoundX = gPhysicsScene.worldSize.x - 3;
+                var minBoundZ = -gPhysicsScene.worldSize.z + 3;
+                var maxBoundZ = gPhysicsScene.worldSize.z - 3;
+                
+                newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
+                newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
+                
+                gSofa.position.x = newX;
+                gSofa.position.z = newZ;
+                
+                // Update obstacle position (with offset toward rear)
+                if (gSofaObstacle && gSofa) {
+                    var sofaRotation = gSofa.rotation.y;
+                    var rearOffset = 1.2;
+                    var offsetX = -rearOffset * Math.sin(sofaRotation);
+                    var offsetZ = -rearOffset * Math.cos(sofaRotation);
+                    gSofaObstacle.updatePosition(new THREE.Vector3(newX + offsetX, gSofa.position.y + gSofaObstacle.height / 2, newZ + offsetZ));
+                }
+            }
+            return;
+        }
+        
         // Handle globe lamp dragging (3D movement in space)
         if (gDraggingGlobeLamp && gGlobeLamp) {
             var rect = gRenderer.domElement.getBoundingClientRect();
@@ -10802,6 +10994,16 @@ function onPointer(evt) {
             return;
         }
         
+        if (gDraggingSofa) {
+            gDraggingSofa = false;
+            gSofaDragOffset = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
         if (gDraggingGlobeLamp) {
             gDraggingGlobeLamp = false;
             gGlobeLampDragOffset = null;
@@ -11246,6 +11448,9 @@ function checkColorMenuClick(clientX, clientY) {
     const menuOriginX = menuUpperLeftX;
     const menuOriginY = menuUpperLeftY;
     
+    const radioY = menuOriginY - 0.03 * menuScale; // Match drawing code - buttons at very top
+    const wheelCenterY = menuOriginY + 0.45 * colorWheelSize; // Match drawing code - wheels centered lower down
+    
     // Check close button
     const closeIconRadius = 0.1 * menuScale * 0.25;
     const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
@@ -11259,7 +11464,7 @@ function checkColorMenuClick(clientX, clientY) {
     }
     
     const centerX = menuOriginX + menuWidth / 2;
-    const centerY = menuOriginY + menuTopMargin;
+    const centerY = wheelCenterY; // Use wheelCenterY instead of menuOriginY + menuTopMargin
     const dx = clientX - centerX;
     const dy = clientY - centerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -11308,7 +11513,6 @@ function checkColorMenuClick(clientX, clientY) {
     }
     
     // Check radio buttons for coloration mode
-    const radioY = menuOriginY + menuHeight + 0.01 * menuScale;
     const radioRadius = knobRadius * 0.3;
     const radioSpacing = menuWidth / 3;
     
@@ -11328,18 +11532,29 @@ function checkColorMenuClick(clientX, clientY) {
     }
     
     // Check if menu background clicked (for dragging or to block clicks underneath)
+    // But exclude the color wheel area to prevent dragging when clicking on exposed background
+    const outerWheelRadius = (colorWheelSize / 2) * 0.75; // Slightly larger than outer ring for buffer
+    const isInWheelArea = distance <= outerWheelRadius;
+    
     if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
         clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
-        isDraggingMenu = true;
-        draggingMenuType = 'color';
-        menuDragStartX = clientX;
-        menuDragStartY = clientY;
-        menuStartX = colorMenuX;
-        menuStartY = colorMenuY;
         
+        // Disable camera controls for any click within menu bounds
         if (gCameraControl) {
             gCameraControl.enabled = false;
         }
+        
+        // Only allow dragging if not clicking in the wheel area
+        if (!isInWheelArea) {
+            isDraggingMenu = true;
+            draggingMenuType = 'color';
+            menuDragStartX = clientX;
+            menuDragStartY = clientY;
+            menuStartX = colorMenuX;
+            menuStartY = colorMenuY;
+        }
+        // Return true to block all clicks within menu bounds (including wheel area)
+        // This prevents world interactions behind the menu
         return true;
     }
     
@@ -12060,6 +12275,47 @@ function update() {
             gChair.position.x = gChairTargetX;
             if (gChairObstacle) {
                 gChairObstacle.updatePosition(new THREE.Vector3(gChairTargetX, gChair.position.y + gChairObstacle.height / 2, gChair.position.z));
+            }
+        }
+    }
+    
+    // Sofa slide animation
+    if (gSofaSliding && gSofa) {
+        gSofaSlideTimer += deltaT;
+        
+        // Slide from X=-60 to final position over 2 seconds with ease-out (deceleration)
+        var duration = 2.0;
+        var t = Math.min(gSofaSlideTimer / duration, 1.0);
+        
+        // Cubic ease-out: y = 1 - (1-x)^3 (starts fast, ends slow - deceleration)
+        var eased = 1 - Math.pow(1 - t, 3);
+        
+        // Interpolate X position
+        var currentX = gSofaStartX + (gSofaTargetX - gSofaStartX) * eased;
+        
+        // Update sofa position
+        gSofa.position.x = currentX;
+        
+        // Update obstacle position (with offset toward rear)
+        if (gSofaObstacle && gSofa) {
+            var sofaRotation = gSofa.rotation.y;
+            var rearOffset = 1.2;
+            var offsetX = -rearOffset * Math.sin(sofaRotation);
+            var offsetZ = -rearOffset * Math.cos(sofaRotation);
+            gSofaObstacle.updatePosition(new THREE.Vector3(currentX + offsetX, gSofa.position.y + gSofaObstacle.height / 2, gSofa.position.z + offsetZ));
+        }
+        
+        // Stop animation when complete
+        if (t >= 1.0) {
+            gSofaSliding = false;
+            // Ensure final position is exact
+            gSofa.position.x = gSofaTargetX;
+            if (gSofaObstacle && gSofa) {
+                var sofaRotation = gSofa.rotation.y;
+                var rearOffset = 1.2;
+                var offsetX = -rearOffset * Math.sin(sofaRotation);
+                var offsetZ = -rearOffset * Math.cos(sofaRotation);
+                gSofaObstacle.updatePosition(new THREE.Vector3(gSofaTargetX + offsetX, gSofa.position.y + gSofaObstacle.height / 2, gSofa.position.z + offsetZ));
             }
         }
     }
