@@ -15,12 +15,19 @@ var gGrabber;
 var gMouseDown = false;
 var gCameraAngle = 0;
 var gCameraRotationSpeed = 3.0; // Rotation state: 0 = stopped, 0.5 = forward, -0.5 = backward
+var gCameraFOV = 50; // Camera field of view (20-120)
 var gAutoRotate = true; // Enable/disable auto-rotation
-var gCameraMode = 1; // Camera mode: 0=rotate CW, 1=rotate CCW, 2=static, 3=behind boid, 4=in front of boid
+var gCameraMode = 1; // Camera mode: 0=rotate CW, 1=rotate CCW, 2=static, 3=behind boid, 4=in front of boid, 5=walking
 var gCameraManualControl = false; // Track if user is manually controlling camera
 var gCameraSpringStrength = 0.08; // Spring interpolation strength (lower = smoother)
 var gCameraOffset = new THREE.Vector3(0, 0, 0); // Manual camera offset in first-person mode
 var gCameraRotationOffset = { theta: 0, phi: 0 }; // Manual rotation offset
+var gCameraDistanceOffset = 0; // Distance offset for follow/lead modes
+var gWalkingCameraYaw = 0; // Horizontal rotation for walking mode
+var gWalkingCameraPitch = 0; // Vertical tilt for walking mode
+var gWalkingCameraPosition = new THREE.Vector3(0, 6.8, 0); // Position for walking mode (eye level at 6.8m)
+var gWalkingSpeed = 5.0; // Walking speed in units per second
+var gKeysPressed = { w: false, a: false, s: false, d: false, up: false, down: false, left: false, right: false }; // Track key states for walking
 var gSavedCameraPosition = null; // Saved camera position from third-person mode
 var gSavedCameraTarget = null; // Saved camera target from third-person mode
 var gPointerLastX = 0;
@@ -205,8 +212,8 @@ var gBirdObstacle = null; // Cylinder obstacle for boid avoidance
 var gDraggingBird = false; // Track if dragging the bird
 var gBirdDragOffset = null; // Store offset from click point to bird center
 var gBirdDragPlaneHeight = 0; // Store the Y height where bird was grabbed
-var gBirdInitialX = -20; // Initial X position for world resize scaling
-var gBirdInitialZ = 18; // Initial Z position for world resize scaling
+var gBirdInitialX = -22; // Initial X position for world resize scaling
+var gBirdInitialZ = 8; // Initial Z position for world resize scaling
 var gBirdDropping = false; // Flag for bird drop animation
 var gBirdDropTimer = 0; // Timer for bird drop animation
 var gBirdDropDelay = 0.0; // Delay before bird drops
@@ -228,7 +235,7 @@ var gChairInitialZ = 0; // Initial Z position for world resize scaling
 var gChairSliding = true; // Flag for chair slide animation
 var gChairSlideTimer = 0; // Timer for chair slide animation
 var gChairStartX = 60; // Starting X position for chair slide
-var gChairTargetX = -2; // Target X position for chair
+var gChairTargetX = -1; // Target X position for chair
 var gStoolTargetY = 0; // Target Y position (on floor)
 var gWheelAngularVelocity = 10; // Current rotation speed (radians per second) - starts at maximum
 var gWheelAngularAcceleration = 4.0; // Acceleration when spinning (rad/s²)
@@ -241,6 +248,7 @@ var gWheelValveAngle = 168.75 * Math.PI / 180; // Current angle of valve (initia
 var gWheelValveMass = 0.1; // Relative mass of valve (creates asymmetry)
 var gWheelRadius = 1.0; // Wheel radius for torque calculation
 var gDirectionalLight = null;
+var gSpawnPointLight = null; // Point light at boid spawn center
 var gAmbientIntensity = 1.0; // Ambient light intensity (0-2)
 var gAmbientHue = 0; // Ambient light hue (0-360)
 var gAmbientSaturation = 0; // Ambient light saturation (0-100)
@@ -256,10 +264,11 @@ var gSpotlight2Saturation = 0; // Spotlight 2 saturation (0-100)
 var gMiroPaintingGroup = null; // Reference to Miro painting + frame group
 var gDaliPaintingGroup = null; // Reference to Dali painting + frame group
 var gDuchampPaintingGroup = null; // Reference to Duchamp painting + frame group
+var gBoschPaintingGroup = null; // Reference to Bosch triptych + frames group
 var gDuchampBridePaintingGroup = null; // Reference to Duchamp Bride painting + frame group
 var gDuchampGrinderPaintingGroup = null; // Reference to Duchamp Grinder painting + frame group
 var gDuchampBrideTopPaintingGroup = null; // Reference to Duchamp Bride (top) painting + frame group
-var gCurrentPainting = 'miro'; // Current painting displayed: 'miro', 'dali', or 'duchamp'
+var gCurrentPainting = 'miro'; // Current painting displayed: 'miro', 'dali', 'duchamp', or 'bosch'
 var gTargetPainting = 'miro'; // Target painting to display
 var gPaintingAnimState = 'idle'; // States: idle, exiting, entering
 var gPaintingAnimTimer = 0; // Timer for painting animation
@@ -281,6 +290,9 @@ var gDuchampExtraPaintingsDropTimer = 0; // Timer for extra paintings drop anima
 var gDuchampBrideTopActive = false; // Track if Duchamp Bride top painting should be visible
 var gDuchampBrideTopDropping = false; // Track if Duchamp Bride top painting is descending
 var gDuchampBrideTopDropTimer = 0; // Timer for Duchamp Bride top painting drop animation
+var gBoschTriptychScale = 1.0; // Current scale of Bosch triptych (1.0, 1.5, or 2.5)
+var gBoschPanelHeight = 12; // Base height for Bosch panels (scaled by gBoschTriptychScale)
+var gBoschBottomHeight = 0; // Bottom height of Bosch triptych (constant regardless of scale)
 var gSpotlightPenumbra = 0.2; // Spotlight penumbra (0-1)
 var gGlobeLampIntensity = 0; // Globe lamp point light intensity (0-3)
 var gGlobeLampHue = 0; // Globe lamp hue (0-360)
@@ -338,6 +350,7 @@ var gPhysicsScene = {
 var gWalls = { front: null, back: null, left: null, right: null };
 var gBaseboards = { front: null, back: null, left: null, right: null };
 var gFloor = null;
+var gRug = null; // Afghan rug mesh
 
 // Wall animation state
 var gWallAnimation = {
@@ -379,7 +392,7 @@ var boidProps = {
 var gTrailEnabled = false; // Enable/disable trail tracking
 var gTrailLength = 50; // Maximum number of trail points to store
 var gTrailRadius = 0.5; // Multiplier for trail tube radius (relative to boid radius)
-var gTrailBoidIndex = 1; // Index of boid to track (second boid in array)
+var gTrailBoidIndex = 0; // Index of boid to track (first boid in array)
 var gTrailPositions = []; // Array to store trail positions
 var gTrailMesh = null; // THREE.Mesh for the trail tube
 var gTrailCapMesh = null; // THREE.Mesh for the disc cap at trail end
@@ -388,11 +401,12 @@ var gTrailUpdateFrequency = 1; // Update trail every N frames
 var gTrailColorMode = 3; // 0=White, 1=Black, 2=B&W, 3=Color
 
 // Boid geometry type
-var gBoidGeometryType = 3; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter
+var gBoidGeometryType = 3; // 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter, 16=PaperPlane
 var gDuckTemplate = null; // Template duck model for boid geometry
 var gFishTemplate = null; // Template fish model for boid geometry
 var gAvocadoTemplate = null; // Template avocado model for boid geometry
 var gHelicopterTemplate = null; // Template helicopter model for boid geometry
+var gPaperPlaneTemplate = null; // Template paper plane model for boid geometry
 
 // OBSTACLE CLASSES ---------------------------------------------------------------------
 
@@ -1317,7 +1331,7 @@ class Lamp {
         // Create spotlight
         this.spotlight = new THREE.SpotLight(0xffffff, intensity);
         this.spotlight.visible = intensity > 0;
-        this.spotlight.angle = Math.PI / 5;
+        this.spotlight.angle = Math.PI / 4;
         this.spotlight.penumbra = gSpotlightPenumbra;
         this.spotlight.position.copy(lightPosition);
         this.spotlight.castShadow = true;
@@ -2145,6 +2159,15 @@ class BOID {
             // Give each helicopter a random initial rotation
             this.spinAngle = Math.random() * Math.PI * 2;
             gThreeScene.add(this.visMesh);
+        } else if (gBoidGeometryType === 16 && gPaperPlaneTemplate) {
+            // Clone paper plane template for this boid
+            this.visMesh = gPaperPlaneTemplate.clone();
+            this.visMesh.scale.set(0.5, 0.5, 0.5);
+            this.visMesh.position.copy(pos);
+            this.visMesh.userData = this;
+            this.visMesh.castShadow = true;
+            this.visMesh.receiveShadow = true;
+            gThreeScene.add(this.visMesh);
         } else {
             // Standard geometry with materials
             if (boidProps.material === 'standard') {
@@ -2243,8 +2266,8 @@ class BOID {
                 this.pos.z + direction.z
             );
             
-            // Make mesh look at target (skip for helicopters which handle their own rotation)
-            if (gBoidGeometryType !== 15) {
+            // Make mesh look at target (skip for helicopters and paper planes which handle their own rotation)
+            if (gBoidGeometryType !== 15 && gBoidGeometryType !== 16) {
                 this.visMesh.lookAt(target);
             }
             // Adjust for default orientation based on geometry type
@@ -2285,6 +2308,25 @@ class BOID {
                 } else {
                     this.visMesh.rotation.y = this.spinAngle || 0;
                     this.visMesh.rotation.x = 0;
+                    this.visMesh.rotation.z = 0;
+                }
+            } else if (gBoidGeometryType === 16) {
+                // Paper plane - calculate direction and orient
+                const speed = direction.length();
+                
+                if (speed > 0.01) {
+                    // Calculate yaw (horizontal rotation)
+                    const yaw = Math.atan2(direction.x, direction.z);
+                    // Calculate pitch (vertical angle)
+                    const pitch = Math.asin(direction.y / speed);
+                    
+                    // Apply rotations: model points along +Z by default
+                    this.visMesh.rotation.y = yaw;
+                    this.visMesh.rotation.x = -pitch;
+                    this.visMesh.rotation.z = 0;
+                } else {
+                    this.visMesh.rotation.x = 0;
+                    this.visMesh.rotation.y = 0;
                     this.visMesh.rotation.z = 0;
                 }
             }
@@ -2522,9 +2564,9 @@ function makeBoids() {
         const speed = 1 + Math.random() * 4; // Random speed between 1 and 5
         vel.multiplyScalar(speed);
         if (i == 0) {
-            hue = 0;
-            sat = 0;
-            light = 100;
+            hue = Math.round(180 + (2 * (-0.5 + Math.random())) * 20);
+            sat = Math.round(40 + Math.random() * 60); 
+            light = Math.round(30 + Math.random() * 40); 
         } else if (i < 101) {
             hue = Math.round(180 + (2 * (-0.5 + Math.random())) * 20);
             sat = Math.round(40 + Math.random() * 60); 
@@ -2968,7 +3010,18 @@ function recreateBoidGeometries() {
             boid.spinAngle = Math.random() * Math.PI * 2;
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
-        } else if (gBoidGeometryType != 11 && gBoidGeometryType != 12 && gBoidGeometryType != 13 && gBoidGeometryType != 14 && gBoidGeometryType != 15) {
+        } else if (gBoidGeometryType === 16 && gPaperPlaneTemplate) {
+            // For paper plane geometry, clone the paper plane template
+            boid.visMesh = gPaperPlaneTemplate.clone();
+            boid.visMesh.scale.set(0.2, 0.2, 0.2); // Scale for boid size
+            
+            // Set position and add to scene
+            boid.visMesh.position.copy(boid.pos);
+            boid.visMesh.castShadow = true;
+            boid.visMesh.receiveShadow = true;
+            gThreeScene.add(boid.visMesh);
+            continue; // Skip standard material creation
+        } else if (gBoidGeometryType != 11 && gBoidGeometryType != 12 && gBoidGeometryType != 13 && gBoidGeometryType != 14 && gBoidGeometryType != 15 && gBoidGeometryType != 16) {
             if (boidProps.material === 'standard') {
                 material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
@@ -3038,6 +3091,325 @@ function recreateBoidGeometries() {
         boid.visMesh.receiveShadow = true;
         gThreeScene.add(boid.visMesh);
     }
+}
+
+function recreateBoschTriptych(newScale) {
+    if (!gBoschPaintingGroup) return;
+    
+    // Store current position and state
+    var currentY = gBoschPaintingGroup.position.y;
+    var currentX = gBoschPaintingGroup.position.x;
+    var currentZ = gBoschPaintingGroup.position.z;
+    var currentRotation = gBoschPaintingGroup.rotation.y;
+    
+    // Remove old triptych
+    while(gBoschPaintingGroup.children.length > 0) {
+        var child = gBoschPaintingGroup.children[0];
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+            if (child.material.map) child.material.map.dispose();
+            if (child.material.emissiveMap) child.material.emissiveMap.dispose();
+            child.material.dispose();
+        }
+        gBoschPaintingGroup.remove(child);
+    }
+    
+    // Update scale
+    gBoschTriptychScale = newScale;
+    var boschPanelHeight = gBoschPanelHeight * gBoschTriptychScale;
+    var boschLeftWidth = 5.3 * gBoschTriptychScale;
+    var boschCenterWidth = 10.6 * gBoschTriptychScale;
+    var boschRightWidth = 5.3 * gBoschTriptychScale;
+    
+    // Recreate frame material
+    var frameMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x5a3a1a,
+        metalness: 0.1,
+        roughness: 0.7
+    });
+    var frameThickness = 0.3;
+    var frameDepth = 0.15;
+    
+    // Left Panel
+    var boschLeftPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    var boschLeftPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(boschLeftWidth, boschPanelHeight),
+        boschLeftPaintingMaterial
+    );
+    boschLeftPainting.position.set(0, 0, -frameDepth / 2);
+    boschLeftPainting.receiveShadow = true;
+    boschLeftPainting.castShadow = true;
+    gBoschPaintingGroup.add(boschLeftPainting);
+    
+    var boschLeftFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(boschLeftWidth + frameThickness * 1.5, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschLeftFrameTop.position.set(0, boschPanelHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    boschLeftFrameTop.castShadow = true;
+    boschLeftFrameTop.receiveShadow = true;
+    gBoschPaintingGroup.add(boschLeftFrameTop);
+    
+    var boschLeftFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(boschLeftWidth + frameThickness * 1.5, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschLeftFrameBottom.position.set(0, -boschPanelHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    boschLeftFrameBottom.castShadow = true;
+    boschLeftFrameBottom.receiveShadow = true;
+    gBoschPaintingGroup.add(boschLeftFrameBottom);
+    
+    var boschLeftFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschLeftFrameLeft.position.set(-boschLeftWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+    boschLeftFrameLeft.castShadow = true;
+    boschLeftFrameLeft.receiveShadow = true;
+    gBoschPaintingGroup.add(boschLeftFrameLeft);
+    
+    var boschLeftFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness / 2, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschLeftFrameRight.position.set(boschLeftWidth / 2 + frameThickness / 4, 0, -frameDepth / 2);
+    boschLeftFrameRight.castShadow = true;
+    boschLeftFrameRight.receiveShadow = true;
+    gBoschPaintingGroup.add(boschLeftFrameRight);
+    
+    // Center Panel
+    var boschCenterPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    var boschCenterPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(boschCenterWidth, boschPanelHeight),
+        boschCenterPaintingMaterial
+    );
+    boschCenterPainting.position.set(0, 0, -frameDepth / 2);
+    boschCenterPainting.receiveShadow = true;
+    boschCenterPainting.castShadow = true;
+    gBoschPaintingGroup.add(boschCenterPainting);
+    
+    var boschCenterFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(boschCenterWidth + frameThickness, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschCenterFrameTop.position.set(0, boschPanelHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    boschCenterFrameTop.castShadow = true;
+    boschCenterFrameTop.receiveShadow = true;
+    gBoschPaintingGroup.add(boschCenterFrameTop);
+    
+    var boschCenterFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(boschCenterWidth + frameThickness, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschCenterFrameBottom.position.set(0, -boschPanelHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    boschCenterFrameBottom.castShadow = true;
+    boschCenterFrameBottom.receiveShadow = true;
+    gBoschPaintingGroup.add(boschCenterFrameBottom);
+    
+    var boschCenterFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness / 2, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschCenterFrameLeft.position.set(-boschCenterWidth / 2 - frameThickness / 4, 0, -frameDepth / 2);
+    boschCenterFrameLeft.castShadow = true;
+    boschCenterFrameLeft.receiveShadow = true;
+    gBoschPaintingGroup.add(boschCenterFrameLeft);
+    
+    var boschCenterFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness / 2, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschCenterFrameRight.position.set(boschCenterWidth / 2 + frameThickness / 4, 0, -frameDepth / 2);
+    boschCenterFrameRight.castShadow = true;
+    boschCenterFrameRight.receiveShadow = true;
+    gBoschPaintingGroup.add(boschCenterFrameRight);
+    
+    // Right Panel
+    var boschRightPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    var boschRightPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(boschRightWidth, boschPanelHeight),
+        boschRightPaintingMaterial
+    );
+    boschRightPainting.position.set(0, 0, -frameDepth / 2);
+    boschRightPainting.receiveShadow = true;
+    boschRightPainting.castShadow = true;
+    gBoschPaintingGroup.add(boschRightPainting);
+    
+    var boschRightFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(boschRightWidth + frameThickness * 1.5, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschRightFrameTop.position.set(0, boschPanelHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    boschRightFrameTop.castShadow = true;
+    boschRightFrameTop.receiveShadow = true;
+    gBoschPaintingGroup.add(boschRightFrameTop);
+    
+    var boschRightFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(boschRightWidth + frameThickness * 1.5, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschRightFrameBottom.position.set(0, -boschPanelHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    boschRightFrameBottom.castShadow = true;
+    boschRightFrameBottom.receiveShadow = true;
+    gBoschPaintingGroup.add(boschRightFrameBottom);
+    
+    var boschRightFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness / 2, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschRightFrameLeft.position.set(-boschRightWidth / 2 - frameThickness / 4, 0, -frameDepth / 2);
+    boschRightFrameLeft.castShadow = true;
+    boschRightFrameLeft.receiveShadow = true;
+    gBoschPaintingGroup.add(boschRightFrameLeft);
+    
+    var boschRightFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschRightFrameRight.position.set(boschRightWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+    boschRightFrameRight.castShadow = true;
+    boschRightFrameRight.receiveShadow = true;
+    gBoschPaintingGroup.add(boschRightFrameRight);
+    
+    // Update positions function
+    function updateBoschPanelPositionsLocal() {
+        var gapSize = 0.12;
+        var leftX = -(boschCenterWidth / 2 + frameThickness / 2 + boschLeftWidth / 2 + gapSize);
+        var centerX = 0;
+        var rightX = boschCenterWidth / 2 + frameThickness / 2 + boschRightWidth / 2 + gapSize;
+        
+        boschLeftPainting.position.x = leftX;
+        boschLeftFrameTop.position.x = leftX - frameThickness / 4;
+        boschLeftFrameBottom.position.x = leftX - frameThickness / 4;
+        boschLeftFrameLeft.position.x = leftX - boschLeftWidth / 2 - frameThickness / 2;
+        boschLeftFrameRight.position.x = leftX + boschLeftWidth / 2 + frameThickness / 4;
+        
+        boschCenterPainting.position.x = centerX;
+        boschCenterFrameTop.position.x = centerX;
+        boschCenterFrameBottom.position.x = centerX;
+        boschCenterFrameLeft.position.x = centerX - boschCenterWidth / 2 - frameThickness / 4;
+        boschCenterFrameRight.position.x = centerX + boschCenterWidth / 2 + frameThickness / 4;
+        
+        boschRightPainting.position.x = rightX;
+        boschRightFrameTop.position.x = rightX + frameThickness / 4;
+        boschRightFrameBottom.position.x = rightX + frameThickness / 4;
+        boschRightFrameLeft.position.x = rightX - boschRightWidth / 2 - frameThickness / 4;
+        boschRightFrameRight.position.x = rightX + boschRightWidth / 2 + frameThickness / 2;
+    }
+    
+    // Load textures
+    new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Bosch_GED_leftPanel_small.jpg',
+        function(texture) {
+            var aspectRatio = texture.image.width / texture.image.height;
+            boschLeftWidth = boschPanelHeight * aspectRatio;
+            
+            boschLeftPainting.geometry.dispose();
+            boschLeftPainting.geometry = new THREE.PlaneGeometry(boschLeftWidth, boschPanelHeight);
+            boschLeftFrameTop.geometry.dispose();
+            boschLeftFrameTop.geometry = new THREE.BoxGeometry(boschLeftWidth + frameThickness * 1.5, frameThickness, frameDepth);
+            boschLeftFrameBottom.geometry.dispose();
+            boschLeftFrameBottom.geometry = new THREE.BoxGeometry(boschLeftWidth + frameThickness * 1.5, frameThickness, frameDepth);
+            
+            boschLeftPaintingMaterial.map = texture;
+            boschLeftPaintingMaterial.emissiveMap = texture;
+            boschLeftPaintingMaterial.color.setHex(0xffffff);
+            boschLeftPaintingMaterial.emissive.setHex(0xffffff);
+            boschLeftPaintingMaterial.emissiveIntensity = 0.3;
+            boschLeftPaintingMaterial.needsUpdate = true;
+            
+            updateBoschPanelPositionsLocal();
+        }
+    );
+    
+    new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Bosch_GED_centerPanel_small.jpg',
+        function(texture) {
+            var aspectRatio = texture.image.width / texture.image.height;
+            boschCenterWidth = boschPanelHeight * aspectRatio;
+            
+            boschCenterPainting.geometry.dispose();
+            boschCenterPainting.geometry = new THREE.PlaneGeometry(boschCenterWidth, boschPanelHeight);
+            boschCenterFrameTop.geometry.dispose();
+            boschCenterFrameTop.geometry = new THREE.BoxGeometry(boschCenterWidth + frameThickness, frameThickness, frameDepth);
+            boschCenterFrameBottom.geometry.dispose();
+            boschCenterFrameBottom.geometry = new THREE.BoxGeometry(boschCenterWidth + frameThickness, frameThickness, frameDepth);
+            
+            boschCenterPaintingMaterial.map = texture;
+            boschCenterPaintingMaterial.emissiveMap = texture;
+            boschCenterPaintingMaterial.color.setHex(0xffffff);
+            boschCenterPaintingMaterial.emissive.setHex(0xffffff);
+            boschCenterPaintingMaterial.emissiveIntensity = 0.3;
+            boschCenterPaintingMaterial.needsUpdate = true;
+            
+            updateBoschPanelPositionsLocal();
+        }
+    );
+    
+    new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Bosch_GED_rightPanel_small.jpg',
+        function(texture) {
+            var aspectRatio = texture.image.width / texture.image.height;
+            boschRightWidth = boschPanelHeight * aspectRatio;
+            
+            boschRightPainting.geometry.dispose();
+            boschRightPainting.geometry = new THREE.PlaneGeometry(boschRightWidth, boschPanelHeight);
+            boschRightFrameTop.geometry.dispose();
+            boschRightFrameTop.geometry = new THREE.BoxGeometry(boschRightWidth + frameThickness * 1.5, frameThickness, frameDepth);
+            boschRightFrameBottom.geometry.dispose();
+            boschRightFrameBottom.geometry = new THREE.BoxGeometry(boschRightWidth + frameThickness * 1.5, frameThickness, frameDepth);
+            
+            boschRightPaintingMaterial.map = texture;
+            boschRightPaintingMaterial.emissiveMap = texture;
+            boschRightPaintingMaterial.color.setHex(0xffffff);
+            boschRightPaintingMaterial.emissive.setHex(0xffffff);
+            boschRightPaintingMaterial.emissiveIntensity = 0.3;
+            boschRightPaintingMaterial.needsUpdate = true;
+            
+            updateBoschPanelPositionsLocal();
+        }
+    );
+    
+    updateBoschPanelPositionsLocal();
+    
+    // Restore position with adjusted Y to keep bottom at constant height
+    // Use the stored bottom height reference
+    var newY = gBoschBottomHeight + (gBoschPanelHeight * gBoschTriptychScale / 2);
+    gBoschPaintingGroup.position.set(currentX, newY, currentZ);
+    gBoschPaintingGroup.rotation.y = currentRotation;
 }
 
 // MENU DRAWING FUNCTIONS -------------------------------------------------------
@@ -3139,7 +3511,8 @@ function drawMainMenu() {
         'hsla(150, 40%, 30%, 0.80)',   // Mode 1: Rotate CCW - dark blue
         'hsla(0, 80%, 30%, 0.3)',   // Mode 2: Static - dark red
         'hsla(270, 20%, 30%, 0.80)',   // Mode 3: Behind boid - dark purple
-        'hsla(300, 30%, 30%, 0.80)'    // Mode 4: In front of boid - dark gold
+        'hsla(300, 30%, 30%, 0.80)',   // Mode 4: In front of boid - dark gold
+        'hsla(40, 50%, 30%, 0.80)'     // Mode 5: Walking - dark orange
     ];
     ctx.fillStyle = cameraBackgroundColors[gCameraMode];
     ctx.fill();
@@ -3151,7 +3524,48 @@ function drawMainMenu() {
     ctx.save();
     ctx.translate(icon2X, icon2Y);
     
-    if (gCameraMode == 0 || gCameraMode == 1 || gCameraMode == 2) {
+    if (gCameraMode === 5) {
+        // Draw stick figure for walking mode
+        const figureSize = iconSize * 1.5;
+        const yOffset = -0.10; // Move figure up
+        ctx.strokeStyle = 'rgba(120, 120, 120, 1.0)';
+        ctx.fillStyle = 'rgba(96, 96, 96, 1.0)';
+        ctx.lineWidth = figureSize * 0.08;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        // Head
+        const headRadius = figureSize * 0.15;
+        ctx.beginPath();
+        ctx.arc(0, figureSize * (-0.35 + yOffset), headRadius, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Body (vertical line)
+        ctx.beginPath();
+        ctx.moveTo(0, figureSize * (-0.35 + yOffset) + headRadius);
+        ctx.lineTo(0, figureSize * (0.1 + yOffset));
+        ctx.stroke();
+        
+        // Arms (angled outward)
+        ctx.beginPath();
+        ctx.moveTo(-figureSize * 0.35, figureSize * (-0.05 + yOffset));
+        ctx.lineTo(0, figureSize * (-0.1 + yOffset));
+        ctx.lineTo(figureSize * 0.35, figureSize * (-0.05 + yOffset));
+        ctx.stroke();
+        
+        // Left leg
+        ctx.beginPath();
+        ctx.moveTo(0, figureSize * (0.1 + yOffset));
+        ctx.lineTo(-figureSize * 0.15, figureSize * (0.45 + yOffset));
+        ctx.stroke();
+        
+        // Right leg
+        ctx.beginPath();
+        ctx.moveTo(0, figureSize * (0.1 + yOffset));
+        ctx.lineTo(figureSize * 0.15, figureSize * (0.45 + yOffset));
+        ctx.stroke();
+    } else if (gCameraMode == 0 || gCameraMode == 1 || gCameraMode == 2) {
         // Draw movie camera icon
         const camSize = iconSize * 1.5;
         ctx.fillStyle = `rgba(76, 76, 76, 1.0)`;
@@ -3539,10 +3953,13 @@ function drawMainMenu() {
         const textX = itemX + itemWidth + padding * 2;
         const textY = itemY2 + itemHeight / 2;
         
-        ctx.font = `${14}px Arial`;
-        ctx.fillStyle = `rgba(230, 230, 230, ${textOpacity})`;
+        ctx.font = `${18}px Arial`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
+        
+        ctx.fillStyle = `rgba(0, 0, 0, ${textOpacity})`;
+        ctx.fillText(gCameraModeText, textX + 2, textY + 1);
+        ctx.fillStyle = `rgba(230, 230, 230, ${textOpacity})`;
         ctx.fillText(gCameraModeText, textX, textY);
     }
 
@@ -3557,12 +3974,12 @@ function drawSimMenu() {
         gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
         boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
         boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin,
-        gWorldSizeX, gWorldSizeY, gWorldSizeZ
+        gWorldSizeX, gWorldSizeY, gWorldSizeZ, gCameraFOV
     ];
-    
+    // Simulation menu knobs
     const ranges = [
         {min: 100, max: 5000},      // numBoids
-        {min: 0.05, max: 0.5},      // boidRadius
+        {min: 0.1, max: 1.0},      // boidRadius
         {min: 0.5, max: 10},        // visualRange
         {min: 0, max: 0.2},         // avoidFactor
         {min: 0, max: 0.2},         // matchingFactor
@@ -3573,7 +3990,8 @@ function drawSimMenu() {
         {min: 0.5, max: 5.0},       // margin
         {min: 10, max: 60},         // worldSizeX
         {min: 10, max: 60},         // worldSizeY
-        {min: 10, max: 60}          // worldSizeZ
+        {min: 10, max: 60},         // worldSizeZ
+        {min: 1, max: 160}         // cameraFOV
     ];
     
     const knobRadius = 0.1 * menuScale;
@@ -3683,7 +4101,7 @@ function drawSimMenu() {
             'Quantity', 'Size', 'Visual Range',
             'Separation', 'Alignment', 'Cohesion',
             'Minimum Speed', 'Speed Limit', 'Corralling Force', 'Corral Margin',
-            'World Size X', 'World Size Y', 'World Size Z'
+            'World Size X', 'World Size Y', 'World Size Z', 'Camera FOV'
         ];
         ctx.font = `${0.35 * knobRadius}px verdana`;
         ctx.textAlign = 'center';
@@ -3707,6 +4125,7 @@ function drawSimMenu() {
             case 10: valueText = gWorldSizeX.toFixed(0); break;
             case 11: valueText = gWorldSizeY.toFixed(0); break;
             case 12: valueText = gWorldSizeZ.toFixed(0); break;
+            case 13: valueText = gCameraFOV.toFixed(0); break;
         }
         ctx.font = `${0.3 * knobRadius}px verdana`;
         ctx.fillStyle = `rgba(128, 230, 200, ${menuOpacity})`;
@@ -3840,7 +4259,7 @@ function drawStylingMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = 17.5 * knobRadius;
+    const menuHeight = 16.5 * knobRadius;
     const padding = 1.7 * knobRadius;
     
     // Position menu slightly below simulation menu
@@ -3900,10 +4319,11 @@ function drawStylingMenu() {
         'Spheres', 'Cones', 'Cylinders', 'Cubes',
         'Tetrahedrons', 'Octahedrons', 'Dodecahedrons', 'Icosahedrons',
         'Capsules', 'Tori', 'Knots', 'Planes',
-        'Rubber Ducks', 'Barramundi', 'Avocados', 'Helicopters'
+        'Rubber Ducks', 'Barramundi', 'Avocados', 'Helicopters',
+        'Paper Planes'
     ];
     
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 17; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
@@ -3936,7 +4356,7 @@ function drawStylingMenu() {
     
     // ====== SECTION 2: SURFACE MESH DETAIL ======
     // Draw Mesh Detail label and radio buttons
-    const meshDetailY = buttonY + 6 * (buttonHeight + buttonSpacing) + knobRadius * 0.6;
+    const meshDetailY = buttonY + 6 * (buttonHeight + buttonSpacing) + knobRadius * 0.4;
     ctx.font = `bold ${0.04 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -3985,7 +4405,7 @@ function drawStylingMenu() {
     
     // ====== SECTION 3: MATERIAL TYPE ======
     // Draw material type section
-    const materialY = meshRadioY + knobRadius * 1.4;
+    const materialY = meshRadioY + knobRadius * 1.2;
     ctx.font = `bold ${0.04 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -4035,7 +4455,7 @@ function drawStylingMenu() {
     
     // ====== SECTION 4: TRAIL CONTROLS (MOVED TO BOTTOM) ======
     // Draw trail control knobs at the bottom (keep original position)
-    const trailSectionY = materialRadioY + knobRadius * 3.5;
+    const trailSectionY = materialRadioY + knobRadius * 3.0;
     
     // Draw trail section heading above knobs
     const trailHeadingY = trailSectionY - knobRadius * 1.5;
@@ -4731,7 +5151,7 @@ function updateWorldGeometry(changedDimension) {
         canvas.height = tileRes;
         const ctx = canvas.getContext('2d');
         
-        ctx.fillStyle = 'hsl(0, 0%, 50%)';
+        ctx.fillStyle = 'hsl(0, 0%, 0%)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         // Draw checkerboard with circles
@@ -4743,12 +5163,12 @@ function updateWorldGeometry(changedDimension) {
                     ctx.arc(
                         i * tileSize + tileSize / 2, 
                         j * tileSize + tileSize / 2, 
-                        0.3 * tileSize, 
+                        0.2 * tileSize, 
                         0, 
                         2 * Math.PI);
                     ctx.fillStyle = 'hsl(296, 65%, 65%)';
                     ctx.fill();
-                    ctx.strokeStyle = 'hsl(0, 0%, 15%)';
+                    ctx.strokeStyle = 'hsl(0, 0%, 50%)';
                     ctx.lineWidth = 0.05 * tileSize;
                     ctx.stroke();
                 } else {
@@ -4759,7 +5179,7 @@ function updateWorldGeometry(changedDimension) {
                         0.45 * tileSize, 
                         0, 
                         2 * Math.PI);
-                    ctx.fillStyle = 'hsl(0, 0%, 15%)';
+                    ctx.fillStyle = 'hsl(0, 0%, 50%)';
                     ctx.fill();
                     ctx.strokeStyle = 'hsl(0, 0%, 90%)';
                     ctx.lineWidth = 0.05 * tileSize;
@@ -4779,14 +5199,14 @@ function updateWorldGeometry(changedDimension) {
             new THREE.PlaneGeometry(boxSize.x * 2, boxSize.z * 2, 1, 1),
             new THREE.MeshPhongMaterial({ 
                 map: checkerTexture,
-                shininess: 1.0,
+                shininess: 1.3,
                 roughness: 0.0,
             })
         );
         
         gFloor.rotation.x = -Math.PI / 2;
         gFloor.receiveShadow = true;
-        gFloor.position.set(0, 0, 0);
+        gFloor.position.set(0, -0.05, 0);
         gThreeScene.add(gFloor);
     }
     
@@ -4864,7 +5284,7 @@ function updateWorldGeometry(changedDimension) {
     const leftWallX = -boxSize.x + 0.3; // X position on left wall
     const backWallZ = -boxSize.z + 0.1; // Z position on back wall
     
-    // Right wall paintings (Miro, Dali, Duchamp main, Duchamp Bride Top)
+    // Right wall paintings (Miro, Dali, Duchamp main, Duchamp Bride Top, Bosch)
     if (gMiroPaintingGroup) {
         gMiroPaintingGroup.position.x = paintingWallX;
     }
@@ -4873,6 +5293,9 @@ function updateWorldGeometry(changedDimension) {
     }
     if (gDuchampPaintingGroup) {
         gDuchampPaintingGroup.position.x = paintingWallX;
+    }
+    if (gBoschPaintingGroup) {
+        gBoschPaintingGroup.position.x = paintingWallX;
     }
     if (gDuchampBrideTopPaintingGroup) {
         gDuchampBrideTopPaintingGroup.position.x = paintingWallX;
@@ -4902,6 +5325,25 @@ function updateWorldGeometry(changedDimension) {
     }
     if (gOvalFrame) {
         gOvalFrame.position.z = backWallZ + frameDepth / 2;
+    }
+    
+    // Update painting base Y values when Y dimension changes
+    if (changedDimension === 'y') {
+        var newPaintingY = boxSize.y / 2 + 1;
+        var newDuchampPaintingY = boxSize.y / 2;
+        
+        // Update base Y values
+        gPaintingBaseY = newPaintingY;
+        gDuchampPaintingBaseY = newDuchampPaintingY;
+        
+        // Don't update gBoschBottomHeight - it should remain constant to keep
+        // the triptych bottom at the same absolute height above the floor
+        
+        // Update Bosch painting position to maintain bottom height
+        if (gBoschPaintingGroup) {
+            var newY = gBoschBottomHeight + (gBoschPanelHeight * gBoschTriptychScale / 2);
+            gBoschPaintingGroup.position.y = newY;
+        }
     }
     
     // Update hanging star ornaments positions based on world size changes
@@ -5168,6 +5610,11 @@ function initThreeScene() {
     dirLight.shadow.mapSize.height = res;
     gThreeScene.add( dirLight );
     
+    /*// Spawn Point Light
+    gSpawnPointLight = new THREE.PointLight( 0xffffff, 1.0, 30 ); // white light, intensity 1.0, distance 30
+    gSpawnPointLight.position.set( 0, 16, 0 ); // At boid spawn center
+    gThreeScene.add( gSpawnPointLight );*/
+    
     // Floor ground with checkerboard pattern -----------------------------
     var canvas = document.createElement('canvas');
     const tileRes = 1024; // Size of each tile in pixels
@@ -5175,51 +5622,39 @@ function initThreeScene() {
     canvas.height = tileRes;
     var ctx = canvas.getContext('2d');
 
-    ctx.fillStyle = 'hsl(0, 0%, 50%)';
+    ctx.fillStyle = 'hsl(0, 0%, 12%)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw checkerboard
-    var tileSize = 512;
-    for (var i = 0; i < tileRes; i++) {
-        for (var j = 0; j < tileRes; j++) {
-            //ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#3d3d3d';
-            //ctx.fillStyle = (i + j) % 2 === 0 ? '#cccccc' : '#0e0f26';
-            //ctx.fillStyle = (i + j) % 2 === 0 ? '#0e0f26' : '#cccccc';
-            //ctx.fillRect(i * tileSize, j * tileSize, tileSize, tileSize);
+    const tileSize = 256;
+    for (let i = 0; i < tileRes; i++) {
+        for (let j = 0; j < tileRes; j++) {
             if ((i + j) % 2 === 0) {
                 ctx.beginPath();
                 ctx.arc(
-                i * tileSize + tileSize / 2, 
-                j * tileSize + tileSize / 2, 
-                0.3 * tileSize, 
-                0, 
-                2 * Math.PI);
-                ctx.fillStyle = 'hsl(296, 65%, 65%)';
-                ctx.fill();
-                ctx.strokeStyle = 'hsl(0, 0%, 15%)';
-                ctx.lineWidth = 0.05 * tileSize;
-                ctx.stroke();
+                    i * tileSize + tileSize / 2, 
+                    j * tileSize + tileSize / 2, 
+                    0.2 * tileSize, 
+                    0, 
+                    2 * Math.PI);
                 //ctx.fillStyle = 'hsl(296, 65%, 65%)';
-                //ctx.fillRect(-tileSize / 2, -tileSize / 2, 1.5 * tileSize, 1.5 * tileSize);
+                ctx.fillStyle = 'hsl(180, 30%, 15%)';
+                ctx.fill();
+                ctx.strokeStyle = 'hsl(0, 0%, 70%)';
+                ctx.lineWidth = 0.03 * tileSize;
+                ctx.stroke();
             } else {
-                /*ctx.fillStyle = 'rgb(105, 107, 136)';
-                ctx.save();
-                ctx.translate(i * tileSize + tileSize / 2, j * tileSize + tileSize / 2);
-                ctx.rotate(Math.PI / 4);
-                ctx.fillRect(-tileSize / 2, -tileSize / 2, tileSize, tileSize);
-                ctx.restore();*/
                 ctx.beginPath();
                 ctx.arc(
-                i * tileSize + tileSize / 2, 
-                j * tileSize + tileSize / 2, 
-                0.45 * tileSize, 
-                0, 
-                2 * Math.PI);
-                ctx.fillStyle = 'hsl(0, 0%, 15%)';
+                    i * tileSize + tileSize / 2, 
+                    j * tileSize + tileSize / 2, 
+                    0.45 * tileSize, 
+                    0, 
+                    2 * Math.PI);
+                ctx.fillStyle = 'hsl(0, 0%, 0%)';
                 ctx.fill();
-                ctx.strokeStyle = 'hsl(0, 0%, 90%)';
-                ctx.lineWidth = 0.05 * tileSize;
+                ctx.strokeStyle = 'hsl(0, 0%, 80%)';
+                ctx.lineWidth = 0.04 * tileSize;
                 ctx.stroke();
+                
             }
         }
     }
@@ -5237,15 +5672,52 @@ function initThreeScene() {
         new THREE.MeshPhongMaterial({ 
             map: checkerTexture,
             //color: new THREE.Color(`hsl(0, 0%, 30%)`),
-            shininess: 1.0,
+            shininess: 100,
             roughness: 0.0,
         })
     );				
 
     gFloor.rotation.x = -Math.PI / 2; // rotates X/Y to X/Z
     gFloor.receiveShadow = true;
-    gFloor.position.set(0, 0, 0);
+    gFloor.position.set(0, -0.05, 0);
     gThreeScene.add( gFloor );
+    
+    // Create Afghan rug
+    var rugTextureLoader = new THREE.TextureLoader();
+    rugTextureLoader.load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/afghan_kazak.jpg',
+        function(texture) {
+            // Use actual texture dimensions to maintain proper aspect ratio
+            var actualWidth = texture.image.width;
+            var actualHeight = texture.image.height;
+            var aspectRatio = actualWidth / actualHeight;
+            
+            var rugWidth = 24; // units (X direction)
+            var rugHeight = rugWidth / aspectRatio; // Z direction, calculated from actual image ratio
+            
+            gRug = new THREE.Mesh(
+                new THREE.PlaneGeometry(rugWidth, rugHeight),
+                new THREE.MeshPhongMaterial({
+                    map: texture,
+                    shininess: 5,
+                    roughness: 0.8
+                })
+            );
+            
+            gRug.rotation.x = -Math.PI / 2; // Lie flat on floor
+            gRug.position.set(-6, 0, 0); // Position between teapot and chair, at floor level
+            gRug.receiveShadow = true;
+            gThreeScene.add(gRug);
+            
+            console.log('Afghan rug loaded successfully with aspect ratio: ' + aspectRatio.toFixed(3));
+        },
+        function(xhr) {
+            console.log('Afghan rug: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+        },
+        function(error) {
+            console.error('Error loading Afghan rug:', error);
+        }
+    );
     
     /*var gridHelper = new THREE.GridHelper( 75, 50, 0xcca000, 0xcca000 );
     gridHelper.material.opacity = 1.0;
@@ -5265,7 +5737,7 @@ function initThreeScene() {
                 // Position on floor in center of room - start high for animation
                 
                 stool.position.set(gStoolInitialX, 30, gStoolInitialZ);
-                stool.rotation.y = -Math.PI / 8; // Rotate 45 degrees
+                stool.rotation.y = -Math.PI / 12; // Rotate 45 degrees
                 
                 // Scale if needed (adjust this value to make it bigger/smaller)
                 stool.scale.set(1.5, 1.5, 1.5);
@@ -5741,6 +6213,52 @@ function initThreeScene() {
         );
     }
     
+    // Load Paper Plane model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var paperPlaneLoader = new THREE.GLTFLoader();
+        paperPlaneLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/paperPlane.gltf',
+            function(gltf) {
+                var paperPlane = gltf.scene;
+                
+                // Scale appropriately
+                paperPlane.scale.set(0.5, 0.5, 0.5);
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                paperPlane.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows for all meshes
+                paperPlane.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                // Store a clone as template for boid geometry
+                gPaperPlaneTemplate = paperPlane.clone();
+                
+                console.log('Paper Plane model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Paper Plane model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Paper Plane model:', error);
+            }
+        );
+    }
+    
     // Load Teapot model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
         var teapotLoader = new THREE.GLTFLoader();
@@ -5968,6 +6486,9 @@ function initThreeScene() {
                 
                 // Scale appropriately
                 bird.scale.set(1, 1, 1);
+
+                // rotate to face forward
+                bird.rotation.y = -0.5 * Math.PI; 
                 
                 // Remove any imported lights
                 var lightsToRemove = [];
@@ -6814,7 +7335,7 @@ function initThreeScene() {
     gThreeScene.add(gWalls.right);
     
     // Add framed paintings on right wall (Miro and Dali with different aspect ratios)
-    var paintingY = boxSize.y / 2 + 2; // Vertical position
+    var paintingY = boxSize.y / 2 + 1; // Vertical position
     var duchampPaintingY = boxSize.y / 2; // Lower position for Duchamp paintings
     var frameThickness = 0.3;
     var frameDepth = 0.15;
@@ -6915,6 +7436,7 @@ function initThreeScene() {
     // Position and orient group on wall (start high for drop animation)
     gMiroPaintingGroup.position.set(paintingWallX, paintingY + gPaintingDropStartY, 0);
     gMiroPaintingGroup.rotation.y = -Math.PI / 2;
+    gMiroPaintingGroup.visible = true; // Miro is the initial painting
     gThreeScene.add(gMiroPaintingGroup);
     
     // ===== DALI PAINTING GROUP (Portrait 9x12) =====
@@ -7002,6 +7524,7 @@ function initThreeScene() {
     // Position and orient group on wall (start high above frame)
     gDaliPaintingGroup.position.set(paintingWallX, paintingY + 50, 0);
     gDaliPaintingGroup.rotation.y = -Math.PI / 2;
+    gDaliPaintingGroup.visible = false; // Hidden until swapped in
     gThreeScene.add(gDaliPaintingGroup);
     
     // ===== DUCHAMP PAINTING GROUP (Landscape 16x12) =====
@@ -7089,6 +7612,7 @@ function initThreeScene() {
     // Position and orient group on wall (start high above frame)
     gDuchampPaintingGroup.position.set(paintingWallX, duchampPaintingY + 50, 0);
     gDuchampPaintingGroup.rotation.y = -Math.PI / 2;
+    gDuchampPaintingGroup.visible = false; // Hidden until swapped in
     gThreeScene.add(gDuchampPaintingGroup);
     
     // ===== DUCHAMP BRIDE PAINTING GROUP (Portrait 10x14) - Left Position =====
@@ -7355,6 +7879,345 @@ function initThreeScene() {
     gDuchampBrideTopPaintingGroup.rotation.y = -Math.PI / 2;
     gDuchampBrideTopPaintingGroup.visible = false; // Initially hidden
     gThreeScene.add(gDuchampBrideTopPaintingGroup);
+    
+    // ===== BOSCH TRIPTYCH GROUP (Three panels: left, center, right) =====
+    gBoschPaintingGroup = new THREE.Group();
+    
+    // Standard height for all panels - width will be calculated from image aspect ratio
+    var boschPanelHeight = gBoschPanelHeight * gBoschTriptychScale;
+    // Initial placeholder widths (will be updated when textures load)
+    var boschLeftWidth = 5.3;
+    var boschCenterWidth = 10.6;
+    var boschRightWidth = 5.3;
+    
+    // Left Panel
+    var boschLeftPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    var boschLeftPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(boschLeftWidth, boschPanelHeight),
+        boschLeftPaintingMaterial
+    );
+    boschLeftPainting.position.set(0, 0, -frameDepth / 2);
+    boschLeftPainting.receiveShadow = true;
+    boschLeftPainting.castShadow = true;
+    gBoschPaintingGroup.add(boschLeftPainting);
+    
+    // Left panel frame pieces (will be updated when texture loads)
+    var boschLeftFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(boschLeftWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschLeftFrameTop.position.set(0, boschPanelHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    boschLeftFrameTop.castShadow = true;
+    boschLeftFrameTop.receiveShadow = true;
+    gBoschPaintingGroup.add(boschLeftFrameTop);
+    
+    var boschLeftFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(boschLeftWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschLeftFrameBottom.position.set(0, -boschPanelHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    boschLeftFrameBottom.castShadow = true;
+    boschLeftFrameBottom.receiveShadow = true;
+    gBoschPaintingGroup.add(boschLeftFrameBottom);
+    
+    var boschLeftFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschLeftFrameLeft.position.set(-boschLeftWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+    boschLeftFrameLeft.castShadow = true;
+    boschLeftFrameLeft.receiveShadow = true;
+    gBoschPaintingGroup.add(boschLeftFrameLeft);
+    
+    var boschLeftFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness / 2, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschLeftFrameRight.position.set(boschLeftWidth / 2 + frameThickness / 4, 0, -frameDepth / 2);
+    boschLeftFrameRight.castShadow = true;
+    boschLeftFrameRight.receiveShadow = true;
+    gBoschPaintingGroup.add(boschLeftFrameRight);
+    
+    // Center Panel
+    var boschCenterPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    var boschCenterPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(boschCenterWidth, boschPanelHeight),
+        boschCenterPaintingMaterial
+    );
+    boschCenterPainting.position.set(0, 0, -frameDepth / 2);
+    boschCenterPainting.receiveShadow = true;
+    boschCenterPainting.castShadow = true;
+    gBoschPaintingGroup.add(boschCenterPainting);
+    
+    // Center panel frame pieces (will be updated when texture loads)
+    var boschCenterFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(boschCenterWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschCenterFrameTop.position.set(0, boschPanelHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    boschCenterFrameTop.castShadow = true;
+    boschCenterFrameTop.receiveShadow = true;
+    gBoschPaintingGroup.add(boschCenterFrameTop);
+    
+    var boschCenterFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(boschCenterWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschCenterFrameBottom.position.set(0, -boschPanelHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    boschCenterFrameBottom.castShadow = true;
+    boschCenterFrameBottom.receiveShadow = true;
+    gBoschPaintingGroup.add(boschCenterFrameBottom);
+    
+    var boschCenterFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness / 2, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschCenterFrameLeft.position.set(-boschCenterWidth / 2 - frameThickness / 4, 0, -frameDepth / 2);
+    boschCenterFrameLeft.castShadow = true;
+    boschCenterFrameLeft.receiveShadow = true;
+    gBoschPaintingGroup.add(boschCenterFrameLeft);
+    
+    var boschCenterFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness / 2, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschCenterFrameRight.position.set(boschCenterWidth / 2 + frameThickness / 4, 0, -frameDepth / 2);
+    boschCenterFrameRight.castShadow = true;
+    boschCenterFrameRight.receiveShadow = true;
+    gBoschPaintingGroup.add(boschCenterFrameRight);
+    
+    // Right Panel
+    var boschRightPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    var boschRightPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(boschRightWidth, boschPanelHeight),
+        boschRightPaintingMaterial
+    );
+    boschRightPainting.position.set(0, 0, -frameDepth / 2);
+    boschRightPainting.receiveShadow = true;
+    boschRightPainting.castShadow = true;
+    gBoschPaintingGroup.add(boschRightPainting);
+    
+    // Right panel frame pieces (will be updated when texture loads)
+    var boschRightFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(boschRightWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschRightFrameTop.position.set(0, boschPanelHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    boschRightFrameTop.castShadow = true;
+    boschRightFrameTop.receiveShadow = true;
+    gBoschPaintingGroup.add(boschRightFrameTop);
+    
+    var boschRightFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(boschRightWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    boschRightFrameBottom.position.set(0, -boschPanelHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    boschRightFrameBottom.castShadow = true;
+    boschRightFrameBottom.receiveShadow = true;
+    gBoschPaintingGroup.add(boschRightFrameBottom);
+    
+    var boschRightFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness / 2, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschRightFrameLeft.position.set(-boschRightWidth / 2 - frameThickness / 4, 0, -frameDepth / 2);
+    boschRightFrameLeft.castShadow = true;
+    boschRightFrameLeft.receiveShadow = true;
+    gBoschPaintingGroup.add(boschRightFrameLeft);
+    
+    var boschRightFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, boschPanelHeight, frameDepth),
+        frameMaterial
+    );
+    boschRightFrameRight.position.set(boschRightWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+    boschRightFrameRight.castShadow = true;
+    boschRightFrameRight.receiveShadow = true;
+    gBoschPaintingGroup.add(boschRightFrameRight);
+    
+    // Function to update panel positions after dimensions are set
+    function updateBoschPanelPositions() {
+        // Position panels with a gap between them
+        var gapSize = 0.12; // Small gap between panels
+        var leftX = -(boschCenterWidth / 2 + frameThickness / 2 + boschLeftWidth / 2 + gapSize);
+        var centerX = 0;
+        var rightX = boschCenterWidth / 2 + frameThickness / 2 + boschRightWidth / 2 + gapSize;
+        
+        // Update left panel and frame positions
+        boschLeftPainting.position.x = leftX;
+        boschLeftFrameTop.position.x = leftX - frameThickness / 4; // Offset for asymmetric frame
+        boschLeftFrameBottom.position.x = leftX - frameThickness / 4; // Offset for asymmetric frame
+        boschLeftFrameLeft.position.x = leftX - boschLeftWidth / 2 - frameThickness / 2;
+        boschLeftFrameRight.position.x = leftX + boschLeftWidth / 2 + frameThickness / 4;
+        
+        // Center panel stays at x=0, just update frame positions
+        boschCenterPainting.position.x = centerX;
+        boschCenterFrameTop.position.x = centerX;
+        boschCenterFrameBottom.position.x = centerX;
+        boschCenterFrameLeft.position.x = centerX - boschCenterWidth / 2 - frameThickness / 4;
+        boschCenterFrameRight.position.x = centerX + boschCenterWidth / 2 + frameThickness / 4;
+        
+        // Update right panel and frame positions
+        boschRightPainting.position.x = rightX;
+        boschRightFrameTop.position.x = rightX + frameThickness / 4; // Offset for asymmetric frame
+        boschRightFrameBottom.position.x = rightX + frameThickness / 4; // Offset for asymmetric frame
+        boschRightFrameLeft.position.x = rightX - boschRightWidth / 2 - frameThickness / 4;
+        boschRightFrameRight.position.x = rightX + boschRightWidth / 2 + frameThickness / 2;
+    }
+    
+    // Load Bosch left panel texture and update dimensions based on aspect ratio
+    var boschLeftPaintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Bosch_GED_leftPanel_small.jpg',
+        function(texture) {
+            // Calculate width based on image aspect ratio
+            var aspectRatio = texture.image.width / texture.image.height;
+            boschLeftWidth = boschPanelHeight * aspectRatio;
+            
+            // Update painting geometry
+            boschLeftPainting.geometry.dispose();
+            boschLeftPainting.geometry = new THREE.PlaneGeometry(boschLeftWidth, boschPanelHeight);
+            
+            // Update frame geometries (full left frame + half right frame)
+            boschLeftFrameTop.geometry.dispose();
+            boschLeftFrameTop.geometry = new THREE.BoxGeometry(boschLeftWidth + frameThickness * 1.5, frameThickness, frameDepth);
+            boschLeftFrameBottom.geometry.dispose();
+            boschLeftFrameBottom.geometry = new THREE.BoxGeometry(boschLeftWidth + frameThickness * 1.5, frameThickness, frameDepth);
+            
+            // Update material
+            boschLeftPaintingMaterial.map = texture;
+            boschLeftPaintingMaterial.emissiveMap = texture;
+            boschLeftPaintingMaterial.color.setHex(0xffffff);
+            boschLeftPaintingMaterial.emissive.setHex(0xffffff);
+            boschLeftPaintingMaterial.emissiveIntensity = 0.3;
+            boschLeftPaintingMaterial.needsUpdate = true;
+            
+            // Update positions
+            updateBoschPanelPositions();
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading Bosch_GED_leftPanel_small.jpg:', err);
+            console.log('Using fallback color for Bosch left panel');
+        }
+    );
+    
+    // Load Bosch center panel texture and update dimensions based on aspect ratio
+    var boschCenterPaintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Bosch_GED_centerPanel_small.jpg',
+        function(texture) {
+            // Calculate width based on image aspect ratio
+            var aspectRatio = texture.image.width / texture.image.height;
+            boschCenterWidth = boschPanelHeight * aspectRatio;
+            
+            // Update painting geometry
+            boschCenterPainting.geometry.dispose();
+            boschCenterPainting.geometry = new THREE.PlaneGeometry(boschCenterWidth, boschPanelHeight);
+            
+            // Update frame geometries (half left frame + half right frame)
+            boschCenterFrameTop.geometry.dispose();
+            boschCenterFrameTop.geometry = new THREE.BoxGeometry(boschCenterWidth + frameThickness, frameThickness, frameDepth);
+            boschCenterFrameBottom.geometry.dispose();
+            boschCenterFrameBottom.geometry = new THREE.BoxGeometry(boschCenterWidth + frameThickness, frameThickness, frameDepth);
+            
+            // Update material
+            boschCenterPaintingMaterial.map = texture;
+            boschCenterPaintingMaterial.emissiveMap = texture;
+            boschCenterPaintingMaterial.color.setHex(0xffffff);
+            boschCenterPaintingMaterial.emissive.setHex(0xffffff);
+            boschCenterPaintingMaterial.emissiveIntensity = 0.3;
+            boschCenterPaintingMaterial.needsUpdate = true;
+            
+            // Update positions
+            updateBoschPanelPositions();
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading Bosch_GED_centerPanel_small.jpg:', err);
+            console.log('Using fallback color for Bosch center panel');
+        }
+    );
+    
+    // Load Bosch right panel texture and update dimensions based on aspect ratio
+    var boschRightPaintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Bosch_GED_rightPanel_small.jpg',
+        function(texture) {
+            // Calculate width based on image aspect ratio
+            var aspectRatio = texture.image.width / texture.image.height;
+            boschRightWidth = boschPanelHeight * aspectRatio;
+            
+            // Update painting geometry
+            boschRightPainting.geometry.dispose();
+            boschRightPainting.geometry = new THREE.PlaneGeometry(boschRightWidth, boschPanelHeight);
+            
+            // Update frame geometries (half left frame + full right frame)
+            boschRightFrameTop.geometry.dispose();
+            boschRightFrameTop.geometry = new THREE.BoxGeometry(boschRightWidth + frameThickness * 1.5, frameThickness, frameDepth);
+            boschRightFrameBottom.geometry.dispose();
+            boschRightFrameBottom.geometry = new THREE.BoxGeometry(boschRightWidth + frameThickness * 1.5, frameThickness, frameDepth);
+            
+            // Update material
+            boschRightPaintingMaterial.map = texture;
+            boschRightPaintingMaterial.emissiveMap = texture;
+            boschRightPaintingMaterial.color.setHex(0xffffff);
+            boschRightPaintingMaterial.emissive.setHex(0xffffff);
+            boschRightPaintingMaterial.emissiveIntensity = 0.3;
+            boschRightPaintingMaterial.needsUpdate = true;
+            
+            // Update positions
+            updateBoschPanelPositions();
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading Bosch_GED_rightPanel_small.jpg:', err);
+            console.log('Using fallback color for Bosch right panel');
+        }
+    );
+    
+    // Initial positioning (will be refined when textures load)
+    updateBoschPanelPositions();
+    
+    // Position and orient group on wall (start high above frame)
+    var initialY = paintingY + 50;
+    gBoschPaintingGroup.position.set(paintingWallX, initialY, 0);
+    gBoschPaintingGroup.rotation.y = -Math.PI / 2;
+    gBoschPaintingGroup.visible = false; // Hidden until swapped in
+    gThreeScene.add(gBoschPaintingGroup);
+    
+    // Store bottom height reference (will be set when painting descends to display position)
+    // For now, use the target display position
+    gBoschBottomHeight = paintingY - (gBoschPanelHeight / 2);
     
     // Add baseboard around perimeter walls
     var baseboardHeight = 0.3;
@@ -7663,7 +8526,7 @@ function initThreeScene() {
     // Create sphere obstacle
     var sphereObstacle = new SphereObstacle(
         3,  // radius
-        new THREE.Vector3(-24, 15, 14),  // position
+        new THREE.Vector3(-10, 15, 18),  // position
     );
     gObstacles.push(sphereObstacle);
 
@@ -7696,7 +8559,7 @@ function initThreeScene() {
     container.appendChild( gRenderer.domElement );
     
     // Camera	
-    gCamera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 1000);
+    gCamera = new THREE.PerspectiveCamera( gCameraFOV, window.innerWidth / window.innerHeight, 0.01, 1000);
     gCamera.position.set(-16.99, 21.37, 43.12);
     gCamera.updateMatrixWorld();	
 
@@ -7724,6 +8587,42 @@ function initThreeScene() {
     window.addEventListener('keydown', function(evt) {
         if (evt.key === 'm' || evt.key === 'M') {
             mainMenuVisible = !mainMenuVisible;
+        }
+        
+        // WASD and arrow key controls for walking camera mode
+        if (gCameraMode === 5) {
+            if (evt.key === 'w' || evt.key === 'W') {
+                gKeysPressed.w = true;
+                evt.preventDefault();
+            }
+            if (evt.key === 's' || evt.key === 'S') {
+                gKeysPressed.s = true;
+                evt.preventDefault();
+            }
+            if (evt.key === 'a' || evt.key === 'A') {
+                gKeysPressed.a = true;
+                evt.preventDefault();
+            }
+            if (evt.key === 'd' || evt.key === 'D') {
+                gKeysPressed.d = true;
+                evt.preventDefault();
+            }
+            if (evt.key === 'ArrowUp') {
+                gKeysPressed.up = true;
+                evt.preventDefault();
+            }
+            if (evt.key === 'ArrowDown') {
+                gKeysPressed.down = true;
+                evt.preventDefault();
+            }
+            if (evt.key === 'ArrowLeft') {
+                gKeysPressed.left = true;
+                evt.preventDefault();
+            }
+            if (evt.key === 'ArrowRight') {
+                gKeysPressed.right = true;
+                evt.preventDefault();
+            }
         }
         
         if (evt.key === 'c' || evt.key === 'C') {
@@ -7795,11 +8694,35 @@ function initThreeScene() {
         }
     });
     
+    window.addEventListener('keyup', function(evt) {
+        // WASD and arrow key release for walking camera mode
+        if (evt.key === 'w' || evt.key === 'W') gKeysPressed.w = false;
+        if (evt.key === 's' || evt.key === 'S') gKeysPressed.s = false;
+        if (evt.key === 'a' || evt.key === 'A') gKeysPressed.a = false;
+        if (evt.key === 'd' || evt.key === 'D') gKeysPressed.d = false;
+        if (evt.key === 'ArrowUp') gKeysPressed.up = false;
+        if (evt.key === 'ArrowDown') gKeysPressed.down = false;
+        if (evt.key === 'ArrowLeft') gKeysPressed.left = false;
+        if (evt.key === 'ArrowRight') gKeysPressed.right = false;
+    });
+    
     // grabber
     gGrabber = new Grabber();
     container.addEventListener( 'pointerdown', onPointer, false );
     container.addEventListener( 'pointermove', onPointer, false );
     container.addEventListener( 'pointerup', onPointer, false );
+    
+    // Wheel event for camera distance in follow/lead modes
+    container.addEventListener('wheel', function(evt) {
+        if (gCameraMode === 3 || gCameraMode === 4) {
+            evt.preventDefault();
+            // Adjust camera distance offset based on scroll direction
+            const zoomSpeed = 0.1;
+            gCameraDistanceOffset += evt.deltaY * zoomSpeed * 0.01;
+            // Clamp distance offset to reasonable range
+            gCameraDistanceOffset = Math.max(-5, Math.min(10, gCameraDistanceOffset));
+        }
+    }, { passive: false });
 }
 
 // ------ Button Functions -----------------------------------------------
@@ -8009,10 +8932,10 @@ function onPointer(evt) {
                 evt.clientY >= itemY2 && evt.clientY <= itemY2 + itemHeight) {
                 // Camera mode cycling
                 const previousMode = gCameraMode;
-                gCameraMode = (gCameraMode + 1) % 5;
+                gCameraMode = (gCameraMode + 1) % 6;
                 
                 // Set camera mode text notification
-                const cameraModeNames = ['Orbit Camera CW', 'Orbit Camera CCW', 'Static Camera', 'Follow', 'Lead'];
+                const cameraModeNames = ['Orbit Scene Clockwise', 'Orbit Scene Counterclockwise', 'Static Camera', 'Follow Boid, Look Ahead', 'Lead Boid, Look Behind', 'Free Roaming Camera'];
                 gCameraModeText = cameraModeNames[gCameraMode];
                 gCameraModeTextTimer = gCameraModeTextDuration;
                 
@@ -8029,9 +8952,25 @@ function onPointer(evt) {
                     gCameraControl.update();
                 }
                 
+                // Initialize walking camera position when entering mode 5
+                if (gCameraMode === 5) {
+                    gWalkingCameraPosition.set(0, 6.8, 0);
+                    gWalkingCameraYaw = -Math.PI / 2; // Point in -x direction
+                    gWalkingCameraPitch = 0;
+                }
+                
+                // Enable/disable OrbitControls based on camera mode
+                // Modes 0, 1, 2 use OrbitControls; modes 3, 4, 5 don't
+                if (gCameraMode >= 0 && gCameraMode <= 2) {
+                    gCameraControl.enabled = true;
+                } else {
+                    gCameraControl.enabled = false;
+                }
+                
                 // Reset manual control flags
                 gCameraManualControl = false;
                 gCameraRotationOffset = { theta: 0, phi: 0 };
+                gCameraDistanceOffset = 0;
                 return;
             }
             
@@ -8492,6 +9431,37 @@ function onPointer(evt) {
             gCamera.getWorldDirection(cameraDirection);
             gSphereDragPlaneDistance = cameraToSphere.dot(cameraDirection);
             
+            // Calculate the initial drag plane intersection to get proper offset
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Create the drag plane
+            var planePoint = new THREE.Vector3();
+            planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gSphereDragPlaneDistance));
+            var dragPlane = new THREE.Plane();
+            dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+            
+            // Find where ray intersects drag plane
+            var planeIntersection = new THREE.Vector3();
+            raycaster.ray.intersectPlane(dragPlane, planeIntersection);
+            
+            if (planeIntersection) {
+                // Store offset from plane intersection to sphere center
+                gSphereDragOffset = new THREE.Vector3(
+                    hitSphereObstacle.position.x - planeIntersection.x,
+                    hitSphereObstacle.position.y - planeIntersection.y,
+                    hitSphereObstacle.position.z - planeIntersection.z
+                );
+            } else {
+                // Fallback to zero offset if plane intersection fails
+                gSphereDragOffset = new THREE.Vector3(0, 0, 0);
+            }
+            
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             // Disable orbit controls while dragging sphere
@@ -8628,9 +9598,17 @@ function onPointer(evt) {
             return;
         }
         
-        // Handle camera control in follow modes
-        if (gCameraMode >= 3) {
+        // Handle camera control in follow modes and walking mode
+        if (gCameraMode === 3 || gCameraMode === 4) {
             gCameraManualControl = true;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            return;
+        }
+        
+        // Handle mouse look for walking mode
+        if (gCameraMode === 5) {
+            gMouseDown = true;
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             return;
@@ -8963,7 +9941,7 @@ function onPointer(evt) {
             // Simulation menu knobs
             const ranges = [
                 {min: 100, max: 5000},
-                {min: 0.05, max: 0.5},
+                {min: 0.1, max: 1.0},
                 {min: 0.5, max: 10},
                 {min: 0, max: 0.2},
                 {min: 0, max: 0.2},
@@ -8974,7 +9952,8 @@ function onPointer(evt) {
                 {min: 0.5, max: 5.0},
                 {min: 10, max: 60},
                 {min: 10, max: 60},
-                {min: 10, max: 60}
+                {min: 10, max: 60},
+                {min: 1, max: 160}
             ];
             
             const dragSensitivity = 0.2;
@@ -9152,6 +10131,13 @@ function onPointer(evt) {
                     if (gWorldSizeZ !== oldWorldSizeZ) {
                         gPhysicsScene.worldSize.z = gWorldSizeZ;
                         updateWorldGeometry('z');
+                    }
+                    break;
+                case 13: // Camera FOV
+                    gCameraFOV = Math.round(newValue);
+                    if (gCamera) {
+                        gCamera.fov = gCameraFOV;
+                        gCamera.updateProjectionMatrix();
                     }
                     break;
             }
@@ -9679,7 +10665,7 @@ function onPointer(evt) {
         }
         
         // Handle camera rotation in follow modes
-        if (gCameraMode >= 3 && gCameraManualControl) {
+        if ((gCameraMode === 3 || gCameraMode === 4) && gCameraManualControl) {
             const deltaX = evt.clientX - gPointerLastX;
             const deltaY = evt.clientY - gPointerLastY;
             
@@ -9687,6 +10673,25 @@ function onPointer(evt) {
             gCameraRotationOffset.phi -= deltaY * 0.005;
             
             gCameraRotationOffset.phi = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gCameraRotationOffset.phi));
+            
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            return;
+        }
+        
+        // Handle mouse look for walking mode (standard FPS controls)
+        if (gCameraMode === 5 && gMouseDown) {
+            const deltaX = evt.clientX - gPointerLastX;
+            const deltaY = evt.clientY - gPointerLastY;
+            
+            // Mouse sensitivity
+            const sensitivity = 0.002;
+            
+            gWalkingCameraYaw -= deltaX * sensitivity;
+            gWalkingCameraPitch -= deltaY * sensitivity;
+            
+            // Clamp pitch to prevent camera flipping
+            gWalkingCameraPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gWalkingCameraPitch));
             
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
@@ -9906,8 +10911,14 @@ function onPointer(evt) {
             return;
         }
         
-        if (gCameraMode >= 3 && gCameraManualControl) {
+        if ((gCameraMode === 3 || gCameraMode === 4) && gCameraManualControl) {
             gCameraManualControl = false;
+            return;
+        }
+        
+        // Release mouse for walking mode
+        if (gCameraMode === 5) {
+            gMouseDown = false;
             return;
         }
         
@@ -9946,8 +10957,8 @@ function checkSimMenuClick(clientX, clientY) {
         return true;
     }
     
-    // Check knobs (now 13 knobs instead of 10)
-    for (let knob = 0; knob < 13; knob++) {
+    // Check knobs (now 14 knobs instead of 10)
+    for (let knob = 0; knob < 14; knob++) {
         const row = Math.floor(knob / 3);
         const col = knob % 3;
         const knobX = menuOriginX + col * knobSpacing;
@@ -9964,7 +10975,7 @@ function checkSimMenuClick(clientX, clientY) {
                 gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
                 boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
                 boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin,
-                gWorldSizeX, gWorldSizeY, gWorldSizeZ
+                gWorldSizeX, gWorldSizeY, gWorldSizeZ, gCameraFOV
             ];
             dragStartValue = menuItems[knob];
             
@@ -10002,7 +11013,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = 17.5 * knobRadius;
+    const menuHeight = 16.5 * knobRadius;
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = stylingMenuX * window.innerWidth;
@@ -10028,7 +11039,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const buttonHeight = knobRadius * 1.3;
     const buttonSpacing = 4;
     
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 17; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
@@ -10047,6 +11058,8 @@ function checkStylingMenuClick(clientX, clientY) {
                 desiredPainting = 'dali'; // Sphere → Dali
             } else if (i === 1 || i === 2) {
                 desiredPainting = 'duchamp'; // Cone or Cylinder → Duchamp
+            } else if (i === 12 || i === 13 || i === 14) {
+                desiredPainting = 'bosch'; // Duck, Fish (Barramundi), or Avocado → Bosch
             }
             
             // Trigger painting swap animation if needed
@@ -10063,7 +11076,7 @@ function checkStylingMenuClick(clientX, clientY) {
     }
     
     // Check mesh detail radio buttons
-    const meshDetailY = buttonY + 6 * (buttonHeight + buttonSpacing) + knobRadius * 0.6;
+    const meshDetailY = buttonY + 6 * (buttonHeight + buttonSpacing) + knobRadius * 0.4;
     const segmentOptions = [8, 16, 24, 32, 64];
     const meshRadioY = meshDetailY + knobRadius * 0.8;
     const meshRadioRadius = knobRadius * 0.35;
@@ -10107,7 +11120,7 @@ function checkStylingMenuClick(clientX, clientY) {
     }
     
     // Check trail knobs (now at bottom)
-    const trailSectionY = materialRadioY + knobRadius * 3.5;
+    const trailSectionY = materialRadioY + knobRadius * 3.0;
     for (let knob = 0; knob < 2; knob++) {
         const row = Math.floor(knob / 3);
         const col = knob % 3;
@@ -10724,8 +11737,8 @@ function update() {
         }
     }
     
-    // Painting swap animation (Miro <-> Dali <-> Duchamp groups with frames)
-    if (gMiroPaintingGroup && gDaliPaintingGroup && gDuchampPaintingGroup && gPaintingAnimState !== 'idle') {
+    // Painting swap animation (Miro <-> Dali <-> Duchamp <-> Bosch groups with frames)
+    if (gMiroPaintingGroup && gDaliPaintingGroup && gDuchampPaintingGroup && gBoschPaintingGroup && gPaintingAnimState !== 'idle') {
         gPaintingAnimTimer += deltaT;
         
         if (gPaintingAnimState === 'exiting') {
@@ -10737,7 +11750,8 @@ function update() {
             
             // Move the current painting up
             var currentGroup = gCurrentPainting === 'miro' ? gMiroPaintingGroup : 
-                             (gCurrentPainting === 'dali' ? gDaliPaintingGroup : gDuchampPaintingGroup);
+                             (gCurrentPainting === 'dali' ? gDaliPaintingGroup : 
+                             (gCurrentPainting === 'bosch' ? gBoschPaintingGroup : gDuchampPaintingGroup));
             var currentBaseY = gCurrentPainting === 'duchamp' ? gDuchampPaintingBaseY : gPaintingBaseY;
             currentGroup.position.y = currentBaseY + eased * (gPaintingExitY - currentBaseY);
             
@@ -10745,6 +11759,8 @@ function update() {
                 gPaintingAnimState = 'entering';
                 gPaintingAnimTimer = 0;
                 gCurrentPainting = gTargetPainting; // Update current painting
+                // Hide the exited painting
+                currentGroup.visible = false;
             }
         } else if (gPaintingAnimState === 'entering') {
             // Target painting drops down with ease-out over 1.0 seconds
@@ -10757,22 +11773,28 @@ function update() {
             
             // Move the target painting down
             var targetGroup = gTargetPainting === 'miro' ? gMiroPaintingGroup : 
-                            (gTargetPainting === 'dali' ? gDaliPaintingGroup : gDuchampPaintingGroup);
+                            (gTargetPainting === 'dali' ? gDaliPaintingGroup : 
+                            (gTargetPainting === 'bosch' ? gBoschPaintingGroup : gDuchampPaintingGroup));
             targetGroup.position.y = startY - eased * (startY - targetBaseY);
+            
+            // Make entering painting visible
+            targetGroup.visible = true;
             
             if (t >= 1.0) {
                 gPaintingAnimState = 'idle';
                 gPaintingAnimTimer = 0;
+                // Ensure entering painting is visible
+                targetGroup.visible = true;
             }
         }
     }
     
-    // Update painting visibility based on position (hide when stored above room)
-    if (gMiroPaintingGroup && gDaliPaintingGroup && gDuchampPaintingGroup) {
-        var storageThreshold = gPaintingBaseY + gPaintingExitY * 0.5; // Halfway up
-        gMiroPaintingGroup.visible = gMiroPaintingGroup.position.y < storageThreshold;
-        gDaliPaintingGroup.visible = gDaliPaintingGroup.position.y < storageThreshold;
-        gDuchampPaintingGroup.visible = gDuchampPaintingGroup.position.y < storageThreshold;
+    // Ensure only current painting is visible when not animating
+    if (gMiroPaintingGroup && gDaliPaintingGroup && gDuchampPaintingGroup && gBoschPaintingGroup && gPaintingAnimState === 'idle') {
+        gMiroPaintingGroup.visible = (gCurrentPainting === 'miro');
+        gDaliPaintingGroup.visible = (gCurrentPainting === 'dali');
+        gDuchampPaintingGroup.visible = (gCurrentPainting === 'duchamp');
+        gBoschPaintingGroup.visible = (gCurrentPainting === 'bosch');
     }
     
     // Update Duchamp Bride and Grinder painting visibility based on world size
@@ -10863,6 +11885,29 @@ function update() {
             gDuchampGrinderPaintingGroup.visible = gDuchampGrinderPaintingGroup.position.y < storageThreshold;
         } else {
             gDuchampGrinderPaintingGroup.visible = false;
+        }
+    }
+    
+    // Update Bosch triptych scale based on world size
+    if (gBoschPaintingGroup) {
+        var targetScale = 1.0;
+        
+        // Determine target scale based on world size
+        if (gPhysicsScene.worldSize.y >= 60 && gPhysicsScene.worldSize.z >= 60) {
+            targetScale = 4.0;
+        } else if (gPhysicsScene.worldSize.y >= 50 && gPhysicsScene.worldSize.z >= 50) {
+            targetScale = 3.0;
+        } else if (gPhysicsScene.worldSize.y >= 40 && gPhysicsScene.worldSize.z >= 40) {
+            targetScale = 2.5;
+        } else if (gPhysicsScene.worldSize.y >= 30 && gPhysicsScene.worldSize.z >= 30) {
+            targetScale = 1.5;
+        } else {
+            targetScale = 1.0;
+        }
+        
+        // If scale needs to change, recreate the triptych
+        if (targetScale !== gBoschTriptychScale) {
+            recreateBoschTriptych(targetScale);
         }
     }
     
@@ -11578,7 +12623,7 @@ function update() {
     }
     
     // Camera follow modes - follow first boid (modes 3 and 4)
-    if (gCameraMode >= 3 && gPhysicsScene.objects.length > 0) {
+    if ((gCameraMode === 3 || gCameraMode === 4) && gPhysicsScene.objects.length > 0) {
         const firstBoid = gPhysicsScene.objects[0];
         
         // Calculate target camera position
@@ -11592,13 +12637,13 @@ function update() {
             
             if (gCameraMode === 3) {
                 // Behind boid, looking forward
-                const backwardOffset = direction.clone().multiplyScalar(-1.5);
+                const backwardOffset = direction.clone().multiplyScalar(-1.5 - gCameraDistanceOffset);
                 targetPos.add(backwardOffset);
                 targetPos.y += 1.3;
                 lookDirection = direction.clone();
             } else {
                 // In front of boid, looking backward
-                const forwardOffset = direction.clone().multiplyScalar(2.0);
+                const forwardOffset = direction.clone().multiplyScalar(2.0 + gCameraDistanceOffset);
                 targetPos.add(forwardOffset);
                 targetPos.y += 0.5;
                 lookDirection = direction.clone().multiplyScalar(-1); // Reverse direction
@@ -11657,6 +12702,56 @@ function update() {
             
             // Sync OrbitControls to prevent stuttering
             gCameraControl.update();
+        } else if (gCameraMode === 5) {
+            // Walking first-person camera mode (standard FPS controls)
+            const walkSpeed = gWalkingSpeed;
+            
+            // Calculate forward and right directions based on yaw (horizontal plane only)
+            const forward = new THREE.Vector3(
+                Math.sin(gWalkingCameraYaw),
+                0,
+                Math.cos(gWalkingCameraYaw)
+            );
+            const right = new THREE.Vector3(
+                Math.cos(gWalkingCameraYaw),
+                0,
+                -Math.sin(gWalkingCameraYaw)
+            );
+            
+            // WASD movement (or arrow keys)
+            if (gKeysPressed.w || gKeysPressed.up) {
+                gWalkingCameraPosition.add(forward.clone().multiplyScalar(walkSpeed * deltaT));
+            }
+            if (gKeysPressed.s || gKeysPressed.down) {
+                gWalkingCameraPosition.add(forward.clone().multiplyScalar(-walkSpeed * deltaT));
+            }
+            if (gKeysPressed.a || gKeysPressed.left) {
+                gWalkingCameraPosition.add(right.clone().multiplyScalar(-walkSpeed * deltaT));
+            }
+            if (gKeysPressed.d || gKeysPressed.right) {
+                gWalkingCameraPosition.add(right.clone().multiplyScalar(walkSpeed * deltaT));
+            }
+            
+            // Keep camera at elevated height (6.8m eye height)
+            gWalkingCameraPosition.y = 6.8;
+            
+            // Constrain position within world bounds
+            const worldSize = gPhysicsScene.worldSize;
+            gWalkingCameraPosition.x = Math.max(-worldSize.x + 1, Math.min(worldSize.x - 1, gWalkingCameraPosition.x));
+            gWalkingCameraPosition.z = Math.max(-worldSize.z + 1, Math.min(worldSize.z - 1, gWalkingCameraPosition.z));
+            
+            // Update camera position
+            gCamera.position.copy(gWalkingCameraPosition);
+            
+            // Calculate look-at point based on yaw and pitch
+            const lookDirection = new THREE.Vector3(
+                Math.sin(gWalkingCameraYaw),
+                Math.sin(gWalkingCameraPitch),
+                Math.cos(gWalkingCameraYaw)
+            ).normalize();
+            
+            const lookAtPoint = gWalkingCameraPosition.clone().add(lookDirection.multiplyScalar(10));
+            gCamera.lookAt(lookAtPoint);
         }
     }
     
