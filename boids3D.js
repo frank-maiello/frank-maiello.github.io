@@ -343,6 +343,7 @@ var gBoschPanelHeight = 12; // Base height for Bosch panels (scaled by gBoschTri
 var gBoschBottomHeight = 0; // Bottom height of Bosch triptych (constant regardless of scale)
 var gSelectedArtwork = 'miro'; // Selected artwork for right wall: 'miro', 'dali', or 'bosch'
 var gSpotlightPenumbra = 0.2; // Spotlight penumbra (0-1)
+var gShadowCameraFar = 70; // Shadow camera far distance for lamps (10-150)
 var gHeadlightIntensity = 0; // Headlight intensity (0-2)
 var gHeadlight = null; // Headlight spotlight reference
 var gGlobeLampIntensity = 0; // Globe lamp point light intensity (0-3)
@@ -1400,7 +1401,7 @@ class Lamp {
         this.spotlight.position.copy(lightPosition);
         this.spotlight.castShadow = true;
         this.spotlight.shadow.camera.near = 0.5;
-        this.spotlight.shadow.camera.far = 70;
+        this.spotlight.shadow.camera.far = gShadowCameraFar;
         this.spotlight.shadow.mapSize.width = 2048;
         this.spotlight.shadow.mapSize.height = 2048;
 
@@ -5077,7 +5078,7 @@ function drawLightingMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2; // 3 knobs across
-    const menuHeight = knobSpacing * 6; // 6.5 rows (now with 17 knobs)
+    const menuHeight = knobSpacing * 6; // 6 rows (now with 18 knobs)
     const padding = 1.7 * knobRadius;
     
     const menuOriginX = lightingMenuX * window.innerWidth;
@@ -5138,7 +5139,8 @@ function drawLightingMenu() {
         { label: 'Hue', value: gSpotlight2Hue, min: 0, max: 360 },
         { label: 'Saturation', value: gSpotlight2Saturation, min: 0, max: 100 },
         { label: 'Penumbra', value: gSpotlightPenumbra, min: 0, max: 1 },
-        { label: 'Headlight', value: gHeadlightIntensity, min: 0, max: 2 }
+        { label: 'Shadow Far', value: gShadowCameraFar, min: 10, max: 150 },
+        { label: 'Boid Headlight', value: gHeadlightIntensity, min: 0, max: 2 }
     ];
     
     const fullMeterSweep = 1.6 * Math.PI;
@@ -5254,7 +5256,7 @@ function drawLightingMenu() {
         
         // Check if this is an intensity knob at 0 (Ambient, Overhead, Globe, Spot1, Spot2, Headlight)
         let displayValue;
-        if ((i === 0 || i === 3 || i === 6 || i === 9 || i === 12 || i === 16) && knobs[i].value === 0) {
+        if ((i === 0 || i === 3 || i === 6 || i === 9 || i === 12 || i === 17) && knobs[i].value === 0) {
             displayValue = 'OFF';
             ctx.fillStyle = `hsla(0, 80%, 50%, ${lightingMenuOpacity})`; // Red color for OFF
         } else if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13) {
@@ -5280,6 +5282,10 @@ function drawLightingMenu() {
         } else if (i === 14) {
             // Spotlight 2 Saturation - show number in spotlight 2 color
             ctx.fillStyle = `hsla(${gSpotlight2Hue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+            displayValue = Math.round(knobs[i].value).toString();
+        } else if (i === 16) {
+            // Shadow Far - show as integer
+            ctx.fillStyle = `hsla(45, 60%, 70%, ${lightingMenuOpacity})`;
             displayValue = Math.round(knobs[i].value).toString();
         } else {
             ctx.fillStyle = `hsla(45, 60%, 70%, ${lightingMenuOpacity})`;
@@ -11035,7 +11041,8 @@ function onPointer(evt) {
                     {min: 0, max: 360},     // 13: spotlight 2 hue
                     {min: 0, max: 100},     // 14: spotlight 2 saturation
                     {min: 0, max: 1},       // 15: spotlight penumbra
-                    {min: 0, max: 2}        // 16: headlight intensity
+                    {min: 10, max: 150},    // 16: shadow camera far
+                    {min: 0, max: 2}        // 17: headlight intensity
                 ];
                 
                 const dragSensitivity = 0.2;
@@ -11214,7 +11221,17 @@ function onPointer(evt) {
                             gHeadlight.penumbra = gSpotlightPenumbra;
                         }
                         break;
-                    case 16: // Headlight intensity
+                    case 16: // Shadow camera far
+                        gShadowCameraFar = Math.round(newValue);
+                        // Update all lamp shadow cameras
+                        for (let lampId in gLamps) {
+                            if (gLamps[lampId] && gLamps[lampId].spotlight && gLamps[lampId].spotlight.shadow) {
+                                gLamps[lampId].spotlight.shadow.camera.far = gShadowCameraFar;
+                                gLamps[lampId].spotlight.shadow.camera.updateProjectionMatrix();
+                            }
+                        }
+                        break;
+                    case 17: // Headlight intensity
                         gHeadlightIntensity = newValue;
                         // Create or update headlight
                         if (gHeadlightIntensity > 0) {
@@ -12862,7 +12879,7 @@ function checkLightingMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 6; // 6.5 rows (now with 17 knobs)
+    const menuHeight = knobSpacing * 6; // 6 rows (now with 18 knobs)
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = lightingMenuX * window.innerWidth;
@@ -12883,7 +12900,7 @@ function checkLightingMenuClick(clientX, clientY) {
     }
     
     // Check each knob
-    for (let i = 0; i < 17; i++) {
+    for (let i = 0; i < 18; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const knobX = menuOriginX + col * knobSpacing;
@@ -12905,6 +12922,7 @@ function checkLightingMenuClick(clientX, clientY) {
                 gSpotlight1Intensity, gSpotlight1Hue, gSpotlight1Saturation,
                 gSpotlight2Intensity, gSpotlight2Hue, gSpotlight2Saturation,
                 gSpotlightPenumbra,
+                gShadowCameraFar,
                 gHeadlightIntensity
             ];
             dragStartValue = values[i];
