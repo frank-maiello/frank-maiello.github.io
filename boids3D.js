@@ -27,10 +27,13 @@ var gCameraSpringStrength = 0.08; // Spring interpolation strength (lower = smoo
 var gCameraOffset = new THREE.Vector3(0, 0, 0); // Manual camera offset in first-person mode
 var gCameraRotationOffset = { theta: 0, phi: 0 }; // Manual rotation offset
 var gCameraDistanceOffset = 0; // Distance offset for follow/lead modes
+var gCameraPrevPosition = new THREE.Vector3(0, 0, 0); // Previous camera position for velocity calculation
+var gCameraVelocity = new THREE.Vector3(0, 0, 0); // Camera velocity for Doppler effect
 var gWalkingCameraYaw = 0; // Horizontal rotation for walking mode
 var gWalkingCameraPitch = 0; // Vertical tilt for walking mode
 var gWalkingCameraPosition = new THREE.Vector3(0, 6.8, 0); // Position for walking mode (eye level at 6.8m)
 var gWalkingSpeed = 5.0; // Walking speed in units per second
+var gWalkingCameraLookLocked = true; // Whether walking camera look is locked (starts locked)
 var gKeysPressed = { w: false, a: false, s: false, d: false, up: false, down: false, left: false, right: false }; // Track key states for walking
 var gSavedCameraPosition = null; // Saved camera position from third-person mode
 var gSavedCameraTarget = null; // Saved camera target from third-person mode
@@ -178,12 +181,14 @@ var gPrimaryHue = 180; // Primary hue (0-360)
 var gSecondaryHue = 0; // Secondary hue (0-360)
 var gPrimaryRingRotation = 180 * Math.PI / 180; // Rotation angle for primary ring (radians)
 var gSecondaryRingRotation = 0 * Math.PI / 180; // Rotation angle for secondary ring (radians)
-var gColorMixPercentage = 50; // Percentage of boids with primary color (0-100)
+var gColorMixPercentage = 10; // Percentage of boids with primary color (0-100)
 var gBoidSaturation = 70; // Global saturation for boids (0-100)
 var gBoidLightness = 50; // Global lightness for boids (0-100)
-var gColorationMode = 0; // 0 = Normal, 1 = By Direction, 2 = By Speed
+var gBoidHueVariability = 10; // Hue variability range (+/- degrees, 0-60)
+var gColorationMode = 0; // 0 = Normal, 1 = By Direction, 2 = By Speed, 3 = By Doppler
 var gDraggingMixKnob = false; // Track if dragging the mix knob
 var gDraggingSaturationKnob = false; // Track if dragging the saturation knob
+var gDraggingVariabilityKnob = false; // Track if dragging the variability knob
 var gDraggingLightnessKnob = false; // Track if dragging the lightness knob
 var gDraggingPrimaryRing = false; // Track if dragging primary ring
 var gDraggingSecondaryRing = false; // Track if dragging secondary ring
@@ -2650,7 +2655,7 @@ function makeBoids() {
             hue = Math.round(180 + (2 * (-0.5 + Math.random())) * 20);
             sat = 0; 
             light = 100; 
-        } else if (i < 101) {
+        } else if (i < 151) {
             hue = Math.round(180 + (2 * (-0.5 + Math.random())) * 20);
             sat = gBoidSaturation; 
             light = gBoidLightness; 
@@ -4745,7 +4750,7 @@ function drawColorMenu() {
         ctx.save();
         ctx.globalAlpha = colorMenuOpacity;
         
-        // Gray out rings when not in Normal mode
+        // Gray out rings when not in Normal mode (except Doppler)
         if (gColorationMode === 1 || gColorationMode === 2) {
             ctx.filter = 'grayscale(100%) brightness(0.6)';
         }
@@ -4814,6 +4819,12 @@ function drawColorMenu() {
     const knobCenterX = menuWidth / 2;
     const knobCenterY = wheelCenterY;
     
+    // Gray out mix knob in Doppler mode (not functional there)
+    if (gColorationMode === 3) {
+        ctx.save();
+        ctx.filter = 'grayscale(100%) brightness(0.6)';
+    }
+    
     // Draw knob background (matching other menus)
     ctx.beginPath();
     ctx.arc(knobCenterX, knobCenterY, knobRadius * 1.05, 0, 2 * Math.PI);
@@ -4835,11 +4846,11 @@ function drawColorMenu() {
     const arcRadii = [knobRadius * 0.78, knobRadius * 0.92]; // inner, outer
     const arcColors = [
         // Inner arc = secondary color
-        gColorationMode === 1 || gColorationMode === 2 
+        gColorationMode === 1 || gColorationMode === 2
             ? { hue: 0, sat: 0, light: 40 }
             : { hue: gSecondaryHue, sat: 100, light: 50 },
         // Outer arc = primary color
-        gColorationMode === 1 || gColorationMode === 2 
+        gColorationMode === 1 || gColorationMode === 2
             ? { hue: 0, sat: 0, light: 40 }
             : { hue: gPrimaryHue, sat: 100, light: 50 }
     ];
@@ -4897,19 +4908,24 @@ function drawColorMenu() {
     ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
     ctx.fillText('Mix', knobCenterX, knobCenterY + 0.6 * knobRadius);
     
+    // Restore context if filter was applied
+    if (gColorationMode === 3) {
+        ctx.restore();
+    }
+    
     // Draw radio buttons for coloration mode (now above the color wheels)
     const radioRadius = knobRadius * 0.3;
-    const radioButtonCount = 3;
+    const radioButtonCount = 4;
     const radioTotalWidth = menuWidth * 0.9; // Use 90% of menu width
     const radioStartX = (menuWidth - radioTotalWidth) / 2; // Center the group
     const radioSpacing = radioTotalWidth / (radioButtonCount - 1); // Space between buttons
-    const radioLabels = ['By Wheel', 'By Direction', 'By Speed'];
+    const radioLabels = ['Wheel', 'Direction', 'Speed', 'Doppler'];
     
     ctx.font = `${0.035 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
         const radioX = radioStartX + i * radioSpacing;
         
         // Draw radio button circle
@@ -4936,12 +4952,12 @@ function drawColorMenu() {
         ctx.fillText(radioLabels[i], radioX, radioY + 0.07 * menuScale);
     }
     
-    // Draw Saturation and Lightness knobs at the bottom
-    const bottomKnobsY = 0.75 * colorWheelSize + smallKnobRadius * 1.5;
-    const knobSpacing = menuWidth / 2;
+    // Draw Saturation, Variability, and Lightness knobs at the bottom
+    const bottomKnobsY = 0.80 * colorWheelSize + smallKnobRadius * 1.7;
+    const knobSpacing = menuWidth / 20;
     
     // Saturation knob (left)
-    const satKnobX = knobSpacing * 0;
+    const satKnobX = knobSpacing * 1;
     ctx.beginPath();
     ctx.arc(satKnobX, bottomKnobsY, smallKnobRadius * 1.05, 0, 2 * Math.PI);
     ctx.fillStyle = `hsla(180, 30%, 10%, ${0.9 * colorMenuOpacity})`;
@@ -4986,8 +5002,53 @@ function drawColorMenu() {
     ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
     ctx.fillText('Saturation', satKnobX, bottomKnobsY + 1.5 * smallKnobRadius + 1);
     
+    // Variability knob (middle)
+    const varKnobX = knobSpacing * 10;
+    ctx.beginPath();
+    ctx.arc(varKnobX, bottomKnobsY, smallKnobRadius * 1.05, 0, 2 * Math.PI);
+    ctx.fillStyle = `hsla(180, 30%, 10%, ${0.9 * colorMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(180, 20%, 60%, ${colorMenuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Variability arc (0 to 60 degrees)
+    const varValue = gBoidHueVariability / 60;
+    const varPointerAngle = meterStart + fullMeterSweep * varValue;
+    
+    // Draw arc with gradient showing hue range
+    for (let i = 0; i < segmentCount; i++) {
+        const segmentStart = meterStart + (i / segmentCount) * fullMeterSweep;
+        const segmentEnd = meterStart + ((i + 1) / segmentCount) * fullMeterSweep;
+        const varRange = (i / segmentCount) * 60; // 0 to 60 degrees
+        // Show the hue spread by varying the color
+        const offsetHue = gPrimaryHue + (i / segmentCount - 0.5) * 60;
+        ctx.beginPath();
+        ctx.arc(varKnobX, bottomKnobsY, smallKnobRadius * 0.8, segmentStart, segmentEnd);
+        ctx.strokeStyle = `hsla(${offsetHue}, ${gBoidSaturation}%, ${gBoidLightness}%, ${colorMenuOpacity})`;
+        ctx.lineWidth = 6;
+        ctx.stroke();
+    }
+    
+    // Draw needle
+    const varPointerLength = smallKnobRadius * 0.6;
+    const varPointerEndX = varKnobX + Math.cos(varPointerAngle) * varPointerLength;
+    const varPointerEndY = bottomKnobsY + Math.sin(varPointerAngle) * varPointerLength;
+    ctx.beginPath();
+    ctx.moveTo(varKnobX, bottomKnobsY);
+    ctx.lineTo(varPointerEndX, varPointerEndY);
+    ctx.strokeStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw label
+    ctx.fillStyle = `hsla(0, 10%, 10%, ${colorMenuOpacity})`;
+    ctx.fillText('Variability', varKnobX + 2, 1 + bottomKnobsY + 1.5 * smallKnobRadius);
+    ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
+    ctx.fillText('Variability', varKnobX, bottomKnobsY + 1.5 * smallKnobRadius + 1);
+    
     // Lightness knob (right)
-    const lightKnobX = knobSpacing * 2;
+    const lightKnobX = knobSpacing * 19;
     ctx.beginPath();
     ctx.arc(lightKnobX, bottomKnobsY, smallKnobRadius * 1.05, 0, 2 * Math.PI);
     ctx.fillStyle = `hsla(180, 30%, 10%, ${0.9 * colorMenuOpacity})`;
@@ -5030,7 +5091,7 @@ function drawColorMenu() {
     ctx.fillText('Lightness', lightKnobX, bottomKnobsY + 1.5 * smallKnobRadius);
     
     // Draw Artwork Selection radio buttons at the bottom
-    const artworkRadioY = bottomKnobsY + 2.5 * smallKnobRadius;
+    const artworkRadioY = bottomKnobsY + 2.8 * smallKnobRadius;
     const artworkRadioRadius = smallKnobRadius * 0.4;
     const artworkOptions = ['miro', 'dali', 'bosch'];
     const artworkLabels = ['Miro', 'Dali', 'Bosch'];
@@ -9583,6 +9644,7 @@ function initThreeScene() {
     gCamera = new THREE.PerspectiveCamera( gCameraFOV, window.innerWidth / window.innerHeight, 0.01, 1000);
     gCamera.position.set(-16.99, 21.37, 43.12);
     gCamera.updateMatrixWorld();	
+    gCameraPrevPosition.copy(gCamera.position); // Initialize for velocity calculation
 
     gThreeScene.add(gCamera);
 
@@ -9732,6 +9794,7 @@ function initThreeScene() {
     container.addEventListener( 'pointerdown', onPointer, false );
     container.addEventListener( 'pointermove', onPointer, false );
     container.addEventListener( 'pointerup', onPointer, false );
+    container.addEventListener( 'pointerleave', onPointerLeave, false );
     
     // Wheel event for camera distance in follow/lead modes and height in dolly mode
     container.addEventListener('wheel', function(evt) {
@@ -10019,6 +10082,7 @@ function onPointer(evt) {
                         gWalkingCameraPosition.set(0, 6.8, 0);
                         gWalkingCameraYaw = -Math.PI / 2; // Point in -x direction
                         gWalkingCameraPitch = 0;
+                        // gWalkingCameraLookLocked state is preserved from previous walking mode session
                     }
                     
                     // Initialize dolly camera when entering mode 6
@@ -10750,9 +10814,9 @@ function onPointer(evt) {
             return;
         }
         
-        // Handle mouse look for walking mode
+        // Handle mouse look for walking mode - toggle lock on click (like dolly cam)
         if (gCameraMode === 5) {
-            gMouseDown = true;
+            gWalkingCameraLookLocked = !gWalkingCameraLookLocked;
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             return;
@@ -10912,6 +10976,23 @@ function onPointer(evt) {
             
             gBoidSaturation = Math.round(newValue);
             initColorWheel();
+            applyMixedColors();
+            return;
+        }
+        
+        // Handle variability knob dragging
+        if (gDraggingVariabilityKnob) {
+            const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+            const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+            const dragDelta = deltaX + deltaY;
+            
+            const dragSensitivity = 0.12;
+            const normalizedDelta = dragDelta / dragSensitivity;
+            const rangeSize = 60; // 0 to 60 degrees
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            newValue = Math.max(0, Math.min(60, newValue));
+            
+            gBoidHueVariability = Math.round(newValue);
             applyMixedColors();
             return;
         }
@@ -12071,13 +12152,13 @@ function onPointer(evt) {
             return;
         }
         
-        // Handle mouse look for walking mode (standard FPS controls)
-        if (gCameraMode === 5 && gMouseDown) {
+        // Handle mouse look for walking mode (pan/tilt) - only when unlocked
+        if (gCameraMode === 5 && !gWalkingCameraLookLocked) {
             const deltaX = evt.clientX - gPointerLastX;
             const deltaY = evt.clientY - gPointerLastY;
             
             // Mouse sensitivity
-            const sensitivity = 0.002;
+            const sensitivity = 0.006;
             
             gWalkingCameraYaw -= deltaX * sensitivity;
             gWalkingCameraPitch -= deltaY * sensitivity;
@@ -12131,6 +12212,15 @@ function onPointer(evt) {
         
         if (gDraggingSaturationKnob) {
             gDraggingSaturationKnob = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingVariabilityKnob) {
+            gDraggingVariabilityKnob = false;
             // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
@@ -12366,16 +12456,68 @@ function onPointer(evt) {
             return;
         }
         
-        // Release mouse for walking mode
-        if (gCameraMode === 5) {
-            gMouseDown = false;
-            return;
-        }
-        
         // Re-enable orbit controls for any other clicks (e.g., color ring clicks)
         if (gCameraMode < 3 && gCameraControl) {
             gCameraControl.enabled = true;
         }
+    }
+}
+
+// Handle pointer leaving the window - reset all dragging states
+function onPointerLeave(evt) {
+    // Reset mouse state
+    gMouseDown = false;
+    
+    // Reset camera control states
+    gCameraManualControl = false;
+    
+    // Lock dolly camera look to prevent continued panning when cursor returns
+    gDollyCameraLookLocked = true;
+    
+    // Lock walking camera look to prevent continued panning when cursor returns
+    gWalkingCameraLookLocked = true;
+    
+    // Reset menu dragging
+    isDraggingMenu = false;
+    draggingMenuType = null;
+    
+    // Reset dolly dragging
+    gDraggingDolly = false;
+    gDraggingDollyEnd = null;
+    
+    // Reset lamp dragging states
+    gDraggingLamp = false;
+    gDraggingLampAngle = false;
+    gDraggingLampHeight = false;
+    gDraggingLampRotation = false;
+    gDraggingLampPoleOrSleeve = false;
+    gDraggingLampBase = false;
+    
+    // Reset obstacle dragging
+    gDraggingCylinder = false;
+    gDraggingSphere = false;
+    gDraggingTorus = false;
+    
+    // Reset color control dragging
+    gDraggingMixKnob = false;
+    gDraggingSaturationKnob = false;
+    gDraggingVariabilityKnob = false;
+    gDraggingLightnessKnob = false;
+    gDraggingPrimaryRing = false;
+    gDraggingSecondaryRing = false;
+    
+    // Reset prop dragging
+    gDraggingStool = false;
+    gDraggingDuck = false;
+    gDraggingTeapot = false;
+    gDraggingBird = false;
+    gDraggingGlobeLamp = false;
+    gDraggingChair = false;
+    gDraggingSofa = false;
+    
+    // Re-enable orbit controls if in normal camera mode
+    if (gCameraMode < 3 && gCameraControl) {
+        gCameraControl.enabled = true;
     }
 }
 
@@ -12714,10 +12856,10 @@ function checkColorMenuClick(clientX, clientY) {
     const dy = clientY - centerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    // Only allow interaction with knob and rings in Normal mode
-    if (gColorationMode === 0) {
-        // Check if clicking on mix knob in center (with standard knob size)
-        if (distance <= knobRadius * 1.05) {
+    // Only allow interaction with knob and rings in Normal mode or Doppler mode
+    if (gColorationMode === 0 || gColorationMode === 3) {
+        // Check if clicking on mix knob in center (only in Normal mode, not Doppler)
+        if (gColorationMode === 0 && distance <= knobRadius * 1.05) {
             gDraggingMixKnob = true;
             dragStartMouseX = clientX;
             dragStartMouseY = clientY;
@@ -12757,12 +12899,12 @@ function checkColorMenuClick(clientX, clientY) {
         }
     }
     
-    // Check saturation and lightness knobs at the bottom
-    const bottomKnobsY = menuOriginY + 0.75 * colorWheelSize + smallKnobRadius * 1.5;
-    const knobSpacing = menuWidth / 2;
+    // Check saturation, variability, and lightness knobs at the bottom
+    const bottomKnobsY = menuOriginY + 0.80 * colorWheelSize + smallKnobRadius * 1.7;
+    const knobSpacing = menuWidth / 20;
     
     // Saturation knob (left)
-    const satKnobX = menuOriginX + knobSpacing * 0;
+    const satKnobX = menuOriginX + knobSpacing * 1;
     const satDx = clientX - satKnobX;
     const satDy = clientY - bottomKnobsY;
     if (satDx * satDx + satDy * satDy <= smallKnobRadius * smallKnobRadius * 1.1) {
@@ -12776,8 +12918,23 @@ function checkColorMenuClick(clientX, clientY) {
         return true;
     }
     
+    // Variability knob (middle)
+    const varKnobX = menuOriginX + knobSpacing * 10;
+    const varDx = clientX - varKnobX;
+    const varDy = clientY - bottomKnobsY;
+    if (varDx * varDx + varDy * varDy <= smallKnobRadius * smallKnobRadius * 1.1) {
+        gDraggingVariabilityKnob = true;
+        dragStartMouseX = clientX;
+        dragStartMouseY = clientY;
+        dragStartValue = gBoidHueVariability;
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
     // Lightness knob (right)
-    const lightKnobX = menuOriginX + knobSpacing * 2;
+    const lightKnobX = menuOriginX + knobSpacing * 19;
     const lightDx = clientX - lightKnobX;
     const lightDy = clientY - bottomKnobsY;
     if (lightDx * lightDx + lightDy * lightDy <= smallKnobRadius * smallKnobRadius * 1.1) {
@@ -12793,12 +12950,12 @@ function checkColorMenuClick(clientX, clientY) {
     
     // Check radio buttons for coloration mode
     const radioRadius = knobRadius * 0.3;
-    const radioButtonCount = 3;
+    const radioButtonCount = 4;
     const radioTotalWidth = menuWidth * 0.9; // Use 90% of menu width
     const radioStartX = menuOriginX + (menuWidth - radioTotalWidth) / 2; // Center the group
     const radioSpacing = radioTotalWidth / (radioButtonCount - 1); // Space between buttons
     
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
         const radioX = radioStartX + i * radioSpacing;
         const rdx = clientX - radioX;
         const rdy = clientY - radioY;
@@ -12814,7 +12971,7 @@ function checkColorMenuClick(clientX, clientY) {
     }
     
     // Check Artwork Selection radio buttons
-    const artworkRadioY = bottomKnobsY + 2.5 * smallKnobRadius;
+    const artworkRadioY = bottomKnobsY + 2.8 * smallKnobRadius;
     const artworkRadioRadius = smallKnobRadius * 0.4;
     const artworkOptions = ['miro', 'dali', 'bosch'];
     const artworkRadioSpacing = menuWidth / 3;
@@ -13110,6 +13267,14 @@ function applyMixedColors() {
                 // Normal mode: Mix primary and secondary colors
                 const numPrimary = Math.floor(numBoids * (gColorMixPercentage / 100));
                 boid.hue = i < numPrimary ? gPrimaryHue : gSecondaryHue;
+                
+                // Apply hue variability if enabled
+                if (gBoidHueVariability > 0) {
+                    // Use boid index as seed for consistent per-boid variation
+                    const seed = i * 123.456;
+                    const randomOffset = (Math.sin(seed) * 2 - 1) * gBoidHueVariability; // -variability to +variability
+                    boid.hue = (boid.hue + randomOffset + 360) % 360; // Wrap around 0-360
+                }
             } else if (gColorationMode === 1) {
                 // By Direction: Color based on heading
                 const vx = boid.vel.x;
@@ -13125,11 +13290,70 @@ function applyMixedColors() {
                 const maxSpeed = 3;
                 const normalizedSpeed = Math.min(speed / maxSpeed, 1);
                 boid.hue = Math.round((1 - normalizedSpeed) * 360); // 240 (blue) to 0 (red)
+            } else if (gColorationMode === 3) {
+                // By Doppler: Color based on velocity relative to camera
+                // Calculate vector from camera to boid
+                const toBoidX = boid.pos.x - gCamera.position.x;
+                const toBoidY = boid.pos.y - gCamera.position.y;
+                const toBoidZ = boid.pos.z - gCamera.position.z;
+                const toBoidDist = Math.sqrt(toBoidX * toBoidX + toBoidY * toBoidY + toBoidZ * toBoidZ);
+                
+                if (toBoidDist > 0.001) {
+                    // Normalize the direction vector
+                    const dirX = toBoidX / toBoidDist;
+                    const dirY = toBoidY / toBoidDist;
+                    const dirZ = toBoidZ / toBoidDist;
+                    
+                    // Calculate relative velocity (boid velocity - camera velocity)
+                    const relVelX = boid.vel.x - gCameraVelocity.x;
+                    const relVelY = boid.vel.y - gCameraVelocity.y;
+                    const relVelZ = boid.vel.z - gCameraVelocity.z;
+                    
+                    // Calculate radial velocity (dot product of relative velocity with direction to boid)
+                    // Positive = moving away, negative = moving toward camera
+                    const radialVel = relVelX * dirX + relVelY * dirY + relVelZ * dirZ;
+                    
+                    // Map radial velocity to color
+                    // Moving away (positive): red (0°)
+                    // Perpendicular (zero): gray (desaturated)
+                    // Moving toward (negative): blue/violet (240-270°)
+                    const maxRadialSpeed = 3; // Reference speed for full color
+                    const normalizedVel = Math.max(-1, Math.min(1, radialVel / maxRadialSpeed));
+                    const absVel = Math.abs(normalizedVel);
+                    
+                    // Saturation increases gradually with velocity magnitude (0% to 100%)
+                    boid.sat = Math.round(absVel * 100);
+                    
+                    if (normalizedVel > 0) {
+                        // Moving away: use primary hue from color wheel
+                        boid.hue = gPrimaryHue;
+                        boid.light = Math.round(65 - 20 * normalizedVel); // 65% to 45% lightness
+                    } else {
+                        // Moving toward: use secondary hue from color wheel
+                        boid.hue = gSecondaryHue;
+                        boid.light = Math.round(65 - 20 * absVel); // 65% to 45% lightness
+                    }
+                    
+                    // Apply hue variability if enabled
+                    if (gBoidHueVariability > 0) {
+                        // Use boid index as seed for consistent per-boid variation
+                        const seed = i * 123.456;
+                        const randomOffset = (Math.sin(seed) * 2 - 1) * gBoidHueVariability; // -variability to +variability
+                        boid.hue = (boid.hue + randomOffset + 360) % 360; // Wrap around 0-360
+                    }
+                } else {
+                    // Boid at camera position: gray
+                    boid.hue = 0;
+                    boid.sat = 0;
+                    boid.light = 50;
+                }
             }
             
-            // Update saturation and lightness from global values
-            boid.sat = Math.round(gBoidSaturation);
-            boid.light = Math.round(gBoidLightness);
+            // Update saturation and lightness from global values (except in Doppler mode)
+            if (gColorationMode !== 3) {
+                boid.sat = Math.round(gBoidSaturation);
+                boid.light = Math.round(gBoidLightness);
+            }
             
             // Update boid color
             if (boid.visMesh && boid.visMesh.material) {
@@ -13553,6 +13777,8 @@ function update() {
     }
     
     // Update Duchamp Bride Top painting visibility based on world size Y and boid types
+    // DISABLED: Image loads but is never displayed
+    /*
     // Only show if world size Y >= 30 AND any selected boid type is Cone (1) or Cylinder (2)
     if (gPhysicsScene.worldSize.y >= 30 && (gSelectedBoidTypes.includes(1) || gSelectedBoidTypes.includes(2)) && !gDuchampBrideTopActive) {
         // Activate top painting
@@ -13577,6 +13803,7 @@ function update() {
         gDuchampBrideTopDropping = false;
         gDuchampBrideTopDropTimer = 0;
     }
+    */
     
     // Update Duchamp Bride and Grinder painting visibility
     if (gDuchampBridePaintingGroup) {
@@ -14114,8 +14341,8 @@ function update() {
         cameraMenuOpacity = Math.max(0, cameraMenuOpacity - cameraMenuFadeSpeed * deltaT);
     }
     
-    // Update colors if in dynamic mode (by direction or speed)
-    if (gColorationMode === 1 || gColorationMode === 2) {
+    // Update colors if in dynamic mode (by direction, speed, or doppler)
+    if (gColorationMode === 1 || gColorationMode === 2 || gColorationMode === 3) {
         applyMixedColors();
     }
     
@@ -14688,6 +14915,14 @@ function update() {
         gOverlayCtx.fillStyle = `rgba(0, 0, 0, ${opacity})`;
         gOverlayCtx.fillRect(0, 0, gOverlayCanvas.width, gOverlayCanvas.height);
     }
+    
+    // Update camera velocity for Doppler effect (based on position change)
+    if (deltaT > 0) {
+        gCameraVelocity.x = (gCamera.position.x - gCameraPrevPosition.x) / deltaT;
+        gCameraVelocity.y = (gCamera.position.y - gCameraPrevPosition.y) / deltaT;
+        gCameraVelocity.z = (gCamera.position.z - gCameraPrevPosition.z) / deltaT;
+    }
+    gCameraPrevPosition.copy(gCamera.position);
     
     requestAnimationFrame(update);
 }
