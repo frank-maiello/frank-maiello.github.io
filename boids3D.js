@@ -420,6 +420,7 @@ var gWalls = { front: null, back: null, left: null, right: null };
 var gBaseboards = { front: null, back: null, left: null, right: null };
 var gFloor = null;
 var gRug = null; // Afghan rug mesh
+var gMarbleTexture = null; // Marble texture for wall squares
 
 // Wall animation state
 var gWallAnimation = {
@@ -8081,7 +8082,7 @@ function initThreeScene() {
         side: THREE.BackSide,
         transparent: false,
         emissive: 0xffffff,
-        emissiveIntensity: 0.1,
+        emissiveIntensity: 0.0,
         metalness: 0,
         roughness: 1
     });
@@ -8099,6 +8100,100 @@ function initThreeScene() {
     );
     gWalls.front.receiveShadow = true;
     gThreeScene.add(gWalls.front);
+    
+    // Load marble texture for white wall squares using THREE.TextureLoader with CORS enabled
+    var marbleTextureLoader = new THREE.TextureLoader(gLoadingManager);
+    marbleTextureLoader.crossOrigin = 'anonymous'; // Enable CORS
+    marbleTextureLoader.load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/marble_square.jpg',
+        function(texture) {
+            // Texture loaded successfully - store it
+            gMarbleTexture = texture.image;
+            console.log('Marble texture loaded successfully');
+            
+            // Update all wall canvases with the marble texture
+            updateWallsWithMarble();
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading marble texture:', err);
+        }
+    );
+    
+    // Function to update wall canvases with marble texture
+    function updateWallsWithMarble() {
+        console.log('updateWallsWithMarble called');
+        console.log('gMarbleTexture:', gMarbleTexture);
+        console.log('backWallCtx:', typeof backWallCtx);
+        console.log('leftWallCtx:', typeof leftWallCtx);
+        console.log('rightWallCtx:', typeof rightWallCtx);
+        
+        if (!gMarbleTexture) {
+            console.log('No marble texture available');
+            return;
+        }
+        
+        // Redraw back wall with marble texture
+        console.log('Drawing marble on back wall...');
+        for (var i = 0; i < 2; i++) {
+            for (var j = 0; j < 2; j++) {
+                if ((i + j) % 2 !== 0) {
+                    backWallCtx.drawImage(gMarbleTexture, i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+                }
+            }
+        }
+        // Redraw strokes
+        backWallCtx.strokeStyle = '#333333';
+        backWallCtx.lineWidth = 4;
+        for (var i = 0; i < 2; i++) {
+            for (var j = 0; j < 2; j++) {
+                backWallCtx.strokeRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+            }
+        }
+        backWallTexture.needsUpdate = true;
+        console.log('Back wall updated');
+        
+        // Redraw left wall with marble texture
+        console.log('Drawing marble on left wall...');
+        for (var i = 0; i < 2; i++) {
+            for (var j = 0; j < 2; j++) {
+                if ((i + j) % 2 !== 0) {
+                    leftWallCtx.drawImage(gMarbleTexture, i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+                }
+            }
+        }
+        // Redraw strokes
+        leftWallCtx.strokeStyle = '#333333';
+        leftWallCtx.lineWidth = 4;
+        for (var i = 0; i < 2; i++) {
+            for (var j = 0; j < 2; j++) {
+                leftWallCtx.strokeRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+            }
+        }
+        leftWallTexture.needsUpdate = true;
+        console.log('Left wall updated');
+        
+        // Redraw right wall with marble texture
+        console.log('Drawing marble on right wall...');
+        for (var i = 0; i < 2; i++) {
+            for (var j = 0; j < 2; j++) {
+                if ((i + j) % 2 !== 0) {
+                    rightWallCtx.drawImage(gMarbleTexture, i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+                }
+            }
+        }
+        // Redraw strokes
+        rightWallCtx.strokeStyle = '#333333';
+        rightWallCtx.lineWidth = 4;
+        for (var i = 0; i < 2; i++) {
+            for (var j = 0; j < 2; j++) {
+                rightWallCtx.strokeRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
+            }
+        }
+        rightWallTexture.needsUpdate = true;
+        console.log('Right wall updated');
+        console.log('All walls updated with marble texture');
+    }
     
     // Back wall (negative Z) - pastel blue checkerboard
     var backWallCanvas = document.createElement('canvas');
@@ -8126,7 +8221,7 @@ function initThreeScene() {
                     }
                 }
             } else {
-                // White panel - solid color
+                // White panel - will be updated with marble texture when loaded
                 backWallCtx.fillStyle = '#e6e6e6';
                 backWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
             }
@@ -8190,7 +8285,7 @@ function initThreeScene() {
                     }
                 }
             } else {
-                // White panel - solid color
+                // White panel - will be updated with marble texture when loaded
                 leftWallCtx.fillStyle = '#e6e6e6';
                 leftWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
             }
@@ -8375,7 +8470,7 @@ function initThreeScene() {
                     }
                 }
             } else {
-                // White panel - solid color
+                // White panel - will be updated with marble texture when loaded
                 rightWallCtx.fillStyle = '#e6e6e6';
                 rightWallCtx.fillRect(i * wallTileSize, j * wallTileSize, wallTileSize, wallTileSize);
             }
