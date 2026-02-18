@@ -34,6 +34,28 @@ var gWalkingSpeed = 5.0; // Walking speed in units per second
 var gKeysPressed = { w: false, a: false, s: false, d: false, up: false, down: false, left: false, right: false }; // Track key states for walking
 var gSavedCameraPosition = null; // Saved camera position from third-person mode
 var gSavedCameraTarget = null; // Saved camera target from third-person mode
+var gDollyRailsPosition = new THREE.Vector3(0, 0.15, 0); // Center position of dolly rails
+var gDollyRailsRotation = 0; // Rotation angle of dolly rails (around Y axis)
+var gDollyRailsLength = 55; // Length of dolly rails
+var gDollyPosition = 0.5; // Position along rails (0 to 1)
+var gDollyDirection = 1; // Direction of dolly movement (1 or -1)
+var gDollySpeed = 0.05; // Speed of dolly traversal
+var gDollyVelocity = 0.05; // Current velocity of dolly (can be negative)
+var gDollyRailsMesh = null; // THREE.Group containing dolly rails visualization
+var gDollyCartMesh = null; // THREE.Group containing dolly cart (wheels + platform)
+var gDollyCameraMesh = null; // THREE.Group containing film camera model on dolly
+var gDollyCameraMountRod = null; // Thin rod connecting camera to dolly platform
+var gDraggingDolly = false; // Whether user is dragging dolly rails
+var gDraggingDollyEnd = null; // Which end is being dragged: null, 'start', or 'end'
+var gDollyDragStartMouseX = 0; // Starting mouse X for dolly drag
+var gDollyDragStartMouseY = 0; // Starting mouse Y for dolly drag
+var gDollyDragStartRotation = 0; // Starting rotation for dolly rotation
+var gDollyDragStartPosition = null; // Starting position for dolly translation
+var gDollyDragPivotPosition = null; // Fixed pivot position during rotation drag
+var gDollyCameraYaw = Math.PI; // Horizontal rotation for dolly camera mode (starts at -90 degrees)
+var gDollyCameraPitch = 0; // Vertical tilt for dolly camera mode
+var gDollyCameraHeight = 7.5; // Camera height above ground in dolly mode
+var gDollyCameraLookLocked = true; // Whether dolly camera look is locked (starts locked)
 var gPointerLastX = 0;
 var gPointerLastY = 0;
 var container = null; // Container element for renderer
@@ -133,6 +155,10 @@ var lightingMenuVisible = false; // Lighting submenu visibility
 var lightingMenuVisibleBeforeHide = false;
 var lightingMenuOpacity = 0;
 var lightingMenuFadeSpeed = 3.0;
+var cameraMenuVisible = false; // Camera submenu visibility
+var cameraMenuVisibleBeforeHide = false;
+var cameraMenuOpacity = 0;
+var cameraMenuFadeSpeed = 3.0;
 var menuScale = 300; // Master menu size control (increased 50%)
 var simMenuX = 0.1; // Simulation menu position
 var simMenuY = 0.2;
@@ -144,6 +170,8 @@ var colorMenuX = 0.2; // Color menu position
 var colorMenuY = 0.2;
 var lightingMenuX = 0.1; // Lighting menu position
 var lightingMenuY = 0.2;
+var cameraMenuX = 0.1; // Camera menu position
+var cameraMenuY = 0.2;
 var gColorWheelCanvas = null; // Offscreen canvas for color wheel
 var gColorWheelCtx = null;
 var gPrimaryHue = 180; // Primary hue (0-360)
@@ -151,8 +179,12 @@ var gSecondaryHue = 0; // Secondary hue (0-360)
 var gPrimaryRingRotation = 180 * Math.PI / 180; // Rotation angle for primary ring (radians)
 var gSecondaryRingRotation = 0 * Math.PI / 180; // Rotation angle for secondary ring (radians)
 var gColorMixPercentage = 50; // Percentage of boids with primary color (0-100)
+var gBoidSaturation = 70; // Global saturation for boids (0-100)
+var gBoidLightness = 50; // Global lightness for boids (0-100)
 var gColorationMode = 0; // 0 = Normal, 1 = By Direction, 2 = By Speed
 var gDraggingMixKnob = false; // Track if dragging the mix knob
+var gDraggingSaturationKnob = false; // Track if dragging the saturation knob
+var gDraggingLightnessKnob = false; // Track if dragging the lightness knob
 var gDraggingPrimaryRing = false; // Track if dragging primary ring
 var gDraggingSecondaryRing = false; // Track if dragging secondary ring
 var gRingDragStartAngle = 0; // Starting angle when drag began
@@ -309,7 +341,10 @@ var gDuchampBrideTopDropTimer = 0; // Timer for Duchamp Bride top painting drop 
 var gBoschTriptychScale = 1.0; // Current scale of Bosch triptych (1.0, 1.5, or 2.5)
 var gBoschPanelHeight = 12; // Base height for Bosch panels (scaled by gBoschTriptychScale)
 var gBoschBottomHeight = 0; // Bottom height of Bosch triptych (constant regardless of scale)
+var gSelectedArtwork = 'miro'; // Selected artwork for right wall: 'miro', 'dali', or 'bosch'
 var gSpotlightPenumbra = 0.2; // Spotlight penumbra (0-1)
+var gHeadlightIntensity = 0; // Headlight intensity (0-2)
+var gHeadlight = null; // Headlight spotlight reference
 var gGlobeLampIntensity = 0; // Globe lamp point light intensity (0-3)
 var gGlobeLampHue = 0; // Globe lamp hue (0-360)
 var gGlobeLampSaturation = 80; // Globe lamp saturation (0-100)
@@ -382,10 +417,10 @@ var gRug = null; // Afghan rug mesh
 
 // Wall animation state
 var gWallAnimation = {
-    front: { timer: 0, delay: 1.3, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
-    back: { timer: 0, delay: 1.45, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 },
+    front: { timer: 0, delay: 1.15, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
+    back: { timer: 0, delay: 1.15, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 },
     left: { timer: 0, delay: 1.15, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
-    right: { timer: 0, delay: 1.6, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 }
+    right: { timer: 0, delay: 1.15, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 }
 };
 
 var gRunning = false; // Track if simulation is running (start paused)
@@ -2165,7 +2200,7 @@ class BOID {
         if (this.geometryType === 12 && gDuckTemplate) {
             // Clone duck template for this boid
             this.visMesh = gDuckTemplate.clone();
-            this.visMesh.scale.set(0.3, 0.3, 0.3);
+            this.visMesh.scale.set(0.5, 0.5, 0.5);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
             this.visMesh.castShadow = true;
@@ -2192,7 +2227,7 @@ class BOID {
         } else if (this.geometryType === 15 && gHelicopterTemplate) {
             // Clone helicopter template for this boid
             this.visMesh = gHelicopterTemplate.clone();
-            this.visMesh.scale.set(1.5, 1.5, 1.5);
+            this.visMesh.scale.set(1.0, 1.0, 1.0);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
             this.visMesh.castShadow = true;
@@ -2322,6 +2357,9 @@ class BOID {
                 this.visMesh.rotateX(Math.PI / 2);
             } else if (this.geometryType === 11) {
                 this.visMesh.rotateX(Math.PI / 2);
+            } else if (this.geometryType === 10) {
+                // TorusKnot - rotate continuously like avocado
+                this.visMesh.rotateZ(this.spinAngle || 0);
             } else if (this.geometryType === 12) {
                 this.visMesh.rotateY(-Math.PI / 2);
             } else if (this.geometryType === 14) {
@@ -2461,8 +2499,11 @@ class BOID {
         // Update visual mesh position
         this.visMesh.position.copy(this.pos);
         
-        // Update spin angles for animated boids (avocado and helicopter)
-        if (this.geometryType === 14) {
+        // Update spin angles for animated boids (torus knot, avocado and helicopter)
+        if (this.geometryType === 10) {
+            // TorusKnot - update spin angle
+            this.spinAngle += 2.0 * deltaT;
+        } else if (this.geometryType === 14) {
             // Avocado - update spin angle
             this.spinAngle += 2.0 * deltaT;
         } else if (this.geometryType === 15) {
@@ -2610,12 +2651,12 @@ function makeBoids() {
             light = 100; 
         } else if (i < 101) {
             hue = Math.round(180 + (2 * (-0.5 + Math.random())) * 20);
-            sat = Math.round(40 + Math.random() * 60); 
-            light = Math.round(30 + Math.random() * 40); 
+            sat = gBoidSaturation; 
+            light = gBoidLightness; 
         } else {
             hue = Math.round(360 + (2 * (-0.5 + Math.random())) * 20);
-            sat = Math.round(40 + Math.random() * 60); 
-            light = Math.round(30 + Math.random() * 40); 
+            sat = gBoidSaturation; 
+            light = gBoidLightness; 
         }
         gPhysicsScene.objects.push(new BOID(pos, radius, vel, hue, sat, light) );
     }
@@ -3048,7 +3089,7 @@ function recreateBoidGeometries() {
         } else if (boid.geometryType === 15 && gHelicopterTemplate) {
             // For helicopter geometry, clone the helicopter template
             boid.visMesh = gHelicopterTemplate.clone();
-            boid.visMesh.scale.set(1.5, 1.5, 1.5); // Scale for boid size
+            boid.visMesh.scale.set(1.0, 1.0, 1.0); // Scale for boid size
             
             // Set position and add to scene
             boid.visMesh.position.copy(boid.pos);
@@ -3994,22 +4035,6 @@ function drawMainMenu() {
     ctx.fill();
     
     ctx.restore();
-    
-    // Draw camera mode text notification (if timer is active)
-    if (gCameraModeTextTimer > 0) {
-        const textOpacity = Math.min(gCameraModeTextTimer / gCameraModeTextDuration, 1.0);
-        const textX = itemX + itemWidth + padding * 2;
-        const textY = itemY2 + itemHeight / 2;
-        
-        ctx.font = `${18}px Arial`;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        
-        ctx.fillStyle = `rgba(0, 0, 0, ${textOpacity})`;
-        ctx.fillText(gCameraModeText, textX + 2, textY + 1);
-        ctx.fillStyle = `rgba(230, 230, 230, ${textOpacity})`;
-        ctx.fillText(gCameraModeText, textX, textY);
-    }
 
     ctx.restore();
 }
@@ -4022,9 +4047,9 @@ function drawSimMenu() {
         gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
         boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
         boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin,
-        gWorldSizeX, gWorldSizeY, gWorldSizeZ, gCameraFOV
+        gWorldSizeX, gWorldSizeY, gWorldSizeZ
     ];
-    // Simulation menu knobs
+    // Simulation menu knobs (13 knobs - removed Camera FOV)
     const ranges = [
         {min: 100, max: 5000},      // numBoids
         {min: 0.1, max: 1.0},      // boidRadius
@@ -4038,15 +4063,14 @@ function drawSimMenu() {
         {min: 0.5, max: 5.0},       // margin
         {min: 10, max: 60},         // worldSizeX
         {min: 10, max: 60},         // worldSizeY
-        {min: 10, max: 60},         // worldSizeZ
-        {min: 1, max: 160}         // cameraFOV
+        {min: 10, max: 60}          // worldSizeZ
     ];
     
     const knobRadius = 0.1 * menuScale;
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 4.6;  // Increased for 13 knobs
+    const menuHeight = knobSpacing * 4.5;  // Adjusted from 5 to 4.5 for 13 knobs (removed FOV)
     const padding = 1.7 * knobRadius;
     
     // Convert world coordinates to screen coordinates
@@ -4149,7 +4173,7 @@ function drawSimMenu() {
             'Quantity', 'Size', 'Visual Range',
             'Separation', 'Alignment', 'Cohesion',
             'Minimum Speed', 'Speed Limit', 'Corralling Force', 'Corral Margin',
-            'World Size X', 'World Size Y', 'World Size Z', 'Camera FOV'
+            'World Size X', 'World Size Y', 'World Size Z'
         ];
         ctx.font = `${0.35 * knobRadius}px verdana`;
         ctx.textAlign = 'center';
@@ -4173,7 +4197,6 @@ function drawSimMenu() {
             case 10: valueText = gWorldSizeX.toFixed(0); break;
             case 11: valueText = gWorldSizeY.toFixed(0); break;
             case 12: valueText = gWorldSizeZ.toFixed(0); break;
-            case 13: valueText = gCameraFOV.toFixed(0); break;
         }
         ctx.font = `${0.3 * knobRadius}px verdana`;
         ctx.fillStyle = `rgba(128, 230, 200, ${menuOpacity})`;
@@ -4662,10 +4685,12 @@ function drawColorMenu() {
     
     const ctx = gOverlayCtx;
     const knobRadius = 0.13 * menuScale; // Larger knob for color mix
+    const smallKnobRadius = 0.1 * menuScale; // Smaller knobs for saturation/lightness
     const colorWheelSize = 1.1 * menuScale; // Size of the color wheel rings
     const menuWidth = 0.6 * menuScale; // Match other menus
     const padding = 0.17 * menuScale;
-    const menuHeight = 0.75 * colorWheelSize;
+    const extraHeight = smallKnobRadius * 5.5; // Extra height for two knobs and checkbox at bottom
+    const menuHeight = 0.75 * colorWheelSize + extraHeight;
     const menuTopMargin = 0.33 * colorWheelSize; // Match other menus
     const radioY = -0.03 * menuScale; // Place radio buttons at very top of menu
     const wheelCenterY = 0.45 * colorWheelSize; // Place wheel center lower down
@@ -4873,15 +4898,18 @@ function drawColorMenu() {
     
     // Draw radio buttons for coloration mode (now above the color wheels)
     const radioRadius = knobRadius * 0.3;
-    const radioSpacing = menuWidth / 3;
+    const radioButtonCount = 3;
+    const radioTotalWidth = menuWidth * 0.9; // Use 90% of menu width
+    const radioStartX = (menuWidth - radioTotalWidth) / 2; // Center the group
+    const radioSpacing = radioTotalWidth / (radioButtonCount - 1); // Space between buttons
     const radioLabels = ['By Wheel', 'By Direction', 'By Speed'];
     
-    ctx.font = `${0.03 * menuScale}px verdana`;
+    ctx.font = `${0.035 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
     for (let i = 0; i < 3; i++) {
-        const radioX = (i + 0.5) * radioSpacing;
+        const radioX = radioStartX + i * radioSpacing;
         
         // Draw radio button circle
         ctx.beginPath();
@@ -4901,8 +4929,141 @@ function drawColorMenu() {
         }
         
         // Draw label
+        ctx.fillStyle = `hsla(0, 10%, 10%, ${colorMenuOpacity})`;
+        ctx.fillText(radioLabels[i], radioX + 2, 1 +radioY + 0.07 * menuScale);
         ctx.fillStyle = `hsla(0, 10%, 80%, ${colorMenuOpacity})`;
         ctx.fillText(radioLabels[i], radioX, radioY + 0.07 * menuScale);
+    }
+    
+    // Draw Saturation and Lightness knobs at the bottom
+    const bottomKnobsY = 0.75 * colorWheelSize + smallKnobRadius * 1.5;
+    const knobSpacing = menuWidth / 2;
+    
+    // Saturation knob (left)
+    const satKnobX = knobSpacing * 0;
+    ctx.beginPath();
+    ctx.arc(satKnobX, bottomKnobsY, smallKnobRadius * 1.05, 0, 2 * Math.PI);
+    ctx.fillStyle = `hsla(180, 30%, 10%, ${0.9 * colorMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(180, 20%, 60%, ${colorMenuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Saturation arc (reuse fullMeterSweep and meterStart from Mix knob)
+    const satValue = gBoidSaturation / 100;
+    const satPointerAngle = meterStart + fullMeterSweep * satValue;
+    
+    // Draw arc with gradient from gray to colored (reuse segmentCount)
+    for (let i = 0; i < segmentCount; i++) {
+        const segmentStart = meterStart + (i / segmentCount) * fullMeterSweep;
+        const segmentEnd = meterStart + ((i + 1) / segmentCount) * fullMeterSweep;
+        const satLevel = (i / segmentCount) * 100;
+        ctx.beginPath();
+        ctx.arc(satKnobX, bottomKnobsY, smallKnobRadius * 0.8, segmentStart, segmentEnd);
+        ctx.strokeStyle = `hsla(${gPrimaryHue}, ${satLevel}%, ${gBoidLightness}%, ${colorMenuOpacity})`;
+        ctx.lineWidth = 6;
+        ctx.stroke();
+    }
+    
+    // Draw needle
+    const satPointerLength = smallKnobRadius * 0.6;
+    const satPointerEndX = satKnobX + Math.cos(satPointerAngle) * satPointerLength;
+    const satPointerEndY = bottomKnobsY + Math.sin(satPointerAngle) * satPointerLength;
+    ctx.beginPath();
+    ctx.moveTo(satKnobX, bottomKnobsY);
+    ctx.lineTo(satPointerEndX, satPointerEndY);
+    ctx.strokeStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw label
+    ctx.font = `${0.35 * smallKnobRadius}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(0, 10%, 10%, ${colorMenuOpacity})`;
+    ctx.fillText('Saturation', satKnobX + 2, 1 +bottomKnobsY + 1.5 * smallKnobRadius);
+    ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
+    ctx.fillText('Saturation', satKnobX, bottomKnobsY + 1.5 * smallKnobRadius + 1);
+    
+    // Lightness knob (right)
+    const lightKnobX = knobSpacing * 2;
+    ctx.beginPath();
+    ctx.arc(lightKnobX, bottomKnobsY, smallKnobRadius * 1.05, 0, 2 * Math.PI);
+    ctx.fillStyle = `hsla(180, 30%, 10%, ${0.9 * colorMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(180, 20%, 60%, ${colorMenuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Lightness arc (reuse fullMeterSweep and meterStart from Mix knob)
+    const lightValue = gBoidLightness / 100;
+    const lightPointerAngle = meterStart + fullMeterSweep * lightValue;
+    
+    // Draw arc with gradient from dark to light (reuse segmentCount)
+    for (let i = 0; i < segmentCount; i++) {
+        const segmentStart = meterStart + (i / segmentCount) * fullMeterSweep;
+        const segmentEnd = meterStart + ((i + 1) / segmentCount) * fullMeterSweep;
+        const lightLevel = (i / segmentCount) * 100;
+        ctx.beginPath();
+        ctx.arc(lightKnobX, bottomKnobsY, smallKnobRadius * 0.8, segmentStart, segmentEnd);
+        ctx.strokeStyle = `hsla(${gPrimaryHue}, ${gBoidSaturation}%, ${lightLevel}%, ${colorMenuOpacity})`;
+        ctx.lineWidth = 6;
+        ctx.stroke();
+    }
+    
+    // Draw needle
+    const lightPointerLength = smallKnobRadius * 0.6;
+    const lightPointerEndX = lightKnobX + Math.cos(lightPointerAngle) * lightPointerLength;
+    const lightPointerEndY = bottomKnobsY + Math.sin(lightPointerAngle) * lightPointerLength;
+    ctx.beginPath();
+    ctx.moveTo(lightKnobX, bottomKnobsY);
+    ctx.lineTo(lightPointerEndX, lightPointerEndY);
+    ctx.strokeStyle = `hsla(0, 0%, 90%, ${colorMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw label
+    ctx.fillStyle = `hsla(0, 10%, 10%, ${colorMenuOpacity})`;
+    ctx.fillText('Lightness', lightKnobX + 2, 1 + bottomKnobsY + 1.5 * smallKnobRadius + 1);
+    ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
+    ctx.fillText('Lightness', lightKnobX, bottomKnobsY + 1.5 * smallKnobRadius);
+    
+    // Draw Artwork Selection radio buttons at the bottom
+    const artworkRadioY = bottomKnobsY + 2.5 * smallKnobRadius;
+    const artworkRadioRadius = smallKnobRadius * 0.4;
+    const artworkOptions = ['miro', 'dali', 'bosch'];
+    const artworkLabels = ['Miro', 'Dali', 'Bosch'];
+    const artworkRadioSpacing = menuWidth / 3;
+    
+    ctx.font = `${0.035 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    for (let i = 0; i < 3; i++) {
+        const artRadioX = (i + 0.5) * artworkRadioSpacing;
+        
+        // Draw radio button circle
+        ctx.beginPath();
+        ctx.arc(artRadioX, artworkRadioY, artworkRadioRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsla(0, 30%, 20%, ${0.8 * colorMenuOpacity})`;
+        ctx.strokeStyle = `hsla(0, 20%, 60%, ${colorMenuOpacity})`;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Fill if selected
+        if (gSelectedArtwork === artworkOptions[i]) {
+            ctx.beginPath();
+            ctx.arc(artRadioX, artworkRadioY, artworkRadioRadius * 0.5, 0, 2 * Math.PI);
+            ctx.fillStyle = `hsla(0, 60%, 70%, ${colorMenuOpacity})`;
+            ctx.fill();
+        }
+        
+        // Draw label
+        ctx.fillStyle = `hsla(0, 10%, 10%, ${colorMenuOpacity})`;
+        ctx.fillText(artworkLabels[i], artRadioX + 2, 1 + artworkRadioY + 0.07 * menuScale);
+        ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
+        ctx.fillText(artworkLabels[i], artRadioX, artworkRadioY + 0.07 * menuScale);
     }
     
     ctx.restore();
@@ -4916,7 +5077,7 @@ function drawLightingMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2; // 3 knobs across
-    const menuHeight = knobSpacing * 5.5; // 6 rows (now with 16 knobs)
+    const menuHeight = knobSpacing * 6; // 6.5 rows (now with 17 knobs)
     const padding = 1.7 * knobRadius;
     
     const menuOriginX = lightingMenuX * window.innerWidth;
@@ -4976,7 +5137,8 @@ function drawLightingMenu() {
         { label: 'Spotlight 2', value: gSpotlight2Intensity, min: 0, max: 2 },
         { label: 'Hue', value: gSpotlight2Hue, min: 0, max: 360 },
         { label: 'Saturation', value: gSpotlight2Saturation, min: 0, max: 100 },
-        { label: 'Penumbra', value: gSpotlightPenumbra, min: 0, max: 1 }
+        { label: 'Penumbra', value: gSpotlightPenumbra, min: 0, max: 1 },
+        { label: 'Headlight', value: gHeadlightIntensity, min: 0, max: 2 }
     ];
     
     const fullMeterSweep = 1.6 * Math.PI;
@@ -5090,9 +5252,9 @@ function drawLightingMenu() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // Check if this is an intensity knob at 0 (Ambient, Overhead, Globe, Spot1, Spot2)
+        // Check if this is an intensity knob at 0 (Ambient, Overhead, Globe, Spot1, Spot2, Headlight)
         let displayValue;
-        if ((i === 0 || i === 3 || i === 6 || i === 9 || i === 12) && knobs[i].value === 0) {
+        if ((i === 0 || i === 3 || i === 6 || i === 9 || i === 12 || i === 16) && knobs[i].value === 0) {
             displayValue = 'OFF';
             ctx.fillStyle = `hsla(0, 80%, 50%, ${lightingMenuOpacity})`; // Red color for OFF
         } else if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13) {
@@ -5134,6 +5296,234 @@ function drawLightingMenu() {
     ctx.restore();
 }
 
+function drawCameraMenu() {
+    if (cameraMenuOpacity <= 0) return;
+    
+    const ctx = gOverlayCtx;
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuWidth = knobSpacing * 2 * 0.75;  // 25% narrower than original
+    const padding = 0.17 * menuScale;
+    const radioButtonSize = 0.04 * menuScale;
+    const radioButtonSpacing = 0.104 * menuScale;  // Increased 30% from 0.08
+    const knobTopMargin = 0.05 * menuScale;
+    const radioSectionHeight = 7 * radioButtonSpacing + 0.05 * menuScale;
+    const menuHeight = radioSectionHeight + knobRadius * 3;
+    
+    // Position menu
+    const menuOriginX = cameraMenuX * window.innerWidth;
+    const menuOriginY = cameraMenuY * window.innerHeight;
+    
+    ctx.save();
+    ctx.translate(menuOriginX, menuOriginY);
+    
+    // Draw menu background
+    const cornerRadius = 8;
+    ctx.beginPath();
+    ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+    const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsl(210, 30%, 20%, ${cameraMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsl(210, 20%, 10%, ${cameraMenuOpacity})`);
+    ctx.fillStyle = menuGradient;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(210, 20%, 50%, ${cameraMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw title
+    ctx.fillStyle = `hsla(210, 10%, 80%, ${cameraMenuOpacity})`;
+    ctx.font = `bold ${0.05 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.fillText('CAMERA', menuWidth / 2, -padding + 0.05 * menuScale);
+    
+    // Draw close button
+    const closeIconRadius = 0.1 * menuScale * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.02 * menuScale;
+    const closeIconY = -padding + closeIconRadius + 0.02 * menuScale;
+    ctx.beginPath();
+    ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(180, 40, 40, ${cameraMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(0, 0, 0, ${cameraMenuOpacity})`;
+    ctx.lineWidth = 2;
+    const xSize = closeIconRadius * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+    ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+    ctx.stroke();
+    
+    // Draw radio buttons for camera modes
+    const cameraModeNames = [
+        'Auto Orbit Cam CW',
+        'Auto Orbit Cam CCW', 
+        'Manual Orbit Cam',
+        'Follow Boid, Look Ahead',
+        'Lead Boid, Look Behind',
+        'Free Roam Cam',
+        'Dolly Cam'
+    ];
+    
+    const radioStartY = 0.03 * menuScale;
+    
+    for (let i = 0; i < cameraModeNames.length; i++) {
+        const radioY = radioStartY + i * radioButtonSpacing;
+        const radioX = -0.02 * menuScale;
+        
+        // Draw radio button circle
+        ctx.beginPath();
+        ctx.arc(radioX, radioY, radioButtonSize, 0, 2 * Math.PI);
+        ctx.strokeStyle = `hsla(210, 20%, 60%, ${cameraMenuOpacity})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Fill if selected
+        if (gCameraMode === i) {
+            ctx.beginPath();
+            ctx.arc(radioX, radioY, radioButtonSize * 0.6, 0, 2 * Math.PI);
+            ctx.fillStyle = `hsla(210, 80%, 70%, ${cameraMenuOpacity})`;
+            ctx.fill();
+        }
+        
+        // Draw label
+        ctx.font = `${0.035 * menuScale}px verdana`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = `hsla(210, 10%, ${gCameraMode === i ? 95 : 80}%, ${cameraMenuOpacity})`;
+        ctx.fillText(cameraModeNames[i], radioX + radioButtonSize + 0.03 * menuScale, radioY);
+    }
+    
+    // Draw FOV and Dolly Speed knobs at bottom (side by side, centered)
+    const horizontalKnobSpacing = knobRadius * 3;
+    const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+    const speedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+    const knobY = radioSectionHeight + knobRadius * 1.5;
+    
+    // ===== FOV Knob =====
+    // Draw knob background
+    ctx.beginPath();
+    ctx.arc(fovKnobX, knobY, knobRadius * 1.05, 0, 2 * Math.PI);
+    ctx.fillStyle = `hsla(210, 30%, 10%, ${0.9 * cameraMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(210, 20%, 60%, ${cameraMenuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Calculate FOV knob angle
+    const fovMin = 20;
+    const fovMax = 120;
+    const fovNormalized = (gCameraFOV - fovMin) / (fovMax - fovMin);
+    const fullMeterSweep = 1.6 * Math.PI;
+    const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+    const fovPointerAngle = meterStart + fullMeterSweep * fovNormalized;
+    
+    // Draw meter arc
+    ctx.strokeStyle = `hsla(210, 60%, 60%, ${cameraMenuOpacity})`;
+    ctx.beginPath();
+    ctx.arc(fovKnobX, knobY, knobRadius * 0.85, meterStart, fovPointerAngle);
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    
+    // Draw needle
+    const pointerLength = knobRadius * 0.6;
+    const fovPointerEndX = fovKnobX + Math.cos(fovPointerAngle) * pointerLength;
+    const fovPointerEndY = knobY + Math.sin(fovPointerAngle) * pointerLength;
+    ctx.beginPath();
+    ctx.moveTo(fovKnobX, knobY);
+    ctx.lineTo(fovPointerEndX, fovPointerEndY);
+    ctx.strokeStyle = `hsla(210, 30%, 80%, ${cameraMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw FOV value
+    ctx.font = `${0.3 * knobRadius}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(210, 60%, 70%, ${cameraMenuOpacity})`;
+    ctx.fillText(gCameraFOV.toFixed(0), fovKnobX, knobY + 0.6 * knobRadius);
+    
+    // Draw label
+    ctx.font = `${0.35 * knobRadius}px verdana`;
+    ctx.fillStyle = `hsla(210, 10%, 90%, ${cameraMenuOpacity})`;
+    ctx.fillText('Field of View', fovKnobX, knobY + 1.35 * knobRadius);
+    
+    // ===== Dolly Speed Knob =====
+    // Draw knob background
+    ctx.beginPath();
+    ctx.arc(speedKnobX, knobY, knobRadius * 1.05, 0, 2 * Math.PI);
+    ctx.fillStyle = `hsla(210, 30%, 10%, ${0.9 * cameraMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(210, 20%, 60%, ${cameraMenuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Calculate dolly speed knob angle
+    const speedMin = 0.01;
+    const speedMax = 0.2;
+    const speedNormalized = (gDollySpeed - speedMin) / (speedMax - speedMin);
+    const speedPointerAngle = meterStart + fullMeterSweep * speedNormalized;
+    
+    // Draw meter arc
+    ctx.strokeStyle = `hsla(30, 70%, 60%, ${cameraMenuOpacity})`;
+    ctx.beginPath();
+    ctx.arc(speedKnobX, knobY, knobRadius * 0.85, meterStart, speedPointerAngle);
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    
+    // Draw needle
+    const speedPointerEndX = speedKnobX + Math.cos(speedPointerAngle) * pointerLength;
+    const speedPointerEndY = knobY + Math.sin(speedPointerAngle) * pointerLength;
+    ctx.beginPath();
+    ctx.moveTo(speedKnobX, knobY);
+    ctx.lineTo(speedPointerEndX, speedPointerEndY);
+    ctx.strokeStyle = `hsla(210, 30%, 80%, ${cameraMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw dolly speed value
+    ctx.font = `${0.3 * knobRadius}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(30, 70%, 70%, ${cameraMenuOpacity})`;
+    ctx.fillText((gDollySpeed * 100).toFixed(0), speedKnobX, knobY + 0.6 * knobRadius);
+    
+    // Draw label
+    ctx.font = `${0.35 * knobRadius}px verdana`;
+    ctx.fillStyle = `hsla(210, 10%, 90%, ${cameraMenuOpacity})`;
+    ctx.fillText('Dolly Speed', speedKnobX, knobY + 1.35 * knobRadius);
+    
+    // Update knob positions for mouse interaction
+    updateKnobPositions();
+    
+    ctx.restore();
+}
+
+// Store FOV knob position for interaction
+var fovKnobInfo = { x: 0, y: 0, radius: 0 };
+var dollySpeedKnobInfo = { x: 0, y: 0, radius: 0 };
+
+// Helper to store knob positions (called from drawCameraMenu)
+function updateKnobPositions() {
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuWidth = knobSpacing * 2 * 0.75;  // 25% narrower than original
+    const radioButtonSpacing = 0.104 * menuScale;
+    const radioSectionHeight = 7 * radioButtonSpacing + 0.05 * menuScale;
+    
+    const menuOriginX = cameraMenuX * window.innerWidth;
+    const menuOriginY = cameraMenuY * window.innerHeight;
+    
+    const horizontalKnobSpacing = knobRadius * 3;
+    const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+    const speedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+    const knobY = radioSectionHeight + knobRadius * 1.5;
+    
+    // Convert to screen pixel coordinates
+    fovKnobInfo = { x: menuOriginX + fovKnobX, y: menuOriginY + knobY, radius: knobRadius };
+    dollySpeedKnobInfo = { x: menuOriginX + speedKnobX, y: menuOriginY + knobY, radius: knobRadius };
+}
+
 // Initialize the color wheel on an offscreen canvas
 function initColorWheel() {
     // Create offscreen canvas for color rings
@@ -5150,6 +5540,9 @@ function initColorWheel() {
     const innerRadius = outerRadius * 0.65; // Reduced inner ring size
     const innerInnerRadius = outerRadius * 0.47; // Reduced inner ring size
     
+    // Clear canvas first
+    gColorWheelCtx.clearRect(0, 0, size, size);
+    
     // Draw outer color ring (primary)
     for (let angle = 0; angle < 360; angle += 1) {
         const startAngle = angle * Math.PI / 180;
@@ -5160,7 +5553,7 @@ function initColorWheel() {
         gColorWheelCtx.arc(centerX, centerY, outerInnerRadius, endAngle, startAngle, true);
         gColorWheelCtx.closePath();
         
-        gColorWheelCtx.fillStyle = `hsl(${angle}, 100%, 50%)`;
+        gColorWheelCtx.fillStyle = `hsl(${angle}, ${gBoidSaturation}%, ${gBoidLightness}%)`;
         gColorWheelCtx.fill();
     }
     
@@ -5174,7 +5567,7 @@ function initColorWheel() {
         gColorWheelCtx.arc(centerX, centerY, innerInnerRadius, endAngle, startAngle, true);
         gColorWheelCtx.closePath();
         
-        gColorWheelCtx.fillStyle = `hsl(${angle}, 100%, 50%)`;
+        gColorWheelCtx.fillStyle = `hsl(${angle}, ${gBoidSaturation}%, ${gBoidLightness}%)`;
         gColorWheelCtx.fill();
     }
 }
@@ -5607,6 +6000,459 @@ function startAnimations() {
     gColumnBaseSliding = true;
 }
 
+// ------------------------------------------
+// Create dolly rails visualization
+function createDollyRails() {
+    // Remove existing dolly rails if any
+    if (gDollyRailsMesh) {
+        gThreeScene.remove(gDollyRailsMesh);
+        // Dispose of geometries and materials
+        gDollyRailsMesh.traverse((child) => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(mat => mat.dispose());
+                } else {
+                    child.material.dispose();
+                }
+            }
+        });
+        gDollyRailsMesh = null;
+    }
+    
+    const railsGroup = new THREE.Group();
+    railsGroup.name = 'DollyRails';
+    
+    const railRadius = 0.1;
+    const railSpacing = 1.5; // Distance between the two rails
+    const railLength = gDollyRailsLength;
+    const crossbeamSpacing = 2.5; // Distance between crossbeams
+    
+    // Create materials
+    const railMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x444444, 
+        metalness: 0.8, 
+        roughness: 0.2 
+    });
+    const crossbeamMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x555555, 
+        metalness: 0.6, 
+        roughness: 0.3 
+    });
+    const endCapMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xcc6666, 
+        metalness: 0.5, 
+        roughness: 0.4 
+    });
+    
+    // Create rail geometry
+    const railGeometry = new THREE.CylinderGeometry(railRadius, railRadius, railLength, 16);
+    railGeometry.rotateZ(Math.PI / 2); // Make horizontal along X axis
+    
+    // Create two parallel rails
+    const rail1 = new THREE.Mesh(railGeometry, railMaterial);
+    rail1.position.set(0, 0, -railSpacing / 2);
+    rail1.castShadow = true;
+    rail1.receiveShadow = true;
+    rail1.userData = { type: 'rail' };
+    railsGroup.add(rail1);
+    
+    const rail2 = new THREE.Mesh(railGeometry, railMaterial);
+    rail2.position.set(0, 0, railSpacing / 2);
+    rail2.castShadow = true;
+    rail2.receiveShadow = true;
+    rail2.userData = { type: 'rail' };
+    railsGroup.add(rail2);
+    
+    // Create crossbeams
+    const crossbeamGeometry = new THREE.CylinderGeometry(railRadius * 0.8, railRadius * 0.8, railSpacing, 12);
+    crossbeamGeometry.rotateX(Math.PI / 2); // Make horizontal perpendicular to rails
+    const numCrossbeams = Math.floor(railLength / crossbeamSpacing) + 1;
+    
+    for (let i = 0; i < numCrossbeams; i++) {
+        const x = -railLength / 2 + i * crossbeamSpacing;
+        const crossbeam = new THREE.Mesh(crossbeamGeometry, crossbeamMaterial);
+        crossbeam.position.set(x, 0, 0);
+        crossbeam.castShadow = true;
+        crossbeam.receiveShadow = true;
+        crossbeam.userData = { type: 'crossbeam' };
+        railsGroup.add(crossbeam);
+    }
+    
+    // Create end caps for dragging
+    // End cap diameter should equal the clear space between rails
+    const clearSpace = railSpacing - (2 * railRadius);
+    const endCapGeometry = new THREE.SphereGeometry(clearSpace / 2, 16, 16);
+    
+    const startEndCap = new THREE.Mesh(endCapGeometry, endCapMaterial);
+    startEndCap.position.set(-railLength / 2, 0, 0);
+    startEndCap.name = 'startEndCap';
+    startEndCap.castShadow = true;
+    railsGroup.add(startEndCap);
+    
+    const endEndCap = new THREE.Mesh(endCapGeometry, endCapMaterial);
+    endEndCap.position.set(railLength / 2, 0, 0);
+    endEndCap.name = 'endEndCap';
+    endEndCap.castShadow = true;
+    railsGroup.add(endEndCap);
+    
+    // Position the rails group
+    railsGroup.position.copy(gDollyRailsPosition);
+    railsGroup.rotation.y = gDollyRailsRotation;
+    
+    gDollyRailsMesh = railsGroup;
+    gThreeScene.add(gDollyRailsMesh);
+}
+
+// ------------------------------------------
+// Create dolly cart (wheels and platform)
+function createDollyCart() {
+    // Remove existing dolly cart if any
+    if (gDollyCartMesh) {
+        gThreeScene.remove(gDollyCartMesh);
+        gDollyCartMesh.traverse((child) => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(mat => mat.dispose());
+                } else {
+                    child.material.dispose();
+                }
+            }
+        });
+        gDollyCartMesh = null;
+    }
+    
+    const cartGroup = new THREE.Group();
+    cartGroup.name = 'DollyCart';
+    
+    const railSpacing = 1.5; // Must match rails
+    const wheelRadius = 0.15;
+    const wheelThickness = 0.2;
+    const platformWidth = railSpacing + 0.5;
+    const platformLength = 2.0;
+    const platformHeight = 0.1;
+    const wheelHeight = 0.24; // Height of wheel axle above ground
+    
+    // Materials
+    const wheelMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x333333, 
+        metalness: 0.7, 
+        roughness: 0.3 
+    });
+    const platformMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x8B4513, 
+        metalness: 0.1, 
+        roughness: 0.8 
+    });
+    
+    // Create 4 wheels (cylinders)
+    const wheelGeometry = new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelThickness, 16);
+    wheelGeometry.rotateX(Math.PI / 2); // Align along Z axis (perpendicular to rails)
+    
+    const wheelPositions = [
+        [-platformLength/2 + 0.3, wheelHeight, -railSpacing/2],
+        [-platformLength/2 + 0.3, wheelHeight, railSpacing/2],
+        [platformLength/2 - 0.3, wheelHeight, -railSpacing/2],
+        [platformLength/2 - 0.3, wheelHeight, railSpacing/2]
+    ];
+    
+    wheelPositions.forEach(pos => {
+        const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+        wheel.position.set(pos[0], pos[1], pos[2]);
+        wheel.castShadow = true;
+        cartGroup.add(wheel);
+    });
+    
+    // Create platform
+    const platformGeometry = new THREE.BoxGeometry(platformLength, platformHeight, platformWidth);
+    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+    platform.position.set(0, wheelHeight + wheelRadius + platformHeight/2, 0);
+    platform.castShadow = true;
+    platform.receiveShadow = true;
+    cartGroup.add(platform);
+    
+    gDollyCartMesh = cartGroup;
+    gThreeScene.add(gDollyCartMesh);
+    
+    // Position will be updated in animation loop
+    updateDollyCartPosition();
+}
+
+// Update dolly cart position based on gDollyPosition
+function updateDollyCartPosition() {
+    if (!gDollyCartMesh) return;
+    
+    // Calculate position along rails (same as camera in dolly mode)
+    const localX = (gDollyPosition - 0.5) * gDollyRailsLength;
+    
+    // Transform from local to world coordinates
+    const worldX = gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * localX;
+    const worldZ = gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * localX;
+    
+    gDollyCartMesh.position.set(worldX, gDollyRailsPosition.y, worldZ);
+    gDollyCartMesh.rotation.y = gDollyRailsRotation;
+}
+
+// ------------------------------------------
+// Load film camera model for dolly
+function loadDollyCameraModel() {
+    // Check if GLTFLoader is available
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var loader = new THREE.GLTFLoader(gLoadingManager);
+        loader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/simpleCamera.gltf',
+            function(gltf) {
+                var cameraModel = gltf.scene;
+                
+                // Scale the camera model to appropriate size
+                cameraModel.scale.set(4, 4, 4);
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                cameraModel.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Apply materials and enable shadows
+                cameraModel.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                // Create camera mount rod (thin semi-transparent cylinder)
+                const rodRadius = 0.05;
+                const rodGeometry = new THREE.CylinderGeometry(rodRadius, rodRadius, 1, 8);
+                const rodMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x888888, 
+                    metalness: 0.8, 
+                    roughness: 0.2,
+                    transparent: true,
+                    opacity: 0.5
+                });
+                gDollyCameraMountRod = new THREE.Mesh(rodGeometry, rodMaterial);
+                gDollyCameraMountRod.castShadow = true;
+                
+                // Store the camera model
+                gDollyCameraMesh = cameraModel;
+                gThreeScene.add(gDollyCameraMesh);
+                gThreeScene.add(gDollyCameraMountRod);
+                
+                // Initial position update
+                updateDollyCameraModel();
+            },
+            undefined,
+            function(error) {
+                console.error('Error loading camera model:', error);
+            }
+        );
+    } else {
+        console.error('THREE.GLTFLoader is not loaded.');
+    }
+}
+
+// Update dolly camera model position and orientation
+function updateDollyCameraModel() {
+    if (!gDollyCameraMesh) return;
+    
+    // Calculate position along rails (same as camera and cart)
+    const localX = (gDollyPosition - 0.5) * gDollyRailsLength;
+    
+    // Transform from local to world coordinates
+    const worldX = gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * localX;
+    const worldZ = gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * localX;
+    
+    // Position model so lens (at y=0 in model local space) aligns with actual camera height
+    // The lens is at y=0 in the model's coordinate system, so we subtract that from camera height
+    const lensLocalY = 0; // Y-position of lens in model's local coordinates
+    gDollyCameraMesh.position.set(worldX, gDollyCameraHeight - lensLocalY, worldZ);
+    
+    // Orient the camera model to match the actual camera look direction
+    // Calculate the same look direction as the actual camera
+    const baseLookDirection = new THREE.Vector3(
+        Math.cos(gDollyRailsRotation + gDollyCameraYaw),
+        Math.sin(gDollyCameraPitch),
+        -Math.sin(gDollyRailsRotation + gDollyCameraYaw)
+    );
+    baseLookDirection.normalize();
+    
+    // Point the camera model in that direction (negate because model's default orientation is backward)
+    const lookAtPoint = gDollyCameraMesh.position.clone().sub(baseLookDirection);
+    gDollyCameraMesh.lookAt(lookAtPoint);
+    
+    // Adjust for model's internal coordinate system (90-degree offset)
+    gDollyCameraMesh.rotateY(Math.PI / 2);
+    
+    // Update camera mount rod
+    if (gDollyCameraMountRod) {
+        // Calculate dolly platform height
+        const wheelHeight = 0.24;
+        const wheelRadius = 0.15;
+        const platformHeight = 0.1;
+        const platformTopY = gDollyRailsPosition.y + wheelHeight + wheelRadius + platformHeight;
+        
+        // Rod extends from camera bottom down to platform top
+        const rodLength = gDollyCameraHeight - platformTopY;
+        const rodMidpointY = (gDollyCameraHeight + platformTopY) / 2;
+        
+        // Position and scale the rod
+        gDollyCameraMountRod.position.set(worldX, rodMidpointY, worldZ);
+        gDollyCameraMountRod.scale.set(1, rodLength, 1);
+        gDollyCameraMountRod.rotation.y = gDollyRailsRotation;
+    }
+}
+
+// Update dolly rails position and rotation
+function updateDollyRailsTransform() {
+    if (gDollyRailsMesh) {
+        gDollyRailsMesh.position.copy(gDollyRailsPosition);
+        gDollyRailsMesh.rotation.y = gDollyRailsRotation;
+    }
+}
+
+// Update existing dolly rails mesh during drag (more efficient than recreating)
+function updateDollyRailsMeshForDrag(newLength) {
+    if (!gDollyRailsMesh) return;
+    
+    // Just recreate - this is simpler and more reliable
+    createDollyRails();
+}
+
+// Update dolly rails geometry for new length
+function updateDollyRailsLength(newLength) {
+    if (!gDollyRailsMesh) return;
+    
+    const railRadius = 0.1;
+    const railSpacing = 1.5;
+    const crossbeamSpacing = 2.5;
+    
+    // Find and update rails and end caps
+    const itemsToRemove = [];
+    gDollyRailsMesh.children.forEach(child => {
+        if (child.name === 'startEndCap') {
+            child.position.x = -newLength / 2;
+        } else if (child.name === 'endEndCap') {
+            child.position.x = newLength / 2;
+        } else if (child.userData && child.userData.type === 'rail') {
+            // Update rail geometry
+            child.geometry.dispose();
+            const newRailGeometry = new THREE.CylinderGeometry(railRadius, railRadius, newLength, 16);
+            newRailGeometry.rotateZ(Math.PI / 2);
+            child.geometry = newRailGeometry;
+        } else if (child.userData && child.userData.type === 'crossbeam') {
+            // Mark crossbeams for removal
+            itemsToRemove.push(child);
+        }
+    });
+    
+    // Remove old crossbeams
+    itemsToRemove.forEach(item => {
+        gDollyRailsMesh.remove(item);
+        if (item.geometry) item.geometry.dispose();
+    });
+    
+    // Add new crossbeams
+    const crossbeamGeometry = new THREE.CylinderGeometry(railRadius * 0.8, railRadius * 0.8, railSpacing, 12);
+    crossbeamGeometry.rotateX(Math.PI / 2); // Make horizontal perpendicular to rails
+    const crossbeamMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x555555, 
+        metalness: 0.6, 
+        roughness: 0.3 
+    });
+    const numCrossbeams = Math.floor(newLength / crossbeamSpacing) + 1;
+    
+    for (let i = 0; i < numCrossbeams; i++) {
+        const x = -newLength / 2 + i * crossbeamSpacing;
+        const crossbeam = new THREE.Mesh(crossbeamGeometry, crossbeamMaterial);
+        crossbeam.position.set(x, 0, 0);
+        crossbeam.castShadow = true;
+        crossbeam.receiveShadow = true;
+        crossbeam.userData = { type: 'crossbeam' };
+        gDollyRailsMesh.add(crossbeam);
+    }
+}
+
+// Check if click is on dolly rails
+function checkDollyRailsClick(clientX, clientY) {
+    if (!cameraMenuVisible || !gDollyRailsMesh) return false;
+    
+    // Convert screen coordinates to 3D world ray
+    const mouse = new THREE.Vector2();
+    mouse.x = (clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+    
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, gCamera);
+    
+    // Test intersection with dolly rails mesh
+    const intersects = raycaster.intersectObjects(gDollyRailsMesh.children, true);
+    
+    if (intersects.length > 0) {
+        const hitObject = intersects[0].object;
+        
+        // Check if hit an end cap
+        if (hitObject.name === 'startEndCap') {
+            gDraggingDollyEnd = 'start';
+            gDraggingDolly = true;
+            gDollyDragStartMouseX = clientX;
+            gDollyDragStartMouseY = clientY;
+            gDollyDragStartRotation = gDollyRailsRotation;
+            gDollyDragStartPosition = gDollyRailsPosition.clone();
+            // Calculate and store the pivot position (end cap, which stays fixed)
+            const pivotLocalOffset = gDollyRailsLength / 2;
+            gDollyDragPivotPosition = new THREE.Vector3(
+                gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * pivotLocalOffset,
+                0,
+                gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * pivotLocalOffset
+            );
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        } else if (hitObject.name === 'endEndCap') {
+            gDraggingDollyEnd = 'end';
+            gDraggingDolly = true;
+            gDollyDragStartMouseX = clientX;
+            gDollyDragStartMouseY = clientY;
+            gDollyDragStartRotation = gDollyRailsRotation;
+            gDollyDragStartPosition = gDollyRailsPosition.clone();
+            // Calculate and store the pivot position (start cap, which stays fixed)
+            const pivotLocalOffset = -gDollyRailsLength / 2;
+            gDollyDragPivotPosition = new THREE.Vector3(
+                gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * pivotLocalOffset,
+                0,
+                gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * pivotLocalOffset
+            );
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        } else {
+            // Dragging the rails body - translate horizontally
+            gDraggingDollyEnd = null;
+            gDraggingDolly = true;
+            gDollyDragStartMouseX = clientX;
+            gDollyDragStartMouseY = clientY;
+            gDollyDragStartPosition = gDollyRailsPosition.clone();
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 // ------------------------------------------		
 function initThreeScene() {
     // Create loading manager to track all asset loading
@@ -5782,7 +6628,7 @@ function initThreeScene() {
             );
             
             gRug.rotation.x = -Math.PI / 2; // Lie flat on floor
-            gRug.position.set(-6, 0, 0); // Position between teapot and chair, at floor level
+            gRug.position.set(-6, 0.015, 0); // Position between teapot and chair, slightly above floor
             gRug.receiveShadow = true;
             gThreeScene.add(gRug);
             
@@ -8881,7 +9727,7 @@ function initThreeScene() {
     container.addEventListener( 'pointermove', onPointer, false );
     container.addEventListener( 'pointerup', onPointer, false );
     
-    // Wheel event for camera distance in follow/lead modes
+    // Wheel event for camera distance in follow/lead modes and height in dolly mode
     container.addEventListener('wheel', function(evt) {
         if (gCameraMode === 3 || gCameraMode === 4) {
             evt.preventDefault();
@@ -8890,6 +9736,13 @@ function initThreeScene() {
             gCameraDistanceOffset += evt.deltaY * zoomSpeed * 0.01;
             // Clamp distance offset to reasonable range
             gCameraDistanceOffset = Math.max(-5, Math.min(10, gCameraDistanceOffset));
+        } else if (gCameraMode === 6) {
+            evt.preventDefault();
+            // Adjust camera height in dolly mode
+            const heightSpeed = 0.1;
+            gDollyCameraHeight -= evt.deltaY * heightSpeed * 0.01;
+            // Clamp height to reasonable range (allow above and below world bounds)
+            gDollyCameraHeight = Math.max(-15, Math.min(30, gDollyCameraHeight));
         }
     }, { passive: false });
 }
@@ -9036,12 +9889,15 @@ function onPointer(evt) {
                 colorMenuVisible = false;
                 lightingMenuVisibleBeforeHide = lightingMenuVisible;
                 lightingMenuVisible = false;
+                cameraMenuVisibleBeforeHide = cameraMenuVisible;
+                cameraMenuVisible = false;
             } else {
                 menuVisible = menuVisibleBeforeHide;
                 stylingMenuVisible = stylingMenuVisibleBeforeHide;
                 instructionsMenuVisible = instructionsMenuVisibleBeforeHide;
                 colorMenuVisible = colorMenuVisibleBeforeHide;
                 lightingMenuVisible = lightingMenuVisibleBeforeHide;
+                cameraMenuVisible = cameraMenuVisibleBeforeHide;
             }
             return;
         }
@@ -9068,6 +9924,16 @@ function onPointer(evt) {
         
         // Check lighting submenu clicks FIRST (before main menu)
         if (checkLightingMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
+        // Check camera menu click
+        if (checkCameraMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
+        // Check dolly rails click (when in dolly camera mode)
+        if (checkDollyRailsClick(evt.clientX, evt.clientY)) {
             return;
         }
         
@@ -9099,46 +9965,89 @@ function onPointer(evt) {
             const itemY2 = itemY + itemHeight + padding;
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
                 evt.clientY >= itemY2 && evt.clientY <= itemY2 + itemHeight) {
-                // Camera mode cycling
-                const previousMode = gCameraMode;
-                gCameraMode = (gCameraMode + 1) % 6;
                 
-                // Set camera mode text notification
-                const cameraModeNames = ['Orbit Scene Clockwise', 'Orbit Scene Counterclockwise', 'Static Camera', 'Follow Boid, Look Ahead', 'Lead Boid, Look Behind', 'Free Roaming Camera'];
-                gCameraModeText = cameraModeNames[gCameraMode];
-                gCameraModeTextTimer = gCameraModeTextDuration;
-                
-                // Save camera position when leaving any third-person mode (0, 1, or 2)
-                if (previousMode >= 0 && previousMode <= 2) {
-                    gSavedCameraPosition = gCamera.position.clone();
-                    gSavedCameraTarget = gCameraControl.target.clone();
-                }
-                
-                // Restore camera position when returning to any third-person mode from first-person
-                if (gCameraMode >= 0 && gCameraMode <= 2 && previousMode >= 3 && gSavedCameraPosition && gSavedCameraTarget) {
-                    gCamera.position.copy(gSavedCameraPosition);
-                    gCameraControl.target.copy(gSavedCameraTarget);
-                    gCameraControl.update();
-                }
-                
-                // Initialize walking camera position when entering mode 5
-                if (gCameraMode === 5) {
-                    gWalkingCameraPosition.set(0, 6.8, 0);
-                    gWalkingCameraYaw = -Math.PI / 2; // Point in -x direction
-                    gWalkingCameraPitch = 0;
-                }
-                
-                // Enable/disable OrbitControls based on camera mode
-                // Modes 0, 1, 2 use OrbitControls; modes 3, 4, 5 don't
-                if (gCameraMode >= 0 && gCameraMode <= 2) {
-                    gCameraControl.enabled = true;
+                if (!cameraMenuVisible) {
+                    // Open camera menu without cycling mode
+                    cameraMenuVisible = true;
+                    // Create dolly rails and cart if they don't exist
+                    if (!gDollyRailsMesh) {
+                        createDollyRails();
+                    }
+                    if (!gDollyCartMesh) {
+                        createDollyCart();
+                    }
+                    if (!gDollyCameraMesh) {
+                        loadDollyCameraModel();
+                    }
+                    // Close other menus when opening camera menu
+                    menuVisible = false;
+                    stylingMenuVisible = false;
+                    colorMenuVisible = false;
+                    lightingMenuVisible = false;
+                    instructionsMenuVisible = false;
                 } else {
-                    gCameraControl.enabled = false;
+                    // Menu is already open, cycle camera mode
+                    const previousMode = gCameraMode;
+                    gCameraMode = (gCameraMode + 1) % 7;
+                    
+                    // If we cycled back to mode 0 (completed full cycle), close the menu
+                    if (gCameraMode === 0) {
+                        cameraMenuVisible = false;
+                    }
+                    
+                    // Save camera position when leaving any third-person mode (0, 1, or 2)
+                    if (previousMode >= 0 && previousMode <= 2) {
+                        gSavedCameraPosition = gCamera.position.clone();
+                        gSavedCameraTarget = gCameraControl.target.clone();
+                    }
+                    
+                    // Restore camera position when returning to any third-person mode from first-person
+                    if (gCameraMode >= 0 && gCameraMode <= 2 && previousMode >= 3 && gSavedCameraPosition && gSavedCameraTarget) {
+                        gCamera.position.copy(gSavedCameraPosition);
+                        gCameraControl.target.copy(gSavedCameraTarget);
+                        gCameraControl.update();
+                    }
+                    
+                    // Initialize walking camera position when entering mode 5
+                    if (gCameraMode === 5) {
+                        gWalkingCameraPosition.set(0, 6.8, 0);
+                        gWalkingCameraYaw = -Math.PI / 2; // Point in -x direction
+                        gWalkingCameraPitch = 0;
+                    }
+                    
+                    // Initialize dolly camera when entering mode 6
+                    if (gCameraMode === 6) {
+                        // Set camera to current dolly cart position
+                        const localX = (gDollyPosition - 0.5) * gDollyRailsLength;
+                        const worldX = gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * localX;
+                        const worldZ = gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * localX;
+                        gCamera.position.set(worldX, gDollyCameraHeight, worldZ);
+                        
+                        // Camera angles (yaw/pitch) are preserved from previous dolly mode session
+                        // Create rails and cart if they don't exist yet
+                        if (!gDollyRailsMesh) {
+                            createDollyRails();
+                        }
+                        if (!gDollyCartMesh) {
+                            createDollyCart();
+                        }
+                        if (!gDollyCameraMesh) {
+                            loadDollyCameraModel();
+                        }
+                    }
+                    
+                    // Enable/disable OrbitControls based on camera mode
+                    // Modes 0, 1, 2 use OrbitControls; modes 3, 4, 5, 6 don't
+                    if (gCameraMode >= 0 && gCameraMode <= 2) {
+                        gCameraControl.enabled = true;
+                    } else {
+                        gCameraControl.enabled = false;
+                    }
+                    
+                    // Reset manual control flags
+                    gCameraManualControl = false;
+                    gCameraRotationOffset = { theta: 0, phi: 0 };
                 }
-                
-                // Reset manual control flags
-                gCameraManualControl = false;
-                gCameraRotationOffset = { theta: 0, phi: 0 };
                 gCameraDistanceOffset = 0;
                 return;
             }
@@ -9152,6 +10061,7 @@ function onPointer(evt) {
                 instructionsMenuVisible = false; // Close instructions menu when opening simulation
                 colorMenuVisible = false; // Close color menu when opening simulation
                 lightingMenuVisible = false; // Close lighting menu when opening simulation
+                cameraMenuVisible = false; // Close camera menu when opening simulation
                 return;
             }
             
@@ -9164,6 +10074,7 @@ function onPointer(evt) {
                 instructionsMenuVisible = false; // Close instructions menu when opening styling
                 colorMenuVisible = false; // Close color menu when opening styling
                 lightingMenuVisible = false; // Close lighting menu when opening styling
+                cameraMenuVisible = false; // Close camera menu when opening styling
                 return;
             }
             
@@ -9176,6 +10087,7 @@ function onPointer(evt) {
                 stylingMenuVisible = false; // Close styling menu when opening color
                 instructionsMenuVisible = false; // Close instructions menu when opening color
                 lightingMenuVisible = false; // Close lighting menu when opening color
+                cameraMenuVisible = false; // Close camera menu when opening color
                 return;
             }
             
@@ -9188,6 +10100,7 @@ function onPointer(evt) {
                 stylingMenuVisible = false; // Close styling menu when opening lighting
                 instructionsMenuVisible = false; // Close instructions menu when opening lighting
                 colorMenuVisible = false; // Close color menu when opening lighting
+                cameraMenuVisible = false; // Close camera menu when opening lighting
                 return;
             }
             
@@ -9200,9 +10113,18 @@ function onPointer(evt) {
                 stylingMenuVisible = false; // Close styling menu when opening instructions
                 colorMenuVisible = false; // Close color menu when opening instructions
                 lightingMenuVisible = false; // Close lighting menu when opening instructions
+                cameraMenuVisible = false; // Close camera menu when opening instructions
                 return;
             }
 
+        }
+        
+        // Handle mouse look for dolly camera mode - toggle lock on click (also skips object interactions)
+        if (gCameraMode === 6) {
+            gDollyCameraLookLocked = !gDollyCameraLookLocked;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            return;
         }
         
         // Check if clicking on bicycle wheel
@@ -9850,6 +10772,105 @@ function onPointer(evt) {
             } else if (draggingMenuType === 'lighting') {
                 lightingMenuX = menuStartX + deltaX / window.innerWidth;
                 lightingMenuY = menuStartY + deltaY / window.innerHeight;
+            } else if (draggingMenuType === 'camera') {
+                cameraMenuX = menuStartX + deltaX / window.innerWidth;
+                cameraMenuY = menuStartY + deltaY / window.innerHeight;
+            }
+            return;
+        }
+        
+        // Handle dolly rails dragging
+        if (gDraggingDolly) {
+            if (gDraggingDollyEnd === 'start' || gDraggingDollyEnd === 'end') {
+                // Dragging an end - pivot stays fixed, length changes
+                const rect = gRenderer.domElement.getBoundingClientRect();
+                const mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                
+                // Intersect with ground plane (y=0)
+                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                const intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(groundPlane, intersectionPoint);
+                
+                if (intersectionPoint && gDollyDragPivotPosition) {
+                    // The pivot end stays at its fixed world position
+                    // The dragged end moves to the mouse intersection
+                    
+                    let startCapWorldPos, endCapWorldPos;
+                    
+                    if (gDraggingDollyEnd === 'start') {
+                        // Dragging the start cap - it follows the mouse
+                        startCapWorldPos = new THREE.Vector3(intersectionPoint.x, 0, intersectionPoint.z);
+                        // End cap stays at stored pivot
+                        endCapWorldPos = new THREE.Vector3(gDollyDragPivotPosition.x, 0, gDollyDragPivotPosition.z);
+                    } else {
+                        // Dragging the end cap - it follows the mouse
+                        endCapWorldPos = new THREE.Vector3(intersectionPoint.x, 0, intersectionPoint.z);
+                        // Start cap stays at stored pivot
+                        startCapWorldPos = new THREE.Vector3(gDollyDragPivotPosition.x, 0, gDollyDragPivotPosition.z);
+                    }
+                    
+                    // Calculate new length from the distance between the caps
+                    const dx = endCapWorldPos.x - startCapWorldPos.x;
+                    const dz = endCapWorldPos.z - startCapWorldPos.z;
+                    const newLength = Math.sqrt(dx * dx + dz * dz);
+                    gDollyRailsLength = Math.max(10, newLength);
+                    
+                    // Calculate rotation (direction from start to end)
+                    // NOTE: Negating dz because of how Three.js rotation around Y-axis works
+                    gDollyRailsRotation = Math.atan2(-dz, dx);
+                    
+                    // Calculate center (midpoint between the two caps)
+                    gDollyRailsPosition.set(
+                        (startCapWorldPos.x + endCapWorldPos.x) / 2,
+                        0,
+                        (startCapWorldPos.z + endCapWorldPos.z) / 2
+                    );
+                    
+                    // Update the existing mesh instead of recreating
+                    updateDollyRailsMeshForDrag(gDollyRailsLength);
+                }
+            } else {
+                // Translating the entire dolly rails horizontally
+                const rect = gRenderer.domElement.getBoundingClientRect();
+                const mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                
+                // Intersect with ground plane (y=0)
+                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                const intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(groundPlane, intersectionPoint);
+                
+                if (intersectionPoint) {
+                    // Calculate drag delta
+                    const startX = ((gDollyDragStartMouseX - rect.left) / rect.width) * 2 - 1;
+                    const startY = -((gDollyDragStartMouseY - rect.top) / rect.height) * 2 + 1;
+                    const startRaycaster = new THREE.Raycaster();
+                    startRaycaster.setFromCamera(new THREE.Vector2(startX, startY), gCamera);
+                    const startPoint = new THREE.Vector3();
+                    startRaycaster.ray.intersectPlane(groundPlane, startPoint);
+                    
+                    if (startPoint) {
+                        const deltaX = intersectionPoint.x - startPoint.x;
+                        const deltaZ = intersectionPoint.z - startPoint.z;
+                        
+                        gDollyRailsPosition.set(
+                            gDollyDragStartPosition.x + deltaX,
+                            0,
+                            gDollyDragStartPosition.z + deltaZ
+                        );
+                        
+                        updateDollyRailsTransform();
+                    }
+                }
             }
             return;
         }
@@ -9860,13 +10881,49 @@ function onPointer(evt) {
             const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
             const dragDelta = deltaX + deltaY;
             
-            const dragSensitivity = 0.2;
+            const dragSensitivity = 0.15;
             const normalizedDelta = dragDelta / dragSensitivity;
             const rangeSize = 100; // 0 to 100 percentage
             let newValue = dragStartValue + normalizedDelta * rangeSize;
             newValue = Math.max(0, Math.min(100, newValue));
             
             gColorMixPercentage = newValue;
+            applyMixedColors();
+            return;
+        }
+        
+        // Handle saturation knob dragging
+        if (gDraggingSaturationKnob) {
+            const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+            const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+            const dragDelta = deltaX + deltaY;
+            
+            const dragSensitivity = 0.12;
+            const normalizedDelta = dragDelta / dragSensitivity;
+            const rangeSize = 100; // 0 to 100 percentage
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            newValue = Math.max(0, Math.min(100, newValue));
+            
+            gBoidSaturation = Math.round(newValue);
+            initColorWheel();
+            applyMixedColors();
+            return;
+        }
+        
+        // Handle lightness knob dragging
+        if (gDraggingLightnessKnob) {
+            const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+            const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+            const dragDelta = deltaX + deltaY;
+            
+            const dragSensitivity = 0.12;
+            const normalizedDelta = dragDelta / dragSensitivity;
+            const rangeSize = 100; // 0 to 100 percentage
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            newValue = Math.max(0, Math.min(100, newValue));
+            
+            gBoidLightness = Math.round(newValue);
+            initColorWheel();
             applyMixedColors();
             return;
         }
@@ -9927,6 +10984,37 @@ function onPointer(evt) {
             const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
             const dragDelta = deltaX + deltaY;
             
+            // Check if it's the camera FOV knob (300) - must check before >= 200
+            if (draggedKnob === 300) {
+                const dragSensitivity = 0.2;
+                const normalizedDelta = dragDelta / dragSensitivity;
+                const rangeSize = 120 - 20; // FOV range: 20 to 120
+                let newValue = dragStartValue + normalizedDelta * rangeSize;
+                newValue = Math.max(20, Math.min(120, newValue));
+                
+                gCameraFOV = Math.round(newValue);
+                if (gCamera) {
+                    gCamera.fov = gCameraFOV;
+                    gCamera.updateProjectionMatrix();
+                }
+                return;
+            }
+            
+            // Check if it's the dolly speed knob (301)
+            if (draggedKnob === 301) {
+                const dragSensitivity = 0.2;
+                const normalizedDelta = dragDelta / dragSensitivity;
+                const rangeSize = 0.2 - 0.01; // Speed range: 0.01 to 0.2
+                let newValue = dragStartValue + normalizedDelta * rangeSize;
+                newValue = Math.max(0.01, Math.min(0.2, newValue));
+                
+                gDollySpeed = newValue;
+                // Update velocity to match new speed (maintaining direction)
+                const velocitySign = gDollyVelocity >= 0 ? 1 : -1;
+                gDollyVelocity = velocitySign * Math.min(Math.abs(gDollyVelocity), gDollySpeed);
+                return;
+            }
+            
             // Check if it's a lighting menu knob (offset by 200)
             if (draggedKnob >= 200) {
                 const lightingKnob = draggedKnob - 200;
@@ -9946,7 +11034,8 @@ function onPointer(evt) {
                     {min: 0, max: 2},       // 12: spotlight 2 intensity
                     {min: 0, max: 360},     // 13: spotlight 2 hue
                     {min: 0, max: 100},     // 14: spotlight 2 saturation
-                    {min: 0, max: 1}        // 15: spotlight penumbra
+                    {min: 0, max: 1},       // 15: spotlight penumbra
+                    {min: 0, max: 2}        // 16: headlight intensity
                 ];
                 
                 const dragSensitivity = 0.2;
@@ -10120,6 +11209,40 @@ function onPointer(evt) {
                                 gLamps[lampId].spotlight.penumbra = gSpotlightPenumbra;
                             }
                         }
+                        // Update headlight penumbra if it exists
+                        if (gHeadlight) {
+                            gHeadlight.penumbra = gSpotlightPenumbra;
+                        }
+                        break;
+                    case 16: // Headlight intensity
+                        gHeadlightIntensity = newValue;
+                        // Create or update headlight
+                        if (gHeadlightIntensity > 0) {
+                            if (!gHeadlight) {
+                                // Create the headlight spotlight
+                                gHeadlight = new THREE.SpotLight(0xffffff, gHeadlightIntensity);
+                                gHeadlight.angle = Math.PI / 6; // 30 degree cone
+                                gHeadlight.penumbra = gSpotlightPenumbra;
+                                gHeadlight.castShadow = true;
+                                gHeadlight.shadow.camera.near = 0.1;
+                                gHeadlight.shadow.camera.far = 50;
+                                gHeadlight.shadow.mapSize.width = 1024;
+                                gHeadlight.shadow.mapSize.height = 1024;
+                                gThreeScene.add(gHeadlight);
+                                gHeadlight.target.position.set(0, 0, 0);
+                                gThreeScene.add(gHeadlight.target);
+                            } else {
+                                gHeadlight.intensity = gHeadlightIntensity;
+                                gHeadlight.visible = true;
+                            }
+                        } else {
+                            // Turn off or remove headlight
+                            if (gHeadlight) {
+                                gThreeScene.remove(gHeadlight);
+                                gThreeScene.remove(gHeadlight.target);
+                                gHeadlight = null;
+                            }
+                        }
                         break;
                 }
                 return;
@@ -10154,7 +11277,7 @@ function onPointer(evt) {
                 return;
             }
             
-            // Simulation menu knobs
+            // Simulation menu knobs (13 knobs - removed FOV)
             const ranges = [
                 {min: 100, max: 5000},
                 {min: 0.1, max: 1.0},
@@ -10168,8 +11291,7 @@ function onPointer(evt) {
                 {min: 0.5, max: 5.0},
                 {min: 10, max: 60},
                 {min: 10, max: 60},
-                {min: 10, max: 60},
-                {min: 1, max: 160}
+                {min: 10, max: 60}
             ];
             
             const dragSensitivity = 0.2;
@@ -10217,8 +11339,8 @@ function onPointer(evt) {
                             );
 
                             hue = Math.round(340 + Math.random() * 40);
-                            sat = Math.round(40 + Math.random() * 60); 
-                            light = Math.round(30 + Math.random() * 40); 
+                            sat = gBoidSaturation; 
+                            light = gBoidLightness; 
                             
                             const newBoid = new BOID(pos, boidRadius, vel, hue, sat, light);
                             gPhysicsScene.objects.push(newBoid);
@@ -10347,13 +11469,6 @@ function onPointer(evt) {
                     if (gWorldSizeZ !== oldWorldSizeZ) {
                         gPhysicsScene.worldSize.z = gWorldSizeZ;
                         updateWorldGeometry('z');
-                    }
-                    break;
-                case 13: // Camera FOV
-                    gCameraFOV = Math.round(newValue);
-                    if (gCamera) {
-                        gCamera.fov = gCameraFOV;
-                        gCamera.updateProjectionMatrix();
                     }
                     break;
             }
@@ -10957,6 +12072,25 @@ function onPointer(evt) {
             gPointerLastY = evt.clientY;
             return;
         }
+        
+        // Handle mouse look for dolly camera mode (pan/tilt) - only when unlocked
+        if (gCameraMode === 6 && !gDraggingDolly && !gDollyCameraLookLocked) {
+            const deltaX = evt.clientX - gPointerLastX;
+            const deltaY = evt.clientY - gPointerLastY;
+            
+            // Mouse sensitivity - higher to allow full rotation within screen bounds
+            const sensitivity = 0.01;
+            
+            gDollyCameraYaw -= deltaX * sensitivity;
+            gDollyCameraPitch -= deltaY * sensitivity;
+            
+            // Clamp pitch to prevent camera flipping
+            gDollyCameraPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gDollyCameraPitch));
+            
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            return;
+        }
     }
     else if (evt.type == "pointerup") {
         // Stop spinning the bicycle wheel
@@ -10971,6 +12105,24 @@ function onPointer(evt) {
         
         if (gDraggingMixKnob) {
             gDraggingMixKnob = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingSaturationKnob) {
+            gDraggingSaturationKnob = false;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingLightnessKnob) {
+            gDraggingLightnessKnob = false;
             // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
@@ -11153,6 +12305,17 @@ function onPointer(evt) {
             return;
         }
         
+        if (gDraggingDolly) {
+            gDraggingDolly = false;
+            gDraggingDollyEnd = null;
+            gDollyDragPivotPosition = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
         if (gDraggingLampHeight) {
             gDraggingLampHeight = false;
             // Re-enable orbit controls if in normal camera mode
@@ -11227,8 +12390,8 @@ function checkSimMenuClick(clientX, clientY) {
         return true;
     }
     
-    // Check knobs (now 14 knobs instead of 10)
-    for (let knob = 0; knob < 14; knob++) {
+    // Check knobs (now 13 knobs - removed FOV)
+    for (let knob = 0; knob < 13; knob++) {
         const row = Math.floor(knob / 3);
         const col = knob % 3;
         const knobX = menuOriginX + col * knobSpacing;
@@ -11245,7 +12408,7 @@ function checkSimMenuClick(clientX, clientY) {
                 gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
                 boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
                 boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin,
-                gWorldSizeX, gWorldSizeY, gWorldSizeZ, gCameraFOV
+                gWorldSizeX, gWorldSizeY, gWorldSizeZ
             ];
             dragStartValue = menuItems[knob];
             
@@ -11333,25 +12496,6 @@ function checkStylingMenuClick(clientX, clientY) {
             
             // Sort selected types for consistent ordering
             gSelectedBoidTypes.sort((a, b) => a - b);
-            
-            // Determine which painting should be shown based on selected types
-            var desiredPainting = 'miro'; // Default for most types
-            const hasTypes = (types) => types.some(t => gSelectedBoidTypes.includes(t));
-            
-            if (hasTypes([0])) {
-                desiredPainting = 'dali'; // Sphere → Dali
-            } else if (hasTypes([1, 2])) {
-                desiredPainting = 'duchamp'; // Cone or Cylinder → Duchamp
-            } else if (hasTypes([12, 13, 14])) {
-                desiredPainting = 'bosch'; // Duck, Fish (Barramundi), or Avocado → Bosch
-            }
-            
-            // Trigger painting swap animation if needed
-            if (gPaintingAnimState === 'idle' && desiredPainting !== gCurrentPainting) {
-                gTargetPainting = desiredPainting;
-                gPaintingAnimState = 'exiting';
-                gPaintingAnimTimer = 0;
-            }
             
             // Recreate all boid geometries with new type distribution
             recreateBoidGeometries();
@@ -11519,10 +12663,12 @@ function checkColorMenuClick(clientX, clientY) {
     if (!colorMenuVisible || colorMenuOpacity <= 0.5) return false;
     
     const knobRadius = 0.1 * menuScale; // Match standard knob size
+    const smallKnobRadius = 0.1 * menuScale; // Smaller knobs for saturation/lightness
     const colorWheelSize = 1.1 * menuScale; // Size of the color wheel rings
     const menuWidth = 0.6 * menuScale; // Match other menus (actual background width)
     const padding = 0.17 * menuScale;
-    const menuHeight = 0.75 * colorWheelSize;
+    const extraHeight = smallKnobRadius * 5.5; // Extra height for two knobs and checkbox at bottom
+    const menuHeight = 0.75 * colorWheelSize + extraHeight;
     const menuTopMargin = 0.33 * colorWheelSize; // Match drawing code
     
     const menuUpperLeftX = colorMenuX * window.innerWidth;
@@ -11594,18 +12740,84 @@ function checkColorMenuClick(clientX, clientY) {
         }
     }
     
+    // Check saturation and lightness knobs at the bottom
+    const bottomKnobsY = menuOriginY + 0.75 * colorWheelSize + smallKnobRadius * 1.5;
+    const knobSpacing = menuWidth / 2;
+    
+    // Saturation knob (left)
+    const satKnobX = menuOriginX + knobSpacing * 0;
+    const satDx = clientX - satKnobX;
+    const satDy = clientY - bottomKnobsY;
+    if (satDx * satDx + satDy * satDy <= smallKnobRadius * smallKnobRadius * 1.1) {
+        gDraggingSaturationKnob = true;
+        dragStartMouseX = clientX;
+        dragStartMouseY = clientY;
+        dragStartValue = gBoidSaturation;
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    // Lightness knob (right)
+    const lightKnobX = menuOriginX + knobSpacing * 2;
+    const lightDx = clientX - lightKnobX;
+    const lightDy = clientY - bottomKnobsY;
+    if (lightDx * lightDx + lightDy * lightDy <= smallKnobRadius * smallKnobRadius * 1.1) {
+        gDraggingLightnessKnob = true;
+        dragStartMouseX = clientX;
+        dragStartMouseY = clientY;
+        dragStartValue = gBoidLightness;
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
     // Check radio buttons for coloration mode
     const radioRadius = knobRadius * 0.3;
-    const radioSpacing = menuWidth / 3;
+    const radioButtonCount = 3;
+    const radioTotalWidth = menuWidth * 0.9; // Use 90% of menu width
+    const radioStartX = menuOriginX + (menuWidth - radioTotalWidth) / 2; // Center the group
+    const radioSpacing = radioTotalWidth / (radioButtonCount - 1); // Space between buttons
     
     for (let i = 0; i < 3; i++) {
-        const radioX = menuOriginX + (i + 0.5) * radioSpacing;
+        const radioX = radioStartX + i * radioSpacing;
         const rdx = clientX - radioX;
         const rdy = clientY - radioY;
         
         if (rdx * rdx + rdy * rdy < radioRadius * radioRadius) {
             gColorationMode = i;
             applyMixedColors();
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        }
+    }
+    
+    // Check Artwork Selection radio buttons
+    const artworkRadioY = bottomKnobsY + 2.5 * smallKnobRadius;
+    const artworkRadioRadius = smallKnobRadius * 0.4;
+    const artworkOptions = ['miro', 'dali', 'bosch'];
+    const artworkRadioSpacing = menuWidth / 3;
+    
+    for (let i = 0; i < 3; i++) {
+        const artRadioX = menuOriginX + (i + 0.5) * artworkRadioSpacing;
+        const rdx = clientX - artRadioX;
+        const rdy = clientY - artworkRadioY;
+        
+        if (rdx * rdx + rdy * rdy < artworkRadioRadius * artworkRadioRadius) {
+            const selectedArtwork = artworkOptions[i];
+            gSelectedArtwork = selectedArtwork;
+            
+            // Trigger painting change if needed
+            if (gPaintingAnimState === 'idle' && gCurrentPainting !== selectedArtwork) {
+                gTargetPainting = selectedArtwork;
+                gPaintingAnimState = 'exiting';
+                gPaintingAnimTimer = 0;
+            }
+            
             if (gCameraControl) {
                 gCameraControl.enabled = false;
             }
@@ -11650,7 +12862,7 @@ function checkLightingMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 5.5; // 6 rows (now with 16 knobs)
+    const menuHeight = knobSpacing * 6; // 6.5 rows (now with 17 knobs)
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = lightingMenuX * window.innerWidth;
@@ -11671,7 +12883,7 @@ function checkLightingMenuClick(clientX, clientY) {
     }
     
     // Check each knob
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 17; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const knobX = menuOriginX + col * knobSpacing;
@@ -11692,7 +12904,8 @@ function checkLightingMenuClick(clientX, clientY) {
                 gGlobeLampIntensity, gGlobeLampHue, gGlobeLampSaturation,
                 gSpotlight1Intensity, gSpotlight1Hue, gSpotlight1Saturation,
                 gSpotlight2Intensity, gSpotlight2Hue, gSpotlight2Saturation,
-                gSpotlightPenumbra
+                gSpotlightPenumbra,
+                gHeadlightIntensity
             ];
             dragStartValue = values[i];
             
@@ -11712,6 +12925,152 @@ function checkLightingMenuClick(clientX, clientY) {
         menuDragStartY = clientY;
         menuStartX = lightingMenuX;
         menuStartY = lightingMenuY;
+        
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    return false;
+}
+
+function checkCameraMenuClick(clientX, clientY) {
+    if (!cameraMenuVisible || cameraMenuOpacity <= 0.5) return false;
+    
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuWidth = knobSpacing * 2 * 0.75;  // 25% narrower than original
+    const padding = 0.17 * menuScale;
+    const radioButtonSize = 0.04 * menuScale;
+    const radioButtonSpacing = 0.104 * menuScale;  // Increased 30% from 0.08
+    const radioSectionHeight = 7 * radioButtonSpacing + 0.05 * menuScale;
+    const menuHeight = radioSectionHeight + knobRadius * 3;
+    
+    const menuUpperLeftX = cameraMenuX * window.innerWidth;
+    const menuUpperLeftY = cameraMenuY * window.innerHeight;
+    const menuOriginX = menuUpperLeftX;
+    const menuOriginY = menuUpperLeftY;
+    
+    // Check close button
+    const closeIconRadius = 0.1 * menuScale * 0.25;
+    const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
+    const closeIconY = menuOriginY - padding + closeIconRadius + 0.02 * menuScale;
+    const cdx = clientX - closeIconX;
+    const cdy = clientY - closeIconY;
+    
+    if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+        cameraMenuVisible = false;
+        return true;
+    }
+    
+    // Check radio buttons for camera modes
+    const radioStartY = menuOriginY + 0.03 * menuScale;
+    const radioX = menuOriginX + -0.02 * menuScale;
+    
+    for (let i = 0; i < 7; i++) {
+        const radioY = radioStartY + i * radioButtonSpacing;
+        const rdx = clientX - radioX;
+        const rdy = clientY - radioY;
+        
+        if (rdx * rdx + rdy * rdy < (radioButtonSize + 5) * (radioButtonSize + 5)) {
+            // Change camera mode
+            const previousMode = gCameraMode;
+            gCameraMode = i;
+            
+            // Save camera position when leaving any third-person mode (0, 1, or 2)
+            if (previousMode >= 0 && previousMode <= 2) {
+                gSavedCameraPosition = gCamera.position.clone();
+                gSavedCameraTarget = gCameraControl.target.clone();
+            }
+            
+            // Restore camera position when returning to any third-person mode from first-person
+            if (gCameraMode >= 0 && gCameraMode <= 2 && previousMode >= 3 && gSavedCameraPosition && gSavedCameraTarget) {
+                gCamera.position.copy(gSavedCameraPosition);
+                gCameraControl.target.copy(gSavedCameraTarget);
+                gCameraControl.update();
+            }
+            
+            // Initialize walking camera position when entering mode 5
+            if (gCameraMode === 5) {
+                gWalkingCameraPosition.set(0, 6.8, 0);
+                gWalkingCameraYaw = -Math.PI / 2; // Point in -x direction
+                gWalkingCameraPitch = 0;
+            }
+            
+            // Initialize dolly camera when entering mode 6
+            if (gCameraMode === 6) {
+                // Set camera to current dolly cart position
+                const localX = (gDollyPosition - 0.5) * gDollyRailsLength;
+                const worldX = gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * localX;
+                const worldZ = gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * localX;
+                gCamera.position.set(worldX, gDollyCameraHeight, worldZ);
+                
+                // Camera angles (yaw/pitch) are preserved from previous dolly mode session
+                // Create rails and cart if they don't exist yet
+                if (!gDollyRailsMesh) {
+                    createDollyRails();
+                }
+                if (!gDollyCartMesh) {
+                    createDollyCart();
+                }
+                if (!gDollyCameraMesh) {
+                    loadDollyCameraModel();
+                }
+            }
+            
+            // Enable/disable OrbitControls based on camera mode
+            if (gCameraMode >= 0 && gCameraMode <= 2) {
+                gCameraControl.enabled = true;
+            } else {
+                gCameraControl.enabled = false;
+            }
+            
+            return true;
+        }
+    }
+    
+    // Check FOV knob
+    const fovDx = clientX - fovKnobInfo.x;
+    const fovDy = clientY - fovKnobInfo.y;
+    
+    if (fovDx * fovDx + fovDy * fovDy < fovKnobInfo.radius * fovKnobInfo.radius * 1.1) {
+        draggedKnob = 300; // Special index for FOV knob in camera menu
+        dragStartMouseX = clientX;
+        dragStartMouseY = clientY;
+        dragStartValue = gCameraFOV;
+        
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    // Check Dolly Speed knob
+    const speedDx = clientX - dollySpeedKnobInfo.x;
+    const speedDy = clientY - dollySpeedKnobInfo.y;
+    
+    if (speedDx * speedDx + speedDy * speedDy < dollySpeedKnobInfo.radius * dollySpeedKnobInfo.radius * 1.1) {
+        draggedKnob = 301; // Special index for Dolly Speed knob in camera menu
+        dragStartMouseX = clientX;
+        dragStartMouseY = clientY;
+        dragStartValue = gDollySpeed;
+        
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    // Check if menu background clicked (for dragging)
+    if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
+        clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
+        isDraggingMenu = true;
+        draggingMenuType = 'camera';
+        menuDragStartX = clientX;
+        menuDragStartY = clientY;
+        menuStartX = cameraMenuX;
+        menuStartY = cameraMenuY;
         
         if (gCameraControl) {
             gCameraControl.enabled = false;
@@ -11750,9 +13109,13 @@ function applyMixedColors() {
                 boid.hue = Math.round((1 - normalizedSpeed) * 360); // 240 (blue) to 0 (red)
             }
             
+            // Update saturation and lightness from global values
+            boid.sat = Math.round(gBoidSaturation);
+            boid.light = Math.round(gBoidLightness);
+            
             // Update boid color
             if (boid.visMesh && boid.visMesh.material) {
-                boid.visMesh.material.color = new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`);
+                boid.visMesh.material.color = new THREE.Color(`hsl(${Math.round(boid.hue)}, ${boid.sat}%, ${boid.light}%)`);
             }
         }
     }
@@ -11874,12 +13237,12 @@ function run() {
                 } else if (i < 51) {
                     //hue = Math.round(100 + Math.random() * 40);
                     hue = 180;
-                    sat = 90;
+                    sat = gBoidSaturation;
                 } else {
                     hue = Math.round(340 + Math.random() * 40);
-                    sat = Math.round(30 + Math.random() * 70);
+                    sat = gBoidSaturation;
                 }
-                gPhysicsScene.objects.push(new BOID(pos, radius, vel, hue, sat, 50));
+                gPhysicsScene.objects.push(new BOID(pos, radius, vel, hue, sat, gBoidLightness));
             }
         }
         
@@ -11928,6 +13291,31 @@ function update() {
         // Both tori rotate around the Y axis (vertical), preserving their X rotation (tilt)
         gTori[0].rotation.y = gToriRotation;
         gTori[1].rotation.y = gToriRotation;
+    }
+    
+    // Update headlight position to track boid 0 (lead boid)
+    if (gHeadlight && gHeadlightIntensity > 0 && gPhysicsScene.objects.length > 0) {
+        const leadBoid = gPhysicsScene.objects[0];
+        if (leadBoid && leadBoid.pos && leadBoid.vel) {
+            // Calculate direction the boid is facing
+            const direction = new THREE.Vector3(leadBoid.vel.x, leadBoid.vel.y, leadBoid.vel.z).normalize();
+            
+            // Position headlight at the front of the boid
+            const headlightOffset = 1.5; // Distance in front of boid
+            gHeadlight.position.set(
+                leadBoid.pos.x + direction.x * headlightOffset,
+                leadBoid.pos.y + direction.y * headlightOffset,
+                leadBoid.pos.z + direction.z * headlightOffset
+            );
+            
+            // Point headlight in the direction the boid is moving
+            const targetDistance = 10; // How far ahead to aim
+            gHeadlight.target.position.set(
+                leadBoid.pos.x + direction.x * targetDistance,
+                leadBoid.pos.y + direction.y * targetDistance,
+                leadBoid.pos.z + direction.z * targetDistance
+            );
+        }
     }
     
     // Animate sphere obstacle hue
@@ -12702,6 +14090,12 @@ function update() {
         lightingMenuOpacity = Math.max(0, lightingMenuOpacity - lightingMenuFadeSpeed * deltaT);
     }
     
+    if (cameraMenuVisible) {
+        cameraMenuOpacity = Math.min(0.9, cameraMenuOpacity + cameraMenuFadeSpeed * deltaT);
+    } else {
+        cameraMenuOpacity = Math.max(0, cameraMenuOpacity - cameraMenuFadeSpeed * deltaT);
+    }
+    
     // Update colors if in dynamic mode (by direction or speed)
     if (gColorationMode === 1 || gColorationMode === 2) {
         applyMixedColors();
@@ -13163,7 +14557,97 @@ function update() {
             
             const lookAtPoint = gWalkingCameraPosition.clone().add(lookDirection.multiplyScalar(10));
             gCamera.lookAt(lookAtPoint);
+        } else if (gCameraMode === 6) {
+            // Dolly camera mode - camera moves along rails
+            // (dolly position is updated in the cart visibility section below)
+            
+            // Calculate position along rails
+            // Position ranges from -gDollyRailsLength/2 to +gDollyRailsLength/2 along the local X axis
+            const localX = (gDollyPosition - 0.5) * gDollyRailsLength;
+            
+            // Transform from local to world coordinates
+            const worldX = gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * localX;
+            const worldZ = gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * localX;
+            
+            // Set camera position on the dolly
+            gCamera.position.set(worldX, gDollyCameraHeight, worldZ);
+            
+            // Calculate look-at point based on dolly rotation plus pan/tilt
+            const baseLookDirection = new THREE.Vector3(
+                Math.cos(gDollyRailsRotation + gDollyCameraYaw),
+                Math.sin(gDollyCameraPitch),
+                -Math.sin(gDollyRailsRotation + gDollyCameraYaw)
+            );
+            baseLookDirection.normalize();
+            
+            const lookAtPoint = gCamera.position.clone().add(baseLookDirection.multiplyScalar(10));
+            gCamera.lookAt(lookAtPoint);
         }
+    }
+    
+    // Update dolly rails visibility based on camera menu
+    if (gDollyRailsMesh) {
+        gDollyRailsMesh.visible = cameraMenuVisible;
+    }
+    
+    // Update dolly cart visibility and position
+    if (gDollyCartMesh) {
+        gDollyCartMesh.visible = cameraMenuVisible;
+        
+        // Update dolly position continuously (not just when menu is visible)
+        // Calculate position limits based on end cap size and cart dimensions
+        const railRadius = 0.1;
+        const railSpacing = 1.5;
+        const clearSpace = railSpacing - (2 * railRadius);
+        const endCapRadius = clearSpace / 2;
+        const platformLength = 2.0; // Must match cart platform length
+        const stopDistance = (platformLength / 2) + endCapRadius; // Cart half-length + end cap radius
+        const positionOffset = stopDistance / gDollyRailsLength;
+        const minPosition = positionOffset;
+        const maxPosition = 1 - positionOffset;
+        
+        // Calculate speed with smooth acceleration/deceleration near ends
+        const decelerationZone = 0.04; // Short transition zone at ends
+        let speedMultiplier = 1.0;
+        
+        // Apply speed reduction when near either end (for both acceleration and deceleration)
+        if (gDollyPosition < (minPosition + decelerationZone)) {
+            // Near start - slow when approaching, slow when leaving
+            const distanceFromStart = gDollyPosition - minPosition;
+            speedMultiplier = Math.max(0.05, distanceFromStart / decelerationZone);
+        } else if (gDollyPosition > (maxPosition - decelerationZone)) {
+            // Near end - slow when approaching, slow when leaving
+            const distanceFromEnd = maxPosition - gDollyPosition;
+            speedMultiplier = Math.max(0.05, distanceFromEnd / decelerationZone);
+        }
+        
+        // Update position with modified speed
+        gDollyPosition += gDollyDirection * gDollySpeed * speedMultiplier * deltaT;
+        
+        // Reverse at ends (only if moving in the wrong direction)
+        if (gDollyPosition <= minPosition && gDollyDirection < 0) {
+            gDollyPosition = minPosition;
+            gDollyDirection = 1;
+        } else if (gDollyPosition >= maxPosition && gDollyDirection > 0) {
+            gDollyPosition = maxPosition;
+            gDollyDirection = -1;
+        }
+        
+        updateDollyCartPosition();
+    }
+    
+    // Update dolly camera model visibility and position
+    if (gDollyCameraMesh) {
+        // Hide camera model when in dolly camera view (you don't see your own camera)
+        gDollyCameraMesh.visible = cameraMenuVisible && gCameraMode !== 6;
+        
+        // Update camera model position and orientation continuously
+        updateDollyCameraModel();
+    }
+    
+    // Update camera mount rod visibility
+    if (gDollyCameraMountRod) {
+        gDollyCameraMountRod.visible = cameraMenuVisible && gCameraMode !== 6;
     }
     
     gRenderer.render(gThreeScene, gCamera);
@@ -13177,6 +14661,7 @@ function update() {
     drawInstructionsMenu();
     drawColorMenu();
     drawLightingMenu();
+    drawCameraMenu();
     
     // Draw fade-in effect (black overlay that fades out)
     if (gFadeInTime < gFadeInDuration) {
@@ -13184,12 +14669,6 @@ function update() {
         const opacity = 1 - fadeProgress; // 1 to 0
         gOverlayCtx.fillStyle = `rgba(0, 0, 0, ${opacity})`;
         gOverlayCtx.fillRect(0, 0, gOverlayCanvas.width, gOverlayCanvas.height);
-    }
-    
-    // Update camera mode text timer
-    if (gCameraModeTextTimer > 0) {
-        gCameraModeTextTimer -= deltaT;
-        if (gCameraModeTextTimer < 0) gCameraModeTextTimer = 0;
     }
     
     requestAnimationFrame(update);
