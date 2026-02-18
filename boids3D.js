@@ -8101,40 +8101,24 @@ function initThreeScene() {
     gWalls.front.receiveShadow = true;
     gThreeScene.add(gWalls.front);
     
-    // Load marble texture for white wall squares using THREE.TextureLoader with CORS enabled
-    var marbleTextureLoader = new THREE.TextureLoader(gLoadingManager);
-    marbleTextureLoader.crossOrigin = 'anonymous'; // Enable CORS
-    marbleTextureLoader.load(
-        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/marble_square.jpg',
-        function(texture) {
-            // Texture loaded successfully - store it
-            gMarbleTexture = texture.image;
-            console.log('Marble texture loaded successfully');
-            
-            // Update all wall canvases with the marble texture
-            updateWallsWithMarble();
-        },
-        undefined,
-        function(err) {
-            console.error('Error loading marble texture:', err);
-        }
-    );
+    // Load marble texture for white wall squares using Image with CORS
+    var marbleImage = new Image();
+    marbleImage.crossOrigin = 'anonymous'; // Enable CORS before setting src
+    marbleImage.onload = function() {
+        gMarbleTexture = marbleImage;
+        // Update all wall canvases with the marble texture
+        updateWallsWithMarble();
+    };
+    marbleImage.onerror = function(err) {
+        console.error('Error loading marble texture:', err);
+    };
+    marbleImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/marble_square.jpg';
     
     // Function to update wall canvases with marble texture
     function updateWallsWithMarble() {
-        console.log('updateWallsWithMarble called');
-        console.log('gMarbleTexture:', gMarbleTexture);
-        console.log('backWallCtx:', typeof backWallCtx);
-        console.log('leftWallCtx:', typeof leftWallCtx);
-        console.log('rightWallCtx:', typeof rightWallCtx);
-        
-        if (!gMarbleTexture) {
-            console.log('No marble texture available');
-            return;
-        }
+        if (!gMarbleTexture) return;
         
         // Redraw back wall with marble texture
-        console.log('Drawing marble on back wall...');
         for (var i = 0; i < 2; i++) {
             for (var j = 0; j < 2; j++) {
                 if ((i + j) % 2 !== 0) {
@@ -8151,10 +8135,8 @@ function initThreeScene() {
             }
         }
         backWallTexture.needsUpdate = true;
-        console.log('Back wall updated');
         
         // Redraw left wall with marble texture
-        console.log('Drawing marble on left wall...');
         for (var i = 0; i < 2; i++) {
             for (var j = 0; j < 2; j++) {
                 if ((i + j) % 2 !== 0) {
@@ -8171,10 +8153,8 @@ function initThreeScene() {
             }
         }
         leftWallTexture.needsUpdate = true;
-        console.log('Left wall updated');
         
         // Redraw right wall with marble texture
-        console.log('Drawing marble on right wall...');
         for (var i = 0; i < 2; i++) {
             for (var j = 0; j < 2; j++) {
                 if ((i + j) % 2 !== 0) {
@@ -8191,8 +8171,6 @@ function initThreeScene() {
             }
         }
         rightWallTexture.needsUpdate = true;
-        console.log('Right wall updated');
-        console.log('All walls updated with marble texture');
     }
     
     // Back wall (negative Z) - pastel blue checkerboard
