@@ -1432,7 +1432,7 @@
           0.4019777798219466,
           1
         ],
-        "metallicFactor": 0.7,
+        "metallicFactor": 0.3,
         "roughnessFactor": 0.05
       }
     },
