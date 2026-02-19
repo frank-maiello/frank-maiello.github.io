@@ -7,65 +7,12 @@
     {
       "name": "Scene",
       "nodes": [
-        0,
-        1,
-        2,
-        3
+        0
       ]
     }
   ],
   "scene": 0,
   "nodes": [
-    {
-      "name": "AmbientLight"
-    },
-    {
-      "matrix": [
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        5,
-        10,
-        7.5,
-        1
-      ],
-      "name": "DirectionalLight",
-      "extensions": {
-        "KHR_lights_punctual": {
-          "light": 0
-        }
-      }
-    },
-    {
-      "matrix": [
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        10,
-        0,
-        1
-      ],
-      "name": "HemisphereLight"
-    },
     {
       "matrix": [
         1,
@@ -87,15 +34,15 @@
       ],
       "name": "wholeDog",
       "children": [
-        4,
+        1,
+        2,
         5,
         8,
+        9,
+        10,
         11,
         12,
-        13,
-        14,
-        15,
-        16
+        13
       ]
     },
     {
@@ -141,8 +88,8 @@
       ],
       "name": "hind legs",
       "children": [
-        6,
-        7
+        3,
+        4
       ]
     },
     {
@@ -210,8 +157,8 @@
       ],
       "name": "front legs",
       "children": [
-        9,
-        10
+        6,
+        7
       ]
     },
     {
@@ -389,8 +336,8 @@
       ],
       "name": "head",
       "children": [
-        17,
-        18
+        14,
+        15
       ]
     },
     {
@@ -438,22 +385,6 @@
       "mesh": 8
     }
   ],
-  "extensions": {
-    "KHR_lights_punctual": {
-      "lights": [
-        {
-          "name": "DirectionalLight",
-          "color": [
-            1,
-            1,
-            1
-          ],
-          "intensity": 1,
-          "type": "directional"
-        }
-      ]
-    }
-  },
   "bufferViews": [
     {
       "buffer": 0,
@@ -1233,9 +1164,9 @@
     {
       "pbrMetallicRoughness": {
         "baseColorFactor": [
-          0.04666508633021928,
-          0.15592646369776456,
-          1,
+          0.23455058215026167,
+          0,
+          0,
           1
         ],
         "metallicFactor": 0.8,
@@ -1370,8 +1301,5 @@
         }
       ]
     }
-  ],
-  "extensionsUsed": [
-    "KHR_lights_punctual"
   ]
 }
