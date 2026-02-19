@@ -37,9 +37,9 @@ var gWalkingCameraLookLocked = true; // Whether walking camera look is locked (s
 var gKeysPressed = { w: false, a: false, s: false, d: false, up: false, down: false, left: false, right: false }; // Track key states for walking
 var gSavedCameraPosition = null; // Saved camera position from third-person mode
 var gSavedCameraTarget = null; // Saved camera target from third-person mode
-var gDollyRailsPosition = new THREE.Vector3(0, 0.15, 0); // Center position of dolly rails
+var gDollyRailsPosition = new THREE.Vector3(9, 0.15, 0); // Center position of dolly rails
 var gDollyRailsRotation = 0; // Rotation angle of dolly rails (around Y axis)
-var gDollyRailsLength = 55; // Length of dolly rails
+var gDollyRailsLength = 65; // Length of dolly rails
 var gDollyPosition = 0.5; // Position along rails (0 to 1)
 var gDollyDirection = 1; // Direction of dolly movement (1 or -1)
 var gDollySpeed = 0.05; // Speed of dolly traversal
@@ -464,7 +464,7 @@ var boidProps = {
     turnFactor: 0.05, // How strongly Boids turn back when near edge
     margin: 2.0, // Distance from boundary to start turning
     wireframe: false, // Render boids in wireframe mode
-    material: 'phong' // Material type: 'basic', 'phong', 'standard', 'normal', 'toon', 'depth', 'imported'
+    material: 'imported' // Material type: 'basic', 'phong', 'standard', 'normal', 'toon', 'depth', 'imported'
 };
 
 // Boid trail tracking variables
@@ -2401,27 +2401,33 @@ class BOID {
             gThreeScene.add(this.visMesh);
         } else {
             // Standard geometry with materials
-            if (boidProps.material === 'standard') {
+            // For primitives, if 'imported' is selected, default to 'phong' (plastic)
+            var effectiveMaterial = boidProps.material;
+            if (effectiveMaterial === 'imported') {
+                effectiveMaterial = 'phong';
+            }
+            
+            if (effectiveMaterial === 'standard') {
                 material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
                     metalness: 0.5, 
                     roughness: 0.4, 
                     wireframe: boidProps.wireframe});
-            } else if (boidProps.material === 'phong') {
+            } else if (effectiveMaterial === 'phong') {
                 material = new THREE.MeshPhongMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
                     shininess: 100, 
                     shininess: 100, 
                     wireframe: boidProps.wireframe});
-            } else if (boidProps.material === 'normal') {
+            } else if (effectiveMaterial === 'normal') {
                 material = new THREE.MeshNormalMaterial({
                     wireframe: boidProps.wireframe});
-            } else if (boidProps.material === 'toon') {
+            } else if (effectiveMaterial === 'toon') {
                 material = new THREE.MeshToonMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
                     shininess: 100, 
                     wireframe: boidProps.wireframe});
-            } else if (boidProps.material === 'depth') {
+            } else if (effectiveMaterial === 'depth') {
                 material = new THREE.MeshDepthMaterial({
                     wireframe: boidProps.wireframe});
             } else {
@@ -3398,25 +3404,31 @@ function recreateBoidGeometries() {
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
         } else if (boid.geometryType != 11 && boid.geometryType != 12 && boid.geometryType != 13 && boid.geometryType != 14 && boid.geometryType != 15 && boid.geometryType != 16 && boid.geometryType != 17) {
-            if (boidProps.material === 'standard') {
+            // For primitives, if 'imported' is selected, default to 'phong' (plastic)
+            var effectiveMaterial = boidProps.material;
+            if (effectiveMaterial === 'imported') {
+                effectiveMaterial = 'phong';
+            }
+            
+            if (effectiveMaterial === 'standard') {
                 material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                     metalness: 0.5, 
                     roughness: 0.4, 
                     wireframe: boidProps.wireframe});
-            } else if (boidProps.material === 'phong') {
+            } else if (effectiveMaterial === 'phong') {
                 material = new THREE.MeshPhongMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                     shininess: 100, 
                     wireframe: boidProps.wireframe});
-            } else if (boidProps.material === 'normal') {
+            } else if (effectiveMaterial === 'normal') {
                 material = new THREE.MeshNormalMaterial({
                     wireframe: boidProps.wireframe});
-            } else if (boidProps.material === 'toon') {
+            } else if (effectiveMaterial === 'toon') {
                 material = new THREE.MeshToonMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                     wireframe: boidProps.wireframe});
-            } else if (boidProps.material === 'depth') {
+            } else if (effectiveMaterial === 'depth') {
                 material = new THREE.MeshDepthMaterial({
                     wireframe: boidProps.wireframe});
             } else {
@@ -3425,29 +3437,35 @@ function recreateBoidGeometries() {
                     wireframe: boidProps.wireframe});
             } 
         } else {
-            if (boidProps.material === 'standard') {
+            // For primitives, if 'imported' is selected, default to 'phong' (plastic)
+            var effectiveMaterial = boidProps.material;
+            if (effectiveMaterial === 'imported') {
+                effectiveMaterial = 'phong';
+            }
+            
+            if (effectiveMaterial === 'standard') {
                 material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                     metalness: 0.5, 
                     roughness: 0.4, 
                     wireframe: boidProps.wireframe,
                     side: THREE.DoubleSide});
-            } else if (boidProps.material === 'phong') {
+            } else if (effectiveMaterial === 'phong') {
                 material = new THREE.MeshPhongMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                     shininess: 100, 
                     wireframe: boidProps.wireframe,
                     side: THREE.DoubleSide});
-            } else if (boidProps.material === 'normal') {
+            } else if (effectiveMaterial === 'normal') {
                 material = new THREE.MeshNormalMaterial({
                     wireframe: boidProps.wireframe, 
                     side: THREE.DoubleSide});
-            } else if (boidProps.material === 'toon') {
+            } else if (effectiveMaterial === 'toon') {
                 material = new THREE.MeshToonMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                     wireframe: boidProps.wireframe,
                     side: THREE.DoubleSide});
-            } else if (boidProps.material === 'depth') {
+            } else if (effectiveMaterial === 'depth') {
                 material = new THREE.MeshDepthMaterial({
                     wireframe: boidProps.wireframe,
                     side: THREE.DoubleSide});
@@ -5481,7 +5499,7 @@ function drawLightingMenu() {
         { label: 'Hue', value: gSpotlight2Hue, min: 0, max: 360 },
         { label: 'Saturation', value: gSpotlight2Saturation, min: 0, max: 100 },
         { label: 'Penumbra', value: gSpotlightPenumbra, min: 0, max: 1 },
-        { label: 'Shadow Far', value: gShadowCameraFar, min: 10, max: 150 },
+        { label: 'Shadow Falloff', value: gShadowCameraFar, min: 10, max: 150 },
         { label: 'Boid Headlight', value: gHeadlightIntensity, min: 0, max: 2 }
     ];
     
@@ -5637,6 +5655,8 @@ function drawLightingMenu() {
         
         // Draw label below knob
         ctx.font = `${0.35 * knobRadius}px verdana`;
+        ctx.fillStyle = `hsla(0, 00%, 10%, ${lightingMenuOpacity})`;
+        ctx.fillText(knobs[i].label, knobX + 2, 1 + knobY + 1.35 * knobRadius);
         ctx.fillStyle = `hsla(45, 10%, 90%, ${lightingMenuOpacity})`;
         ctx.fillText(knobs[i].label, knobX, knobY + 1.35 * knobRadius);
     }
@@ -11979,24 +11999,30 @@ function onPointer(evt) {
                                 default: geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
                             }
                             let material;
-                            if (boidProps.material === 'standard') {
+                            // For primitives, if 'imported' is selected, default to 'phong' (plastic)
+                            var effectiveMaterial = boidProps.material;
+                            if (effectiveMaterial === 'imported') {
+                                effectiveMaterial = 'phong';
+                            }
+                            
+                            if (effectiveMaterial === 'standard') {
                                 material = new THREE.MeshStandardMaterial({
                                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                                     metalness: 0.5,
                                     roughness: 0.4, 
                                     wireframe: boidProps.wireframe});
-                            } else if (boidProps.material === 'phong') {
+                            } else if (effectiveMaterial === 'phong') {
                                 material = new THREE.MeshPhongMaterial({
                                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                                     shininess: 100, 
                                     wireframe: boidProps.wireframe});
-                            } else if (boidProps.material === 'normal') {
+                            } else if (effectiveMaterial === 'normal') {
                                 material = new THREE.MeshNormalMaterial({wireframe: boidProps.wireframe});
-                            } else if (boidProps.material === 'toon') {
+                            } else if (effectiveMaterial === 'toon') {
                                 material = new THREE.MeshToonMaterial({
                                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                                     wireframe: boidProps.wireframe});
-                            } else if (boidProps.material === 'depth') {
+                            } else if (effectiveMaterial === 'depth') {
                                 material = new THREE.MeshDepthMaterial({
                                     wireframe: boidProps.wireframe});
                             } else {
@@ -13884,14 +13910,14 @@ function applyMixedColors() {
                     // Saturation increases gradually with velocity magnitude (0% to 100%)
                     boid.sat = Math.round(absVel * 100);
                     
-                    if (normalizedVel > 0) {
-                        // Moving away: use primary hue from color wheel
+                    if (normalizedVel < 0) {
+                        // Moving toward camera: blue-shift → use primary hue from color wheel
                         boid.hue = gPrimaryHue;
-                        boid.light = Math.round(65 - 20 * normalizedVel); // 65% to 45% lightness
-                    } else {
-                        // Moving toward: use secondary hue from color wheel
-                        boid.hue = gSecondaryHue;
                         boid.light = Math.round(65 - 20 * absVel); // 65% to 45% lightness
+                    } else {
+                        // Moving away from camera: red-shift → use secondary hue from color wheel
+                        boid.hue = gSecondaryHue;
+                        boid.light = Math.round(65 - 20 * normalizedVel); // 65% to 45% lightness
                     }
                     
                     // Apply hue variability if enabled
