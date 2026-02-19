@@ -261,6 +261,13 @@ var gBirdDropTimer = 0; // Timer for bird drop animation
 var gBirdDropDelay = 0.0; // Delay before bird drops
 var gBirdDropDuration = 1.5; // Duration of bird drop animation
 var gBirdStartY = 60; // Starting Y offset for bird drop
+var gKoonsDog = null; // Koons Dog sculpture model reference
+var gKoonsDogObstacle = null; // Sphere obstacle for boid avoidance
+var gDraggingKoonsDog = false; // Track if dragging the Koons Dog
+var gKoonsDogDragOffset = null; // Store offset from click point to dog center
+var gKoonsDogDragPlaneHeight = 0; // Store the Y height where dog was grabbed
+var gKoonsDogInitialX = -25; // Initial X position for world resize scaling
+var gKoonsDogInitialZ = 26; // Initial Z position for world resize scaling
 var gGlobeLamp = null; // Globe lamp model reference
 var gGlobeLampLight = null; // Point light at center of globe lamp
 var gGlobeLampObstacle = null; // Sphere obstacle for boid avoidance
@@ -421,6 +428,8 @@ var gBaseboards = { front: null, back: null, left: null, right: null };
 var gFloor = null;
 var gRug = null; // Afghan rug mesh
 var gMarbleTexture = null; // Marble texture for wall squares
+var gPedestalMarbleTexture = null; // Marble texture for platonic solid pedestals
+var gColumnMarbleTexture = null; // Marble texture for fluted column
 
 // Wall animation state
 var gWallAnimation = {
@@ -455,7 +464,7 @@ var boidProps = {
     turnFactor: 0.05, // How strongly Boids turn back when near edge
     margin: 2.0, // Distance from boundary to start turning
     wireframe: false, // Render boids in wireframe mode
-    material: 'phong' // Material type: 'basic', 'phong', 'standard', 'normal', 'toon', 'depth'
+    material: 'phong' // Material type: 'basic', 'phong', 'standard', 'normal', 'toon', 'depth', 'imported'
 };
 
 // Boid trail tracking variables
@@ -471,12 +480,13 @@ var gTrailUpdateFrequency = 1; // Update trail every N frames
 var gTrailColorMode = 3; // 0=White, 1=Black, 2=B&W, 3=Color
 
 // Boid geometry types (multiple can be selected)
-var gSelectedBoidTypes = [3]; // Array of selected geometry types: 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter, 16=PaperPlane
+var gSelectedBoidTypes = [3]; // Array of selected geometry types: 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter, 16=PaperPlane, 17=KoonsDog
 var gDuckTemplate = null; // Template duck model for boid geometry
 var gFishTemplate = null; // Template fish model for boid geometry
 var gAvocadoTemplate = null; // Template avocado model for boid geometry
 var gHelicopterTemplate = null; // Template helicopter model for boid geometry
 var gPaperPlaneTemplate = null; // Template paper plane model for boid geometry
+var gKoonsDogTemplate = null; // Template Koons Dog model for boid geometry
 
 // OBSTACLE CLASSES ---------------------------------------------------------------------
 
@@ -972,7 +982,8 @@ class CylinderObstacle {
         
         // Material for column sections
         var columnMaterial = new THREE.MeshStandardMaterial({
-            color: `hsl(22, 8%, 74%)`,
+            color: 0xffffff,
+            map: gColumnMarbleTexture,
             roughness: 1.0
         });
         
@@ -2177,6 +2188,44 @@ class Lamp {
     }
 }
 
+// Helper function to create boid materials based on type
+function createBoidMaterial(materialType, hue, sat, light, wireframe) {
+    if (materialType === 'standard') {
+        return new THREE.MeshStandardMaterial({
+            color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`),
+            metalness: 0.5,
+            roughness: 0.4,
+            wireframe: wireframe
+        });
+    } else if (materialType === 'phong' || materialType === 'basic') {
+        return new THREE.MeshPhongMaterial({
+            color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`),
+            shininess: 100,
+            wireframe: wireframe
+        });
+    } else if (materialType === 'normal') {
+        return new THREE.MeshNormalMaterial({
+            wireframe: wireframe
+        });
+    } else if (materialType === 'toon') {
+        return new THREE.MeshToonMaterial({
+            color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`),
+            wireframe: wireframe
+        });
+    } else if (materialType === 'depth') {
+        return new THREE.MeshDepthMaterial({
+            wireframe: wireframe
+        });
+    } else {
+        // Fallback to phong
+        return new THREE.MeshPhongMaterial({
+            color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`),
+            shininess: 100,
+            wireframe: wireframe
+        });
+    }
+}
+
 class BOID {
     constructor(pos, rad, vel, hue, sat, light, geometryType) {
         this.pos = pos.clone();
@@ -2212,6 +2261,21 @@ class BOID {
             this.visMesh.userData = this;
             this.visMesh.castShadow = true;
             this.visMesh.receiveShadow = true;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, hue, sat, light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 13 && gFishTemplate) {
             // Clone fish template for this boid
@@ -2221,6 +2285,21 @@ class BOID {
             this.visMesh.userData = this;
             this.visMesh.castShadow = true;
             this.visMesh.receiveShadow = true;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, hue, sat, light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 14 && gAvocadoTemplate) {
             // Clone avocado template for this boid
@@ -2230,6 +2309,21 @@ class BOID {
             this.visMesh.userData = this;
             this.visMesh.castShadow = true;
             this.visMesh.receiveShadow = true;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, hue, sat, light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 15 && gHelicopterTemplate) {
             // Clone helicopter template for this boid
@@ -2241,6 +2335,21 @@ class BOID {
             this.visMesh.receiveShadow = true;
             // Give each helicopter a random initial rotation
             this.spinAngle = Math.random() * Math.PI * 2;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, hue, sat, light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 16 && gPaperPlaneTemplate) {
             // Clone paper plane template for this boid
@@ -2250,6 +2359,45 @@ class BOID {
             this.visMesh.userData = this;
             this.visMesh.castShadow = true;
             this.visMesh.receiveShadow = true;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, hue, sat, light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            
+            gThreeScene.add(this.visMesh);
+        } else if (this.geometryType === 17 && gKoonsDogTemplate) {
+            // Clone Koons Dog template for this boid
+            this.visMesh = gKoonsDogTemplate.clone();
+            this.visMesh.scale.set(0.1, 0.1, 0.1);
+            this.visMesh.position.copy(pos);
+            this.visMesh.userData = this;
+            this.visMesh.castShadow = true;
+            this.visMesh.receiveShadow = true;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, hue, sat, light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            
             gThreeScene.add(this.visMesh);
         } else {
             // Standard geometry with materials
@@ -2349,8 +2497,8 @@ class BOID {
                 this.pos.z + direction.z
             );
             
-            // Make mesh look at target (skip for helicopters and paper planes which handle their own rotation)
-            if (this.geometryType !== 15 && this.geometryType !== 16) {
+            // Make mesh look at target (skip for helicopters, paper planes, and Koons Dogs which handle their own rotation)
+            if (this.geometryType !== 15 && this.geometryType !== 16 && this.geometryType !== 17) {
                 this.visMesh.lookAt(target);
             }
             // Adjust for default orientation based on geometry type
@@ -2398,6 +2546,25 @@ class BOID {
                 }
             } else if (this.geometryType === 16) {
                 // Paper plane - calculate direction and orient
+                const speed = direction.length();
+                
+                if (speed > 0.01) {
+                    // Calculate yaw (horizontal rotation)
+                    const yaw = Math.atan2(direction.x, direction.z);
+                    // Calculate pitch (vertical angle)
+                    const pitch = Math.asin(direction.y / speed);
+                    
+                    // Apply rotations: model points along +Z by default
+                    this.visMesh.rotation.y = yaw;
+                    this.visMesh.rotation.x = -pitch;
+                    this.visMesh.rotation.z = 0;
+                } else {
+                    this.visMesh.rotation.x = 0;
+                    this.visMesh.rotation.y = 0;
+                    this.visMesh.rotation.z = 0;
+                }
+            } else if (this.geometryType === 17) {
+                // Koons Dog - calculate direction and orient (model points along +Z axis)
                 const speed = direction.length();
                 
                 if (speed > 0.01) {
@@ -3069,6 +3236,23 @@ function recreateBoidGeometries() {
             boid.visMesh.position.copy(boid.pos);
             boid.visMesh.castShadow = true;
             boid.visMesh.receiveShadow = true;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                // Create new material based on boidProps.material type
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, boid.hue, boid.sat, boid.light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            // For 'imported' mode, materials are preserved as-is from template clone
+            
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
         } else if (boid.geometryType === 13 && gFishTemplate) {
@@ -3080,6 +3264,23 @@ function recreateBoidGeometries() {
             boid.visMesh.position.copy(boid.pos);
             boid.visMesh.castShadow = true;
             boid.visMesh.receiveShadow = true;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                // Create new material based on boidProps.material type
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, boid.hue, boid.sat, boid.light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            // For 'imported' mode, materials are preserved as-is from template clone
+            
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
         } else if (boid.geometryType === 14 && gAvocadoTemplate) {
@@ -3091,6 +3292,23 @@ function recreateBoidGeometries() {
             boid.visMesh.position.copy(boid.pos);
             boid.visMesh.castShadow = true;
             boid.visMesh.receiveShadow = true;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                // Create new material based on boidProps.material type
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, boid.hue, boid.sat, boid.light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            // For 'imported' mode, materials are preserved as-is from template clone
+            
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
         } else if (boid.geometryType === 15 && gHelicopterTemplate) {
@@ -3104,6 +3322,23 @@ function recreateBoidGeometries() {
             boid.visMesh.receiveShadow = true;
             // Give each helicopter a random initial rotation
             boid.spinAngle = Math.random() * Math.PI * 2;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                // Create new material based on boidProps.material type
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, boid.hue, boid.sat, boid.light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            // For 'imported' mode, materials are preserved as-is from template clone
+            
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
         } else if (boid.geometryType === 16 && gPaperPlaneTemplate) {
@@ -3115,9 +3350,54 @@ function recreateBoidGeometries() {
             boid.visMesh.position.copy(boid.pos);
             boid.visMesh.castShadow = true;
             boid.visMesh.receiveShadow = true;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                // Create new material based on boidProps.material type
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, boid.hue, boid.sat, boid.light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            // For 'imported' mode, materials are preserved as-is from template clone
+            
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
-        } else if (boid.geometryType != 11 && boid.geometryType != 12 && boid.geometryType != 13 && boid.geometryType != 14 && boid.geometryType != 15 && boid.geometryType != 16) {
+        } else if (boid.geometryType === 17 && gKoonsDogTemplate) {
+            // For Koons Dog geometry, clone Koons Dog template
+            boid.visMesh = gKoonsDogTemplate.clone();
+            boid.visMesh.scale.set(0.1, 0.1, 0.1); // Scale for boid size
+            
+            // Set position and add to scene
+            boid.visMesh.position.copy(boid.pos);
+            boid.visMesh.castShadow = true;
+            boid.visMesh.receiveShadow = true;
+            
+            // Apply material type
+            if (boidProps.material !== 'imported') {
+                // Create new material based on boidProps.material type
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        var newMaterial = createBoidMaterial(boidProps.material, boid.hue, boid.sat, boid.light, boidProps.wireframe);
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => newMaterial.clone());
+                        } else {
+                            child.material = newMaterial;
+                        }
+                    }
+                });
+            }
+            // For 'imported' mode, materials are preserved as-is from template clone
+            
+            gThreeScene.add(boid.visMesh);
+            continue; // Skip standard material creation
+        } else if (boid.geometryType != 11 && boid.geometryType != 12 && boid.geometryType != 13 && boid.geometryType != 14 && boid.geometryType != 15 && boid.geometryType != 16 && boid.geometryType != 17) {
             if (boidProps.material === 'standard') {
                 material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
@@ -4398,10 +4678,10 @@ function drawStylingMenu() {
         'Tetrahedrons', 'Octahedrons', 'Dodecahedrons', 'Icosahedrons',
         'Capsules', 'Tori', 'Knots', 'Planes',
         'Rubber Ducks', 'Barramundi', 'Avocados', 'Helicopters',
-        'Paper Planes'
+        'Paper Planes', 'Koons Dogs'
     ];
     
-    for (let i = 0; i < 17; i++) {
+    for (let i = 0; i < 18; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
@@ -4493,8 +4773,8 @@ function drawStylingMenu() {
     ctx.fillText('Material Type', 0.5 * menuWidth, materialY);
     
     // Draw horizontal radio buttons for material types
-    const materialOptions = ['basic', 'phong', 'standard', 'normal', 'toon'];
-    const materialLabels = ['2D', 'Plastic', 'Metal', '"Normal"', 'Cartoon'];
+    const materialOptions = ['basic', 'phong', 'standard', 'normal', 'toon', 'imported'];
+    const materialLabels = ['2D', 'Plastic', 'Metal', '"Normal"', 'Cartoon', 'Imported'];
     const materialRadioY = materialY + knobRadius * 0.8;
     const materialRadioRadius = knobRadius * 0.35;
     const totalMaterialRadioWidth = materialOptions.length * materialRadioRadius * 2 + (materialOptions.length - 1) * materialRadioRadius * 1.5;
@@ -6615,7 +6895,7 @@ function initThreeScene() {
 
     ctx.fillStyle = 'hsl(0, 0%, 12%)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const tileSize = 256;
+    const tileSize = 512;
     for (let i = 0; i < tileRes; i++) {
         for (let j = 0; j < tileRes; j++) {
             if ((i + j) % 2 === 0) {
@@ -6626,11 +6906,10 @@ function initThreeScene() {
                     0.2 * tileSize, 
                     0, 
                     2 * Math.PI);
-                //ctx.fillStyle = 'hsl(296, 65%, 65%)';
                 ctx.fillStyle = 'hsl(180, 30%, 15%)';
                 ctx.fill();
                 ctx.strokeStyle = 'hsl(0, 0%, 70%)';
-                ctx.lineWidth = 0.03 * tileSize;
+                ctx.lineWidth = 0.02 * tileSize;
                 ctx.stroke();
             } else {
                 ctx.beginPath();
@@ -6642,12 +6921,24 @@ function initThreeScene() {
                     2 * Math.PI);
                 ctx.fillStyle = 'hsl(0, 0%, 0%)';
                 ctx.fill();
-                ctx.strokeStyle = 'hsl(0, 0%, 80%)';
+                ctx.strokeStyle = 'hsl(0, 0%, 70%)';
                 ctx.lineWidth = 0.04 * tileSize;
                 ctx.stroke();
+
                 
             }
         }
+
+        ctx.strokeStyle = 'hsl(0, 0%, 60%)';
+        ctx.lineWidth = 0.01 * tileSize;
+        ctx.beginPath();
+        ctx.moveTo(i * tileSize, 0);
+        ctx.lineTo(i * tileSize, tileRes);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i * tileSize);
+        ctx.lineTo(tileRes, i * tileSize);
+        ctx.stroke();
     }
     
     var checkerTexture = new THREE.CanvasTexture(canvas);
@@ -6968,16 +7259,6 @@ function initThreeScene() {
                     }
                 });
                 
-                // Add invisible beak collision area for rotation
-                var beakCollisionGeometry = new THREE.BoxGeometry(0.45, 0.36, 0.36);
-                var beakCollisionMaterial = new THREE.MeshBasicMaterial({
-                    visible: false
-                });
-                var beakCollisionMesh = new THREE.Mesh(beakCollisionGeometry, beakCollisionMaterial);
-                beakCollisionMesh.position.set(0.825, 1.25, -0.15);
-                beakCollisionMesh.userData.isDuckBeak = true;
-                duck.add(beakCollisionMesh);
-                
                 gThreeScene.add(duck);
                 gDuck = duck; // Store global reference
                 
@@ -7006,8 +7287,19 @@ function initThreeScene() {
                 gDuckEntranceDiscOutline.receiveShadow = true;
                 gThreeScene.add(gDuckEntranceDiscOutline);
                 
-                // Store a clone as template for boid geometry
+                // Store a clone as template for boid geometry BEFORE adding interaction controls
                 gDuckTemplate = duck.clone();
+                
+                // Add invisible beak collision area for rotation (only to main duck, not template)
+                var beakCollisionGeometry = new THREE.BoxGeometry(0.45, 0.36, 0.36);
+                var beakCollisionMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x000000
+                });
+                var beakCollisionMesh = new THREE.Mesh(beakCollisionGeometry, beakCollisionMaterial);
+                beakCollisionMesh.position.set(0.825, 1.25, -0.15);
+                beakCollisionMesh.userData.isDuckBeak = true;
+                beakCollisionMesh.visible = false; // Hide the collision box
+                duck.add(beakCollisionMesh);
                 
                 // Create sphere obstacle for boid avoidance
                 var duckObstacleRadius = 2.0; // Radius that covers the duck
@@ -7607,6 +7899,74 @@ function initThreeScene() {
         );
     }
     
+    // Load Koons Dog sculpture using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var koonsDogLoader = new THREE.GLTFLoader(gLoadingManager);
+        koonsDogLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/KoonsDog.gltf',
+            function(gltf) {
+                var koonsDog = gltf.scene;
+                
+                // Store a clone as template for boid geometry BEFORE any transformations
+                gKoonsDogTemplate = koonsDog.clone();
+                
+                // Position on floor
+                koonsDog.position.set(gKoonsDogInitialX, 0, gKoonsDogInitialZ);
+                
+                // Scale appropriately
+                koonsDog.scale.set(1, 1, 1);
+                
+                // Rotate to face forward (model points along +Z, rotate 90 degrees to face -X direction)
+                koonsDog.rotation.y = 0.5 * Math.PI;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                koonsDog.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and mark as draggable for all meshes
+                koonsDog.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.userData.isDraggableKoonsDog = true;
+                    }
+                });
+                
+                gThreeScene.add(koonsDog);
+                gKoonsDog = koonsDog; // Store global reference
+                
+                // Create sphere obstacle for boid avoidance
+                var koonsDogObstacleRadius = 2.5; // Radius that covers the sculpture
+                gKoonsDogObstacle = new SphereObstacle(
+                    koonsDogObstacleRadius,
+                    new THREE.Vector3(koonsDog.position.x, koonsDog.position.y + 2, koonsDog.position.z)
+                );
+                // Make the obstacle invisible
+                if (gKoonsDogObstacle.mesh) {
+                    gKoonsDogObstacle.mesh.visible = false;
+                }
+                gObstacles.push(gKoonsDogObstacle);
+                
+                console.log('Koons Dog sculpture loaded successfully');
+            },
+            function(xhr) {
+                console.log('Koons Dog sculpture: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Koons Dog sculpture:', error);
+            }
+        );
+    }
+    
     // Load Tube Star, Heart, Moon, Clover, and Diamond models using GLTFLoader for hanging decorations
     if (typeof THREE.GLTFLoader !== 'undefined') {
         var starTemplate, heartTemplate, moonTemplate, cloverTemplate, diamondTemplate;
@@ -8113,6 +8473,58 @@ function initThreeScene() {
         console.error('Error loading marble texture:', err);
     };
     marbleImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/marble_square.jpg';
+    
+    // Load marble texture for platonic solid pedestals using TextureLoader with CORS
+    var pedestalTextureLoader = new THREE.TextureLoader();
+    pedestalTextureLoader.setCrossOrigin('anonymous');
+    pedestalTextureLoader.load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/marble_pedestal.jpg',
+        function(texture) {
+            // Rotate texture 90 degrees
+            texture.center.set(0.5, 0.5);
+            texture.rotation = Math.PI / 2; // 90 degrees in radians
+            
+            gPedestalMarbleTexture = texture;
+            console.log('Pedestal marble texture loaded successfully');
+            // Update pedestals if they already exist
+            if (gPedestalAnimData && gPedestalAnimData.length > 0) {
+                gPedestalAnimData.forEach(function(data) {
+                    if (data.pedestal && data.pedestal.material) {
+                        data.pedestal.material.map = texture;
+                        data.pedestal.material.needsUpdate = true;
+                    }
+                });
+            }
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading pedestal marble texture:', err);
+        }
+    );
+    
+    // Load marble texture for fluted column using TextureLoader with CORS
+    var columnTextureLoader = new THREE.TextureLoader();
+    columnTextureLoader.setCrossOrigin('anonymous');
+    columnTextureLoader.load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/marble_column.jpg',
+        function(texture) {
+            gColumnMarbleTexture = texture;
+            console.log('Column marble texture loaded successfully');
+            // Update column if it already exists
+            if (gColumnObstacle && gColumnObstacle.columnSections) {
+                gColumnObstacle.columnSections.forEach(function(section) {
+                    if (section.material) {
+                        section.material.map = texture;
+                        section.material.needsUpdate = true;
+                    }
+                });
+            }
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading column marble texture:', err);
+        }
+    );
     
     // Function to update wall canvases with marble texture
     function updateWallsWithMarble() {
@@ -9425,12 +9837,13 @@ function initThreeScene() {
     var pedestalHeight = 7;
     var solidSize = 0.8;
     var backWallZ = -boxSize.z + baseboardDepth + pedestalSize / 2;
-    var pedestalY = baseboardHeight + pedestalHeight / 2;
-    var solidY = baseboardHeight + pedestalHeight + solidSize;
+    var pedestalY = pedestalHeight / 2; // Center of pedestal, bottom will be at y=0 (floor level)
+    var solidY = pedestalHeight + solidSize;
     
     // Pedestal material
     var pedestalMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xe2e2e2,
+        color: 0xffffff,
+        map: gPedestalMarbleTexture,
         metalness: 0.1,
         roughness: 0.7
     });
@@ -9475,7 +9888,6 @@ function initThreeScene() {
             transparent: true,
             opacity: 0.6,
             shininess: 0,
-            //roughness: 0.0
         });
         
         var solid = new THREE.Mesh(platonicConfig[i].geometry, solidMaterial);
@@ -10328,6 +10740,7 @@ function onPointer(evt) {
         var hitLampId = 1; // Default to lamp 1
         var hitStool = false;
         var hitBird = false;
+        var hitKoonsDog = false;
         var hitStoolLeg = false;
         var hitDuck = false;
         var hitDuckBeak = false;
@@ -10453,6 +10866,19 @@ function onPointer(evt) {
                     gBird.position.x - actualClickPoint.x,
                     0,
                     gBird.position.z - actualClickPoint.z
+                );
+                // Don't break - check if other objects are also hit
+            }
+            if (intersects[i].object.userData.isDraggableKoonsDog && !hitKoonsDog) {
+                hitKoonsDog = true;
+                var actualClickPoint = intersects[i].point;
+                gKoonsDogDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to Koons Dog center (X and Z only)
+                gKoonsDogDragOffset = new THREE.Vector3(
+                    gKoonsDog.position.x - actualClickPoint.x,
+                    0,
+                    gKoonsDog.position.z - actualClickPoint.z
                 );
                 // Don't break - check if other objects are also hit
             }
@@ -10695,6 +11121,17 @@ function onPointer(evt) {
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             // Disable orbit controls while dragging bird
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
+        if (hitKoonsDog && gKoonsDog) {
+            gDraggingKoonsDog = true;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging Koons Dog
             if (gCameraControl) {
                 gCameraControl.enabled = false;
             }
@@ -11969,6 +12406,45 @@ function onPointer(evt) {
             return;
         }
         
+        if (gDraggingKoonsDog && gKoonsDog) {
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Define plane at the height where the dog was grabbed
+            var dogPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gKoonsDogDragPlaneHeight);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(dogPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                // Keep the dog's Y position constant, only move X and Z
+                var newX = intersectionPoint.x + (gKoonsDogDragOffset ? gKoonsDogDragOffset.x : 0);
+                var newZ = intersectionPoint.z + (gKoonsDogDragOffset ? gKoonsDogDragOffset.z : 0);
+                
+                // Clamp to room boundaries
+                var minBoundX = -gPhysicsScene.worldSize.x + 2;
+                var maxBoundX = gPhysicsScene.worldSize.x - 2;
+                var minBoundZ = -gPhysicsScene.worldSize.z + 2;
+                var maxBoundZ = gPhysicsScene.worldSize.z - 2;
+                
+                newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
+                newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
+                
+                gKoonsDog.position.x = newX;
+                gKoonsDog.position.z = newZ;
+                
+                // Update obstacle position
+                if (gKoonsDogObstacle) {
+                    gKoonsDogObstacle.updatePosition(new THREE.Vector3(newX, 2, newZ));
+                }
+            }
+            return;
+        }
+        
         // Handle sphere dragging (translation in 3D)
         if (gDraggingSphere && window.draggingSphereObstacle) {
             var sphereObstacle = window.draggingSphereObstacle;
@@ -12434,6 +12910,16 @@ function onPointer(evt) {
             return;
         }
         
+        if (gDraggingKoonsDog) {
+            gDraggingKoonsDog = false;
+            gKoonsDogDragOffset = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
         if (gDraggingSphere) {
             gDraggingSphere = false;
             gSphereDragOffset = null;
@@ -12584,6 +13070,7 @@ function onPointerLeave(evt) {
     gDraggingDuck = false;
     gDraggingTeapot = false;
     gDraggingBird = false;
+    gDraggingKoonsDog = false;
     gDraggingGlobeLamp = false;
     gDraggingChair = false;
     gDraggingSofa = false;
@@ -12704,7 +13191,7 @@ function checkStylingMenuClick(clientX, clientY) {
     const buttonHeight = knobRadius * 1.3;
     const buttonSpacing = 4;
     
-    for (let i = 0; i < 17; i++) {
+    for (let i = 0; i < 18; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const totalRowWidth = (buttonWidth * 3) + (buttonSpacing * 2);
@@ -12758,7 +13245,7 @@ function checkStylingMenuClick(clientX, clientY) {
     }
     
     // Check material type radio buttons
-    const materialOptions = ['basic', 'phong', 'standard', 'normal', 'toon'];
+    const materialOptions = ['basic', 'phong', 'standard', 'normal', 'toon', 'imported'];
     const materialY = meshRadioY + knobRadius * 1.2;
     const materialRadioY = materialY + knobRadius * 0.8;
     const materialRadioRadius = knobRadius * 0.35;
@@ -13429,8 +13916,33 @@ function applyMixedColors() {
             }
             
             // Update boid color
-            if (boid.visMesh && boid.visMesh.material) {
-                boid.visMesh.material.color = new THREE.Color(`hsl(${Math.round(boid.hue)}, ${boid.sat}%, ${boid.light}%)`);
+            if (boid.visMesh) {
+                if (boid.geometryType >= 12 && boid.geometryType <= 17) {
+                    // For imported models (Duck, Fish, Avocado, Helicopter, Paper Plane, Koons Dog)
+                    // Only update colors if not using 'imported' material (which preserves original colors)
+                    if (boidProps.material !== 'imported') {
+                        boid.visMesh.traverse(function(child) {
+                            if (child.isMesh && child.material) {
+                                if (Array.isArray(child.material)) {
+                                    child.material.forEach(mat => {
+                                        // Only update color if material supports it (not Normal or Depth materials)
+                                        if (mat.color) {
+                                            mat.color = new THREE.Color(`hsl(${Math.round(boid.hue)}, ${boid.sat}%, ${boid.light}%)`);
+                                        }
+                                    });
+                                } else {
+                                    // Only update color if material supports it (not Normal or Depth materials)
+                                    if (child.material.color) {
+                                        child.material.color = new THREE.Color(`hsl(${Math.round(boid.hue)}, ${boid.sat}%, ${boid.light}%)`);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                } else if (boid.visMesh.material) {
+                    // For standard geometries with a single material
+                    boid.visMesh.material.color = new THREE.Color(`hsl(${Math.round(boid.hue)}, ${boid.sat}%, ${boid.light}%)`);
+                }
             }
         }
     }
