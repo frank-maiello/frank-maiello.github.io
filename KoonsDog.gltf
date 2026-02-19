@@ -1169,7 +1169,7 @@
           0,
           1
         ],
-        "metallicFactor": 1,
+        "metallicFactor": 0.8,
         "roughnessFactor": 0
       }
     }
