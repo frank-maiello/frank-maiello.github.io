@@ -7,7 +7,10 @@
     {
       "name": "Scene",
       "nodes": [
-        0
+        0,
+        16,
+        17,
+        18
       ]
     }
   ],
@@ -383,6 +386,56 @@
       ],
       "name": "nose",
       "mesh": 8
+    },
+    {
+      "name": "AmbientLight"
+    },
+    {
+      "matrix": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5,
+        10,
+        7.5,
+        1
+      ],
+      "name": "DirectionalLight",
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 0
+        }
+      }
+    },
+    {
+      "matrix": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        10,
+        0,
+        1
+      ],
+      "name": "HemisphereLight"
     }
   ],
   "bufferViews": [
@@ -1169,8 +1222,8 @@
           0.001214107934117647,
           1
         ],
-        "metallicFactor": 0.3,
-        "roughnessFactor": 0.3
+        "metallicFactor": 0.5,
+        "roughnessFactor": 0
       }
     }
   ],
@@ -1301,5 +1354,24 @@
         }
       ]
     }
+  ],
+  "extensions": {
+    "KHR_lights_punctual": {
+      "lights": [
+        {
+          "name": "DirectionalLight",
+          "color": [
+            1,
+            1,
+            1
+          ],
+          "intensity": 1,
+          "type": "directional"
+        }
+      ]
+    }
+  },
+  "extensionsUsed": [
+    "KHR_lights_punctual"
   ]
 }
