@@ -358,6 +358,7 @@ var gSpotlightPenumbra = 0.2; // Spotlight penumbra (0-1)
 var gShadowCameraFar = 70; // Shadow camera far distance for lamps (10-150)
 var gHeadlightIntensity = 0; // Headlight intensity (0-2)
 var gHeadlight = null; // Headlight spotlight reference
+var gHeadlightPointLight = null; // Point light in front of boid when headlight is active
 var gGlobeLampIntensity = 0; // Globe lamp point light intensity (0-3)
 var gGlobeLampHue = 0; // Globe lamp hue (0-360)
 var gGlobeLampSaturation = 80; // Globe lamp saturation (0-100)
@@ -10310,6 +10311,13 @@ function initThreeScene() {
             gCameraDistanceOffset += evt.deltaY * zoomSpeed * 0.01;
             // Clamp distance offset to reasonable range
             gCameraDistanceOffset = Math.max(-5, Math.min(10, gCameraDistanceOffset));
+        } else if (gCameraMode === 5) {
+            evt.preventDefault();
+            // Adjust camera elevation in free-roam mode
+            const elevationSpeed = 0.1;
+            gWalkingCameraPosition.y -= evt.deltaY * elevationSpeed * 0.01;
+            // Clamp elevation to reasonable range
+            gWalkingCameraPosition.y = Math.max(0.5, Math.min(50, gWalkingCameraPosition.y));
         } else if (gCameraMode === 6) {
             evt.preventDefault();
             // Adjust camera height in dolly mode
@@ -11859,9 +11867,17 @@ function onPointer(evt) {
                                 gThreeScene.add(gHeadlight);
                                 gHeadlight.target.position.set(0, 0, 0);
                                 gThreeScene.add(gHeadlight.target);
+                                
+                                // Create point light in front of boid
+                                gHeadlightPointLight = new THREE.PointLight(0xffffff, gHeadlightIntensity * 1.5, 15);
+                                gThreeScene.add(gHeadlightPointLight);
                             } else {
                                 gHeadlight.intensity = gHeadlightIntensity;
                                 gHeadlight.visible = true;
+                                if (gHeadlightPointLight) {
+                                    gHeadlightPointLight.intensity = gHeadlightIntensity * 1.5;
+                                    gHeadlightPointLight.visible = true;
+                                }
                             }
                         } else {
                             // Turn off or remove headlight
@@ -11869,6 +11885,10 @@ function onPointer(evt) {
                                 gThreeScene.remove(gHeadlight);
                                 gThreeScene.remove(gHeadlight.target);
                                 gHeadlight = null;
+                            }
+                            if (gHeadlightPointLight) {
+                                gThreeScene.remove(gHeadlightPointLight);
+                                gHeadlightPointLight = null;
                             }
                         }
                         break;
@@ -14168,6 +14188,16 @@ function update() {
                 leadBoid.pos.y + direction.y * targetDistance,
                 leadBoid.pos.z + direction.z * targetDistance
             );
+            
+            // Update point light position in front of boid
+            if (gHeadlightPointLight) {
+                const pointLightOffset = 2.0; // Distance in front of boid
+                gHeadlightPointLight.position.set(
+                    leadBoid.pos.x + direction.x * pointLightOffset,
+                    leadBoid.pos.y + direction.y * pointLightOffset,
+                    leadBoid.pos.z + direction.z * pointLightOffset
+                );
+            }
         }
     }
     
@@ -15379,22 +15409,36 @@ function update() {
                 -Math.sin(gWalkingCameraYaw)
             );
             
-            // WASD movement (or arrow keys)
-            if (gKeysPressed.w || gKeysPressed.up) {
+            // Arrow keys control pan and tilt
+            const rotationSpeed = 1.5; // radians per second
+            if (gKeysPressed.left) {
+                gWalkingCameraYaw += rotationSpeed * deltaT;
+            }
+            if (gKeysPressed.right) {
+                gWalkingCameraYaw -= rotationSpeed * deltaT;
+            }
+            if (gKeysPressed.up) {
+                gWalkingCameraPitch += rotationSpeed * deltaT;
+            }
+            if (gKeysPressed.down) {
+                gWalkingCameraPitch -= rotationSpeed * deltaT;
+            }
+            // Clamp pitch to prevent camera flipping
+            gWalkingCameraPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gWalkingCameraPitch));
+            
+            // WASD movement
+            if (gKeysPressed.w) {
                 gWalkingCameraPosition.add(forward.clone().multiplyScalar(walkSpeed * deltaT));
             }
-            if (gKeysPressed.s || gKeysPressed.down) {
+            if (gKeysPressed.s) {
                 gWalkingCameraPosition.add(forward.clone().multiplyScalar(-walkSpeed * deltaT));
             }
-            if (gKeysPressed.a || gKeysPressed.left) {
+            if (gKeysPressed.a) {
                 gWalkingCameraPosition.add(right.clone().multiplyScalar(walkSpeed * deltaT));
             }
-            if (gKeysPressed.d || gKeysPressed.right) {
+            if (gKeysPressed.d) {
                 gWalkingCameraPosition.add(right.clone().multiplyScalar(-walkSpeed * deltaT));
             }
-            
-            // Keep camera at elevated height (6.8m eye height)
-            gWalkingCameraPosition.y = 6.8;
             
             // Constrain position within world bounds
             const worldSize = gPhysicsScene.worldSize;
