@@ -13,6 +13,8 @@ var gAssetsLoaded = false; // Flag tracking if all assets have finished loading
 
 var gThreeScene;
 var gRenderer;
+var gAnaglyphEffect = null; // AnaglyphEffect for stereo rendering
+var gStereoEnabled = false; // Whether stereo/anaglyph mode is enabled
 var gCamera;
 var gCameraControl;
 var gGrabber;
@@ -5750,7 +5752,8 @@ function drawCameraMenu() {
     const radioButtonSpacing = 0.104 * menuScale;  // Increased 30% from 0.08
     const knobTopMargin = 0.05 * menuScale;
     const radioSectionHeight = 7 * radioButtonSpacing + 0.05 * menuScale;
-    const menuHeight = radioSectionHeight + knobRadius * 3;
+    const checkboxSectionHeight = 0.15 * menuScale; // Extra space for stereo checkbox
+    const menuHeight = radioSectionHeight + knobRadius * 3 + checkboxSectionHeight;
     
     // Position menu
     const menuOriginX = cameraMenuX * window.innerWidth;
@@ -5934,6 +5937,29 @@ function drawCameraMenu() {
     ctx.font = `${0.35 * knobRadius}px verdana`;
     ctx.fillStyle = `hsla(210, 10%, 90%, ${cameraMenuOpacity})`;
     ctx.fillText('Dolly Speed', speedKnobX, knobY + 1.35 * knobRadius);
+    
+    // Draw Stereo/Anaglyph checkbox below the knobs
+    const checkboxY = knobY + 2.5 * knobRadius;
+    const checkboxX = menuWidth / 2;
+    const checkboxSize = 0.04 * menuScale;
+    
+    // Draw checkbox outline
+    ctx.strokeStyle = `hsla(210, 20%, 60%, ${cameraMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(checkboxX - checkboxSize / 2, checkboxY - checkboxSize / 2, checkboxSize, checkboxSize);
+    
+    // Fill if checked
+    if (gStereoEnabled) {
+        ctx.fillStyle = `hsla(210, 80%, 70%, ${cameraMenuOpacity})`;
+        ctx.fillRect(checkboxX - checkboxSize / 2 + 2, checkboxY - checkboxSize / 2 + 2, checkboxSize - 4, checkboxSize - 4);
+    }
+    
+    // Draw label
+    ctx.font = `${0.032 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(210, 10%, 90%, ${cameraMenuOpacity})`;
+    ctx.fillText('Stereo (Red/Cyan Anaglyph)', checkboxX, checkboxY + 0.06 * menuScale);
     
     // Update knob positions for mouse interaction
     updateKnobPositions();
@@ -10507,6 +10533,14 @@ function initThreeScene() {
     window.addEventListener( 'resize', onWindowResize, false );
     container.appendChild( gRenderer.domElement );
     
+    // Initialize AnaglyphEffect for stereo rendering
+    if (typeof THREE.AnaglyphEffect !== 'undefined') {
+        gAnaglyphEffect = new THREE.AnaglyphEffect(gRenderer);
+        gAnaglyphEffect.setSize(0.8 * window.innerWidth, 0.8 * window.innerHeight);
+    } else {
+        console.warn('THREE.AnaglyphEffect not available. Stereo mode will be disabled.');
+    }
+    
     // Camera	
     gCamera = new THREE.PerspectiveCamera( gCameraFOV, window.innerWidth / window.innerHeight, 0.01, 1000);
     gCamera.position.set(-16.99, 21.37, 43.12);
@@ -14697,7 +14731,7 @@ function checkLightingMenuClick(clientX, clientY) {
 }
 
 function checkCameraMenuClick(clientX, clientY) {
-    if (!cameraMenuVisible || cameraMenuOpacity <= 0.5) return false;
+    if (!cameraMenuVisible || cameraMenuOpacity <= 0.1) return false;
     
     const knobRadius = 0.1 * menuScale;
     const knobSpacing = knobRadius * 3;
@@ -14706,12 +14740,21 @@ function checkCameraMenuClick(clientX, clientY) {
     const radioButtonSize = 0.04 * menuScale;
     const radioButtonSpacing = 0.104 * menuScale;  // Increased 30% from 0.08
     const radioSectionHeight = 7 * radioButtonSpacing + 0.05 * menuScale;
-    const menuHeight = radioSectionHeight + knobRadius * 3;
+    const checkboxSectionHeight = 0.15 * menuScale; // Extra space for stereo checkbox
+    const menuHeight = radioSectionHeight + knobRadius * 3 + checkboxSectionHeight;
     
     const menuUpperLeftX = cameraMenuX * window.innerWidth;
     const menuUpperLeftY = cameraMenuY * window.innerHeight;
     const menuOriginX = menuUpperLeftX;
     const menuOriginY = menuUpperLeftY;
+    
+    // Debug: log if we're anywhere near the menu
+    const inMenuX = (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding);
+    const inMenuY = (clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding);
+    if (inMenuX && inMenuY) {
+        console.log('Click in camera menu area at', clientX, clientY);
+        console.log('Menu bounds:', menuOriginX - padding, 'to', menuOriginX + menuWidth + padding, ',', menuOriginY - padding, 'to', menuOriginY + menuHeight + padding);
+    }
     
     // Check close button
     const closeIconRadius = 0.1 * menuScale * 0.25;
@@ -14819,6 +14862,31 @@ function checkCameraMenuClick(clientX, clientY) {
         
         if (gCameraControl) {
             gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    // Check Stereo checkbox - use same pattern as radio buttons
+    const knobY = radioSectionHeight + knobRadius * 1.5;
+    const checkboxY = menuOriginY + knobY + 2.5 * knobRadius;
+    const checkboxX = menuOriginX + menuWidth / 2;
+    const checkboxSize = 0.04 * menuScale;
+    
+    // Check if click is near checkbox (using same circular hit detection as radio buttons)
+    const cbdx = clientX - checkboxX;
+    const cbdy = clientY - checkboxY;
+    const distSq = cbdx * cbdx + cbdy * cbdy;
+    const radiusSq = (checkboxSize * 10) * (checkboxSize * 10);
+    
+    console.log('Checkbox at', checkboxX, checkboxY, 'click at', clientX, clientY, 'distSq', distSq, 'radiusSq', radiusSq);
+    
+    if (distSq < radiusSq) {
+        // Toggle stereo mode
+        if (gAnaglyphEffect) {
+            gStereoEnabled = !gStereoEnabled;
+            console.log('Stereo mode ' + (gStereoEnabled ? 'enabled' : 'disabled'));
+        } else {
+            console.warn('Stereo mode not available - AnaglyphEffect not loaded');
         }
         return true;
     }
@@ -15159,6 +15227,9 @@ function onWindowResize() {
     gCamera.aspect = window.innerWidth / window.innerHeight;
     gCamera.updateProjectionMatrix();
     gRenderer.setSize( window.innerWidth, window.innerHeight );
+    if (gAnaglyphEffect) {
+        gAnaglyphEffect.setSize( window.innerWidth, window.innerHeight );
+    }
     if (gOverlayCanvas) {
         gOverlayCanvas.width = window.innerWidth;
         gOverlayCanvas.height = window.innerHeight;
@@ -16891,7 +16962,12 @@ function update() {
         }
     }
     
-    gRenderer.render(gThreeScene, gCamera);
+    // Render scene with stereo effect if enabled
+    if (gStereoEnabled && gAnaglyphEffect) {
+        gAnaglyphEffect.render(gThreeScene, gCamera);
+    } else {
+        gRenderer.render(gThreeScene, gCamera);
+    }
     
     // Draw menus on overlay canvas
     gOverlayCtx.clearRect(0, 0, gOverlayCanvas.width, gOverlayCanvas.height);
