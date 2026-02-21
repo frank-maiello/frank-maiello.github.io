@@ -7158,8 +7158,20 @@ function initThreeScene() {
                 var rotatingWheelGroup = new THREE.Group();
                 var wheelPartsToRotate = [];
                 var hubMesh = null;
+                var spinningWheelGroup = null;
                 
-                // Apply MeshPhongMaterial to all meshes and enable shadows
+                // First pass: find the spinningWheel group and hubAxle
+                stool.traverse(function(child) {
+                    var name = child.name.toLowerCase();
+                    if (name === 'spinningwheel') {
+                        spinningWheelGroup = child;
+                    }
+                    if (name === 'hubaxle' || name === 'hubbody') {
+                        hubMesh = child;
+                    }
+                });
+                
+                // Second pass: apply materials, shadows, and mark draggable parts
                 stool.traverse(function(child) {
                     if (child.isMesh) {
                         // Get the original color if it exists
@@ -7178,13 +7190,8 @@ function initThreeScene() {
                         child.castShadow = true;
                         child.receiveShadow = true;
                         
-                        // Find hub to use as pivot point
-                        var name = child.name.toLowerCase();
-                        if (name === 'hubbody') {
-                            hubMesh = child;
-                        }
-                        
                         // Mark base/fork parts as draggable
+                        var name = child.name.toLowerCase();
                         if (name.includes('fork') || name.includes('seat') || name.includes('base')) {
                             child.userData.isDraggableStool = true;
                         }
@@ -7193,18 +7200,24 @@ function initThreeScene() {
                         if (name.includes('leg')) {
                             child.userData.isStoolLeg = true;
                         }
-                        
-                        // Identify wheel parts - tire, spokes, valve (NOT hub/axle/flanges)
-                        if ((name.includes('tire') || name.includes('spoke') || 
-                             name.includes('valve') || name.includes('vavle')) &&
-                            !name.includes('hub') && !name.includes('axle') && !name.includes('flange')) {
-                            wheelPartsToRotate.push(child);
-                        }
                     }
                 });
                 
-                // Group wheel parts for rotation
+                // Collect all children from spinningWheel group
+                if (spinningWheelGroup && hubMesh) {
+                    // Collect only meshes from the spinningWheel group, preserving group structure
+                    spinningWheelGroup.traverse(function(child) {
+                        if (child.isMesh && child !== spinningWheelGroup) {
+                            wheelPartsToRotate.push(child);
+                        }
+                    });
+                }
+                
+                // Group wheel parts for rotation around hub
                 if (wheelPartsToRotate.length > 0 && hubMesh) {
+                    // Update matrices to get accurate world positions
+                    stool.updateMatrixWorld(true);
+                    
                     // Find the parent that will contain our rotating group
                     var wheelParent = hubMesh.parent;
                     
@@ -7215,49 +7228,113 @@ function initThreeScene() {
                         stool.add(rotatingWheelGroup);
                     }
                     
-                    // Position group at hub's local position (but don't copy rotation)
-                    rotatingWheelGroup.position.copy(hubMesh.position);
+                    // Position group at hub's world position (converted to local space of parent)
+                    var hubWorldPos = new THREE.Vector3();
+                    hubMesh.getWorldPosition(hubWorldPos);
                     
-                    // Reparent wheel parts to rotating group
+                    if (rotatingWheelGroup.parent) {
+                        rotatingWheelGroup.parent.worldToLocal(hubWorldPos);
+                    }
+                    rotatingWheelGroup.position.copy(hubWorldPos);
+                    rotatingWheelGroup.updateMatrixWorld(true);
+                    
+                    // Reparent wheel parts to rotating group, preserving world positions
                     wheelPartsToRotate.forEach(function(part) {
-                        // Store original local transform relative to parent
-                        var localPos = part.position.clone();
-                        var localRot = part.rotation.clone();
-                        var localScale = part.scale.clone();
-                        var oldParent = part.parent;
+                        // Get world position before reparenting
+                        var partWorldPos = new THREE.Vector3();
+                        var partWorldQuat = new THREE.Quaternion();
+                        var partLocalScale = part.scale.clone(); // Keep local scale
                         
+                        part.getWorldPosition(partWorldPos);
+                        part.getWorldQuaternion(partWorldQuat);
+                        
+                        var oldParent = part.parent;
                         if (oldParent) {
                             oldParent.remove(part);
                         }
                         rotatingWheelGroup.add(part);
                         
-                        // Keep the part in the same world position
-                        // Calculate offset from hub
-                        part.position.set(
-                            localPos.x - hubMesh.position.x,
-                            localPos.y - hubMesh.position.y,
-                            localPos.z - hubMesh.position.z
-                        );
-                        part.rotation.copy(localRot);
-                        part.scale.copy(localScale);
+                        // Convert world position to local position in rotatingWheelGroup
+                        var localPos = partWorldPos.clone();
+                        rotatingWheelGroup.worldToLocal(localPos);
+                        part.position.copy(localPos);
                         
-                        // Fix nested torus orientation if this is the tire
-                        if (part.name.toLowerCase().includes('tire')) {
-                            part.traverse(function(child) {
-                                if (child.geometry && child.geometry.type === 'TorusGeometry') {
-                                    // Reset rotation to match parent tire orientation
-                                    // Tire rotates around X axis, so nested torus should have no relative rotation
-                                    child.rotation.set(0, 0, 0);
-                                }
-                            });
+                        // Convert world quaternion to local
+                        var rotGroupWorldQuat = new THREE.Quaternion();
+                        rotatingWheelGroup.getWorldQuaternion(rotGroupWorldQuat);
+                        var rotGroupWorldQuatInv = rotGroupWorldQuat.clone().invert();
+                        var localQuat = rotGroupWorldQuatInv.clone().multiply(partWorldQuat);
+                        part.quaternion.copy(localQuat);
+                        
+                        // Keep original local scale
+                        part.scale.copy(partLocalScale);
+                    });
+                    
+                    gWheelParts = [rotatingWheelGroup];
+                    gBicycleWheel = rotatingWheelGroup;
+                    console.log('Wheel configured: ' + wheelPartsToRotate.length + ' parts rotating about hubAxle');
+                } else if (hubMesh) {
+                    // Fallback: no spinningWheel group found, try to identify parts individually
+                    console.log('Warning: spinningWheel group not found, attempting fallback method');
+                    
+                    // Identify wheel parts by name as fallback
+                    stool.traverse(function(child) {
+                        if (child.isMesh) {
+                            var name = child.name.toLowerCase();
+                            if ((name.includes('tire') || name.includes('spoke') || 
+                                 name.includes('valve') || name.includes('vavle')) &&
+                                !name.includes('hub') && !name.includes('axle') && !name.includes('flange')) {
+                                wheelPartsToRotate.push(child);
+                            }
                         }
                     });
                     
-                    gWheelParts = [rotatingWheelGroup]; // Store the group
-                    gBicycleWheel = rotatingWheelGroup;
-                } else {
-                    gWheelParts = wheelPartsToRotate;
-                    gBicycleWheel = stool;
+                    if (wheelPartsToRotate.length > 0) {
+                        // Create rotating group and reparent parts
+                        var wheelParent = hubMesh.parent;
+                        if (wheelParent) {
+                            wheelParent.add(rotatingWheelGroup);
+                        } else {
+                            stool.add(rotatingWheelGroup);
+                        }
+                        
+                        var hubWorldPos = new THREE.Vector3();
+                        hubMesh.getWorldPosition(hubWorldPos);
+                        if (rotatingWheelGroup.parent) {
+                            rotatingWheelGroup.parent.worldToLocal(hubWorldPos);
+                        }
+                        rotatingWheelGroup.position.copy(hubWorldPos);
+                        
+                        wheelPartsToRotate.forEach(function(part) {
+                            var worldMatrix = new THREE.Matrix4();
+                            worldMatrix.copy(part.matrixWorld);
+                            
+                            var oldParent = part.parent;
+                            if (oldParent) {
+                                oldParent.remove(part);
+                            }
+                            rotatingWheelGroup.add(part);
+                            
+                            var parentWorldMatrixInverse = new THREE.Matrix4();
+                            parentWorldMatrixInverse.copy(rotatingWheelGroup.matrixWorld).invert();
+                            
+                            var localMatrix = new THREE.Matrix4();
+                            localMatrix.multiplyMatrices(parentWorldMatrixInverse, worldMatrix);
+                            
+                            var localPos = new THREE.Vector3();
+                            var localQuat = new THREE.Quaternion();
+                            var localScale = new THREE.Vector3();
+                            localMatrix.decompose(localPos, localQuat, localScale);
+                            
+                            part.position.copy(localPos);
+                            part.quaternion.copy(localQuat);
+                            part.scale.copy(localScale);
+                        });
+                        
+                        gWheelParts = [rotatingWheelGroup];
+                        gBicycleWheel = rotatingWheelGroup;
+                        console.log('Fallback: created rotating group with ' + wheelPartsToRotate.length + ' parts');
+                    }
                 }
                 
                 // Add invisible floor grab area under stool (large cylinder at ground level)
@@ -7324,7 +7401,6 @@ function initThreeScene() {
                 if (gStoolObstacle.majorToricPedestalMesh) gStoolObstacle.majorToricPedestalMesh.visible = false;
                 if (gStoolObstacle.pedestalMesh) gStoolObstacle.pedestalMesh.visible = false;
                 gObstacles.push(gStoolObstacle);
-                console.log('Stool loaded successfully with rotating wheel group containing ' + wheelPartsToRotate.length + ' parts');
             },
             function(xhr) {
                 console.log((xhr.loaded / xhr.total * 100) + '% loaded');
