@@ -92,6 +92,27 @@ var gTorusDragOffset = null; // Store offset from click point to torus center
 var gTorusDragPlaneHeight = 0; // Store the Y height where the torus was grabbed
 var gTorusDragPlaneDistance = 0; // Store the distance from camera for fixed plane dragging
 var gTorusHue = 90; // Current hue value for torus obstacle (0-360, same start as sphere)
+var gDuckDragPlaneHeight = 0; // Store the Y height where the duck was grabbed
+var gDuckDragOffset = null; // Store offset from click point to duck center (for toggle dragging)
+var gMammothDragPlaneHeight = 0; // Store the Y height where the mammoth was grabbed
+var gMammothDragOffset = null; // Store offset from click point to mammoth center (for toggle dragging)
+var gDraggingMammothSkeleton = false; // Track if dragging the mammoth skeleton
+var gMammothSkeletonDragOffset = null; // Store offset from click point to skeleton center
+var gMammothSkeletonDragPlaneHeight = 0; // Height of the invisible plane for skeleton dragging
+var gTeapotDragPlaneHeight = 0; // Store the Y height where the teapot was grabbed
+var gTeapotDragOffset = null; // Store offset from click point to teapot center (for toggle dragging)
+var gChairDragPlaneHeight = 0; // Store the Y height where the chair was grabbed
+var gChairDragOffset = null; // Store offset from click point to chair center (for toggle dragging)
+var gSofaDragPlaneHeight = 0; // Store the Y height where the sofa was grabbed
+var gSofaDragOffset = null; // Store offset from click point to sofa center (for toggle dragging)
+var gStoolDragPlaneHeight = 0; // Store the Y height where the stool was grabbed
+var gStoolDragOffset = null; // Store offset from click point to stool center (for toggle dragging)
+var gBirdDragPlaneHeight = 0; // Store the Y height where the bird was grabbed
+var gBirdDragOffset = null; // Store offset from click point to bird center (for toggle dragging)
+var gKoonsDogDragPlaneHeight = 0; // Store the Y height where the Koons Dog was grabbed
+var gKoonsDogDragOffset = null; // Store offset from click point to Koons Dog center (for toggle dragging)
+var gGlobeLampDragPlaneDistance = 0; // Store the distance from camera for globe lamp dragging
+var gGlobeLampDragOffset = null; // Store offset from click point to globe lamp center (for toggle dragging)
 var gActiveLampId = 1; // Track which lamp is currently being interacted with (1 or 2)
 var gLampAngle = -0.0435; // Current lamp angle in radians (-2.49 degrees)
 var gLampAssemblyRotation = 0.0; // Current lamp assembly rotation around Y axis
@@ -121,6 +142,9 @@ var gLampInnerCone2 = null; // Reference to inner cone 2
 var gPinRotationAxis2 = null;
 var gInitialLampHeight = 0; // Initial lamp height
 var gLastLampBaseClickTime = { 1: 0, 2: 0 }; // Track last click time for double-click detection
+var gCurrentlyDraggingObject = null; // Track which object is currently in dragging mode: 'duck', 'mammoth', 'teapot', 'chair', 'sofa', 'stool', etc.
+var gLastObjectClickTime = { duck: 0, mammoth: 0, mammothSkeleton: 0, teapot: 0, chair: 0, sofa: 0, stool: 0, bird: 0, koonsDog: 0, globeLamp: 0 }; // Track last click time for double-click detection
+var gDragHighlightBox = null; // BoxHelper to show which object is being dragged
 var gOverlayCanvas;
 var gOverlayCtx;
 var gButtons = {
@@ -212,16 +236,12 @@ var gBicycleWheel = null; // Group containing wheel parts
 var gWheelParts = []; // Array of wheel meshes (tire, spokes, valve)
 var gStool = null; // Reference to entire stool model
 var gStoolObstacle = null; // Cylinder obstacle for boid avoidance
-var gDraggingStool = false; // Track if dragging the stool
+var gDraggingStool = false; // Track if dragging the stool (toggleable)
 var gRotatingStool = false; // Track if rotating the stool
-var gStoolDragOffset = null; // Store offset from click point to stool center
-var gStoolDragPlaneHeight = 0; // Store the Y height where stool was grabbed
 var gDuck = null; // Reference to duck model
 var gDuckObstacle = null; // Sphere obstacle for boid avoidance
-var gDraggingDuck = false; // Track if dragging the duck
+var gDraggingDuck = false; // Track if dragging the duck (toggleable)
 var gRotatingDuckBeak = false; // Track if rotating the duck via beak
-var gDuckDragOffset = null; // Store offset from click point to duck center
-var gDuckDragPlaneHeight = 0; // Store the Y height where duck was grabbed
 var gDuckEntranceDisc = null; // Black disc for entrance animation
 var gDuckEntranceDiscOutline = null; // White outline for disc
 var gDuckEntranceState = 'waiting'; // States: waiting, expanding, rising, shrinking, complete
@@ -230,15 +250,27 @@ var gDuckTargetY = -0.4; // Target Y position for duck
 var gDuckStartY = -8; // Starting Y position (below floor)
 var gDuckInitialX = 18; // Initial X position for world resize scaling
 var gDuckInitialZ = 12; // Initial Z position for world resize scaling
+var gMammoth = null; // Reference to mini mammoth display model
+var gMammothObstacle = null; // Sphere obstacle for boid avoidance
+var gDraggingMammoth = false; // Track if dragging the mammoth (toggleable)
+var gMammothSkeleton = null; // Reference to full mammoth skeleton model
+var gMammothSkeletonObstacle = null; // Sphere obstacle for full mammoth
+var gMammothSwapDisc = null; // Disc for swap animation hole
+var gMammothSwapDiscOutline = null; // Outline ring for swap disc
+var gMammothSwapState = 'idle'; // States: idle, expanding-mini, dropping-mini, rising-full, shrinking, complete
+var gMammothSwapTimer = 0; // Timer for animation
+var gMammothSwapSpotlight = null; // Spotlight for swap animation
+var gMiniMammothStartY = 0; // Starting Y for mini mammoth drop
+var gMiniMammothTargetY = -10; // Target Y for mini mammoth (below floor)
+var gFullMammothStartY = -12; // Starting Y for full mammoth (below floor)
+var gFullMammothTargetY = 0; // Target Y for full mammoth (at floor level)
 var gTeapot = null; // Teapot model reference
 var gTeapotAnimating = true; // Is teapot currently animating
 var gTeapotAnimationTimer = 0; // Timer for teapot slide animation
 var gTeapotStartZ = 40; // Starting Z position
 var gTeapotTargetZ = 0; // Target Z position
 var gTeapotObstacle = null; // Teapot obstacle for boid avoidance
-var gDraggingTeapot = false; // Track if dragging the teapot
-var gTeapotDragOffset = null; // Store offset from click point to teapot center
-var gTeapotDragPlaneHeight = 0; // Store the Y height where the teapot was grabbed
+var gDraggingTeapot = false; // Track if dragging the teapot (toggleable)
 var gTeapotInitialX = -10; // sets final x Initial X position for world resize scaling
 var gTeapotInitialZ = 0; // does nothing Initial Z position for world resize scaling (final position after animation)
 var gStoolAnimating = true; // Is stool currently animating
@@ -251,9 +283,7 @@ var gColumnInitialX = 26; // Initial X position for world resize scaling
 var gColumnInitialZ = -26; // Initial Z position for world resize scaling
 var gBird = null; // Brancusi Bird model reference
 var gBirdObstacle = null; // Cylinder obstacle for boid avoidance
-var gDraggingBird = false; // Track if dragging the bird
-var gBirdDragOffset = null; // Store offset from click point to bird center
-var gBirdDragPlaneHeight = 0; // Store the Y height where bird was grabbed
+var gDraggingBird = false; // Track if dragging the bird (toggleable)
 var gBirdInitialX = -22; // Initial X position for world resize scaling
 var gBirdInitialZ = 8; // Initial Z position for world resize scaling
 var gBirdDropping = false; // Flag for bird drop animation
@@ -263,30 +293,22 @@ var gBirdDropDuration = 1.5; // Duration of bird drop animation
 var gBirdStartY = 60; // Starting Y offset for bird drop
 var gKoonsDog = null; // Koons Dog sculpture model reference
 var gKoonsDogObstacle = null; // Sphere obstacle for boid avoidance
-var gDraggingKoonsDog = false; // Track if dragging the Koons Dog
-var gKoonsDogDragOffset = null; // Store offset from click point to dog center
-var gKoonsDogDragPlaneHeight = 0; // Store the Y height where dog was grabbed
+var gDraggingKoonsDog = false; // Track if dragging the Koons Dog (toggleable)
 var gKoonsDogInitialX = -25; // Initial X position for world resize scaling
 var gKoonsDogInitialZ = 26; // Initial Z position for world resize scaling
 var gGlobeLamp = null; // Globe lamp model reference
 var gGlobeLampLight = null; // Point light at center of globe lamp
 var gGlobeLampObstacle = null; // Sphere obstacle for boid avoidance
-var gDraggingGlobeLamp = false; // Track if dragging the globe lamp
-var gGlobeLampDragOffset = null; // Store offset from click point to globe lamp center
-var gGlobeLampDragPlaneDistance = 0; // Store the distance from camera for fixed plane dragging
+var gDraggingGlobeLamp = false; // Track if dragging the globe lamp (toggleable)
 var gChair = null; // Sheen chair model reference
 var gChairObstacle = null; // Box obstacle for boid avoidance
-var gDraggingChair = false; // Track if dragging the chair
-var gChairDragOffset = null; // Store offset from click point to chair center
-var gChairDragPlaneHeight = 0; // Store the Y height where chair was grabbed
+var gDraggingChair = false; // Track if dragging the chair (toggleable)
 var gChairInitialX = -2; // Initial X position for world resize scaling
 var gChairInitialZ = 0; // Initial Z position for world resize scaling
 var gChairSliding = false; // Flag for chair slide animation (starts after loading)
 var gSofa = null; // Glam velvet sofa model reference
 var gSofaObstacle = null; // Box obstacle for boid avoidance
-var gDraggingSofa = false; // Track if dragging the sofa
-var gSofaDragOffset = null; // Store offset from click point to sofa center
-var gSofaDragPlaneHeight = 0; // Store the Y height where sofa was grabbed
+var gDraggingSofa = false; // Track if dragging the sofa (toggleable)
 var gSofaInitialX = 19; // Initial X position for world resize scaling (close to left wall)
 var gSofaInitialZ = -11; // Initial Z position for world resize scaling
 var gChairSlideTimer = 0; // Timer for chair slide animation
@@ -309,6 +331,8 @@ var gWheelValveMass = 0.1; // Relative mass of valve (creates asymmetry)
 var gWheelRadius = 1.0; // Wheel radius for torque calculation
 var gDirectionalLight = null;
 var gSpawnPointLight = null; // Point light at boid spawn center
+var gDragSpotlight = null; // Spotlight for object being dragged
+var gOriginalLightIntensities = {}; // Store original light intensities when dimming for drag
 var gAmbientIntensity = 1.2; // Ambient light intensity (0-2)
 var gAmbientHue = 0; // Ambient light hue (0-360)
 var gAmbientSaturation = 0; // Ambient light saturation (0-100)
@@ -362,6 +386,8 @@ var gHeadlightPointLight = null; // Point light in front of boid when headlight 
 var gGlobeLampIntensity = 0; // Globe lamp point light intensity (0-3)
 var gGlobeLampHue = 0; // Globe lamp hue (0-360)
 var gGlobeLampSaturation = 80; // Globe lamp saturation (0-100)
+var gOrnamentLightIntensity = 0; // Ornament point light intensity (0-3)
+var gOrnamentLightFalloff = 8; // Ornament point light distance/falloff (3-15)
 var gHangingStars = []; // Array of hanging star decorations
 var gStarAnimData = []; // Animation data for each star {star, wire, targetY, startY, timer, delay, animating}
 var gEnableStarSwayAndTwist = true; // Enable/disable star swaying and twisting motion
@@ -395,6 +421,7 @@ var gColumnBaseSliding = false; // Flag for column base slide animation (starts 
 var gColumnBaseSlideTimer = 0; // Timer for column base slide animation
 var gColumnBaseStartZ = 35; // Starting Z offset for column base slide
 var gColumnBaseTargetZ = -26; // Target Z position for column base
+var gColumnEverDragged = false; // Flag to permanently disable animations after first drag
 
 var segregationMode = 0; // 0 = no segregation, 1 = same hue separation, 2 = all separation
 var SpatialGrid; // Global spatial grid instance
@@ -1169,42 +1196,50 @@ class CylinderObstacle {
             this.toriGroups = [];
         }
         
-        // Create conical pedestal
-        const conicalPedestalRadius = this.radius * 1.5;
-        const conicalPedestalHeight = 3; 
-        const conicalPedestalGeometry = new THREE.ConeGeometry(conicalPedestalRadius, conicalPedestalHeight, 64);
-        // Create clipping plane to cut off bottom portion of cone (y = 0.0 to 0.95)
-        const clippingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.95);
-        const conicalPedestalMaterial = new THREE.MeshStandardMaterial({
+        // Create minorToric pedestal
+        const minorToricPedestalRadius = this.radius;
+        const minorToricPedestalHeight = 3; 
+        //const minorToricPedestalGeometry = new THREE.ConeGeometry(minorToricPedestalRadius, minorToricPedestalHeight, 64);
+        const minorToricPedestalGeometry = new THREE.TorusGeometry(
+            minorToricPedestalRadius, 
+            0.3, 
+            8, 
+            16); // Start with thin torus geometry
+        minorToricPedestalGeometry.rotateX(Math.PI / 2); // Rotate to stand upright
+        minorToricPedestalGeometry.translate(0, 0.32, 0); // Move up 
+        
+        const minorToricPedestalMaterial = new THREE.MeshStandardMaterial({
             color: `hsl(25, 10%, 30%)`,
             roughness: 0.5,
-            clippingPlanes: [clippingPlane],
-            clipShadows: true
+            
         });
-        this.conicalPedestalMesh = new THREE.Mesh(conicalPedestalGeometry, conicalPedestalMaterial);
-        this.conicalPedestalMesh.position.copy(this.position);
-        // Start conical pedestal at offset Z position for slide animation
+        
+        this.minorToricPedestalMesh = new THREE.Mesh(minorToricPedestalGeometry, minorToricPedestalMaterial);
+        this.minorToricPedestalMesh.position.copy(this.position);
+        // Start minorToric pedestal at offset Z position for slide animation
         if (Math.abs(this.position.x - gColumnInitialX) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
-            this.conicalPedestalMesh.position.z = gColumnBaseStartZ;
+            this.minorToricPedestalMesh.position.z = gColumnBaseStartZ;
         }
-        this.conicalPedestalMesh.position.y = (this.position.y - this.height / 2) + 0.5 * conicalPedestalHeight + 0.28; // Bottom at y=0
-        this.conicalPedestalMesh.rotation.copy(this.mesh.rotation);
-        this.conicalPedestalMesh.castShadow = true;
-        this.conicalPedestalMesh.receiveShadow = true;
-        this.conicalPedestalMesh.userData.isDraggableCylinder = true;
-        this.conicalPedestalMesh.userData.cylinderObstacle = this;
-        gThreeScene.add(this.conicalPedestalMesh);
+        this.minorToricPedestalMesh.position.y = (this.position.y - this.height / 2) + 0.5 * minorToricPedestalHeight + 0.28; // Bottom at y=0
+        this.minorToricPedestalMesh.rotation.copy(this.mesh.rotation);
+        this.minorToricPedestalMesh.castShadow = true;
+        this.minorToricPedestalMesh.receiveShadow = true;
+        this.minorToricPedestalMesh.userData.isDraggableCylinder = true;
+        this.minorToricPedestalMesh.userData.cylinderObstacle = this;
+        gThreeScene.add(this.minorToricPedestalMesh);
 
-        // Create round disc baseplate between column and pedestal
+        // Create round disc plate to fill between column and pedestal
         const discRadius = this.radius * 1.02; // Larger than column, smaller than pedestal
         const discHeight = 0.2;
         const discGeometry = new THREE.CylinderGeometry(discRadius, discRadius, discHeight, 64);
+        discGeometry.translate(0, 0.82, 0); // Move up 
         const discMaterial = new THREE.MeshStandardMaterial({
             color: `hsl(25, 10%, 30%)`,
             roughness: 0.5
         });
         this.discMesh = new THREE.Mesh(discGeometry, discMaterial);
         this.discMesh.position.copy(this.position);
+        
         // Start disc at offset Z position for slide animation
         if (Math.abs(this.position.x - gColumnInitialX) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
             this.discMesh.position.z = gColumnBaseStartZ;
@@ -1217,8 +1252,40 @@ class CylinderObstacle {
         this.discMesh.userData.cylinderObstacle = this;
         gThreeScene.add(this.discMesh);
 
+        // Create majorToric pedestal
+        const majorToricPedestalRadius = this.radius;
+        const majorToricPedestalHeight = 3; 
+        //const majorToricPedestalGeometry = new THREE.ConeGeometry(majorToricPedestalRadius, majorToricPedestalHeight, 64);
+        const majorToricPedestalGeometry = new THREE.TorusGeometry(
+            majorToricPedestalRadius, 
+            0.55, 
+            16, 
+            16); 
+        majorToricPedestalGeometry.rotateX(Math.PI / 2); // Rotate to stand upright
+        majorToricPedestalGeometry.translate(0, -0.5, 0); // Move up 
+        
+        const majorToricPedestalMaterial = new THREE.MeshStandardMaterial({
+            color: `hsl(25, 10%, 30%)`,
+            roughness: 0.5,
+            
+        });
+        
+        this.majorToricPedestalMesh = new THREE.Mesh(majorToricPedestalGeometry, majorToricPedestalMaterial);
+        this.majorToricPedestalMesh.position.copy(this.position);
+        // Start majorToric pedestal at offset Z position for slide animation
+        if (Math.abs(this.position.x - gColumnInitialX) < 0.1 && Math.abs(this.position.z - gColumnBaseTargetZ) < 0.1) {
+            this.majorToricPedestalMesh.position.z = gColumnBaseStartZ;
+        }
+        this.majorToricPedestalMesh.position.y = (this.position.y - this.height / 2) + 0.5 * majorToricPedestalHeight + 0.28; // Bottom at y=0
+        this.majorToricPedestalMesh.rotation.copy(this.mesh.rotation);
+        this.majorToricPedestalMesh.castShadow = true;
+        this.majorToricPedestalMesh.receiveShadow = true;
+        this.majorToricPedestalMesh.userData.isDraggableCylinder = true;
+        this.majorToricPedestalMesh.userData.cylinderObstacle = this;
+        gThreeScene.add(this.majorToricPedestalMesh);
+
         // add square pedestal
-        const pedestalSize = this.radius * 2.5;
+        const pedestalSize = this.radius * 2.4;
         const pedestalHeight = 1;
         const pedestalGeometry = new THREE.BoxGeometry(pedestalSize, pedestalHeight, pedestalSize);
         const pedestalMaterial = new THREE.MeshStandardMaterial({
@@ -1381,9 +1448,13 @@ class CylinderObstacle {
         if (this.discMesh) {
             this.discMesh.position.set(newPosition.x, bottomY + 1.3, newPosition.z);
         }
-        if (this.conicalPedestalMesh) {
-            const conicalPedestalHeight = 3;
-            this.conicalPedestalMesh.position.set(newPosition.x, bottomY + 0.5 * conicalPedestalHeight + 0.28, newPosition.z);
+        if (this.minorToricPedestalMesh) {
+            const minorToricPedestalHeight = 3;
+            this.minorToricPedestalMesh.position.set(newPosition.x, bottomY + 0.5 * minorToricPedestalHeight + 0.28, newPosition.z);
+        }
+        if (this.majorToricPedestalMesh) {
+            const majorToricPedestalHeight = 3;
+            this.majorToricPedestalMesh.position.set(newPosition.x, bottomY + 0.5 * majorToricPedestalHeight + 0.28, newPosition.z);
         }
         if (this.pedestalMesh) {
             const pedestalHeight = 1;
@@ -5439,7 +5510,7 @@ function drawLightingMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2; // 3 knobs across
-    const menuHeight = knobSpacing * 6; // 6 rows (now with 18 knobs)
+    const menuHeight = knobSpacing * 7; // 7 rows (now with 20 knobs)
     const padding = 1.7 * knobRadius;
     
     const menuOriginX = lightingMenuX * window.innerWidth;
@@ -5501,7 +5572,9 @@ function drawLightingMenu() {
         { label: 'Saturation', value: gSpotlight2Saturation, min: 0, max: 100 },
         { label: 'Penumbra', value: gSpotlightPenumbra, min: 0, max: 1 },
         { label: 'Shadow Falloff', value: gShadowCameraFar, min: 10, max: 150 },
-        { label: 'Boid Headlight', value: gHeadlightIntensity, min: 0, max: 2 }
+        { label: 'Boid Headlight', value: gHeadlightIntensity, min: 0, max: 2 },
+        { label: 'Ornament Lights', value: gOrnamentLightIntensity, min: 0, max: 3 },
+        { label: 'Falloff', value: gOrnamentLightFalloff, min: 3, max: 15 }
     ];
     
     const fullMeterSweep = 1.6 * Math.PI;
@@ -5615,9 +5688,9 @@ function drawLightingMenu() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // Check if this is an intensity knob at 0 (Ambient, Overhead, Globe, Spot1, Spot2, Headlight)
+        // Check if this is an intensity knob at 0 (Ambient, Overhead, Globe, Spot1, Spot2, Headlight, Ornament)
         let displayValue;
-        if ((i === 0 || i === 3 || i === 6 || i === 9 || i === 12 || i === 17) && knobs[i].value === 0) {
+        if ((i === 0 || i === 3 || i === 6 || i === 9 || i === 12 || i === 17 || i === 18) && knobs[i].value === 0) {
             displayValue = 'OFF';
             ctx.fillStyle = `hsla(0, 80%, 50%, ${lightingMenuOpacity})`; // Red color for OFF
         } else if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13) {
@@ -6188,6 +6261,14 @@ function updateWorldGeometry(changedDimension) {
                 if (starData.cone) {
                     starData.cone.position.x = newX;
                 }
+                if (starData.obstacle) {
+                    const currentObstaclePos = starData.obstacle.position.clone();
+                    currentObstaclePos.x = newX + (starData.offsetX || 0);
+                    starData.obstacle.updatePosition(currentObstaclePos);
+                }
+                if (starData.pointLight) {
+                    starData.pointLight.position.x = newX + (starData.offsetX || 0);
+                }
             }
             
             // Only update Z when Z dimension changes
@@ -6205,6 +6286,14 @@ function updateWorldGeometry(changedDimension) {
                 }
                 if (starData.cone) {
                     starData.cone.position.z = newZ;
+                }
+                if (starData.obstacle) {
+                    const currentObstaclePos = starData.obstacle.position.clone();
+                    currentObstaclePos.z = newZ + (starData.offsetZ || 0);
+                    starData.obstacle.updatePosition(currentObstaclePos);
+                }
+                if (starData.pointLight) {
+                    starData.pointLight.position.z = newZ + (starData.offsetZ || 0);
                 }
             }
             
@@ -6238,6 +6327,24 @@ function updateWorldGeometry(changedDimension) {
                 if (starData.cone) {
                     const coneHeight = starData.coneHeight || 0.5;
                     starData.cone.position.y = ceilingY + coneHeight / 2;
+                }
+                
+                // Update obstacle position
+                if (starData.obstacle && starData.star) {
+                    var obstacleRadius = starData.obstacle.radius;
+                    var yOffset = starData.yOffsetMultiplier || 1.0;
+                    const obstacleY = starData.animating ? starData.star.position.y - obstacleRadius * yOffset : starData.targetY - obstacleRadius * yOffset;
+                    starData.obstacle.updatePosition(new THREE.Vector3(
+                        starData.x + (starData.offsetX || 0),
+                        obstacleY,
+                        starData.z + (starData.offsetZ || 0)
+                    ));
+                }
+                
+                // Update point light position
+                if (starData.pointLight && starData.star) {
+                    const lightY = starData.animating ? starData.star.position.y : starData.targetY;
+                    starData.pointLight.position.y = lightY;
                 }
             }
         }
@@ -6805,17 +6912,6 @@ function checkDollyRailsClick(clientX, clientY) {
                 gCameraControl.enabled = false;
             }
             return true;
-        } else {
-            // Dragging the rails body - translate horizontally
-            gDraggingDollyEnd = null;
-            gDraggingDolly = true;
-            gDollyDragStartMouseX = clientX;
-            gDollyDragStartMouseY = clientY;
-            gDollyDragStartPosition = gDollyRailsPosition.clone();
-            if (gCameraControl) {
-                gCameraControl.enabled = false;
-            }
-            return true;
         }
     }
     
@@ -7224,7 +7320,8 @@ function initThreeScene() {
                     });
                 }
                 if (gStoolObstacle.discMesh) gStoolObstacle.discMesh.visible = false;
-                if (gStoolObstacle.conicalPedestalMesh) gStoolObstacle.conicalPedestalMesh.visible = false;
+                if (gStoolObstacle.minorToricPedestalMesh) gStoolObstacle.minorToricPedestalMesh.visible = false;
+                if (gStoolObstacle.majorToricPedestalMesh) gStoolObstacle.majorToricPedestalMesh.visible = false;
                 if (gStoolObstacle.pedestalMesh) gStoolObstacle.pedestalMesh.visible = false;
                 gObstacles.push(gStoolObstacle);
                 console.log('Stool loaded successfully with rotating wheel group containing ' + wheelPartsToRotate.length + ' parts');
@@ -7461,6 +7558,142 @@ function initThreeScene() {
             },
             function(error) {
                 console.error('Error loading Avocado model:', error);
+            }
+        );
+    }
+    
+    // Load Mammoth model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var mammothLoader = new THREE.GLTFLoader(gLoadingManager);
+        mammothLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/miniMammothDisplay.gltf',
+            function(gltf) {
+                var mammoth = gltf.scene;
+                
+                // Position on floor
+                mammoth.position.set(0, 0, 25);
+                
+                // Scale appropriately
+                mammoth.scale.set(1, 1, 1);
+                
+                // Rotate to face forward
+                mammoth.rotation.y = 0.5 * Math.PI;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                mammoth.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and mark meshes as draggable
+                mammoth.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        
+                        // Check if this is the pushbutton
+                        if (child.name && child.name.toLowerCase().includes('pushbutton')) {
+                            child.userData.isMammothPushbutton = true;
+                        } else {
+                            child.userData.isDraggableMammoth = true;
+                        }
+                    }
+                });
+                
+                gThreeScene.add(mammoth);
+                gMammoth = mammoth; // Store global reference
+                
+                // Create sphere obstacle for boid avoidance
+                var mammothObstacleRadius = 2.0; // Radius that covers the mammoth
+                gMammothObstacle = new SphereObstacle(
+                    mammothObstacleRadius,
+                    new THREE.Vector3(mammoth.position.x, mammoth.position.y + 1.5, mammoth.position.z)
+                );
+                // Make the obstacle invisible
+                if (gMammothObstacle.mesh) {
+                    gMammothObstacle.mesh.visible = false;
+                }
+                gObstacles.push(gMammothObstacle);
+                
+                console.log('Mammoth model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Mammoth model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Mammoth model:', error);
+            }
+        );
+    }
+    
+    // Load Mammoth Skeleton model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var mammothSkeletonLoader = new THREE.GLTFLoader(gLoadingManager);
+        mammothSkeletonLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/mammothSkeleton.gltf',
+            function(gltf) {
+                var skeleton = gltf.scene;
+                
+                // Position below floor initially for entrance animation
+                skeleton.position.set(0, gFullMammothStartY, 25);
+                
+                // Scale appropriately
+                skeleton.scale.set(4, 4, 4);
+                
+                // Rotate to face forward
+                skeleton.rotation.y = 0.5 * Math.PI;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                skeleton.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and mark meshes as draggable
+                skeleton.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.userData.isDraggableMammothSkeleton = true;
+                    }
+                });
+                
+                // Don't add to scene yet - will be added during swap animation
+                gMammothSkeleton = skeleton; // Store global reference
+                
+                // Create sphere obstacle for boid avoidance and add to obstacles array
+                var skeletonObstacleRadius = 12.0; // Larger radius for full skeleton (4x scale)
+                gMammothSkeletonObstacle = new SphereObstacle(
+                    skeletonObstacleRadius,
+                    new THREE.Vector3(skeleton.position.x, skeleton.position.y + 8, skeleton.position.z)
+                );
+                // Make the obstacle invisible
+                if (gMammothSkeletonObstacle.mesh) {
+                    gMammothSkeletonObstacle.mesh.visible = false;
+                }
+                gObstacles.push(gMammothSkeletonObstacle);
+                
+                console.log('Mammoth Skeleton model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Mammoth Skeleton model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Mammoth Skeleton model:', error);
             }
         );
     }
@@ -8183,6 +8416,55 @@ function initThreeScene() {
                 
                 gThreeScene.add(cone);
                 
+                // Create sphere obstacle for boid avoidance
+                // Adjust parameters based on ornament type
+                var baseRadius = 1.68; // Base radius multiplier (40% larger than original 1.2)
+                var radiusMultiplier = 1.0;
+                var yOffsetMultiplier = 1.0;
+                
+                if (ornamentTypes[i] === 'heart') {
+                    // Hearts: raise by 1/4 radius
+                    yOffsetMultiplier = 0.75;
+                } else if (ornamentTypes[i] === 'moon') {
+                    // Moons: increase radius by 10%, lower by 10% of radius, then raise by 1/8 radius
+                    radiusMultiplier = 1.10;
+                    yOffsetMultiplier = 0.975;
+                } else if (ornamentTypes[i] === 'clover') {
+                    // Clovers: increase radius by 20%, lower by 10% of radius, then raise by 1/8 radius
+                    radiusMultiplier = 1.20;
+                    yOffsetMultiplier = 0.975;
+                }
+                
+                var ornamentObstacleRadius = baseRadius * radiusMultiplier * scale;
+                var ornamentObstacle = new SphereObstacle(
+                    ornamentObstacleRadius,
+                    new THREE.Vector3(x, startYAboveCeiling - ornamentObstacleRadius * yOffsetMultiplier, z) // Lower than origin
+                );
+                // Make the obstacle invisible
+                if (ornamentObstacle.mesh) {
+                    ornamentObstacle.mesh.visible = false;
+                }
+                gObstacles.push(ornamentObstacle);
+                
+                // Create point light for each ornament with color based on type
+                var ornamentLightColor = new THREE.Color();
+                if (ornamentTypes[i] === 'star') {
+                    ornamentLightColor.setHSL(60 / 360, 0.8, 0.6); // Yellow
+                } else if (ornamentTypes[i] === 'heart') {
+                    ornamentLightColor.setHSL(0 / 360, 0.9, 0.5); // Red
+                } else if (ornamentTypes[i] === 'moon') {
+                    ornamentLightColor.setHSL(200 / 360, 0.7, 0.6); // Blue
+                } else if (ornamentTypes[i] === 'clover') {
+                    ornamentLightColor.setHSL(120 / 360, 0.8, 0.5); // Green
+                } else if (ornamentTypes[i] === 'diamond') {
+                    ornamentLightColor.setHSL(280 / 360, 0.7, 0.6); // Purple
+                }
+                
+                var ornamentPointLight = new THREE.PointLight(ornamentLightColor, gOrnamentLightIntensity, gOrnamentLightFalloff, 2);
+                ornamentPointLight.position.set(x, startYAboveCeiling, z);
+                ornamentPointLight.visible = gOrnamentLightIntensity > 0;
+                gThreeScene.add(ornamentPointLight);
+                
                 // Store animation data with staggered delay
                 gStarAnimData.push({
                     star: star,
@@ -8201,6 +8483,9 @@ function initThreeScene() {
                     scale: scale,
                     starHeight: starHeight,
                     coneHeight: coneHeight,
+                    obstacle: ornamentObstacle, // Reference to the obstacle
+                    pointLight: ornamentPointLight, // Reference to the point light
+                    yOffsetMultiplier: yOffsetMultiplier, // Store offset multiplier for updates
                     // Sway physics
                     offsetX: 0,
                     offsetZ: 0,
@@ -10710,6 +10995,19 @@ function onPointer(evt) {
             return;
         }
         
+        // If dragging mammoth skeleton, ANY click should exit dragging mode
+        if (gCurrentlyDraggingObject === 'mammothSkeleton' && gDraggingMammothSkeleton) {
+            gCurrentlyDraggingObject = null;
+            gDraggingMammothSkeleton = false;
+            gMammothSkeletonDragOffset = null;
+            restoreLightsFromDrag();
+            removeDragSpotlight();
+            if (gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
         // Check if clicking on bicycle wheel
         var rect = gRenderer.domElement.getBoundingClientRect();
         var mousePos = new THREE.Vector2();
@@ -10772,6 +11070,9 @@ function onPointer(evt) {
         var hitStoolLeg = false;
         var hitDuck = false;
         var hitDuckBeak = false;
+        var hitMammoth = false;
+        var hitMammothSkeleton = false;
+        var hitMammothPushbutton = false;
         var hitTeapot = false;
         var hitChair = false;
         var hitSofa = false;
@@ -10794,120 +11095,61 @@ function onPointer(evt) {
                 continue;
             }
             
+            // Check for mammoth pushbutton with high priority
+            if (intersects[i].object.userData.isMammothPushbutton && !hitMammothPushbutton) {
+                hitMammothPushbutton = true;
+                // Don't check for draggable mammoth if pushbutton is hit
+                continue;
+            }
+            
             if (intersects[i].object.userData.isDraggableDuck && !hitDuck && !hitDuckBeak) {
                 hitDuck = true;
-                var actualClickPoint = intersects[i].point;
-                gDuckDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to duck center (X and Z only)
-                gDuckDragOffset = new THREE.Vector3(
-                    gDuck.position.x - actualClickPoint.x,
-                    0,
-                    gDuck.position.z - actualClickPoint.z
-                );
+                // No offset calculation - object will follow cursor directly
+                // Don't break - check if other objects are also hit
+            }
+            if (intersects[i].object.userData.isDraggableMammoth && !hitMammoth) {
+                hitMammoth = true;
+                // No offset calculation - object will follow cursor directly
+                // Don't break - check if other objects are also hit
+            }
+            if (intersects[i].object.userData.isDraggableMammothSkeleton && !hitMammothSkeleton) {
+                hitMammothSkeleton = true;
+                // No offset calculation - object will follow cursor directly
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableTeapot && !hitTeapot) {
                 hitTeapot = true;
-                var actualClickPoint = intersects[i].point;
-                gTeapotDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to teapot center (X and Z only)
-                gTeapotDragOffset = new THREE.Vector3(
-                    gTeapot.position.x - actualClickPoint.x,
-                    0,
-                    gTeapot.position.z - actualClickPoint.z
-                );
+                // No offset calculation - object will follow cursor directly
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableChair && !hitChair) {
                 hitChair = true;
-                var actualClickPoint = intersects[i].point;
-                gChairDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to chair center (X and Z only)
-                gChairDragOffset = new THREE.Vector3(
-                    gChair.position.x - actualClickPoint.x,
-                    0,
-                    gChair.position.z - actualClickPoint.z
-                );
-                // Don't break - check if other objects are also hit
-            }
-            if (intersects[i].object.userData.isDraggableChair && !hitChair) {
-                hitChair = true;
-                var actualClickPoint = intersects[i].point;
-                gChairDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to chair center (X and Z only)
-                gChairDragOffset = new THREE.Vector3(
-                    gChair.position.x - actualClickPoint.x,
-                    0,
-                    gChair.position.z - actualClickPoint.z
-                );
+                // No offset calculation - object will follow cursor directly
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableSofa && !hitSofa) {
                 hitSofa = true;
-                var actualClickPoint = intersects[i].point;
-                gSofaDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to sofa center (X and Z only)
-                gSofaDragOffset = new THREE.Vector3(
-                    gSofa.position.x - actualClickPoint.x,
-                    0,
-                    gSofa.position.z - actualClickPoint.z
-                );
+                // No offset calculation - object will follow cursor directly
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableGlobeLamp && !hitGlobeLamp) {
                 hitGlobeLamp = true;
-                var actualClickPoint = intersects[i].point;
-                
-                // Store offset from click point to globe lamp center (full 3D)
-                gGlobeLampDragOffset = new THREE.Vector3(
-                    gGlobeLamp.position.x - actualClickPoint.x,
-                    gGlobeLamp.position.y - actualClickPoint.y,
-                    gGlobeLamp.position.z - actualClickPoint.z
-                );
+                // No offset calculation - object will follow cursor directly
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableStool && !hitStool) {
                 hitStool = true;
-                var actualClickPoint = intersects[i].point;
-                gStoolDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to stool center (X and Z only)
-                gStoolDragOffset = new THREE.Vector3(
-                    gStool.position.x - actualClickPoint.x,
-                    0,
-                    gStool.position.z - actualClickPoint.z
-                );
+                // No offset calculation - object will follow cursor directly
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableBird && !hitBird) {
                 hitBird = true;
-                var actualClickPoint = intersects[i].point;
-                gBirdDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to bird center (X and Z only)
-                gBirdDragOffset = new THREE.Vector3(
-                    gBird.position.x - actualClickPoint.x,
-                    0,
-                    gBird.position.z - actualClickPoint.z
-                );
+                // No offset calculation - object will follow cursor directly
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableKoonsDog && !hitKoonsDog) {
                 hitKoonsDog = true;
-                var actualClickPoint = intersects[i].point;
-                gKoonsDogDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to Koons Dog center (X and Z only)
-                gKoonsDogDragOffset = new THREE.Vector3(
-                    gKoonsDog.position.x - actualClickPoint.x,
-                    0,
-                    gKoonsDog.position.z - actualClickPoint.z
-                );
+                // No offset calculation - object will follow cursor directly
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableSphere && !hitSphere) {
@@ -11012,14 +11254,250 @@ function onPointer(evt) {
             return;
         }
         
+        // Mammoth pushbutton click triggers swap animation
+        if (hitMammothPushbutton && gMammoth && gMammothSkeleton && gMammothSwapState === 'idle') {
+            // Start the swap animation
+            gMammothSwapState = 'expanding-mini';
+            gMammothSwapTimer = 0;
+            gMiniMammothStartY = gMammoth.position.y;
+            
+            // Position skeleton at the same X,Z location as mini mammoth
+            gMammothSkeleton.position.x = gMammoth.position.x;
+            gMammothSkeleton.position.z = gMammoth.position.z;
+            gMammothSkeleton.position.y = gFullMammothStartY;
+            
+            // Dim lights and create spotlight above mini mammoth
+            dimLightsForDrag();
+            gMammothSwapSpotlight = new THREE.SpotLight(0xffffff, 3.0);
+            gMammothSwapSpotlight.position.set(gMammoth.position.x, gMammoth.position.y + 15, gMammoth.position.z);
+            gMammothSwapSpotlight.angle = Math.PI / 6;
+            gMammothSwapSpotlight.penumbra = 0.3;
+            gMammothSwapSpotlight.distance = 30;
+            gMammothSwapSpotlight.decay = 2;
+            gMammothSwapSpotlight.target.position.set(gMammoth.position.x, gMammoth.position.y, gMammoth.position.z);
+            gThreeScene.add(gMammothSwapSpotlight);
+            gThreeScene.add(gMammothSwapSpotlight.target);
+            
+            // Create the disc for the hole animation
+            var discGeometry = new THREE.CircleGeometry(0.01, 32);
+            var discMaterial = new THREE.MeshStandardMaterial({
+                color: 0x000000,
+                side: THREE.DoubleSide,
+                transparent: false
+            });
+            gMammothSwapDisc = new THREE.Mesh(discGeometry, discMaterial);
+            gMammothSwapDisc.position.set(gMammoth.position.x, 0.05, gMammoth.position.z);
+            gMammothSwapDisc.rotation.x = -Math.PI / 2; // Lay flat on floor
+            gMammothSwapDisc.receiveShadow = true;
+            gThreeScene.add(gMammothSwapDisc);
+            
+            // Create white outline ring
+            var ringGeometry = new THREE.RingGeometry(0.009, 0.011, 32);
+            var ringMaterial = new THREE.MeshStandardMaterial({
+                color: 0xFFFFFF,
+                side: THREE.DoubleSide
+            });
+            gMammothSwapDiscOutline = new THREE.Mesh(ringGeometry, ringMaterial);
+            gMammothSwapDiscOutline.position.set(gMammoth.position.x, 0.06, gMammoth.position.z);
+            gMammothSwapDiscOutline.rotation.x = -Math.PI / 2;
+            gMammothSwapDiscOutline.receiveShadow = true;
+            gThreeScene.add(gMammothSwapDiscOutline);
+            
+            return;
+        }
+        
         if (hitDuck && gDuck && !hitDuckBeak) {
-            gDraggingDuck = true;
-            gPointerLastX = evt.clientX;
-            gPointerLastY = evt.clientY;
-            // Disable orbit controls while dragging duck
-            if (gCameraControl) {
-                gCameraControl.enabled = false;
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastObjectClickTime.duck;
+            
+            if (gCurrentlyDraggingObject === 'duck') {
+                // Single-click while dragging - lock position and exit dragging mode
+                gCurrentlyDraggingObject = null;
+                gDraggingDuck = false;
+                gDuckDragOffset = null;
+                // Restore lights and remove spotlight
+                restoreLightsFromDrag();
+                removeDragSpotlight();
+                if (gCameraControl) {
+                    gCameraControl.enabled = true;
+                }
+                gLastObjectClickTime.duck = 0; // Reset to prevent accidental double-click
+                return;
             }
+            
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - enter dragging mode
+                if (gCurrentlyDraggingObject !== null && gCurrentlyDraggingObject !== 'duck') {
+                    // Another object is being dragged, ignore this double-click
+                    return;
+                }
+                gCurrentlyDraggingObject = 'duck';
+                gDraggingDuck = true;
+                gDuckDragPlaneHeight = gDuck.position.y;
+                
+                // Dim other lights and create spotlight
+                dimLightsForDrag();
+                createDragSpotlight(gDuck.position);
+                
+                // Calculate offset from mouse position to object center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                var duckPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gDuckDragPlaneHeight);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(duckPlane, intersectionPoint);
+                if (intersectionPoint) {
+                    gDuckDragOffset = new THREE.Vector3(
+                        gDuck.position.x - intersectionPoint.x,
+                        0,
+                        gDuck.position.z - intersectionPoint.z
+                    );
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging duck
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                gLastObjectClickTime.duck = 0; // Reset to prevent triple-click
+                return;
+            }
+            
+            gLastObjectClickTime.duck = currentTime;
+            return;
+        }
+        
+        if (hitMammoth && gMammoth) {
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastObjectClickTime.mammoth;
+            
+            if (gCurrentlyDraggingObject === 'mammoth') {
+                // Single-click while dragging - lock position and exit dragging mode
+                gCurrentlyDraggingObject = null;
+                gDraggingMammoth = false;
+                gMammothDragOffset = null;
+                // Restore lights and remove spotlight
+                restoreLightsFromDrag();
+                removeDragSpotlight();
+                if (gCameraControl) {
+                    gCameraControl.enabled = true;
+                }
+                gLastObjectClickTime.mammoth = 0; // Reset to prevent accidental double-click
+                return;
+            }
+            
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - enter dragging mode
+                if (gCurrentlyDraggingObject !== null && gCurrentlyDraggingObject !== 'mammoth') {
+                    // Another object is being dragged, ignore this double-click
+                    return;
+                }
+                gCurrentlyDraggingObject = 'mammoth';
+                gDraggingMammoth = true;
+                gMammothDragPlaneHeight = gMammoth.position.y;
+                
+                // Dim other lights and create spotlight
+                dimLightsForDrag();
+                createDragSpotlight(gMammoth.position);
+                
+                // Calculate offset from mouse position to object center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                var mammothPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gMammothDragPlaneHeight);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(mammothPlane, intersectionPoint);
+                if (intersectionPoint) {
+                    gMammothDragOffset = new THREE.Vector3(
+                        gMammoth.position.x - intersectionPoint.x,
+                        0,
+                        gMammoth.position.z - intersectionPoint.z
+                    );
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging mammoth
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                gLastObjectClickTime.mammoth = 0; // Reset to prevent triple-click
+                return;
+            }
+            
+            gLastObjectClickTime.mammoth = currentTime;
+            return;
+        }
+        
+        if (hitMammothSkeleton && gMammothSkeleton) {
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastObjectClickTime.mammothSkeleton;
+            
+            if (gCurrentlyDraggingObject === 'mammothSkeleton') {
+                // Single-click while dragging - lock position and exit dragging mode
+                gCurrentlyDraggingObject = null;
+                gDraggingMammothSkeleton = false;
+                gMammothSkeletonDragOffset = null;
+                // Restore lights and remove spotlight
+                restoreLightsFromDrag();
+                removeDragSpotlight();
+                if (gCameraControl) {
+                    gCameraControl.enabled = true;
+                }
+                gLastObjectClickTime.mammothSkeleton = 0; // Reset to prevent accidental double-click
+                return;
+            }
+            
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - enter dragging mode
+                if (gCurrentlyDraggingObject !== null && gCurrentlyDraggingObject !== 'mammothSkeleton') {
+                    // Another object is being dragged, ignore this double-click
+                    return;
+                }
+                gCurrentlyDraggingObject = 'mammothSkeleton';
+                gDraggingMammothSkeleton = true;
+                gMammothSkeletonDragPlaneHeight = gMammothSkeleton.position.y;
+                
+                // Dim other lights and create spotlight
+                dimLightsForDrag();
+                createDragSpotlight(gMammothSkeleton.position);
+                
+                // Calculate offset from mouse position to object center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                var skeletonPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gMammothSkeletonDragPlaneHeight);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(skeletonPlane, intersectionPoint);
+                if (intersectionPoint) {
+                    gMammothSkeletonDragOffset = new THREE.Vector3(
+                        gMammothSkeleton.position.x - intersectionPoint.x,
+                        0,
+                        gMammothSkeleton.position.z - intersectionPoint.z
+                    );
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging skeleton
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                gLastObjectClickTime.mammothSkeleton = 0; // Reset to prevent triple-click
+                return;
+            }
+            
+            gLastObjectClickTime.mammothSkeleton = currentTime;
             return;
         }
         
@@ -11036,133 +11514,470 @@ function onPointer(evt) {
         }
         
         if (hitTeapot && gTeapot) {
-            // Stop the teapot animation if still running
-            gTeapotAnimating = false;
-            gDraggingTeapot = true;
-            gPointerLastX = evt.clientX;
-            gPointerLastY = evt.clientY;
-            // Disable orbit controls while dragging teapot
-            if (gCameraControl) {
-                gCameraControl.enabled = false;
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastObjectClickTime.teapot;
+            
+            if (gCurrentlyDraggingObject === 'teapot') {
+                // Single-click while dragging - lock position and exit dragging mode
+                gCurrentlyDraggingObject = null;
+                gDraggingTeapot = false;
+                gTeapotDragOffset = null;
+                // Restore lights and remove spotlight
+                restoreLightsFromDrag();
+                removeDragSpotlight();
+                if (gCameraControl) {
+                    gCameraControl.enabled = true;
+                }
+                gLastObjectClickTime.teapot = 0; // Reset to prevent accidental double-click
+                return;
             }
+            
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - enter dragging mode
+                // Stop the teapot animation if still running
+                gTeapotAnimating = false;
+                if (gCurrentlyDraggingObject !== null && gCurrentlyDraggingObject !== 'teapot') {
+                    // Another object is being dragged, ignore this double-click
+                    return;
+                }
+                gCurrentlyDraggingObject = 'teapot';
+                gDraggingTeapot = true;
+                gTeapotDragPlaneHeight = gTeapot.position.y;
+                
+                // Dim other lights and create spotlight
+                dimLightsForDrag();
+                createDragSpotlight(gTeapot.position);
+                
+                // Calculate offset from mouse position to object center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                var teapotPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gTeapotDragPlaneHeight);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(teapotPlane, intersectionPoint);
+                if (intersectionPoint) {
+                    gTeapotDragOffset = new THREE.Vector3(
+                        gTeapot.position.x - intersectionPoint.x,
+                        0,
+                        gTeapot.position.z - intersectionPoint.z
+                    );
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging teapot
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                gLastObjectClickTime.teapot = 0; // Reset to prevent triple-click
+                return;
+            }
+            
+            gLastObjectClickTime.teapot = currentTime;
             return;
         }
         
         if (hitChair && gChair) {
-            gDraggingChair = true;
-            gChairDragPlaneHeight = gChair.position.y;
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastObjectClickTime.chair;
             
-            // Calculate drag offset from click point to chair center
-            var rect = gRenderer.domElement.getBoundingClientRect();
-            var mousePos = new THREE.Vector2();
-            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
-            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
-            
-            var raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(mousePos, gCamera);
-            var chairPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gChairDragPlaneHeight);
-            var intersectionPoint = new THREE.Vector3();
-            raycaster.ray.intersectPlane(chairPlane, intersectionPoint);
-            
-            if (intersectionPoint) {
-                gChairDragOffset = new THREE.Vector3(
-                    gChair.position.x - intersectionPoint.x,
-                    0,
-                    gChair.position.z - intersectionPoint.z
-                );
+            if (gCurrentlyDraggingObject === 'chair') {
+                // Single-click while dragging - lock position and exit dragging mode
+                gCurrentlyDraggingObject = null;
+                gDraggingChair = false;
+                gChairDragOffset = null;
+                // Restore lights and remove spotlight
+                restoreLightsFromDrag();
+                removeDragSpotlight();
+                if (gCameraControl) {
+                    gCameraControl.enabled = true;
+                }
+                gLastObjectClickTime.chair = 0; // Reset to prevent accidental double-click
+                return;
             }
             
-            gPointerLastX = evt.clientX;
-            gPointerLastY = evt.clientY;
-            // Disable orbit controls while dragging chair
-            if (gCameraControl) {
-                gCameraControl.enabled = false;
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - enter dragging mode
+                if (gCurrentlyDraggingObject !== null && gCurrentlyDraggingObject !== 'chair') {
+                    // Another object is being dragged, ignore this double-click
+                    return;
+                }
+                gCurrentlyDraggingObject = 'chair';
+                gDraggingChair = true;
+                gChairDragPlaneHeight = gChair.position.y;
+                
+                // Dim other lights and create spotlight
+                dimLightsForDrag();
+                createDragSpotlight(gChair.position);
+                
+                // Calculate offset from mouse position to object center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                var chairPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gChairDragPlaneHeight);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(chairPlane, intersectionPoint);
+                if (intersectionPoint) {
+                    gChairDragOffset = new THREE.Vector3(
+                        gChair.position.x - intersectionPoint.x,
+                        0,
+                        gChair.position.z - intersectionPoint.z
+                    );
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging chair
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                gLastObjectClickTime.chair = 0; // Reset to prevent triple-click
+                return;
             }
+            
+            gLastObjectClickTime.chair = currentTime;
             return;
         }
         
         if (hitSofa && gSofa) {
-            gDraggingSofa = true;
-            gSofaDragPlaneHeight = gSofa.position.y;
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastObjectClickTime.sofa;
             
-            // Calculate drag offset from click point to sofa center
-            var rect = gRenderer.domElement.getBoundingClientRect();
-            var mousePos = new THREE.Vector2();
-            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
-            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
-            
-            var raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(mousePos, gCamera);
-            var sofaPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gSofaDragPlaneHeight);
-            var intersectionPoint = new THREE.Vector3();
-            raycaster.ray.intersectPlane(sofaPlane, intersectionPoint);
-            
-            if (intersectionPoint) {
-                gSofaDragOffset = new THREE.Vector3(
-                    gSofa.position.x - intersectionPoint.x,
-                    0,
-                    gSofa.position.z - intersectionPoint.z
-                );
+            if (gCurrentlyDraggingObject === 'sofa') {
+                // Single-click while dragging - lock position and exit dragging mode
+                gCurrentlyDraggingObject = null;
+                gDraggingSofa = false;
+                gSofaDragOffset = null;
+                // Restore lights and remove spotlight
+                restoreLightsFromDrag();
+                removeDragSpotlight();
+                if (gCameraControl) {
+                    gCameraControl.enabled = true;
+                }
+                gLastObjectClickTime.sofa = 0; // Reset to prevent accidental double-click
+                return;
             }
             
-            gPointerLastX = evt.clientX;
-            gPointerLastY = evt.clientY;
-            // Disable orbit controls while dragging sofa
-            if (gCameraControl) {
-                gCameraControl.enabled = false;
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - enter dragging mode
+                if (gCurrentlyDraggingObject !== null && gCurrentlyDraggingObject !== 'sofa') {
+                    // Another object is being dragged, ignore this double-click
+                    return;
+                }
+                gCurrentlyDraggingObject = 'sofa';
+                gDraggingSofa = true;
+                gSofaDragPlaneHeight = gSofa.position.y;
+                
+                // Dim other lights and create spotlight
+                dimLightsForDrag();
+                createDragSpotlight(gSofa.position);
+                
+                // Calculate offset from mouse position to object center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                var sofaPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gSofaDragPlaneHeight);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(sofaPlane, intersectionPoint);
+                if (intersectionPoint) {
+                    gSofaDragOffset = new THREE.Vector3(
+                        gSofa.position.x - intersectionPoint.x,
+                        0,
+                        gSofa.position.z - intersectionPoint.z
+                    );
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging sofa
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                gLastObjectClickTime.sofa = 0; // Reset to prevent triple-click
+                return;
             }
+            
+            gLastObjectClickTime.sofa = currentTime;
             return;
         }
         
         if (hitGlobeLamp && gGlobeLamp) {
-            gDraggingGlobeLamp = true;
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastObjectClickTime.globeLamp;
             
-            // Store the distance from camera to globe lamp center (for fixed plane)
-            var cameraToLamp = new THREE.Vector3();
-            cameraToLamp.subVectors(gGlobeLamp.position, gCamera.position);
-            var cameraDirection = new THREE.Vector3();
-            gCamera.getWorldDirection(cameraDirection);
-            gGlobeLampDragPlaneDistance = cameraToLamp.dot(cameraDirection);
-            
-            gPointerLastX = evt.clientX;
-            gPointerLastY = evt.clientY;
-            // Disable orbit controls while dragging globe lamp
-            if (gCameraControl) {
-                gCameraControl.enabled = false;
+            if (gCurrentlyDraggingObject === 'globeLamp') {
+                // Single-click while dragging - lock position and exit dragging mode
+                gCurrentlyDraggingObject = null;
+                gDraggingGlobeLamp = false;
+                gGlobeLampDragOffset = null;
+                // Restore lights and remove spotlight
+                restoreLightsFromDrag();
+                removeDragSpotlight();
+                if (gCameraControl) {
+                    gCameraControl.enabled = true;
+                }
+                gLastObjectClickTime.globeLamp = 0; // Reset to prevent accidental double-click
+                return;
             }
+            
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - enter dragging mode
+                if (gCurrentlyDraggingObject !== null && gCurrentlyDraggingObject !== 'globeLamp') {
+                    // Another object is being dragged, ignore this double-click
+                    return;
+                }
+                gCurrentlyDraggingObject = 'globeLamp';
+                gDraggingGlobeLamp = true;
+                
+                // Dim other lights and create spotlight
+                dimLightsForDrag();
+                createDragSpotlight(gGlobeLamp.position);
+                
+                // Store the distance from camera to globe lamp center (for fixed plane)
+                var cameraToLamp = new THREE.Vector3();
+                cameraToLamp.subVectors(gGlobeLamp.position, gCamera.position);
+                var cameraDirection = new THREE.Vector3();
+                gCamera.getWorldDirection(cameraDirection);
+                gGlobeLampDragPlaneDistance = cameraToLamp.dot(cameraDirection);
+                
+                // Calculate offset from mouse position to object center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                var planePoint = new THREE.Vector3();
+                planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gGlobeLampDragPlaneDistance));
+                var globeLampPlane = new THREE.Plane();
+                globeLampPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(globeLampPlane, intersectionPoint);
+                if (intersectionPoint) {
+                    gGlobeLampDragOffset = new THREE.Vector3(
+                        gGlobeLamp.position.x - intersectionPoint.x,
+                        gGlobeLamp.position.y - intersectionPoint.y,
+                        gGlobeLamp.position.z - intersectionPoint.z
+                    );
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging globe lamp
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                gLastObjectClickTime.globeLamp = 0; // Reset to prevent triple-click
+                return;
+            }
+            
+            gLastObjectClickTime.globeLamp = currentTime;
             return;
         }
         
         if (hitStool && gStool) {
-            gDraggingStool = true;
-            gPointerLastX = evt.clientX;
-            gPointerLastY = evt.clientY;
-            // Disable orbit controls while dragging stool
-            if (gCameraControl) {
-                gCameraControl.enabled = false;
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastObjectClickTime.stool;
+            
+            if (gCurrentlyDraggingObject === 'stool') {
+                // Single-click while dragging - lock position and exit dragging mode
+                gCurrentlyDraggingObject = null;
+                gDraggingStool = false;
+                gStoolDragOffset = null;
+                // Restore lights and remove spotlight
+                restoreLightsFromDrag();
+                removeDragSpotlight();
+                if (gCameraControl) {
+                    gCameraControl.enabled = true;
+                }
+                gLastObjectClickTime.stool = 0; // Reset to prevent accidental double-click
+                return;
             }
+            
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - enter dragging mode
+                if (gCurrentlyDraggingObject !== null && gCurrentlyDraggingObject !== 'stool') {
+                    // Another object is being dragged, ignore this double-click
+                    return;
+                }
+                gCurrentlyDraggingObject = 'stool';
+                gDraggingStool = true;
+                gStoolDragPlaneHeight = gStool.position.y;
+                
+                // Dim other lights and create spotlight
+                dimLightsForDrag();
+                createDragSpotlight(gStool.position);
+                
+                // Calculate offset from mouse position to object center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                var stoolPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gStoolDragPlaneHeight);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(stoolPlane, intersectionPoint);
+                if (intersectionPoint) {
+                    gStoolDragOffset = new THREE.Vector3(
+                        gStool.position.x - intersectionPoint.x,
+                        0,
+                        gStool.position.z - intersectionPoint.z
+                    );
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging stool
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                gLastObjectClickTime.stool = 0; // Reset to prevent triple-click
+                return;
+            }
+            
+            gLastObjectClickTime.stool = currentTime;
             return;
         }
         
         if (hitBird && gBird) {
-            gDraggingBird = true;
-            gPointerLastX = evt.clientX;
-            gPointerLastY = evt.clientY;
-            // Disable orbit controls while dragging bird
-            if (gCameraControl) {
-                gCameraControl.enabled = false;
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastObjectClickTime.bird;
+            
+            if (gCurrentlyDraggingObject === 'bird') {
+                // Single-click while dragging - lock position and exit dragging mode
+                gCurrentlyDraggingObject = null;
+                gDraggingBird = false;
+                gBirdDragOffset = null;
+                // Restore lights and remove spotlight
+                restoreLightsFromDrag();
+                removeDragSpotlight();
+                if (gCameraControl) {
+                    gCameraControl.enabled = true;
+                }
+                gLastObjectClickTime.bird = 0; // Reset to prevent accidental double-click
+                return;
             }
+            
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - enter dragging mode
+                // Stop the bird animation if still running
+                gBirdAnimating = false;
+                if (gCurrentlyDraggingObject !== null && gCurrentlyDraggingObject !== 'bird') {
+                    // Another object is being dragged, ignore this double-click
+                    return;
+                }
+                gCurrentlyDraggingObject = 'bird';
+                gDraggingBird = true;
+                gBirdDragPlaneHeight = gBird.position.y;
+                
+                // Dim other lights and create spotlight
+                dimLightsForDrag();
+                createDragSpotlight(gBird.position);
+                
+                // Calculate offset from mouse position to object center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                var birdPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gBirdDragPlaneHeight);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(birdPlane, intersectionPoint);
+                if (intersectionPoint) {
+                    gBirdDragOffset = new THREE.Vector3(
+                        gBird.position.x - intersectionPoint.x,
+                        0,
+                        gBird.position.z - intersectionPoint.z
+                    );
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging bird
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                gLastObjectClickTime.bird = 0; // Reset to prevent triple-click
+                return;
+            }
+            
+            gLastObjectClickTime.bird = currentTime;
             return;
         }
         
         if (hitKoonsDog && gKoonsDog) {
-            gDraggingKoonsDog = true;
-            gPointerLastX = evt.clientX;
-            gPointerLastY = evt.clientY;
-            // Disable orbit controls while dragging Koons Dog
-            if (gCameraControl) {
-                gCameraControl.enabled = false;
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastObjectClickTime.koonsDog;
+            
+            if (gCurrentlyDraggingObject === 'koonsDog') {
+                // Single-click while dragging - lock position and exit dragging mode
+                gCurrentlyDraggingObject = null;
+                gDraggingKoonsDog = false;
+                gKoonsDogDragOffset = null;
+                // Restore lights and remove spotlight
+                restoreLightsFromDrag();
+                removeDragSpotlight();
+                if (gCameraControl) {
+                    gCameraControl.enabled = true;
+                }
+                gLastObjectClickTime.koonsDog = 0; // Reset to prevent accidental double-click
+                return;
             }
+            
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - enter dragging mode
+                if (gCurrentlyDraggingObject !== null && gCurrentlyDraggingObject !== 'koonsDog') {
+                    // Another object is being dragged, ignore this double-click
+                    return;
+                }
+                gCurrentlyDraggingObject = 'koonsDog';
+                gDraggingKoonsDog = true;
+                gKoonsDogDragPlaneHeight = gKoonsDog.position.y;
+                
+                // Dim other lights and create spotlight
+                dimLightsForDrag();
+                createDragSpotlight(gKoonsDog.position);
+                
+                // Calculate offset from mouse position to object center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                var dogPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gKoonsDogDragPlaneHeight);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(dogPlane, intersectionPoint);
+                if (intersectionPoint) {
+                    gKoonsDogDragOffset = new THREE.Vector3(
+                        gKoonsDog.position.x - intersectionPoint.x,
+                        0,
+                        gKoonsDog.position.z - intersectionPoint.z
+                    );
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging Koons Dog
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                gLastObjectClickTime.koonsDog = 0; // Reset to prevent triple-click
+                return;
+            }
+            
+            gLastObjectClickTime.koonsDog = currentTime;
             return;
         }
         
@@ -11220,6 +12035,17 @@ function onPointer(evt) {
         if (hitCylinder && hitCylinderObstacle) {
             gDraggingCylinder = true;
             window.draggingCylinderObstacle = hitCylinderObstacle; // Store reference globally
+            
+            // Permanently disable animations - once dragged, animations should never run again
+            gColumnEverDragged = true;
+            gColumnBaseSliding = false;
+            gColumnDropping = false;
+            
+            // Immediately synchronize base component positions with column position
+            if (gColumnObstacle) {
+                const currentPos = gColumnObstacle.position.clone();
+                gColumnObstacle.updatePosition(currentPos);
+            }
             
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
@@ -11340,6 +12166,40 @@ function onPointer(evt) {
             // Disable orbit controls while dragging lamp
             if (gCameraControl) {
                 gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
+        // If in toggle-dragging mode and clicking empty space, exit dragging mode
+        if (gCurrentlyDraggingObject !== null) {
+            gCurrentlyDraggingObject = null;
+            gDraggingDuck = false;
+            gDraggingMammoth = false;
+            gDraggingMammothSkeleton = false;
+            gDraggingTeapot = false;
+            gDraggingChair = false;
+            gDraggingSofa = false;
+            gDraggingStool = false;
+            gDraggingBird = false;
+            gDraggingKoonsDog = false;
+            gDraggingGlobeLamp = false;
+            // Clear drag offsets
+            gDuckDragOffset = null;
+            gMammothDragOffset = null;
+            gMammothSkeletonDragOffset = null;
+            gTeapotDragOffset = null;
+            gChairDragOffset = null;
+            gSofaDragOffset = null;
+            gStoolDragOffset = null;
+            gBirdDragOffset = null;
+            gKoonsDogDragOffset = null;
+            gGlobeLampDragOffset = null;
+            // Restore lights and remove spotlight
+            restoreLightsFromDrag();
+            removeDragSpotlight();
+            // Re-enable orbit controls
+            if (gCameraControl) {
+                gCameraControl.enabled = true;
             }
             return;
         }
@@ -11661,7 +12521,9 @@ function onPointer(evt) {
                     {min: 0, max: 100},     // 14: spotlight 2 saturation
                     {min: 0, max: 1},       // 15: spotlight penumbra
                     {min: 10, max: 150},    // 16: shadow camera far
-                    {min: 0, max: 2}        // 17: headlight intensity
+                    {min: 0, max: 2},       // 17: headlight intensity
+                    {min: 0, max: 3},       // 18: ornament light intensity
+                    {min: 3, max: 15}       // 19: ornament light falloff
                 ];
                 
                 const dragSensitivity = 0.2;
@@ -11889,6 +12751,25 @@ function onPointer(evt) {
                             if (gHeadlightPointLight) {
                                 gThreeScene.remove(gHeadlightPointLight);
                                 gHeadlightPointLight = null;
+                            }
+                        }
+                        break;
+                    case 18: // Ornament light intensity
+                        gOrnamentLightIntensity = newValue;
+                        // Update all ornament point lights
+                        for (let i = 0; i < gStarAnimData.length; i++) {
+                            if (gStarAnimData[i].pointLight) {
+                                gStarAnimData[i].pointLight.intensity = gOrnamentLightIntensity;
+                                gStarAnimData[i].pointLight.visible = gOrnamentLightIntensity > 0;
+                            }
+                        }
+                        break;
+                    case 19: // Ornament light falloff
+                        gOrnamentLightFalloff = newValue;
+                        // Update all ornament point light distances
+                        for (let i = 0; i < gStarAnimData.length; i++) {
+                            if (gStarAnimData[i].pointLight) {
+                                gStarAnimData[i].pointLight.distance = gOrnamentLightFalloff;
                             }
                         }
                         break;
@@ -12157,6 +13038,7 @@ function onPointer(evt) {
             
             if (intersectionPoint) {
                 // Keep the duck's Y position constant, only move X and Z
+                // Apply offset to maintain grab point
                 var newX = intersectionPoint.x + (gDuckDragOffset ? gDuckDragOffset.x : 0);
                 var newZ = intersectionPoint.z + (gDuckDragOffset ? gDuckDragOffset.z : 0);
                 
@@ -12175,6 +13057,94 @@ function onPointer(evt) {
                 // Update obstacle position
                 if (gDuckObstacle) {
                     gDuckObstacle.updatePosition(new THREE.Vector3(newX, gDuck.position.y + 1.5, newZ));
+                }
+            }
+            return;
+        }
+        
+        // Handle mammoth dragging (translation along ground, horizontal only)
+        if (gDraggingMammoth && gMammoth) {
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Define plane at the height where the mammoth was grabbed
+            var mammothPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gMammothDragPlaneHeight);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(mammothPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                // Keep the mammoth's Y position constant, only move X and Z
+                // Apply offset to maintain grab point
+                var newX = intersectionPoint.x + (gMammothDragOffset ? gMammothDragOffset.x : 0);
+                var newZ = intersectionPoint.z + (gMammothDragOffset ? gMammothDragOffset.z : 0);
+                
+                // Clamp to room boundaries
+                var minBoundX = -gPhysicsScene.worldSize.x + 2;
+                var maxBoundX = gPhysicsScene.worldSize.x - 2;
+                var minBoundZ = -gPhysicsScene.worldSize.z + 2;
+                var maxBoundZ = gPhysicsScene.worldSize.z - 2;
+                
+                newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
+                newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
+                
+                gMammoth.position.x = newX;
+                gMammoth.position.z = newZ;
+                
+                // Update obstacle position
+                if (gMammothObstacle) {
+                    gMammothObstacle.updatePosition(new THREE.Vector3(newX, gMammoth.position.y + 1.5, newZ));
+                }
+            }
+            return;
+        }
+        
+        // Handle mammoth skeleton dragging (translation along ground, horizontal only)
+        if (gDraggingMammothSkeleton && gMammothSkeleton) {
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Define plane at the height where the skeleton was grabbed
+            var skeletonPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gMammothSkeletonDragPlaneHeight);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(skeletonPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                // Keep the skeleton's Y position constant, only move X and Z
+                // Apply offset to maintain grab point
+                var newX = intersectionPoint.x + (gMammothSkeletonDragOffset ? gMammothSkeletonDragOffset.x : 0);
+                var newZ = intersectionPoint.z + (gMammothSkeletonDragOffset ? gMammothSkeletonDragOffset.z : 0);
+                
+                // Clamp to room boundaries
+                var minBoundX = -gPhysicsScene.worldSize.x + 2;
+                var maxBoundX = gPhysicsScene.worldSize.x - 2;
+                var minBoundZ = -gPhysicsScene.worldSize.z + 2;
+                var maxBoundZ = gPhysicsScene.worldSize.z - 2;
+                
+                newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
+                newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
+                
+                gMammothSkeleton.position.x = newX;
+                gMammothSkeleton.position.z = newZ;
+                
+                // Update obstacle position
+                if (gMammothSkeletonObstacle) {
+                    gMammothSkeletonObstacle.updatePosition(new THREE.Vector3(newX, gMammothSkeleton.position.y + 8, newZ));
+                }
+                
+                // Update drag spotlight position
+                if (gDragSpotlight) {
+                    gDragSpotlight.position.set(newX, gMammothSkeleton.position.y + 15, newZ);
+                    gDragSpotlight.target.position.set(newX, gMammothSkeleton.position.y, newZ);
                 }
             }
             return;
@@ -12208,6 +13178,7 @@ function onPointer(evt) {
             
             if (intersectionPoint) {
                 // Keep the teapot's Y position constant, only move X and Z
+                // Apply offset to maintain grab point
                 var newX = intersectionPoint.x + (gTeapotDragOffset ? gTeapotDragOffset.x : 0);
                 var newZ = intersectionPoint.z + (gTeapotDragOffset ? gTeapotDragOffset.z : 0);
                 
@@ -12248,6 +13219,7 @@ function onPointer(evt) {
             
             if (intersectionPoint) {
                 // Keep the chair's Y position constant, only move X and Z
+                // Apply offset to maintain grab point
                 var newX = intersectionPoint.x + (gChairDragOffset ? gChairDragOffset.x : 0);
                 var newZ = intersectionPoint.z + (gChairDragOffset ? gChairDragOffset.z : 0);
                 
@@ -12288,6 +13260,7 @@ function onPointer(evt) {
             
             if (intersectionPoint) {
                 // Keep the sofa's Y position constant, only move X and Z
+                // Apply offset to maintain grab point
                 var newX = intersectionPoint.x + (gSofaDragOffset ? gSofaDragOffset.x : 0);
                 var newZ = intersectionPoint.z + (gSofaDragOffset ? gSofaDragOffset.z : 0);
                 
@@ -12336,12 +13309,12 @@ function onPointer(evt) {
             var intersectionPoint = new THREE.Vector3();
             raycaster.ray.intersectPlane(globeLampPlane, intersectionPoint);
             
-            if (intersectionPoint && gGlobeLampDragOffset) {
-                // Apply the offset to maintain grab point
+            if (intersectionPoint) {
+                // Apply offset to maintain grab point
                 var newPosition = new THREE.Vector3(
-                    intersectionPoint.x + gGlobeLampDragOffset.x,
-                    intersectionPoint.y + gGlobeLampDragOffset.y,
-                    intersectionPoint.z + gGlobeLampDragOffset.z
+                    intersectionPoint.x + (gGlobeLampDragOffset ? gGlobeLampDragOffset.x : 0),
+                    intersectionPoint.y + (gGlobeLampDragOffset ? gGlobeLampDragOffset.y : 0),
+                    intersectionPoint.z + (gGlobeLampDragOffset ? gGlobeLampDragOffset.z : 0)
                 );
                 
                 // Clamp to room boundaries
@@ -12389,6 +13362,7 @@ function onPointer(evt) {
             
             if (intersectionPoint) {
                 // Keep the stool's Y position constant, only move X and Z
+                // Apply offset to maintain grab point
                 var newX = intersectionPoint.x + (gStoolDragOffset ? gStoolDragOffset.x : 0);
                 var newZ = intersectionPoint.z + (gStoolDragOffset ? gStoolDragOffset.z : 0);
                 
@@ -12428,6 +13402,7 @@ function onPointer(evt) {
             
             if (intersectionPoint) {
                 // Keep the bird's Y position constant, only move X and Z
+                // Apply offset to maintain grab point
                 var newX = intersectionPoint.x + (gBirdDragOffset ? gBirdDragOffset.x : 0);
                 var newZ = intersectionPoint.z + (gBirdDragOffset ? gBirdDragOffset.z : 0);
                 
@@ -12468,6 +13443,7 @@ function onPointer(evt) {
             
             if (intersectionPoint) {
                 // Keep the dog's Y position constant, only move X and Z
+                // Apply offset to maintain grab point
                 var newX = intersectionPoint.x + (gKoonsDogDragOffset ? gKoonsDogDragOffset.x : 0);
                 var newZ = intersectionPoint.z + (gKoonsDogDragOffset ? gKoonsDogDragOffset.z : 0);
                 
@@ -12877,88 +13853,12 @@ function onPointer(evt) {
             return;
         }
         
-        if (gDraggingDuck) {
-            gDraggingDuck = false;
-            gDuckDragOffset = null;
-            // Re-enable orbit controls if in normal camera mode
-            if (gCameraMode < 3 && gCameraControl) {
-                gCameraControl.enabled = true;
-            }
-            return;
-        }
+        // NOTE: gDraggingDuck, gDraggingMammoth, gDraggingMammothSkeleton, gDraggingTeapot, gDraggingChair, gDraggingSofa, 
+        // gDraggingStool, gDraggingBird, gDraggingKoonsDog, gDraggingGlobeLamp are NOT cleared on pointerup
+        // because they use toggle-dragging mode (double-click to enter, single-click to exit)
         
         if (gRotatingStool) {
             gRotatingStool = false;
-            // Re-enable orbit controls if in normal camera mode
-            if (gCameraMode < 3 && gCameraControl) {
-                gCameraControl.enabled = true;
-            }
-            return;
-        }
-        
-        if (gDraggingTeapot) {
-            gDraggingTeapot = false;
-            gTeapotDragOffset = null;
-            // Re-enable orbit controls if in normal camera mode
-            if (gCameraMode < 3 && gCameraControl) {
-                gCameraControl.enabled = true;
-            }
-            return;
-        }
-        
-        if (gDraggingChair) {
-            gDraggingChair = false;
-            gChairDragOffset = null;
-            // Re-enable orbit controls if in normal camera mode
-            if (gCameraMode < 3 && gCameraControl) {
-                gCameraControl.enabled = true;
-            }
-            return;
-        }
-        
-        if (gDraggingSofa) {
-            gDraggingSofa = false;
-            gSofaDragOffset = null;
-            // Re-enable orbit controls if in normal camera mode
-            if (gCameraMode < 3 && gCameraControl) {
-                gCameraControl.enabled = true;
-            }
-            return;
-        }
-        
-        if (gDraggingGlobeLamp) {
-            gDraggingGlobeLamp = false;
-            gGlobeLampDragOffset = null;
-            // Re-enable orbit controls if in normal camera mode
-            if (gCameraMode < 3 && gCameraControl) {
-                gCameraControl.enabled = true;
-            }
-            return;
-        }
-        
-        if (gDraggingStool) {
-            gDraggingStool = false;
-            gStoolDragOffset = null;
-            // Re-enable orbit controls if in normal camera mode
-            if (gCameraMode < 3 && gCameraControl) {
-                gCameraControl.enabled = true;
-            }
-            return;
-        }
-        
-        if (gDraggingBird) {
-            gDraggingBird = false;
-            gBirdDragOffset = null;
-            // Re-enable orbit controls if in normal camera mode
-            if (gCameraMode < 3 && gCameraControl) {
-                gCameraControl.enabled = true;
-            }
-            return;
-        }
-        
-        if (gDraggingKoonsDog) {
-            gDraggingKoonsDog = false;
-            gKoonsDogDragOffset = null;
             // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
@@ -13114,6 +14014,8 @@ function onPointerLeave(evt) {
     // Reset prop dragging
     gDraggingStool = false;
     gDraggingDuck = false;
+    gDraggingMammoth = false;
+    gDraggingMammothSkeleton = false;
     gDraggingTeapot = false;
     gDraggingBird = false;
     gDraggingKoonsDog = false;
@@ -13642,7 +14544,7 @@ function checkLightingMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 6; // 6 rows (now with 18 knobs)
+    const menuHeight = knobSpacing * 7; // 7 rows (now with 20 knobs)
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = lightingMenuX * window.innerWidth;
@@ -13663,7 +14565,7 @@ function checkLightingMenuClick(clientX, clientY) {
     }
     
     // Check each knob
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 20; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const knobX = menuOriginX + col * knobSpacing;
@@ -13686,7 +14588,9 @@ function checkLightingMenuClick(clientX, clientY) {
                 gSpotlight2Intensity, gSpotlight2Hue, gSpotlight2Saturation,
                 gSpotlightPenumbra,
                 gShadowCameraFar,
-                gHeadlightIntensity
+                gHeadlightIntensity,
+                gOrnamentLightIntensity,
+                gOrnamentLightFalloff
             ];
             dragStartValue = values[i];
             
@@ -13860,6 +14764,150 @@ function checkCameraMenuClick(clientX, clientY) {
     }
     
     return false;
+}
+
+// Dim all lights to 1/4 intensity for drag mode
+function dimLightsForDrag() {
+    // Store original intensities
+    gOriginalLightIntensities = {};
+    
+    if (gAmbientLight) {
+        gOriginalLightIntensities.ambient = gAmbientLight.intensity;
+        gAmbientLight.intensity *= 0.25;
+    }
+    
+    if (gDirectionalLight) {
+        gOriginalLightIntensities.directional = gDirectionalLight.intensity;
+        gDirectionalLight.intensity *= 0.25;
+    }
+    
+    if (gSpawnPointLight) {
+        gOriginalLightIntensities.spawnPoint = gSpawnPointLight.intensity;
+        gSpawnPointLight.intensity *= 0.25;
+    }
+    
+    if (gGlobeLampLight) {
+        gOriginalLightIntensities.globeLamp = gGlobeLampLight.intensity;
+        gGlobeLampLight.intensity *= 0.25;
+    }
+    
+    if (gHeadlight) {
+        gOriginalLightIntensities.headlight = gHeadlight.intensity;
+        gHeadlight.intensity *= 0.25;
+    }
+    
+    if (gHeadlightPointLight) {
+        gOriginalLightIntensities.headlightPoint = gHeadlightPointLight.intensity;
+        gHeadlightPointLight.intensity *= 0.25;
+    }
+    
+    // Dim lamp spotlights
+    for (var i = 0; i < gLamps.length; i++) {
+        if (gLamps[i] && gLamps[i].spotlight) {
+            if (!gOriginalLightIntensities.lamps) gOriginalLightIntensities.lamps = [];
+            gOriginalLightIntensities.lamps[i] = gLamps[i].spotlight.intensity;
+            gLamps[i].spotlight.intensity *= 0.25;
+        }
+    }
+    
+    // Dim ornament lights
+    if (gStarAnimData && gStarAnimData.length > 0) {
+        gOriginalLightIntensities.ornaments = [];
+        for (var i = 0; i < gStarAnimData.length; i++) {
+            if (gStarAnimData[i].pointLight) {
+                gOriginalLightIntensities.ornaments[i] = gStarAnimData[i].pointLight.intensity;
+                gStarAnimData[i].pointLight.intensity *= 0.25;
+            }
+        }
+    }
+}
+
+// Restore all lights to original intensity
+function restoreLightsFromDrag() {
+    if (gAmbientLight && gOriginalLightIntensities.ambient !== undefined) {
+        gAmbientLight.intensity = gOriginalLightIntensities.ambient;
+    }
+    
+    if (gDirectionalLight && gOriginalLightIntensities.directional !== undefined) {
+        gDirectionalLight.intensity = gOriginalLightIntensities.directional;
+    }
+    
+    if (gSpawnPointLight && gOriginalLightIntensities.spawnPoint !== undefined) {
+        gSpawnPointLight.intensity = gOriginalLightIntensities.spawnPoint;
+    }
+    
+    if (gGlobeLampLight && gOriginalLightIntensities.globeLamp !== undefined) {
+        gGlobeLampLight.intensity = gOriginalLightIntensities.globeLamp;
+    }
+    
+    if (gHeadlight && gOriginalLightIntensities.headlight !== undefined) {
+        gHeadlight.intensity = gOriginalLightIntensities.headlight;
+    }
+    
+    if (gHeadlightPointLight && gOriginalLightIntensities.headlightPoint !== undefined) {
+        gHeadlightPointLight.intensity = gOriginalLightIntensities.headlightPoint;
+    }
+    
+    // Restore lamp spotlights
+    if (gOriginalLightIntensities.lamps) {
+        for (var i = 0; i < gLamps.length; i++) {
+            if (gLamps[i] && gLamps[i].spotlight && gOriginalLightIntensities.lamps[i] !== undefined) {
+                gLamps[i].spotlight.intensity = gOriginalLightIntensities.lamps[i];
+            }
+        }
+    }
+    
+    // Restore ornament lights
+    if (gOriginalLightIntensities.ornaments) {
+        for (var i = 0; i < gStarAnimData.length; i++) {
+            if (gStarAnimData[i].pointLight && gOriginalLightIntensities.ornaments[i] !== undefined) {
+                gStarAnimData[i].pointLight.intensity = gOriginalLightIntensities.ornaments[i];
+            }
+        }
+    }
+    
+    gOriginalLightIntensities = {};
+}
+
+// Create spotlight above dragged object
+function createDragSpotlight(position) {
+    // Remove existing spotlight if any
+    if (gDragSpotlight) {
+        gThreeScene.remove(gDragSpotlight);
+        gThreeScene.remove(gDragSpotlight.target);
+        gDragSpotlight = null;
+    }
+    
+    // Create new spotlight
+    gDragSpotlight = new THREE.SpotLight(0xffffff, 3.0); // White light, high intensity
+    gDragSpotlight.position.set(position.x, position.y + 15, position.z); // 15 units above object
+    gDragSpotlight.angle = Math.PI / 6; // 30 degree cone
+    gDragSpotlight.penumbra = 0.3; // Soft edge
+    gDragSpotlight.distance = 30; // Max distance
+    gDragSpotlight.decay = 2; // Physically accurate falloff
+    
+    // Set target to object position
+    gDragSpotlight.target.position.set(position.x, position.y, position.z);
+    
+    gThreeScene.add(gDragSpotlight);
+    gThreeScene.add(gDragSpotlight.target);
+}
+
+// Update spotlight position to follow dragged object
+function updateDragSpotlight(position) {
+    if (gDragSpotlight) {
+        gDragSpotlight.position.set(position.x, position.y + 15, position.z);
+        gDragSpotlight.target.position.set(position.x, position.y, position.z);
+    }
+}
+
+// Remove drag spotlight
+function removeDragSpotlight() {
+    if (gDragSpotlight) {
+        gThreeScene.remove(gDragSpotlight);
+        gThreeScene.remove(gDragSpotlight.target);
+        gDragSpotlight = null;
+    }
 }
 
 // Apply mixed colors to boids based on percentage
@@ -14312,6 +15360,151 @@ function update() {
         }
     }
     
+    // Mammoth swap animation (mini mammoth → full skeleton)
+    if (gMammothSwapDisc && gMammothSwapState !== 'idle' && gMammothSwapState !== 'complete') {
+        gMammothSwapTimer += deltaT;
+        
+        if (gMammothSwapState === 'expanding-mini') {
+            // Expand hole continuously - this state lasts 1 second
+            var totalExpansionDuration = 2.5; // Total time for full expansion
+            var t = Math.min(gMammothSwapTimer / totalExpansionDuration, 1.0);
+            var eased = t * t; // Quadratic ease-in across entire expansion
+            var maxRadius = 12.0; // Final radius (doubled)
+            var currentRadius = 0.01 + eased * maxRadius;
+            
+            // Update disc geometry
+            gMammothSwapDisc.geometry.dispose();
+            gMammothSwapDisc.geometry = new THREE.CircleGeometry(currentRadius, 32);
+            
+            // Update outline ring
+            if (gMammothSwapDiscOutline) {
+                var ringWidth = 0.15;
+                gMammothSwapDiscOutline.geometry.dispose();
+                gMammothSwapDiscOutline.geometry = new THREE.RingGeometry(currentRadius - ringWidth/2, currentRadius + ringWidth/2, 32);
+            }
+            
+            if (gMammothSwapTimer >= 1.0) {
+                gMammothSwapState = 'dropping-mini';
+                // Don't reset timer - continue for smooth expansion
+            }
+        } else if (gMammothSwapState === 'dropping-mini') {
+            // Mini mammoth drops through hole over 1.5 seconds
+            // Hole continues expanding smoothly (continuous from expanding-mini)
+            var totalExpansionDuration = 2.5;
+            var t = Math.min(gMammothSwapTimer / totalExpansionDuration, 1.0);
+            var eased = t * t; // Same easing curve continues
+            var maxRadius = 12.0; // Final radius (doubled)
+            var currentRadius = 0.01 + eased * maxRadius;
+            
+            // Update disc geometry
+            gMammothSwapDisc.geometry.dispose();
+            gMammothSwapDisc.geometry = new THREE.CircleGeometry(currentRadius, 32);
+            
+            // Update outline ring
+            if (gMammothSwapDiscOutline) {
+                var ringWidth = 0.15;
+                gMammothSwapDiscOutline.geometry.dispose();
+                gMammothSwapDiscOutline.geometry = new THREE.RingGeometry(currentRadius - ringWidth/2, currentRadius + ringWidth/2, 32);
+            }
+            
+            // Mini mammoth drops based on time since state started (1.0 seconds into total animation)
+            var dropDuration = 1.5;
+            var dropT = Math.min((gMammothSwapTimer - 1.0) / dropDuration, 1.0);
+            var dropEased = dropT * dropT; // Quadratic ease-in (accelerating fall)
+            gMammoth.position.y = gMiniMammothStartY + dropEased * (gMiniMammothTargetY - gMiniMammothStartY);
+            
+            // Update obstacle position
+            if (gMammothObstacle) {
+                gMammothObstacle.updatePosition(new THREE.Vector3(
+                    gMammoth.position.x,
+                    gMammoth.position.y + 1.5,
+                    gMammoth.position.z
+                ));
+            }
+            
+            if (dropT >= 1.0) {
+                // Hide mini mammoth only when animation is complete
+                gMammoth.visible = false;
+                gMammothSwapState = 'rising-full';
+                gMammothSwapTimer = 0;
+                // Remove mini mammoth from scene
+                gThreeScene.remove(gMammoth);
+                // Remove mini mammoth obstacle
+                if (gMammothObstacle) {
+                    var index = gObstacles.indexOf(gMammothObstacle);
+                    if (index > -1) {
+                        gObstacles.splice(index, 1);
+                    }
+                }
+                // Add full skeleton to scene (obstacle already in gObstacles array)
+                gThreeScene.add(gMammothSkeleton);
+            }
+        } else if (gMammothSwapState === 'rising-full') {
+            // Full skeleton rises over 2 seconds
+            var duration = 2.0;
+            var t = Math.min(gMammothSwapTimer / duration, 1.0);
+            var eased = 1 - Math.pow(1 - t, 3); // Cubic ease-out
+            gMammothSkeleton.position.y = gFullMammothStartY + eased * (gFullMammothTargetY - gFullMammothStartY);
+            
+            // Update obstacle position
+            if (gMammothSkeletonObstacle) {
+                gMammothSkeletonObstacle.updatePosition(new THREE.Vector3(
+                    gMammothSkeleton.position.x,
+                    gMammothSkeleton.position.y + 8,
+                    gMammothSkeleton.position.z
+                ));
+            }
+            
+            if (t >= 1.0) {
+                gMammothSwapState = 'shrinking';
+                gMammothSwapTimer = 0;
+            }
+        } else if (gMammothSwapState === 'shrinking') {
+            // Shrink hole over 0.5 seconds
+            var duration = 0.5;
+            var t = Math.min(gMammothSwapTimer / duration, 1.0);
+            var eased = t * t; // Quadratic ease-in
+            var maxRadius = 12.0; // Doubled radius
+            var currentRadius = maxRadius * (1 - eased);
+            
+            // Update disc geometry
+            gMammothSwapDisc.geometry.dispose();
+            gMammothSwapDisc.geometry = new THREE.CircleGeometry(Math.max(0.01, currentRadius), 32);
+            
+            // Update outline ring
+            if (gMammothSwapDiscOutline) {
+                var ringWidth = 0.15;
+                var safeRadius = Math.max(0.01, currentRadius);
+                gMammothSwapDiscOutline.geometry.dispose();
+                gMammothSwapDiscOutline.geometry = new THREE.RingGeometry(Math.max(0.001, safeRadius - ringWidth/2), safeRadius + ringWidth/2, 32);
+            }
+            
+            if (t >= 1.0) {
+                gMammothSwapState = 'complete';
+                // Remove disc and outline
+                gThreeScene.remove(gMammothSwapDisc);
+                gMammothSwapDisc.geometry.dispose();
+                gMammothSwapDisc.material.dispose();
+                gMammothSwapDisc = null;
+                
+                if (gMammothSwapDiscOutline) {
+                    gThreeScene.remove(gMammothSwapDiscOutline);
+                    gMammothSwapDiscOutline.geometry.dispose();
+                    gMammothSwapDiscOutline.material.dispose();
+                    gMammothSwapDiscOutline = null;
+                }
+                
+                // Remove spotlight and restore lights
+                if (gMammothSwapSpotlight) {
+                    gThreeScene.remove(gMammothSwapSpotlight);
+                    gThreeScene.remove(gMammothSwapSpotlight.target);
+                    gMammothSwapSpotlight = null;
+                }
+                restoreLightsFromDrag();
+            }
+        }
+    }
+    
     // Painting swap animation (Miro <-> Dali <-> Duchamp <-> Bosch groups with frames)
     if (gMiroPaintingGroup && gDaliPaintingGroup && gDuchampPaintingGroup && gBoschPaintingGroup && gPaintingAnimState !== 'idle') {
         gPaintingAnimTimer += deltaT;
@@ -14569,7 +15762,8 @@ function update() {
     }
     
     // Column base slide animation
-    if (gColumnBaseSliding && gColumnObstacle) {
+    // Skip if column was ever dragged - user interaction takes permanent precedence
+    if (gColumnBaseSliding && gColumnObstacle && !gColumnEverDragged) {
         gColumnBaseSlideTimer += deltaT;
         
         // Slide from Z=25 to Z=-9 over 2 seconds with ease-out (deceleration)
@@ -14582,9 +15776,12 @@ function update() {
         // Interpolate Z position
         var currentZ = gColumnBaseStartZ + (gColumnBaseTargetZ - gColumnBaseStartZ) * eased;
         
-        // Update all base component positions
-        if (gColumnObstacle.conicalPedestalMesh) {
-            gColumnObstacle.conicalPedestalMesh.position.z = currentZ;
+        // Update only the Z coordinate of base components (preserving current X and Y)
+        if (gColumnObstacle.minorToricPedestalMesh) {
+            gColumnObstacle.minorToricPedestalMesh.position.z = currentZ;
+        }
+        if (gColumnObstacle.majorToricPedestalMesh) {
+            gColumnObstacle.majorToricPedestalMesh.position.z = currentZ;
         }
         if (gColumnObstacle.discMesh) {
             gColumnObstacle.discMesh.position.z = currentZ;
@@ -14596,9 +15793,12 @@ function update() {
         // Stop animation when complete
         if (t >= 1.0) {
             gColumnBaseSliding = false;
-            // Ensure final position is exact
-            if (gColumnObstacle.conicalPedestalMesh) {
-                gColumnObstacle.conicalPedestalMesh.position.z = gColumnBaseTargetZ;
+            // Ensure final Z position is exact
+            if (gColumnObstacle.minorToricPedestalMesh) {
+                gColumnObstacle.minorToricPedestalMesh.position.z = gColumnBaseTargetZ;
+            }
+            if (gColumnObstacle.majorToricPedestalMesh) {
+                gColumnObstacle.majorToricPedestalMesh.position.z = gColumnBaseTargetZ;
             }
             if (gColumnObstacle.discMesh) {
                 gColumnObstacle.discMesh.position.z = gColumnBaseTargetZ;
@@ -14700,6 +15900,18 @@ function update() {
                 var currentY = starData.startY + (starData.targetY - starData.startY) * eased;
                 starData.star.position.y = currentY;
                 
+                // Update obstacle position during drop (lower than origin)
+                if (starData.obstacle) {
+                    var obstacleRadius = starData.obstacle.radius;
+                    var yOffset = starData.yOffsetMultiplier || 1.0;
+                    starData.obstacle.updatePosition(new THREE.Vector3(starData.x, currentY - obstacleRadius * yOffset, starData.z));
+                }
+                
+                // Update point light position during drop
+                if (starData.pointLight) {
+                    starData.pointLight.position.y = currentY;
+                }
+                
                 // Update wire position and length
                 var ceilingY = 2 * gPhysicsScene.worldSize.y; // Wire extends to 2x world height
                 var starTop = currentY; // Connect to model origin
@@ -14743,6 +15955,23 @@ function update() {
             // Update star position with sway
             starData.star.position.x = starData.x + starData.offsetX;
             starData.star.position.z = starData.z + starData.offsetZ;
+            
+            // Update obstacle position with sway (lower than origin)
+            if (starData.obstacle) {
+                var obstacleRadius = starData.obstacle.radius;
+                var yOffset = starData.yOffsetMultiplier || 1.0;
+                starData.obstacle.updatePosition(new THREE.Vector3(
+                    starData.x + starData.offsetX,
+                    starData.targetY - obstacleRadius * yOffset,
+                    starData.z + starData.offsetZ
+                ));
+            }
+            
+            // Update point light position with sway
+            if (starData.pointLight) {
+                starData.pointLight.position.x = starData.x + starData.offsetX;
+                starData.pointLight.position.z = starData.z + starData.offsetZ;
+            }
             
             // Update wire to connect fixed ceiling point to moving star (optimized)
             var currentY = starData.targetY;
@@ -14850,30 +16079,21 @@ function update() {
                 const targetY = 6.03;
                 const currentY = targetY + currentOffset;
                 
-                // Update column position (this will update all parts)
-                gColumnObstacle.updatePosition(new THREE.Vector3(gColumnInitialX, currentY, gColumnInitialZ));
+                // Preserve column's current X/Z position (in case it was dragged)
+                const columnX = gColumnObstacle.position.x;
+                const columnZ = gColumnObstacle.position.z;
                 
-                // Update base components to descend with the column
-                if (gColumnObstacle.conicalPedestalMesh) {
-                    const conicalPedestalHeight = 3;
-                    gColumnObstacle.conicalPedestalMesh.position.y = (currentY - gColumnObstacle.height / 2) + 0.5 * conicalPedestalHeight + 0.28;
-                }
-                if (gColumnObstacle.discMesh) {
-                    gColumnObstacle.discMesh.position.y = (currentY - gColumnObstacle.height / 2) + 1.3;
-                }
+                // Update column position (this will update all parts including base components)
+                gColumnObstacle.updatePosition(new THREE.Vector3(columnX, currentY, columnZ));
                 
                 // End animation when complete
                 if (progress >= 1) {
                     gColumnDropping = false;
-                    gColumnObstacle.updatePosition(new THREE.Vector3(gColumnInitialX, targetY, gColumnInitialZ));
-                    // Ensure final positions are exact
-                    if (gColumnObstacle.conicalPedestalMesh) {
-                        const conicalPedestalHeight = 3;
-                        gColumnObstacle.conicalPedestalMesh.position.y = (targetY - gColumnObstacle.height / 2) + 0.5 * conicalPedestalHeight + 0.28;
-                    }
-                    if (gColumnObstacle.discMesh) {
-                        gColumnObstacle.discMesh.position.y = (targetY - gColumnObstacle.height / 2) + 1.3;
-                    }
+                    // Preserve column's current X/Z position (in case it was dragged)
+                    const columnX = gColumnObstacle.position.x;
+                    const columnZ = gColumnObstacle.position.z;
+                    // Update to final Y position
+                    gColumnObstacle.updatePosition(new THREE.Vector3(columnX, targetY, columnZ));
                 }
             }
         }
@@ -15548,6 +16768,51 @@ function update() {
     // Update camera mount rod visibility
     if (gDollyCameraMountRod) {
         gDollyCameraMountRod.visible = cameraMenuVisible && gCameraMode !== 6;
+    }
+    
+    // Update drag highlight box for toggle-dragging objects
+    if (gCurrentlyDraggingObject !== null) {
+        // Determine which object is being dragged and get its reference
+        var targetObject = null;
+        if (gCurrentlyDraggingObject === 'duck' && gDuck) targetObject = gDuck;
+        else if (gCurrentlyDraggingObject === 'mammoth' && gMammoth) targetObject = gMammoth;
+        else if (gCurrentlyDraggingObject === 'teapot' && gTeapot) targetObject = gTeapot;
+        else if (gCurrentlyDraggingObject === 'chair' && gChair) targetObject = gChair;
+        else if (gCurrentlyDraggingObject === 'sofa' && gSofa) targetObject = gSofa;
+        else if (gCurrentlyDraggingObject === 'stool' && gStool) targetObject = gStool;
+        else if (gCurrentlyDraggingObject === 'bird' && gBird) targetObject = gBird;
+        else if (gCurrentlyDraggingObject === 'koonsDog' && gKoonsDog) targetObject = gKoonsDog;
+        else if (gCurrentlyDraggingObject === 'globeLamp' && gGlobeLamp) targetObject = gGlobeLamp;
+        
+        if (targetObject) {
+            // Create box helper if it doesn't exist or if it's for a different object
+            if (!gDragHighlightBox || gDragHighlightBox.object !== targetObject) {
+                // Remove old box helper if it exists
+                if (gDragHighlightBox) {
+                    gThreeScene.remove(gDragHighlightBox);
+                    gDragHighlightBox.dispose();
+                }
+                
+                // Create new box helper with transparent cyan color
+                gDragHighlightBox = new THREE.BoxHelper(targetObject, 0x00ffff);
+                gDragHighlightBox.material.transparent = true;
+                gDragHighlightBox.material.opacity = 0.3;
+                gDragHighlightBox.material.linewidth = 2;
+                gThreeScene.add(gDragHighlightBox);
+            }
+            
+            // Update box to match object's current transform
+            gDragHighlightBox.update();
+            
+            // Update spotlight to follow object
+            updateDragSpotlight(targetObject.position);
+        }
+    } else {
+        // No object is being dragged - remove box helper if it exists
+        if (gDragHighlightBox) {
+            gThreeScene.remove(gDragHighlightBox);
+            gDragHighlightBox = null;
+        }
     }
     
     gRenderer.render(gThreeScene, gCamera);
