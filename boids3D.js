@@ -94,6 +94,10 @@ var gTorusDragOffset = null; // Store offset from click point to torus center
 var gTorusDragPlaneHeight = 0; // Store the Y height where the torus was grabbed
 var gTorusDragPlaneDistance = 0; // Store the distance from camera for fixed plane dragging
 var gTorusHue = 90; // Current hue value for torus obstacle (0-360, same start as sphere)
+var gDraggingSkyPig = false; // Track if dragging the sky pig obstacle
+var gSkyPigDragOffset = null; // Store offset from click point to sky pig center
+var gSkyPigDragPlaneHeight = 0; // Store the Y height where the sky pig was grabbed
+var gSkyPigDragPlaneDistance = 0; // Store the distance from camera for fixed plane dragging
 var gDuckDragPlaneHeight = 0; // Store the Y height where the duck was grabbed
 var gDuckDragOffset = null; // Store offset from click point to duck center (for toggle dragging)
 var gMammothDragPlaneHeight = 0; // Store the Y height where the mammoth was grabbed
@@ -390,6 +394,7 @@ var gGlobeLampHue = 0; // Globe lamp hue (0-360)
 var gGlobeLampSaturation = 80; // Globe lamp saturation (0-100)
 var gOrnamentLightIntensity = 0; // Ornament point light intensity (0-3)
 var gOrnamentLightFalloff = 8; // Ornament point light distance/falloff (3-15)
+var gOrnamentHeightOffset = 50; // Ornament height percentage (0=floor, 100=above ceiling)
 var gHangingStars = []; // Array of hanging star decorations
 var gStarAnimData = []; // Animation data for each star {star, wire, targetY, startY, timer, delay, animating}
 var gEnableStarSwayAndTwist = true; // Enable/disable star swaying and twisting motion
@@ -419,6 +424,15 @@ var gSphereTargetY = 15; // Target Y position for sphere
 var gSphereStartRadius = 0.1; // Starting radius for sphere
 var gSphereTargetRadius = 3; // Target radius for sphere
 var gSphereObstacle = null; // Reference to sphere obstacle
+var gSkyPig = null; // Reference to sky pig model
+var gSkyPigObstacle = null; // Reference to sky pig obstacle
+var gSkyPigRising = false; // Flag for sky pig rise animation
+var gSkyPigRiseTimer = 0; // Timer for sky pig rise animation
+var gSkyPigRiseDuration = 2.0; // Duration of sky pig rise animation
+var gSkyPigStartY = 0; // Starting Y position for sky pig
+var gSkyPigTargetY = 12; // Target Y position for sky pig
+var gSkyPigStartScale = 0.1; // Starting scale for sky pig (tiny)
+var gSkyPigTargetScale = 2.0; // Target scale for sky pig (full size)
 var gColumnBaseSliding = false; // Flag for column base slide animation (starts after loading)
 var gColumnBaseSlideTimer = 0; // Timer for column base slide animation
 var gColumnBaseStartZ = 35; // Starting Z offset for column base slide
@@ -5512,7 +5526,7 @@ function drawLightingMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2; // 3 knobs across
-    const menuHeight = knobSpacing * 7; // 7 rows (now with 20 knobs)
+    const menuHeight = knobSpacing * 7; // 7 rows (now with 21 knobs)
     const padding = 1.7 * knobRadius;
     
     const menuOriginX = lightingMenuX * window.innerWidth;
@@ -5576,7 +5590,8 @@ function drawLightingMenu() {
         { label: 'Shadow Falloff', value: gShadowCameraFar, min: 10, max: 150 },
         { label: 'Boid Headlight', value: gHeadlightIntensity, min: 0, max: 2 },
         { label: 'Ornament Lights', value: gOrnamentLightIntensity, min: 0, max: 3 },
-        { label: 'Falloff', value: gOrnamentLightFalloff, min: 3, max: 15 }
+        { label: 'Falloff', value: gOrnamentLightFalloff, min: 3, max: 15 },
+        { label: 'Ornament Height', value: gOrnamentHeightOffset, min: 0, max: 100 }
     ];
     
     const fullMeterSweep = 1.6 * Math.PI;
@@ -5721,6 +5736,10 @@ function drawLightingMenu() {
             displayValue = Math.round(knobs[i].value).toString();
         } else if (i === 16) {
             // Shadow Far - show as integer
+            ctx.fillStyle = `hsla(45, 60%, 70%, ${lightingMenuOpacity})`;
+            displayValue = Math.round(knobs[i].value).toString();
+        } else if (i === 20) {
+            // Ornament Height - show as integer percentage
             ctx.fillStyle = `hsla(45, 60%, 70%, ${lightingMenuOpacity})`;
             displayValue = Math.round(knobs[i].value).toString();
         } else {
@@ -8314,6 +8333,78 @@ function initThreeScene() {
         );
     }
     
+    // Load Sky Pig model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var skyPigLoader = new THREE.GLTFLoader(gLoadingManager);
+        skyPigLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/skyPig.gltf',
+            function(gltf) {
+                var skyPig = gltf.scene;
+                
+                // Position on floor initially (for rise animation)
+                skyPig.position.set(15, gSkyPigStartY, -15);
+                
+                // Start tiny for growth animation
+                skyPig.scale.set(gSkyPigStartScale, gSkyPigStartScale, gSkyPigStartScale);
+                
+                // Rotate to face forward
+                skyPig.rotation.y = 0;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                skyPig.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                gThreeScene.add(skyPig);
+                gSkyPig = skyPig; // Store global reference
+                
+                // Create sphere obstacle for boid avoidance
+                var skyPigObstacleRadius = 3.0;
+                gSkyPigObstacle = new SphereObstacle(
+                    skyPigObstacleRadius,
+                    new THREE.Vector3(15, gSkyPigStartY, -15)
+                );
+                
+                // Enable shadows and mark meshes as draggable with obstacle reference
+                skyPig.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.userData.isDraggableSkyPig = true;
+                        child.userData.skyPigObstacle = gSkyPigObstacle;
+                    }
+                });
+                // Make the obstacle invisible
+                if (gSkyPigObstacle.mesh) {
+                    gSkyPigObstacle.mesh.visible = false;
+                }
+                gSkyPigObstacle.enabled = false; // Disable until rise animation completes
+                gObstacles.push(gSkyPigObstacle);
+                
+                // Start rise animation after a delay
+                setTimeout(function() {
+                    gSkyPigRising = true;
+                }, 1000); // Wait 1 second before rising
+                
+                console.log('Sky Pig model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Sky Pig model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Sky Pig model:', error);
+            }
+        );
+    }
+    
     // Load Tube Star, Heart, Moon, Clover, and Diamond models using GLTFLoader for hanging decorations
     if (typeof THREE.GLTFLoader !== 'undefined') {
         var starTemplate, heartTemplate, moonTemplate, cloverTemplate, diamondTemplate;
@@ -8542,15 +8633,15 @@ function initThreeScene() {
                 // Create point light for each ornament with color based on type
                 var ornamentLightColor = new THREE.Color();
                 if (ornamentTypes[i] === 'star') {
-                    ornamentLightColor.setHSL(60 / 360, 0.8, 0.6); // Yellow
+                    ornamentLightColor.setHSL(180 / 360, 0.8, 0.6); // Cyan
                 } else if (ornamentTypes[i] === 'heart') {
-                    ornamentLightColor.setHSL(0 / 360, 0.9, 0.5); // Red
+                    ornamentLightColor.setHSL(320 / 360, 0.9, 0.6); // Pink
                 } else if (ornamentTypes[i] === 'moon') {
-                    ornamentLightColor.setHSL(200 / 360, 0.7, 0.6); // Blue
+                    ornamentLightColor.setHSL(0 / 360, 0.0, 0.6); // White (desaturated)
                 } else if (ornamentTypes[i] === 'clover') {
-                    ornamentLightColor.setHSL(120 / 360, 0.8, 0.5); // Green
+                    ornamentLightColor.setHSL(120 / 360, 0.8, 0.6); // Green
                 } else if (ornamentTypes[i] === 'diamond') {
-                    ornamentLightColor.setHSL(280 / 360, 0.7, 0.6); // Purple
+                    ornamentLightColor.setHSL(30 / 360, 0.7, 0.6); // Orange
                 }
                 
                 var ornamentPointLight = new THREE.PointLight(ornamentLightColor, gOrnamentLightIntensity, gOrnamentLightFalloff, 2);
@@ -11162,6 +11253,8 @@ function onPointer(evt) {
         var hitCylinderObstacle = null;
         var hitSphere = false;
         var hitSphereObstacle = null;
+        var hitSkyPig = false;
+        var hitSkyPigObstacle = null;
         var hitTorus = false;
         var hitTorusObstacle = null;
         var hitLampId = 1; // Default to lamp 1
@@ -11268,6 +11361,22 @@ function onPointer(evt) {
                     hitSphereObstacle.position.z - actualClickPoint.z
                 );
                 // Don't break - check if lamp components are also hit
+            }
+            if (intersects[i].object.userData.isDraggableSkyPig && !hitSkyPig) {
+                hitSkyPig = true;
+                hitSkyPigObstacle = intersects[i].object.userData.skyPigObstacle;
+                
+                // Store the actual 3D point where the sky pig was clicked
+                var actualClickPoint = intersects[i].point;
+                gSkyPigDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to sky pig center
+                gSkyPigDragOffset = new THREE.Vector3(
+                    hitSkyPigObstacle.position.x - actualClickPoint.x,
+                    hitSkyPigObstacle.position.y - actualClickPoint.y,
+                    hitSkyPigObstacle.position.z - actualClickPoint.z
+                );
+                // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableCylinder && !hitCylinder) {
                 hitCylinder = true;
@@ -12133,6 +12242,57 @@ function onPointer(evt) {
             return;
         }
         
+        if (hitSkyPig && hitSkyPigObstacle) {
+            gDraggingSkyPig = true;
+            window.draggingSkyPigObstacle = hitSkyPigObstacle; // Store reference globally
+            
+            // Store the distance from camera to sky pig center (for fixed plane)
+            var cameraToSkyPig = new THREE.Vector3();
+            cameraToSkyPig.subVectors(hitSkyPigObstacle.position, gCamera.position);
+            var cameraDirection = new THREE.Vector3();
+            gCamera.getWorldDirection(cameraDirection);
+            gSkyPigDragPlaneDistance = cameraToSkyPig.dot(cameraDirection);
+            
+            // Calculate the initial drag plane intersection to get proper offset
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Create the drag plane
+            var planePoint = new THREE.Vector3();
+            planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gSkyPigDragPlaneDistance));
+            var dragPlane = new THREE.Plane();
+            dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+            
+            // Find where ray intersects drag plane
+            var planeIntersection = new THREE.Vector3();
+            raycaster.ray.intersectPlane(dragPlane, planeIntersection);
+            
+            if (planeIntersection) {
+                // Store offset from plane intersection to sky pig center
+                gSkyPigDragOffset = new THREE.Vector3(
+                    hitSkyPigObstacle.position.x - planeIntersection.x,
+                    hitSkyPigObstacle.position.y - planeIntersection.y,
+                    hitSkyPigObstacle.position.z - planeIntersection.z
+                );
+            } else {
+                // Fallback to zero offset if plane intersection fails
+                gSkyPigDragOffset = new THREE.Vector3(0, 0, 0);
+            }
+            
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            // Disable orbit controls while dragging sky pig
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return;
+        }
+        
         if (hitCylinder && hitCylinderObstacle) {
             gDraggingCylinder = true;
             window.draggingCylinderObstacle = hitCylinderObstacle; // Store reference globally
@@ -12624,7 +12784,8 @@ function onPointer(evt) {
                     {min: 10, max: 150},    // 16: shadow camera far
                     {min: 0, max: 2},       // 17: headlight intensity
                     {min: 0, max: 3},       // 18: ornament light intensity
-                    {min: 3, max: 15}       // 19: ornament light falloff
+                    {min: 3, max: 15},      // 19: ornament light falloff
+                    {min: 0, max: 100}      // 20: ornament height percentage
                 ];
                 
                 const dragSensitivity = 0.2;
@@ -12871,6 +13032,55 @@ function onPointer(evt) {
                         for (let i = 0; i < gStarAnimData.length; i++) {
                             if (gStarAnimData[i].pointLight) {
                                 gStarAnimData[i].pointLight.distance = gOrnamentLightFalloff;
+                            }
+                        }
+                        break;
+                    case 20: // Ornament height percentage
+                        gOrnamentHeightOffset = Math.round(newValue); // Round to integer percentage
+                        // Update all ornament positions, wires, and related elements
+                        // Shift the original range based on percentage
+                        const worldHeight = gPhysicsScene.worldSize.y;
+                        const originalCenter = worldHeight * 1.15; // Center of original range (0.8 to 1.5)
+                        const maxHeight = worldHeight * 2.1;
+                        const percentageCenter = (gOrnamentHeightOffset / 100) * maxHeight;
+                        const heightOffset = percentageCenter - originalCenter;
+                        
+                        for (let i = 0; i < gStarAnimData.length; i++) {
+                            const starData = gStarAnimData[i];
+                            const targetHeight = starData.targetY + heightOffset;
+                            
+                            // Update star position
+                            starData.star.position.y = targetHeight;
+                            
+                            // Update obstacle position
+                            if (starData.obstacle) {
+                                const obstacleRadius = starData.obstacle.radius;
+                                const yOffset = starData.yOffsetMultiplier || 1.0;
+                                starData.obstacle.updatePosition(new THREE.Vector3(
+                                    starData.star.position.x,
+                                    targetHeight - obstacleRadius * yOffset,
+                                    starData.star.position.z
+                                ));
+                            }
+                            
+                            // Update point light position
+                            if (starData.pointLight) {
+                                starData.pointLight.position.y = targetHeight;
+                            }
+                            
+                            // Update wire position and length
+                            const ceilingY = 2 * gPhysicsScene.worldSize.y;
+                            const starTop = targetHeight;
+                            const wireLength = ceilingY - starTop;
+                            starData.wire.position.set(starData.star.position.x, starTop + wireLength / 2, starData.star.position.z);
+                            starData.wire.scale.set(1, wireLength, 1);
+                            
+                            // Calculate wire angle for swaying ornaments
+                            const dx = starData.star.position.x - starData.x;
+                            const dz = starData.star.position.z - starData.z;
+                            if (dx !== 0 || dz !== 0) {
+                                const angle = Math.atan2(dx, dz);
+                                starData.wire.rotation.set(Math.atan(Math.sqrt(dx*dx + dz*dz) / wireLength), 0, -angle);
                             }
                         }
                         break;
@@ -13617,6 +13827,60 @@ function onPointer(evt) {
             return;
         }
         
+        // Handle sky pig dragging (3D movement like sphere)
+        if (gDraggingSkyPig && window.draggingSkyPigObstacle) {
+            var skyPigObstacle = window.draggingSkyPigObstacle;
+            
+            // Move sky pig in 3D space along a fixed plane perpendicular to camera view
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Use fixed plane at the distance established when drag started
+            var cameraDirection = new THREE.Vector3();
+            gCamera.getWorldDirection(cameraDirection);
+            var planePoint = new THREE.Vector3();
+            planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gSkyPigDragPlaneDistance));
+            var skyPigPlane = new THREE.Plane();
+            skyPigPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+            
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(skyPigPlane, intersectionPoint);
+            
+            if (intersectionPoint && gSkyPigDragOffset) {
+                // Apply the offset to maintain grab point
+                var newPosition = new THREE.Vector3(
+                    intersectionPoint.x + gSkyPigDragOffset.x,
+                    intersectionPoint.y + gSkyPigDragOffset.y,
+                    intersectionPoint.z + gSkyPigDragOffset.z
+                );
+                
+                // Clamp to room boundaries (sky pig center must stay within room)
+                var minBoundX = -gPhysicsScene.worldSize.x + skyPigObstacle.radius;
+                var maxBoundX = gPhysicsScene.worldSize.x - skyPigObstacle.radius;
+                var minBoundY = skyPigObstacle.radius;
+                var maxBoundY = gPhysicsScene.worldSize.y - skyPigObstacle.radius;
+                var minBoundZ = -gPhysicsScene.worldSize.z + skyPigObstacle.radius;
+                var maxBoundZ = gPhysicsScene.worldSize.z - skyPigObstacle.radius;
+                
+                newPosition.x = Math.max(minBoundX, Math.min(maxBoundX, newPosition.x));
+                newPosition.y = Math.max(minBoundY, Math.min(maxBoundY, newPosition.y));
+                newPosition.z = Math.max(minBoundZ, Math.min(maxBoundZ, newPosition.z));
+                
+                skyPigObstacle.updatePosition(newPosition);
+                
+                // Update sky pig model position to match obstacle
+                if (gSkyPig) {
+                    gSkyPig.position.copy(skyPigObstacle.position);
+                }
+            }
+            return;
+        }
+        
         // Handle cylinder dragging (translation along ground)
         if (gDraggingCylinder && window.draggingCylinderObstacle) {
             // Raycast to find where cursor intersects a plane at cylinder's height
@@ -13978,6 +14242,17 @@ function onPointer(evt) {
             return;
         }
         
+        if (gDraggingSkyPig) {
+            gDraggingSkyPig = false;
+            gSkyPigDragOffset = null;
+            window.draggingSkyPigObstacle = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
         if (gDraggingCylinder) {
             gDraggingCylinder = false;
             gCylinderDragOffset = null;
@@ -14102,6 +14377,7 @@ function onPointerLeave(evt) {
     // Reset obstacle dragging
     gDraggingCylinder = false;
     gDraggingSphere = false;
+    gDraggingSkyPig = false;
     gDraggingTorus = false;
     
     // Reset color control dragging
@@ -14645,7 +14921,7 @@ function checkLightingMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 7; // 7 rows (now with 20 knobs)
+    const menuHeight = knobSpacing * 7; // 7 rows (now with 21 knobs)
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = lightingMenuX * window.innerWidth;
@@ -14666,7 +14942,7 @@ function checkLightingMenuClick(clientX, clientY) {
     }
     
     // Check each knob
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 21; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const knobX = menuOriginX + col * knobSpacing;
@@ -14691,7 +14967,8 @@ function checkLightingMenuClick(clientX, clientY) {
                 gShadowCameraFar,
                 gHeadlightIntensity,
                 gOrnamentLightIntensity,
-                gOrnamentLightFalloff
+                gOrnamentLightFalloff,
+                gOrnamentHeightOffset
             ];
             dragStartValue = values[i];
             
@@ -16060,7 +16337,15 @@ function update() {
                 
                 // Cubic ease-out for natural drop
                 var eased = 1 - Math.pow(1 - t, 3);
-                var currentY = starData.startY + (starData.targetY - starData.startY) * eased;
+                // Calculate target height: preserve original targetY, apply percentage as offset
+                // Original range was 0.8 to 1.5 * worldHeight, centered around 1.15 * worldHeight
+                var worldHeight = gPhysicsScene.worldSize.y;
+                var originalCenter = worldHeight * 1.15; // Center of original range
+                var percentageCenter = (gOrnamentHeightOffset / 100) * (worldHeight * 2.1); // Center based on percentage
+                var heightOffset = percentageCenter - originalCenter; // How much to shift from original
+                var targetHeight = starData.targetY + heightOffset;
+                // Drop to adjusted target
+                var currentY = starData.startY + (targetHeight - starData.startY) * eased;
                 starData.star.position.y = currentY;
                 
                 // Update obstacle position during drop (lower than origin)
@@ -16088,7 +16373,6 @@ function update() {
                 // Stop animation when complete
                 if (t >= 1.0) {
                     starData.animating = false;
-                    starData.star.position.y = starData.targetY;
                 }
             }
         } else if (gEnableStarSwayAndTwist) {
@@ -16116,28 +16400,50 @@ function update() {
             starData.offsetZ += starData.velZ * deltaT;
             
             // Update star position with sway
+            var worldHeight = gPhysicsScene.worldSize.y;
+            var originalCenter = worldHeight * 1.15;
+            var percentageCenter = (gOrnamentHeightOffset / 100) * (worldHeight * 2.1);
+            var heightOffset = percentageCenter - originalCenter;
+            var targetHeight = starData.targetY + heightOffset;
             starData.star.position.x = starData.x + starData.offsetX;
+            starData.star.position.y = targetHeight;
             starData.star.position.z = starData.z + starData.offsetZ;
             
             // Update obstacle position with sway (lower than origin)
             if (starData.obstacle) {
                 var obstacleRadius = starData.obstacle.radius;
                 var yOffset = starData.yOffsetMultiplier || 1.0;
+                var worldHeight = gPhysicsScene.worldSize.y;
+                var originalCenter = worldHeight * 1.15;
+                var percentageCenter = (gOrnamentHeightOffset / 100) * (worldHeight * 2.1);
+                var heightOffset = percentageCenter - originalCenter;
+                var targetHeight = starData.targetY + heightOffset;
                 starData.obstacle.updatePosition(new THREE.Vector3(
                     starData.x + starData.offsetX,
-                    starData.targetY - obstacleRadius * yOffset,
+                    targetHeight - obstacleRadius * yOffset,
                     starData.z + starData.offsetZ
                 ));
             }
             
             // Update point light position with sway
             if (starData.pointLight) {
+                var worldHeight = gPhysicsScene.worldSize.y;
+                var originalCenter = worldHeight * 1.15;
+                var percentageCenter = (gOrnamentHeightOffset / 100) * (worldHeight * 2.1);
+                var heightOffset = percentageCenter - originalCenter;
+                var targetHeight = starData.targetY + heightOffset;
                 starData.pointLight.position.x = starData.x + starData.offsetX;
+                starData.pointLight.position.y = targetHeight;
                 starData.pointLight.position.z = starData.z + starData.offsetZ;
             }
             
             // Update wire to connect fixed ceiling point to moving star (optimized)
-            var currentY = starData.targetY;
+            var worldHeight = gPhysicsScene.worldSize.y;
+            var originalCenter = worldHeight * 1.15;
+            var percentageCenter = (gOrnamentHeightOffset / 100) * (worldHeight * 2.1);
+            var heightOffset = percentageCenter - originalCenter;
+            var targetHeight = starData.targetY + heightOffset;
+            var currentY = targetHeight;
             var starTop = currentY; // Connect to model origin
             var ceilingY = 2 * gPhysicsScene.worldSize.y;
             
@@ -16598,6 +16904,35 @@ function update() {
                 const finalScale = gSphereTargetRadius / gSphereStartRadius;
                 gSphereObstacle.mesh.scale.set(finalScale, finalScale, finalScale);
             }
+        }
+    }
+    
+    // Sky Pig rise animation
+    if (gSkyPigRising && gSkyPigObstacle && gSkyPig) {
+        gSkyPigRiseTimer += deltaT;
+        
+        const progress = Math.min(1, gSkyPigRiseTimer / gSkyPigRiseDuration);
+        
+        // Cubic ease-out: starts fast, decelerates
+        const easedProgress = 1 - Math.pow(1 - progress, 3);
+        
+        // Calculate current Y position
+        const currentY = gSkyPigStartY + (gSkyPigTargetY - gSkyPigStartY) * easedProgress;
+        
+        // Calculate current scale (grow from tiny to full size)
+        const currentScale = gSkyPigStartScale + (gSkyPigTargetScale - gSkyPigStartScale) * easedProgress;
+        
+        // Update sky pig position and scale
+        gSkyPig.position.y = currentY;
+        gSkyPig.scale.set(currentScale, currentScale, currentScale);
+        
+        // Update obstacle position (center should match model center)
+        gSkyPigObstacle.updatePosition(new THREE.Vector3(15, currentY, -15));
+        
+        // End animation when complete
+        if (progress >= 1) {
+            gSkyPigRising = false;
+            gSkyPigObstacle.enabled = true;  // Enable collision after animation
         }
     }
     
