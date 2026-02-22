@@ -13920,10 +13920,10 @@ function onPointer(evt) {
                     intersectionPoint.z + gSkyPigDragOffset.z
                 );
                 
-                // Clamp to room boundaries (sky pig center must stay within room)
+                // Clamp to room boundaries (allow sky pig to reach floor)
                 var minBoundX = -gPhysicsScene.worldSize.x + skyPigObstacle.radius;
                 var maxBoundX = gPhysicsScene.worldSize.x - skyPigObstacle.radius;
-                var minBoundY = skyPigObstacle.radius;
+                var minBoundY = 0; // Allow sky pig model to reach the floor
                 var maxBoundY = gPhysicsScene.worldSize.y - skyPigObstacle.radius;
                 var minBoundZ = -gPhysicsScene.worldSize.z + skyPigObstacle.radius;
                 var maxBoundZ = gPhysicsScene.worldSize.z - skyPigObstacle.radius;
