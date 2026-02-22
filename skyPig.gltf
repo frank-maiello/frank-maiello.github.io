@@ -7,12 +7,65 @@
     {
       "name": "Scene",
       "nodes": [
-        0
+        0,
+        1,
+        2,
+        3
       ]
     }
   ],
   "scene": 0,
   "nodes": [
+    {
+      "name": "AmbientLight"
+    },
+    {
+      "matrix": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5,
+        10,
+        7.5,
+        1
+      ],
+      "name": "DirectionalLight",
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 0
+        }
+      }
+    },
+    {
+      "matrix": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        10,
+        0,
+        1
+      ],
+      "name": "HemisphereLight"
+    },
     {
       "name": "18412_Pig_v1",
       "extras": {
@@ -21,6 +74,22 @@
       "mesh": 0
     }
   ],
+  "extensions": {
+    "KHR_lights_punctual": {
+      "lights": [
+        {
+          "name": "DirectionalLight",
+          "color": [
+            1,
+            1,
+            1
+          ],
+          "intensity": 1,
+          "type": "directional"
+        }
+      ]
+    }
+  },
   "bufferViews": [
     {
       "buffer": 0,
@@ -120,13 +189,13 @@
     {
       "pbrMetallicRoughness": {
         "baseColorFactor": [
-          1,
-          0.34191442489801843,
-          0.5583403896257968,
+          0.8879231178794776,
+          0.35640014413537763,
+          0.08865558627723595,
           1
         ],
-        "metallicFactor": 0,
-        "roughnessFactor": 1
+        "metallicFactor": 1,
+        "roughnessFactor": 0
       }
     }
   ],
@@ -145,5 +214,8 @@
         }
       ]
     }
+  ],
+  "extensionsUsed": [
+    "KHR_lights_punctual"
   ]
 }
