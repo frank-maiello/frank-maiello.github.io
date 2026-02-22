@@ -259,12 +259,12 @@ var gMammothSkeleton = null; // Reference to full mammoth skeleton model
 var gMammothSkeletonObstacle = null; // Sphere obstacle for full mammoth
 var gMammothSwapDisc = null; // Disc for swap animation hole
 var gMammothSwapDiscOutline = null; // Outline ring for swap disc
-var gMammothSwapState = 'idle'; // States: idle, expanding-mini, dropping-mini, rising-full, shrinking, complete
+var gMammothSwapState = 'idle'; // States: idle, expanding-mini, dropping-mini, pausing, rising-full, shrinking, complete
 var gMammothSwapTimer = 0; // Timer for animation
 var gMammothSwapSpotlight = null; // Spotlight for swap animation
 var gMiniMammothStartY = 0; // Starting Y for mini mammoth drop
 var gMiniMammothTargetY = -10; // Target Y for mini mammoth (below floor)
-var gFullMammothStartY = -12; // Starting Y for full mammoth (below floor)
+var gFullMammothStartY = -25; // Starting Y for full mammoth (below floor)
 var gFullMammothTargetY = 0; // Target Y for full mammoth (at floor level)
 var gTeapot = null; // Teapot model reference
 var gTeapotAnimating = true; // Is teapot currently animating
@@ -2354,7 +2354,7 @@ class BOID {
         } else if (this.geometryType === 13 && gFishTemplate) {
             // Clone fish template for this boid
             this.visMesh = gFishTemplate.clone();
-            this.visMesh.scale.set(2.0, 2.0, 2.0);
+            this.visMesh.scale.set(0.015, 0.015, 0.015);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
             this.visMesh.castShadow = true;
@@ -3338,7 +3338,7 @@ function recreateBoidGeometries() {
         } else if (boid.geometryType === 13 && gFishTemplate) {
             // For fish geometry, clone the fish template
             boid.visMesh = gFishTemplate.clone();
-            boid.visMesh.scale.set(2.0, 2.0, 2.0); // Scale down for boid size
+            boid.visMesh.scale.set(0.15, 0.15, 0.15); // Scale down for boid size
             
             // Set position and add to scene
             boid.visMesh.position.copy(boid.pos);
@@ -7548,19 +7548,10 @@ function initThreeScene() {
     if (typeof THREE.GLTFLoader !== 'undefined') {
         var fishLoader = new THREE.GLTFLoader(gLoadingManager);
         fishLoader.load(
-            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/BarramundiFish.gltf',
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/fishBarramundi.gltf',
             function(gltf) {
                 var fish = gltf.scene;
-                
-                // Position at geometric center of room (mid-height)
-                fish.position.set(15, 15, -19.2);
-                
-                // Scale fish appropriately
-                fish.scale.set(12, 12, 12);
-                
-                // Rotate to face forward
-                fish.rotation.y = 0.5 * Math.PI; // Rotate 90 degrees to face forward
-                
+            
                 // Remove any imported lights
                 var lightsToRemove = [];
                 fish.traverse(function(child) {
@@ -8880,7 +8871,7 @@ function initThreeScene() {
     marbleImage.onerror = function(err) {
         console.error('Error loading marble texture:', err);
     };
-    marbleImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/marble_square.jpg';
+    marbleImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/oysterWhite_marble_square.jpg';
     
     // Load marble texture for platonic solid pedestals using TextureLoader with CORS
     var pedestalTextureLoader = new THREE.TextureLoader();
@@ -15513,7 +15504,7 @@ function update() {
         
         if (gMammothSwapState === 'expanding-mini') {
             // Expand hole continuously - this state lasts 1 second
-            var totalExpansionDuration = 2.5; // Total time for full expansion
+            var totalExpansionDuration = 4.0; // Total time for full expansion (includes pause)
             var t = Math.min(gMammothSwapTimer / totalExpansionDuration, 1.0);
             var eased = t * t; // Quadratic ease-in across entire expansion
             var maxRadius = 12.0; // Final radius (doubled)
@@ -15537,7 +15528,7 @@ function update() {
         } else if (gMammothSwapState === 'dropping-mini') {
             // Mini mammoth drops through hole over 1.5 seconds
             // Hole continues expanding smoothly (continuous from expanding-mini)
-            var totalExpansionDuration = 2.5;
+            var totalExpansionDuration = 4.0; // Total time for full expansion (includes pause)
             var t = Math.min(gMammothSwapTimer / totalExpansionDuration, 1.0);
             var eased = t * t; // Same easing curve continues
             var maxRadius = 12.0; // Final radius (doubled)
@@ -15572,8 +15563,8 @@ function update() {
             if (dropT >= 1.0) {
                 // Hide mini mammoth only when animation is complete
                 gMammoth.visible = false;
-                gMammothSwapState = 'rising-full';
-                gMammothSwapTimer = 0;
+                gMammothSwapState = 'pausing';
+                // Don't reset timer - keep it continuous for hole expansion
                 // Remove mini mammoth from scene
                 gThreeScene.remove(gMammoth);
                 // Remove mini mammoth obstacle
@@ -15586,9 +15577,34 @@ function update() {
                 // Add full skeleton to scene (obstacle already in gObstacles array)
                 gThreeScene.add(gMammothSkeleton);
             }
+        } else if (gMammothSwapState === 'pausing') {
+            // Pause for 1.5 seconds before skeleton rises
+            // Hole continues expanding to reach max size when skeleton starts rising
+            var totalExpansionDuration = 4.0; // Total time for full expansion
+            var t = Math.min(gMammothSwapTimer / totalExpansionDuration, 1.0);
+            var eased = t * t; // Same easing curve continues
+            var maxRadius = 12.0; // Final radius (doubled)
+            var currentRadius = 0.01 + eased * maxRadius;
+            
+            // Update disc geometry
+            gMammothSwapDisc.geometry.dispose();
+            gMammothSwapDisc.geometry = new THREE.CircleGeometry(currentRadius, 32);
+            
+            // Update outline ring
+            if (gMammothSwapDiscOutline) {
+                var ringWidth = 0.15;
+                gMammothSwapDiscOutline.geometry.dispose();
+                gMammothSwapDiscOutline.geometry = new THREE.RingGeometry(currentRadius - ringWidth/2, currentRadius + ringWidth/2, 32);
+            }
+            
+            var pauseDuration = 1.5;
+            if (gMammothSwapTimer >= 2.5 + pauseDuration) { // 2.5 seconds of drop + 1.5 pause
+                gMammothSwapState = 'rising-full';
+                gMammothSwapTimer = 0;
+            }
         } else if (gMammothSwapState === 'rising-full') {
-            // Full skeleton rises over 2 seconds
-            var duration = 2.0;
+            // Full skeleton rises over 4 seconds (slowed down from 2 seconds)
+            var duration = 4.0;
             var t = Math.min(gMammothSwapTimer / duration, 1.0);
             var eased = 1 - Math.pow(1 - t, 3); // Cubic ease-out
             gMammothSkeleton.position.y = gFullMammothStartY + eased * (gFullMammothTargetY - gFullMammothStartY);
