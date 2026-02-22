@@ -5858,10 +5858,11 @@ function drawCameraMenu() {
         ctx.fillText(cameraModeNames[i], radioX + radioButtonSize + 0.03 * menuScale, radioY);
     }
     
-    // Draw FOV and Dolly Speed knobs at bottom (side by side, centered)
-    const horizontalKnobSpacing = knobRadius * 3;
-    const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
-    const speedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+    // Draw FOV, Orbit Speed, and Dolly Speed knobs at bottom (3 knobs side by side, centered)
+    const horizontalKnobSpacing = knobRadius * 2.4;
+    const fovKnobX = menuWidth / 2 - horizontalKnobSpacing;
+    const orbitSpeedKnobX = menuWidth / 2;
+    const speedKnobX = menuWidth / 2 + horizontalKnobSpacing;
     const knobY = radioSectionHeight + knobRadius * 1.5;
     
     // ===== FOV Knob =====
@@ -5911,6 +5912,51 @@ function drawCameraMenu() {
     ctx.font = `${0.35 * knobRadius}px verdana`;
     ctx.fillStyle = `hsla(210, 10%, 90%, ${cameraMenuOpacity})`;
     ctx.fillText('Field of View', fovKnobX, knobY + 1.35 * knobRadius);
+    
+    // ===== Orbit Speed Knob =====
+    // Draw knob background
+    ctx.beginPath();
+    ctx.arc(orbitSpeedKnobX, knobY, knobRadius * 1.05, 0, 2 * Math.PI);
+    ctx.fillStyle = `hsla(210, 30%, 10%, ${0.9 * cameraMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(210, 20%, 60%, ${cameraMenuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Calculate orbit speed knob angle
+    const orbitMin = 0.5;
+    const orbitMax = 25.0;
+    const orbitNormalized = (gCameraRotationSpeed - orbitMin) / (orbitMax - orbitMin);
+    const orbitPointerAngle = meterStart + fullMeterSweep * orbitNormalized;
+    
+    // Draw meter arc
+    ctx.strokeStyle = `hsla(280, 60%, 60%, ${cameraMenuOpacity})`;
+    ctx.beginPath();
+    ctx.arc(orbitSpeedKnobX, knobY, knobRadius * 0.85, meterStart, orbitPointerAngle);
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    
+    // Draw needle
+    const orbitPointerEndX = orbitSpeedKnobX + Math.cos(orbitPointerAngle) * pointerLength;
+    const orbitPointerEndY = knobY + Math.sin(orbitPointerAngle) * pointerLength;
+    ctx.beginPath();
+    ctx.moveTo(orbitSpeedKnobX, knobY);
+    ctx.lineTo(orbitPointerEndX, orbitPointerEndY);
+    ctx.strokeStyle = `hsla(210, 30%, 80%, ${cameraMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw orbit speed value
+    ctx.font = `${0.3 * knobRadius}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(280, 60%, 70%, ${cameraMenuOpacity})`;
+    ctx.fillText(gCameraRotationSpeed.toFixed(1), orbitSpeedKnobX, knobY + 0.6 * knobRadius);
+    
+    // Draw label
+    ctx.font = `${0.35 * knobRadius}px verdana`;
+    ctx.fillStyle = `hsla(210, 10%, 90%, ${cameraMenuOpacity})`;
+    ctx.fillText('Orbit Speed', orbitSpeedKnobX, knobY + 1.35 * knobRadius);
     
     // ===== Dolly Speed Knob =====
     // Draw knob background
@@ -5988,6 +6034,7 @@ function drawCameraMenu() {
 
 // Store FOV knob position for interaction
 var fovKnobInfo = { x: 0, y: 0, radius: 0 };
+var orbitSpeedKnobInfo = { x: 0, y: 0, radius: 0 };
 var dollySpeedKnobInfo = { x: 0, y: 0, radius: 0 };
 
 // Helper to store knob positions (called from drawCameraMenu)
@@ -6001,13 +6048,15 @@ function updateKnobPositions() {
     const menuOriginX = cameraMenuX * window.innerWidth;
     const menuOriginY = cameraMenuY * window.innerHeight;
     
-    const horizontalKnobSpacing = knobRadius * 3;
-    const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
-    const speedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+    const horizontalKnobSpacing = knobRadius * 2.4;
+    const fovKnobX = menuWidth / 2 - horizontalKnobSpacing;
+    const orbitSpeedKnobX = menuWidth / 2;
+    const speedKnobX = menuWidth / 2 + horizontalKnobSpacing;
     const knobY = radioSectionHeight + knobRadius * 1.5;
     
     // Convert to screen pixel coordinates
     fovKnobInfo = { x: menuOriginX + fovKnobX, y: menuOriginY + knobY, radius: knobRadius };
+    orbitSpeedKnobInfo = { x: menuOriginX + orbitSpeedKnobX, y: menuOriginY + knobY, radius: knobRadius };
     dollySpeedKnobInfo = { x: menuOriginX + speedKnobX, y: menuOriginY + knobY, radius: knobRadius };
 }
 
@@ -12746,8 +12795,20 @@ function onPointer(evt) {
                 return;
             }
             
-            // Check if it's the dolly speed knob (301)
+            // Check if it's the orbit speed knob (301)
             if (draggedKnob === 301) {
+                const dragSensitivity = 0.2;
+                const normalizedDelta = dragDelta / dragSensitivity;
+                const rangeSize = 25.0 - 0.5; // Orbit speed range: 0.5 to 25.0
+                let newValue = dragStartValue + normalizedDelta * rangeSize;
+                newValue = Math.max(0.5, Math.min(25.0, newValue));
+                
+                gCameraRotationSpeed = newValue;
+                return;
+            }
+            
+            // Check if it's the dolly speed knob (302)
+            if (draggedKnob === 302) {
                 const dragSensitivity = 0.2;
                 const normalizedDelta = dragDelta / dragSensitivity;
                 const rangeSize = 0.2 - 0.01; // Speed range: 0.01 to 0.2
@@ -15118,12 +15179,28 @@ function checkCameraMenuClick(clientX, clientY) {
         return true;
     }
     
+    // Check Orbit Speed knob
+    const orbitDx = clientX - orbitSpeedKnobInfo.x;
+    const orbitDy = clientY - orbitSpeedKnobInfo.y;
+    
+    if (orbitDx * orbitDx + orbitDy * orbitDy < orbitSpeedKnobInfo.radius * orbitSpeedKnobInfo.radius * 1.1) {
+        draggedKnob = 301; // Special index for Orbit Speed knob in camera menu
+        dragStartMouseX = clientX;
+        dragStartMouseY = clientY;
+        dragStartValue = gCameraRotationSpeed;
+        
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
     // Check Dolly Speed knob
     const speedDx = clientX - dollySpeedKnobInfo.x;
     const speedDy = clientY - dollySpeedKnobInfo.y;
     
     if (speedDx * speedDx + speedDy * speedDy < dollySpeedKnobInfo.radius * dollySpeedKnobInfo.radius * 1.1) {
-        draggedKnob = 301; // Special index for Dolly Speed knob in camera menu
+        draggedKnob = 302; // Special index for Dolly Speed knob in camera menu
         dragStartMouseX = clientX;
         dragStartMouseY = clientY;
         dragStartValue = gDollySpeed;
