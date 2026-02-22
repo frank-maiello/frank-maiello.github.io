@@ -121,24 +121,12 @@
       "pbrMetallicRoughness": {
         "baseColorFactor": [
           1,
-          0.16202937562896222,
-          0.6444796819634361,
+          0.34191442489801843,
+          0.5583403896257968,
           1
         ],
         "metallicFactor": 0,
         "roughnessFactor": 1
-      },
-      "doubleSided": true,
-      "name": "_18412_Pig_v1default",
-      "extensions": {
-        "KHR_materials_specular": {
-          "specularFactor": 0,
-          "specularColorFactor": [
-            1,
-            1,
-            1
-          ]
-        }
       }
     }
   ],
@@ -157,8 +145,5 @@
         }
       ]
     }
-  ],
-  "extensionsUsed": [
-    "KHR_materials_specular"
   ]
 }
