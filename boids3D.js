@@ -5877,7 +5877,7 @@ function drawCameraMenu() {
     
     // Calculate FOV knob angle
     const fovMin = 20;
-    const fovMax = 120;
+    const fovMax = 170;
     const fovNormalized = (gCameraFOV - fovMin) / (fovMax - fovMin);
     const fullMeterSweep = 1.6 * Math.PI;
     const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
@@ -12783,9 +12783,9 @@ function onPointer(evt) {
             if (draggedKnob === 300) {
                 const dragSensitivity = 0.2;
                 const normalizedDelta = dragDelta / dragSensitivity;
-                const rangeSize = 120 - 20; // FOV range: 20 to 120
+                const rangeSize = 170 - 20; // FOV range: 20 to 170
                 let newValue = dragStartValue + normalizedDelta * rangeSize;
-                newValue = Math.max(20, Math.min(120, newValue));
+                newValue = Math.max(20, Math.min(170, newValue));
                 
                 gCameraFOV = Math.round(newValue);
                 if (gCamera) {
@@ -17011,6 +17011,11 @@ function update() {
             gSkyPigRising = false;
             gSkyPigObstacle.enabled = true;  // Enable collision after animation
         }
+    }
+    
+    // Sky Pig continuous rotation
+    if (gSkyPig) {
+        gSkyPig.rotation.y += deltaT * 0.3; // Slow rotation (0.3 radians per second)
     }
     
     // Separate animation for Duchamp extra paintings (can drop independently)
