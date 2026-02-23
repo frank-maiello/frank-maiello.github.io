@@ -288,6 +288,12 @@ var gStoolAnimationTimer = 0; // Timer for stool lowering animation
 var gStoolStartY = 30; // Starting Y position (high above floor)
 var gStoolInitialX = -20;
 var gStoolInitialZ = -9;
+var gRugAnimating = true; // Is rug currently unrolling
+var gRugAnimationTimer = 0; // Timer for rug unroll animation
+var gRugRoll = null; // Cylinder mesh representing rolled carpet
+var gRugRollRadius = 1.2; // Initial radius of carpet roll
+var gRugStartX = -18; // Starting X position (left edge of rug area)
+var gRugTargetX = 6; // Target X position (right edge of rug area)
 
 var gColumnInitialX = 26; // Initial X position for world resize scaling
 var gColumnInitialZ = -26; // Initial Z position for world resize scaling
@@ -7360,12 +7366,17 @@ function initThreeScene() {
             var rugWidth = 24; // units (X direction)
             var rugHeight = rugWidth / aspectRatio; // Z direction, calculated from actual image ratio
             
+            // Create clipping plane for rug reveal animation
+            var clipPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), gRugStartX);
+            
             gRug = new THREE.Mesh(
                 new THREE.PlaneGeometry(rugWidth, rugHeight),
                 new THREE.MeshPhongMaterial({
                     map: texture,
                     shininess: 5,
-                    roughness: 0.8
+                    roughness: 0.8,
+                    clippingPlanes: [clipPlane],
+                    clipShadows: true
                 })
             );
             
@@ -7373,6 +7384,18 @@ function initThreeScene() {
             gRug.position.set(-6, 0.015, 0); // Position between teapot and chair, slightly above floor
             gRug.receiveShadow = true;
             gThreeScene.add(gRug);
+            
+            // Create carpet roll cylinder
+            var rugRollGeometry = new THREE.CylinderGeometry(gRugRollRadius, gRugRollRadius, rugHeight, 32);
+            var rugRollMaterial = new THREE.MeshPhongMaterial({
+                color: 0x8B4513, // Brown color for carpet backing
+                shininess: 10
+            });
+            gRugRoll = new THREE.Mesh(rugRollGeometry, rugRollMaterial);
+            gRugRoll.rotation.x = Math.PI / 2; // Align with rug direction
+            gRugRoll.position.set(gRugStartX, gRugRollRadius, 0); // Start at left edge
+            gRugRoll.castShadow = true;
+            gThreeScene.add(gRugRoll);
             
             console.log('Afghan rug loaded successfully with aspect ratio: ' + aspectRatio.toFixed(3));
         },
@@ -16574,6 +16597,54 @@ function update() {
                     gStool.position.z
                 ));
             }
+        }
+    }
+    
+    // Rug unrolling animation
+    if (gRug && gRugRoll && gRugAnimating) {
+        gRugAnimationTimer += deltaT;
+        
+        // Unroll over 3 seconds with ease-out
+        var duration = 3.0;
+        var t = Math.min(gRugAnimationTimer / duration, 1.0);
+        
+        // Cubic ease-out for smooth deceleration
+        var eased = 1 - Math.pow(1 - t, 3);
+        
+        // Calculate current position of carpet roll
+        var currentX = gRugStartX + (gRugTargetX - gRugStartX) * eased;
+        
+        // Calculate current radius (shrinks as carpet unrolls)
+        var totalDistance = gRugTargetX - gRugStartX;
+        var distanceTraveled = currentX - gRugStartX;
+        var remainingRatio = 1 - (distanceTraveled / totalDistance);
+        var currentRadius = gRugRollRadius * remainingRatio;
+        
+        // Update cylinder position and size
+        gRugRoll.position.x = currentX;
+        gRugRoll.position.y = Math.max(0.05, currentRadius); // Keep bottom at floor level
+        
+        // Update cylinder geometry with new radius
+        if (currentRadius > 0.05) {
+            var rugHeight = gRug.geometry.parameters.height;
+            gRugRoll.geometry.dispose();
+            gRugRoll.geometry = new THREE.CylinderGeometry(currentRadius, currentRadius, rugHeight, 32);
+        }
+        
+        // Update clipping plane to reveal rug behind the roll
+        if (gRug.material.clippingPlanes && gRug.material.clippingPlanes.length > 0) {
+            gRug.material.clippingPlanes[0].constant = currentX;
+        }
+        
+        // Stop animation when complete
+        if (t >= 1.0) {
+            gRugAnimating = false;
+            // Remove the carpet roll
+            gThreeScene.remove(gRugRoll);
+            gRugRoll = null;
+            // Remove clipping plane
+            gRug.material.clippingPlanes = [];
+            gRug.material.needsUpdate = true;
         }
     }
     
