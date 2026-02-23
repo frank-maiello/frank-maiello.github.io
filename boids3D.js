@@ -193,18 +193,18 @@ var cameraMenuVisibleBeforeHide = false;
 var cameraMenuOpacity = 0;
 var cameraMenuFadeSpeed = 3.0;
 var menuScale = 300; // Master menu size control (increased 50%)
-var simMenuX = 0.1; // Simulation menu position
-var simMenuY = 0.2;
-var stylingMenuX = 0.1; // Styling menu position
-var stylingMenuY = 0.05;
-var instructionsMenuX = 0.1; // Instructions menu position
-var instructionsMenuY = 0.2;
-var colorMenuX = 0.2; // Color menu position
-var colorMenuY = 0.2;
-var lightingMenuX = 0.1; // Lighting menu position
-var lightingMenuY = 0.2;
-var cameraMenuX = 0.1; // Camera menu position
-var cameraMenuY = 0.2;
+var simMenuX = 0.15; // Simulation menu position
+var simMenuY = 0.1;
+var stylingMenuX = 0.15; // Styling menu position
+var stylingMenuY = 0.1;
+var instructionsMenuX = 0.15; // Instructions menu position
+var instructionsMenuY = 0.1;
+var colorMenuX = 0.15; // Color menu position
+var colorMenuY = 0.1;
+var lightingMenuX = 0.15; // Lighting menu position
+var lightingMenuY = 0.1;
+var cameraMenuX = 0.15; // Camera menu position
+var cameraMenuY = 0.1;
 var gColorWheelCanvas = null; // Offscreen canvas for color wheel
 var gColorWheelCtx = null;
 var gPrimaryHue = 180; // Primary hue (0-360)
@@ -2287,39 +2287,48 @@ class Lamp {
 }
 
 // Helper function to create boid materials based on type
-function createBoidMaterial(materialType, hue, sat, light, wireframe) {
+function createBoidMaterial(materialType, hue, sat, light, wireframe, side) {
+    // Default to FrontSide if not specified
+    var materialSide = (side !== undefined) ? side : THREE.FrontSide;
+    
     if (materialType === 'standard') {
         return new THREE.MeshStandardMaterial({
             color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`),
             metalness: 0.5,
             roughness: 0.4,
-            wireframe: wireframe
+            wireframe: wireframe,
+            side: materialSide
         });
     } else if (materialType === 'phong' || materialType === 'basic') {
         return new THREE.MeshPhongMaterial({
             color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`),
             shininess: 100,
-            wireframe: wireframe
+            wireframe: wireframe,
+            side: materialSide
         });
     } else if (materialType === 'normal') {
         return new THREE.MeshNormalMaterial({
-            wireframe: wireframe
+            wireframe: wireframe,
+            side: materialSide
         });
     } else if (materialType === 'toon') {
         return new THREE.MeshToonMaterial({
             color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`),
-            wireframe: wireframe
+            wireframe: wireframe,
+            side: materialSide
         });
     } else if (materialType === 'depth') {
         return new THREE.MeshDepthMaterial({
-            wireframe: wireframe
+            wireframe: wireframe,
+            side: materialSide
         });
     } else {
         // Fallback to phong
         return new THREE.MeshPhongMaterial({
             color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`),
             shininess: 100,
-            wireframe: wireframe
+            wireframe: wireframe,
+            side: materialSide
         });
     }
 }
@@ -2505,34 +2514,43 @@ class BOID {
                 effectiveMaterial = 'phong';
             }
             
+            // No longer need DoubleSide for plane since we're using thin disc
+            var sideOption = THREE.FrontSide;
+            
             if (effectiveMaterial === 'standard') {
                 material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
                     metalness: 0.5, 
                     roughness: 0.4, 
-                    wireframe: boidProps.wireframe});
+                    wireframe: boidProps.wireframe,
+                    side: sideOption});
             } else if (effectiveMaterial === 'phong') {
                 material = new THREE.MeshPhongMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
                     shininess: 100, 
                     shininess: 100, 
-                    wireframe: boidProps.wireframe});
+                    wireframe: boidProps.wireframe,
+                    side: sideOption});
             } else if (effectiveMaterial === 'normal') {
                 material = new THREE.MeshNormalMaterial({
-                    wireframe: boidProps.wireframe});
+                    wireframe: boidProps.wireframe,
+                    side: sideOption});
             } else if (effectiveMaterial === 'toon') {
                 material = new THREE.MeshToonMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
                     shininess: 100, 
-                    wireframe: boidProps.wireframe});
+                    wireframe: boidProps.wireframe,
+                    side: sideOption});
             } else if (effectiveMaterial === 'depth') {
                 material = new THREE.MeshDepthMaterial({
-                    wireframe: boidProps.wireframe});
+                    wireframe: boidProps.wireframe,
+                    side: sideOption});
             } else {
                 material = new THREE.MeshBasicMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
                     shininess: 100, 
-                    wireframe: boidProps.wireframe});
+                    wireframe: boidProps.wireframe,
+                    side: sideOption});
             }
             
             // Create geometry based on this.geometryType
@@ -2560,7 +2578,8 @@ class BOID {
             } else if (this.geometryType === 10) {
                 geometry = new THREE.TorusKnotGeometry(rad, rad * 0.3, geometrySegments * 4, geometrySegments);
             } else if (this.geometryType === 11) {
-                geometry = new THREE.PlaneGeometry(2 * rad, 3 * rad, 1, 1);
+                // Use a thin disc (cylinder) to avoid z-fighting artifacts
+                geometry = new THREE.CylinderGeometry(1 *rad, 1 * rad, rad * 0.15, 32);
             } else {
                 // Default to cone
                 geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
@@ -2615,7 +2634,8 @@ class BOID {
             } else if (this.geometryType === 5) {
                 this.visMesh.rotateX(Math.PI / 2);
             } else if (this.geometryType === 11) {
-                this.visMesh.rotateX(Math.PI / 2);
+                // Disc - spin around Z axis (parallel to direction of travel)
+                this.visMesh.rotateZ(this.spinAngle || 0);
             } else if (this.geometryType === 10) {
                 // TorusKnot - rotate continuously like avocado
                 this.visMesh.rotateZ(this.spinAngle || 0);
@@ -2777,9 +2797,12 @@ class BOID {
         // Update visual mesh position
         this.visMesh.position.copy(this.pos);
         
-        // Update spin angles for animated boids (torus knot, avocado and helicopter)
+        // Update spin angles for animated boids (torus knot, disc, avocado and helicopter)
         if (this.geometryType === 10) {
             // TorusKnot - update spin angle
+            this.spinAngle += 2.0 * deltaT;
+        } else if (this.geometryType === 11) {
+            // Disc - update spin angle
             this.spinAngle += 2.0 * deltaT;
         } else if (this.geometryType === 14) {
             // Avocado - update spin angle
@@ -3313,7 +3336,8 @@ function recreateBoidGeometries() {
                 geometry = new THREE.TorusKnotGeometry(rad, rad * 0.3, 4 * geometrySegments, geometrySegments);
                 break;
             case 11: // Plane
-                geometry = new THREE.PlaneGeometry(2.5 * rad, 2.5 * rad);
+                // Use a thin disc (cylinder) to avoid z-fighting artifacts
+                geometry = new THREE.CylinderGeometry(1 * rad, 1 * rad, rad * 0.2, 32);
                 break;
             case 12: // Duck
                 // Use cloned duck model if available
@@ -3535,7 +3559,7 @@ function recreateBoidGeometries() {
                     wireframe: boidProps.wireframe});
             } 
         } else {
-            // For primitives, if 'imported' is selected, default to 'phong' (plastic)
+            // For Plane geometry (geometryType 11), now using thin disc (no special handling needed)
             var effectiveMaterial = boidProps.material;
             if (effectiveMaterial === 'imported') {
                 effectiveMaterial = 'phong';
@@ -3546,32 +3570,26 @@ function recreateBoidGeometries() {
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                     metalness: 0.5, 
                     roughness: 0.4, 
-                    wireframe: boidProps.wireframe,
-                    side: THREE.DoubleSide});
+                    wireframe: boidProps.wireframe});
             } else if (effectiveMaterial === 'phong') {
                 material = new THREE.MeshPhongMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                     shininess: 100, 
-                    wireframe: boidProps.wireframe,
-                    side: THREE.DoubleSide});
+                    wireframe: boidProps.wireframe});
             } else if (effectiveMaterial === 'normal') {
                 material = new THREE.MeshNormalMaterial({
-                    wireframe: boidProps.wireframe, 
-                    side: THREE.DoubleSide});
+                    wireframe: boidProps.wireframe});
             } else if (effectiveMaterial === 'toon') {
                 material = new THREE.MeshToonMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
-                    wireframe: boidProps.wireframe,
-                    side: THREE.DoubleSide});
+                    wireframe: boidProps.wireframe});
             } else if (effectiveMaterial === 'depth') {
                 material = new THREE.MeshDepthMaterial({
-                    wireframe: boidProps.wireframe,
-                    side: THREE.DoubleSide});
+                    wireframe: boidProps.wireframe});
             } else {
                 material = new THREE.MeshBasicMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
-                    wireframe: boidProps.wireframe,
-                    side: THREE.DoubleSide});
+                    wireframe: boidProps.wireframe});
             }
         }
 
@@ -4004,12 +4022,14 @@ function drawMainMenu() {
     
     // Background color varies by camera mode
     const cameraBackgroundColors = [
-        'hsla(100, 35%, 30%, 0.80)',   // Mode 0: Rotate CW - dark green
-        'hsla(150, 40%, 30%, 0.80)',   // Mode 1: Rotate CCW - dark blue
-        'hsla(0, 80%, 30%, 0.3)',   // Mode 2: Static - dark red
-        'hsla(270, 20%, 30%, 0.80)',   // Mode 3: Behind boid - dark purple
-        'hsla(300, 30%, 30%, 0.80)',   // Mode 4: In front of boid - dark gold
-        'hsla(40, 50%, 30%, 0.80)'     // Mode 5: Walking - dark orange
+        'hsla(60, 30%, 30%, 0.80)',   // Mode 0: Rotate CW
+        'hsla(80, 30%, 30%, 0.80)',   // Mode 1: Rotate CCW
+        'hsla(100, 30%, 30%, 0.80)',      // Mode 2: Static
+        'hsla(120, 30%, 30%, 0.80)',   // Mode 3: Behind boid
+        'hsla(140, 30%, 30%, 0.80)',   // Mode 4: In front of boid
+        'hsla(160, 50%, 30%, 0.80)',    // Mode 5: Walking
+        'hsla(180, 50%, 30%, 0.80)',    // Mode 6: Dolly
+        'hsla(200, 50%, 30%, 0.80)'     // Mode 7: Dolly tracking
     ];
     ctx.fillStyle = cameraBackgroundColors[gCameraMode];
     ctx.fill();
@@ -4025,8 +4045,8 @@ function drawMainMenu() {
         // Draw stick figure for walking mode
         const figureSize = iconSize * 1.5;
         const yOffset = -0.10; // Move figure up
-        ctx.strokeStyle = 'rgba(120, 120, 120, 1.0)';
-        ctx.fillStyle = 'rgba(96, 96, 96, 1.0)';
+        ctx.strokeStyle = 'hsla(0, 0%, 70%, 1.0)';
+        ctx.fillStyle = 'rgb(111, 111, 111)';
         ctx.lineWidth = figureSize * 0.08;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -4065,9 +4085,9 @@ function drawMainMenu() {
     } else if (gCameraMode == 0 || gCameraMode == 1 || gCameraMode == 2) {
         // Draw movie camera icon
         const camSize = iconSize * 1.5;
-        ctx.fillStyle = `rgba(76, 76, 76, 1.0)`;
-        ctx.strokeStyle = `rgba(120, 120, 120, 1.0)`;
-        ctx.lineWidth = camSize * 0.04;
+        ctx.fillStyle = `hsla(0, 0%, 40%, 1.0)`;
+        ctx.strokeStyle = `hsla(0, 0%, 60%, 1.0)`;
+        ctx.lineWidth = camSize * 0.06;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
@@ -4145,12 +4165,12 @@ function drawMainMenu() {
         }
     } else {
         // Draw eye icon for first-person mode
-        const eyeWidth = iconSize * 1.5;
-        const eyeHeight = iconSize * 1.0;
+        const eyeWidth = iconSize * 1.7;
+        const eyeHeight = iconSize * 1.2;
         
         // Draw eye outline
-        ctx.strokeStyle = `rgba(96, 96, 96, 0.8)`;
-        ctx.lineWidth = eyeHeight * 0.2;
+        ctx.strokeStyle = `hsla(0, 0%, 80%, 0.80)`;
+        ctx.lineWidth = eyeHeight * 0.1;
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.arc(0, -3 + eyeHeight * 0.3, eyeWidth / 2, -0.4, Math.PI + 0.4, true);
@@ -4233,13 +4253,13 @@ function drawMainMenu() {
     const itemY4 = itemY3 + itemHeight + padding;
     ctx.beginPath();
     ctx.roundRect(itemX, itemY4, itemWidth, itemHeight, cornerRadius * 0.5);
-    ctx.fillStyle = stylingMenuVisible ? 'rgba(255, 150, 80, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fillStyle = stylingMenuVisible ? 'rgba(100, 150, 220, 0.3)' : 'rgba(38, 38, 38, 0.8)';
     ctx.fill();
     
     // Draw necktie icon
     const icon4X = itemX + itemWidth / 2;
     const icon4Y = itemY4 + itemHeight / 2;
-    const icon4Color = stylingMenuVisible ? 'rgba(255, 180, 100, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+    const icon4Color = stylingMenuVisible ? 'hsl(0, 0%, 80%)' : 'hsl(0, 0%, 30%';
     ctx.strokeStyle = icon4Color;
     ctx.fillStyle = icon4Color;
     ctx.lineWidth = 2;
@@ -4278,7 +4298,7 @@ function drawMainMenu() {
     const itemY5 = itemY4 + itemHeight + padding;
     ctx.beginPath();
     ctx.roundRect(itemX, itemY5, itemWidth, itemHeight, cornerRadius * 0.5);
-    ctx.fillStyle = colorMenuVisible ? 'hsla(0, 100%, 70%, 0.30)' : 'hsla(0, 0%, 15%, 0.80)';
+    ctx.fillStyle = colorMenuVisible ? 'rgba(100, 150, 220, 0.3)' : 'rgba(38, 38, 38, 0.8)';
     ctx.fill();
     
     // Draw color palette icon
@@ -4348,7 +4368,7 @@ function drawMainMenu() {
     const itemY6 = itemY5 + itemHeight + padding;
     ctx.beginPath();
     ctx.roundRect(itemX, itemY6, itemWidth, itemHeight, cornerRadius * 0.5);
-    ctx.fillStyle = lightingMenuVisible ? 'rgba(255, 204, 0, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fillStyle = lightingMenuVisible ? 'rgba(100, 150, 220, 0.3)' : 'rgba(38, 38, 38, 0.8)';
     ctx.fill();
     
     // Draw lightbulb icon
@@ -4455,9 +4475,10 @@ function drawSimMenu() {
         gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
         boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
         boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin,
+        0, 0, // blank spaces
         gWorldSizeX, gWorldSizeY, gWorldSizeZ
     ];
-    // Simulation menu knobs (13 knobs - removed Camera FOV)
+    // Simulation menu knobs (15 knobs - removed Camera FOV, added 2 blank spaces)
     const ranges = [
         {min: 100, max: 5000},      // numBoids
         {min: 0.1, max: 1.0},      // boidRadius
@@ -4469,6 +4490,8 @@ function drawSimMenu() {
         {min: 1.0, max: 30.0},      // maxSpeed
         {min: 0, max: 0.2},         // turnFactor
         {min: 0.5, max: 5.0},       // margin
+        {min: 0, max: 1},           // blank
+        {min: 0, max: 1},           // blank
         {min: 10, max: 60},         // worldSizeX
         {min: 10, max: 60},         // worldSizeY
         {min: 10, max: 60}          // worldSizeZ
@@ -4478,7 +4501,7 @@ function drawSimMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 4.5;  // Adjusted from 5 to 4.5 for 13 knobs (removed FOV)
+    const menuHeight = knobSpacing * 4.2;  // 15 knobs with 2 blank spaces
     const padding = 1.7 * knobRadius;
     
     // Convert world coordinates to screen coordinates
@@ -4486,26 +4509,26 @@ function drawSimMenu() {
     const menuUpperLeftY = simMenuY * window.innerHeight;
     
     ctx.save();
-    ctx.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
+    ctx.translate(menuUpperLeftX, menuUpperLeftY);
     
     // Draw menu background
     const cornerRadius = 8;
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
     const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `rgba(51, 85, 128, ${menuOpacity})`);
-    menuGradient.addColorStop(1, `rgba(13, 26, 38, ${menuOpacity})`);
+    menuGradient.addColorStop(0, `hsla(214, 43%, 35.1%, ${menuOpacity})`); // hsl(214 43% 35.1%) rgba(51, 85, 128)
+    menuGradient.addColorStop(1, `hsla(214, 43%, 15%, ${menuOpacity})`); // hsl(214 43% 15%) rgba(13, 26, 38)
     ctx.fillStyle = menuGradient;
     ctx.fill();
-    ctx.strokeStyle = `rgba(100, 150, 200, ${menuOpacity})`;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = `hsla(214, 43%, 70%, ${menuOpacity})`; 
+    ctx.lineWidth = 1.5;
     ctx.stroke();
     
     // Draw title
-    ctx.fillStyle = `rgba(200, 220, 240, ${menuOpacity})`;
+    ctx.fillStyle = `hsla(214, 43%, 85%, ${menuOpacity})`; // hsl(214 43% 85%) rgba(200, 220, 240)
     ctx.font = `bold ${0.05 * menuScale}px verdana`;
     ctx.textAlign = 'center';
-    ctx.fillText('SIMULATION', menuWidth / 2, -padding + 0.05 * menuScale);
+    ctx.fillText('SIMULATION', menuWidth / 2, -padding + 0.06 * menuScale);
     
     // Draw close button
     const closeIconRadius = knobRadius * 0.25;
@@ -4513,9 +4536,9 @@ function drawSimMenu() {
     const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
     ctx.beginPath();
     ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
-    ctx.fillStyle = `rgba(180, 40, 40, ${menuOpacity})`;
+    ctx.fillStyle = `hsla(0, 70%, 45%, ${menuOpacity})`; // hsl(0 70% 45%) rgba(180, 40, 40)
     ctx.fill();
-    ctx.strokeStyle = `rgba(0, 0, 0, ${menuOpacity})`;
+    ctx.strokeStyle = `hsla(0, 0%, 0%, ${menuOpacity})`; // hsl(0 0% 0%) rgba(0, 0, 0)
     ctx.lineWidth = 2;
     const xSize = closeIconRadius * 0.4;
     ctx.beginPath();
@@ -4530,6 +4553,9 @@ function drawSimMenu() {
     const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
     
     for (let knob = 0; knob < menuItems.length; knob++) {
+        // Skip blank spaces (knobs 10 and 11)
+        if (knob === 10 || knob === 11) continue;
+        
         const row = Math.floor(knob / 3);
         const col = knob % 3;
         const knobX = col * knobSpacing;
@@ -4538,9 +4564,9 @@ function drawSimMenu() {
         // Draw knob background
         ctx.beginPath();
         ctx.arc(knobX, knobY, 1.05 * knobRadius, 0, 2 * Math.PI);
-        ctx.fillStyle = `rgba(38, 51, 64, ${0.9 * menuOpacity})`;
+        ctx.fillStyle = `hsla(214, 43%, 15%, ${0.9 * menuOpacity})`; // hsl(214 43% 25%) rgba(38, 51, 64)
         ctx.fill();
-        ctx.strokeStyle = `rgba(77, 102, 128, ${menuOpacity})`;
+        ctx.strokeStyle = `hsla(214, 43%, 50%, ${menuOpacity})`; // hsl(214 43% 50%) rgba(77, 102, 128)
         ctx.lineWidth = 1;
         ctx.stroke();
         
@@ -4556,8 +4582,8 @@ function drawSimMenu() {
             knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
             knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
         );
-        gradient.addColorStop(0, `rgba(77, 153, 179, ${menuOpacity})`);
-        gradient.addColorStop(0.5, `rgba(77, 179, 153, ${menuOpacity})`);
+        gradient.addColorStop(0, `hsla(184, 43%, 50%, ${menuOpacity})`); // hsl(184 43% 50%) rgba(77, 153, 179)
+        gradient.addColorStop(0.5, `hsla(153, 43%, 50%, ${menuOpacity})`); // hsl(153 43% 50%) rgba(77, 179, 153)
         ctx.strokeStyle = gradient;
         ctx.beginPath();
         ctx.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
@@ -4572,7 +4598,7 @@ function drawSimMenu() {
         ctx.beginPath();
         ctx.moveTo(knobX, knobY);
         ctx.lineTo(pointerEndX, pointerEndY);
-        ctx.strokeStyle = `rgba(200, 220, 240, ${menuOpacity})`;
+        ctx.strokeStyle = `hsla(214, 43%, 85%, ${menuOpacity})`; // hsl(214 43% 85%) rgba(200, 220, 240)
         ctx.lineWidth = 2;
         ctx.stroke();
         
@@ -4581,12 +4607,15 @@ function drawSimMenu() {
             'Quantity', 'Size', 'Visual Range',
             'Separation', 'Alignment', 'Cohesion',
             'Minimum Speed', 'Speed Limit', 'Corralling Force', 'Corral Margin',
+            '', '', // blank spaces
             'World Size X', 'World Size Y', 'World Size Z'
         ];
         ctx.font = `${0.35 * knobRadius}px verdana`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = `rgba(230, 240, 250, ${menuOpacity})`;
+        ctx.fillStyle = `hsla(0, 0%, 10%, ${menuOpacity})`; // hsl(0 0% 0%) rgba(0, 0, 0)
+        ctx.fillText(labels[knob], knobX + 1, 1 + knobY + 1.35 * knobRadius);
+        ctx.fillStyle = `hsla(214, 43%, 85%, ${menuOpacity})`; // hsl(214 43% 85%) rgba(230, 240, 250)
         ctx.fillText(labels[knob], knobX, knobY + 1.35 * knobRadius);
         
         // Draw value
@@ -4602,12 +4631,14 @@ function drawSimMenu() {
             case 7: valueText = boidProps.maxSpeed.toFixed(1); break;
             case 8: valueText = (boidProps.turnFactor >= 0.2) ? 'MAX' : boidProps.turnFactor.toFixed(3); break;
             case 9: valueText = boidProps.margin.toFixed(1); break;
-            case 10: valueText = gWorldSizeX.toFixed(0); break;
-            case 11: valueText = gWorldSizeY.toFixed(0); break;
-            case 12: valueText = gWorldSizeZ.toFixed(0); break;
+            case 10: valueText = ''; break; // blank
+            case 11: valueText = ''; break; // blank
+            case 12: valueText = gWorldSizeX.toFixed(0); break;
+            case 13: valueText = gWorldSizeY.toFixed(0); break;
+            case 14: valueText = gWorldSizeZ.toFixed(0); break;
         }
         ctx.font = `${0.3 * knobRadius}px verdana`;
-        ctx.fillStyle = `rgba(128, 230, 200, ${menuOpacity})`;
+        ctx.fillStyle = `hsla(153, 70%, 70%, ${menuOpacity})`; // hsl(153 43% 50%) 
         ctx.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
     }
 
@@ -4625,8 +4656,8 @@ function drawInstructionsMenu() {
     const padding = 0.17 * menuScale;
     
     // Position menu slightly below simulation menu
-    const menuUpperLeftX = (instructionsMenuX + 0.01) * window.innerWidth;
-    const menuUpperLeftY = (instructionsMenuY + 0.0) * window.innerHeight;
+    const menuUpperLeftX = instructionsMenuX * window.innerWidth;
+    const menuUpperLeftY = instructionsMenuY * window.innerHeight;
     
     ctx.save();
     ctx.translate(menuUpperLeftX, menuUpperLeftY);
@@ -4648,7 +4679,7 @@ function drawInstructionsMenu() {
     ctx.fillStyle = `hsla(45, 10%, 80%, ${instructionsMenuOpacity})`;
     ctx.font = `bold ${0.05 * menuScale}px verdana`;
     ctx.textAlign = 'center';
-    ctx.fillText('HUH?', menuWidth / 2, -padding + 0.05 * menuScale);
+    ctx.fillText('HUH?', menuWidth / 2, -padding + 0.06 * menuScale);
     
     // Draw close button
     const closeIconRadius = 0.1 * menuScale * 0.25;
@@ -4738,34 +4769,34 @@ function drawStylingMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = 16.5 * knobRadius;
+    const menuHeight = 14.7 * knobRadius;
     const padding = 1.7 * knobRadius;
     
     // Position menu slightly below simulation menu
     const menuUpperLeftX = stylingMenuX * window.innerWidth;
-    const menuUpperLeftY = (stylingMenuY + 0.1) * window.innerHeight;
+    const menuUpperLeftY = stylingMenuY * window.innerHeight;
     
     ctx.save();
-    ctx.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
+    ctx.translate(menuUpperLeftX, menuUpperLeftY);
     
     // Draw menu background
     const cornerRadius = 8;
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
     const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `hsl(30, 30%, 20%, ${stylingMenuOpacity})`);
-    menuGradient.addColorStop(1, `hsl(25, 10%, 10%, ${stylingMenuOpacity})`);
+    menuGradient.addColorStop(0, `hsla(214, 43%, 35.1%, ${stylingMenuOpacity})`); 
+    menuGradient.addColorStop(1, `hsla(214, 43%, 15%, ${stylingMenuOpacity})`); 
     ctx.fillStyle = menuGradient;
     ctx.fill();
-    ctx.strokeStyle = `hsla(35, 20%, 70%, ${stylingMenuOpacity})`;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = `hsla(214, 43%, 70%, ${stylingMenuOpacity})`; 
+    ctx.lineWidth = 1.5;
     ctx.stroke();
-    
+
     // Draw title
-    ctx.fillStyle = `hsla(35, 10%, 80%, ${stylingMenuOpacity})`;
+    ctx.fillStyle = `hsla(214, 43%, 85%, ${stylingMenuOpacity})`;
     ctx.font = `bold ${0.05 * menuScale}px verdana`;
     ctx.textAlign = 'center';
-    ctx.fillText('STYLING', menuWidth / 2, -padding + 0.05 * menuScale);
+    ctx.fillText('STYLING', menuWidth / 2, -padding + 0.06 * menuScale);
     
     // Draw close button
     const closeIconRadius = knobRadius * 0.25;
@@ -4789,7 +4820,7 @@ function drawStylingMenu() {
     
     // Draw boid geometry selection buttons
     const buttonY = menuTopMargin - knobRadius * 0.67;
-    const buttonWidth = (menuWidth + padding * 1.2) / 3;
+    const buttonWidth = (menuWidth + padding * 1.6) / 3;
     const buttonHeight = knobRadius * 1.3;
     const buttonSpacing = 4;
     
@@ -4797,7 +4828,7 @@ function drawStylingMenu() {
     const geometryNames = [
         'Spheres', 'Cones', 'Cylinders', 'Cubes',
         'Tetrahedrons', 'Octahedrons', 'Dodecahedrons', 'Icosahedrons',
-        'Capsules', 'Tori', 'Knots', 'Planes',
+        'Capsules', 'Tori', 'Knots', 'Discs',
         'Rubber Ducks', 'Barramundi', 'Avocados', 'Helicopters',
         'Paper Planes', 'Koons Dogs'
     ];
@@ -4814,12 +4845,12 @@ function drawStylingMenu() {
         ctx.beginPath();
         ctx.roundRect(btnX, btnY, buttonWidth, buttonHeight, 4);
         if (gSelectedBoidTypes.includes(i)) {
-            ctx.fillStyle = `hsla(30, 30%, 50%, ${0.8 * stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 70%, 50%, ${0.8 * stylingMenuOpacity})`;
         } else {
-            ctx.fillStyle = `hsla(30, 30%, 20%, ${0.6 * stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(214, 43%, 15%, ${0.6 * stylingMenuOpacity})`;
         }
         ctx.fill();
-        ctx.strokeStyle = `hsla(30, 10%, 60%, ${stylingMenuOpacity})`;
+        ctx.strokeStyle = `hsla(214, 43%, 70%, ${stylingMenuOpacity})`;
         ctx.lineWidth = 1;
         ctx.stroke();
         
@@ -4859,8 +4890,8 @@ function drawStylingMenu() {
         // Draw radio button circle
         ctx.beginPath();
         ctx.arc(rbX, meshRadioY, meshRadioRadius, 0, 2 * Math.PI);
-        ctx.fillStyle = `hsla(30, 30%, 20%, ${0.8 * stylingMenuOpacity})`;
-        ctx.strokeStyle = `hsla(30, 20%, 60%, ${stylingMenuOpacity})`;
+        ctx.fillStyle = `hsla(214, 43%, 15%, ${0.8 * stylingMenuOpacity})`;
+        ctx.strokeStyle = `hsla(214, 43%, 50%, ${stylingMenuOpacity})`;
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -4869,7 +4900,7 @@ function drawStylingMenu() {
         if (geometrySegments === segmentOptions[i]) {
             ctx.beginPath();
             ctx.arc(rbX, meshRadioY, meshRadioRadius * 0.5, 0, 2 * Math.PI);
-            ctx.fillStyle = `hsla(30, 60%, 60%, ${stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 70%, 60%, ${stylingMenuOpacity})`;
             ctx.fill();
         }
         
@@ -4909,17 +4940,17 @@ function drawStylingMenu() {
         // Draw radio button circle
         ctx.beginPath();
         ctx.arc(rbX, materialRadioY, materialRadioRadius, 0, 2 * Math.PI);
-        ctx.fillStyle = `hsla(30, 30%, 20%, ${0.8 * stylingMenuOpacity})`;
-        ctx.strokeStyle = `hsla(30, 20%, 60%, ${stylingMenuOpacity})`;
+        ctx.fillStyle = `hsla(214, 43%, 15%, ${0.8 * stylingMenuOpacity})`;
+        ctx.strokeStyle = `hsla(214, 43%, 50%, ${stylingMenuOpacity})`;
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.stroke();
-        
+
         // Draw filled circle if selected
         if (boidProps.material === materialOptions[i]) {
             ctx.beginPath();
             ctx.arc(rbX, materialRadioY, materialRadioRadius * 0.5, 0, 2 * Math.PI);
-            ctx.fillStyle = `hsla(30, 60%, 60%, ${stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 70%, 60%, ${stylingMenuOpacity})`;
             ctx.fill();
         }
         
@@ -4964,9 +4995,9 @@ function drawStylingMenu() {
         // Draw knob background
         ctx.beginPath();
         ctx.arc(knobX, knobY, 1.05 * knobRadius, 0, 2 * Math.PI);
-        ctx.fillStyle = `hsla(30, 30%, 10%, ${0.9 * stylingMenuOpacity})`;
+        ctx.fillStyle = `hsla(214, 43%, 15%, ${0.9 * stylingMenuOpacity})`; 
         ctx.fill();
-        ctx.strokeStyle = `hsla(30, 20%, 50%, ${stylingMenuOpacity})`;
+        ctx.strokeStyle = `hsla(214, 43%, 50%, ${stylingMenuOpacity})`; 
         ctx.lineWidth = 1;
         ctx.stroke();
         
@@ -4982,8 +5013,8 @@ function drawStylingMenu() {
             knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
             knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
         );
-        gradient.addColorStop(0, `hsla(30, 30%, 60%, ${stylingMenuOpacity})`);
-        gradient.addColorStop(0.5, `hsla(40, 30%, 60%, ${stylingMenuOpacity})`);
+        gradient.addColorStop(0, `hsla(184, 43%, 50%, ${stylingMenuOpacity})`);
+        gradient.addColorStop(0.5, `hsla(153, 43%, 50%, ${stylingMenuOpacity})`); 
         ctx.strokeStyle = gradient;
         ctx.beginPath();
         ctx.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
@@ -5028,7 +5059,7 @@ function drawStylingMenu() {
         if (isOff && knob === 0) {
             ctx.fillStyle = `hsla(0, 90%, 70%, ${stylingMenuOpacity})`;
         } else {
-            ctx.fillStyle = `hsla(30, 80%, 70%, ${stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(153, 70%, 70%, ${stylingMenuOpacity})`; // hsl(153 43% 50%) 
         }
         ctx.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
     }
@@ -5053,8 +5084,8 @@ function drawStylingMenu() {
             ctx.fillStyle = `hsla(30, 10%, 25%, ${0.5 * stylingMenuOpacity})`;
             ctx.strokeStyle = `hsla(30, 5%, 40%, ${0.5 * stylingMenuOpacity})`;
         } else {
-            ctx.fillStyle = `hsla(30, 30%, 20%, ${0.8 * stylingMenuOpacity})`;
-            ctx.strokeStyle = `hsla(30, 20%, 60%, ${stylingMenuOpacity})`;
+            ctx.fillStyle = `hsla(214, 43%, 15%, ${0.8 * stylingMenuOpacity})`;
+        ctx.strokeStyle = `hsla(214, 43%, 50%, ${stylingMenuOpacity})`;
         }
         ctx.fill();
         ctx.lineWidth = 2;
@@ -5098,14 +5129,14 @@ function drawColorMenu() {
     const menuWidth = 0.6 * menuScale; // Match other menus
     const padding = 0.17 * menuScale;
     const extraHeight = smallKnobRadius * 5.5; // Extra height for two knobs and checkbox at bottom
-    const menuHeight = 0.75 * colorWheelSize + extraHeight;
+    const menuHeight = 10.0 * knobRadius;
     const menuTopMargin = 0.33 * colorWheelSize; // Match other menus
     const radioY = -0.03 * menuScale; // Place radio buttons at very top of menu
     const wheelCenterY = 0.45 * colorWheelSize; // Place wheel center lower down
     
     // Position menu
     const menuUpperLeftX = colorMenuX * window.innerWidth;
-    const menuUpperLeftY = (colorMenuY + 0.1) * window.innerHeight;
+    const menuUpperLeftY = colorMenuY * window.innerHeight;
     
     ctx.save();
     ctx.translate(menuUpperLeftX, menuUpperLeftY);
@@ -5115,12 +5146,12 @@ function drawColorMenu() {
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
     const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `hsl(0, 40%, 20%, ${colorMenuOpacity})`);
-    menuGradient.addColorStop(1, `hsl(20, 20%, 10%, ${colorMenuOpacity})`);
+    menuGradient.addColorStop(0, `hsla(214, 43%, 35.1%, ${colorMenuOpacity})`); 
+    menuGradient.addColorStop(1, `hsla(214, 43%, 15%, ${colorMenuOpacity})`); 
     ctx.fillStyle = menuGradient;
     ctx.fill();
-    ctx.strokeStyle = `hsla(0, 20%, 50%, ${colorMenuOpacity})`;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = `hsla(214, 43%, 70%, ${colorMenuOpacity})`; 
+    ctx.lineWidth = 1.5;
     ctx.stroke();
     
     // Draw title
@@ -5323,7 +5354,7 @@ function drawColorMenu() {
     const radioSpacing = radioTotalWidth / (radioButtonCount - 1); // Space between buttons
     const radioLabels = ['Wheel', 'Direction', 'Speed', 'Doppler'];
     
-    ctx.font = `${0.035 * menuScale}px verdana`;
+    ctx.font = `${0.037 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
@@ -5333,25 +5364,25 @@ function drawColorMenu() {
         // Draw radio button circle
         ctx.beginPath();
         ctx.arc(radioX, radioY, radioRadius, 0, 2 * Math.PI);
-        ctx.fillStyle = `hsla(0, 30%, 20%, ${0.8 * colorMenuOpacity})`;
-        ctx.strokeStyle = `hsla(0, 20%, 60%, ${colorMenuOpacity})`;
+        ctx.fillStyle = `hsla(214, 43%, 15%, ${0.8 * colorMenuOpacity})`;
+        ctx.strokeStyle = `214, 43%, 50%, ${colorMenuOpacity})`;
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.stroke();
-        
+
         // Fill if selected
         if (gColorationMode === i) {
             ctx.beginPath();
             ctx.arc(radioX, radioY, radioRadius * 0.5, 0, 2 * Math.PI);
-            ctx.fillStyle = `hsla(0, 60%, 70%, ${colorMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 70%, 60%, ${colorMenuOpacity})`;
             ctx.fill();
         }
         
         // Draw label
         ctx.fillStyle = `hsla(0, 10%, 10%, ${colorMenuOpacity})`;
-        ctx.fillText(radioLabels[i], radioX + 2, 1 +radioY + 0.07 * menuScale);
+        ctx.fillText(radioLabels[i], radioX + 2, 1 +radioY + 0.08 * menuScale);
         ctx.fillStyle = `hsla(0, 10%, 80%, ${colorMenuOpacity})`;
-        ctx.fillText(radioLabels[i], radioX, radioY + 0.07 * menuScale);
+        ctx.fillText(radioLabels[i], radioX, radioY + 0.08 * menuScale);
     }
     
     // Draw Saturation, Variability, and Lightness knobs at the bottom
@@ -5396,13 +5427,13 @@ function drawColorMenu() {
     ctx.stroke();
     
     // Draw label
-    ctx.font = `${0.35 * smallKnobRadius}px verdana`;
+    ctx.font = `${0.37 * smallKnobRadius}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = `hsla(0, 10%, 10%, ${colorMenuOpacity})`;
-    ctx.fillText('Saturation', satKnobX + 2, 1 +bottomKnobsY + 1.5 * smallKnobRadius);
+    ctx.fillText('Saturation', satKnobX + 2, 1 + bottomKnobsY + 1.4 * smallKnobRadius);
     ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
-    ctx.fillText('Saturation', satKnobX, bottomKnobsY + 1.5 * smallKnobRadius + 1);
+    ctx.fillText('Saturation', satKnobX, bottomKnobsY + 1.4 * smallKnobRadius);
     
     // Variability knob (middle)
     const varKnobX = knobSpacing * 10;
@@ -5445,9 +5476,9 @@ function drawColorMenu() {
     
     // Draw label
     ctx.fillStyle = `hsla(0, 10%, 10%, ${colorMenuOpacity})`;
-    ctx.fillText('Variability', varKnobX + 2, 1 + bottomKnobsY + 1.5 * smallKnobRadius);
+    ctx.fillText('Variability', varKnobX + 2, 1 + bottomKnobsY + 1.4 * smallKnobRadius);
     ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
-    ctx.fillText('Variability', varKnobX, bottomKnobsY + 1.5 * smallKnobRadius + 1);
+    ctx.fillText('Variability', varKnobX, bottomKnobsY + 1.4 * smallKnobRadius);
     
     // Lightness knob (right)
     const lightKnobX = knobSpacing * 19;
@@ -5488,7 +5519,7 @@ function drawColorMenu() {
     
     // Draw label
     ctx.fillStyle = `hsla(0, 10%, 10%, ${colorMenuOpacity})`;
-    ctx.fillText('Lightness', lightKnobX + 2, 1 + bottomKnobsY + 1.5 * smallKnobRadius + 1);
+    ctx.fillText('Lightness', lightKnobX + 2, 1 + bottomKnobsY + 1.4 * smallKnobRadius);
     ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
     ctx.fillText('Lightness', lightKnobX, bottomKnobsY + 1.5 * smallKnobRadius);
     
@@ -5499,7 +5530,7 @@ function drawColorMenu() {
     const artworkLabels = ['Miro', 'Dali', 'Bosch'];
     const artworkRadioSpacing = menuWidth / 3;
     
-    ctx.font = `${0.035 * menuScale}px verdana`;
+    ctx.font = `${0.037 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
@@ -5525,9 +5556,9 @@ function drawColorMenu() {
         
         // Draw label
         ctx.fillStyle = `hsla(0, 10%, 10%, ${colorMenuOpacity})`;
-        ctx.fillText(artworkLabels[i], artRadioX + 2, 1 + artworkRadioY + 0.07 * menuScale);
+        ctx.fillText(artworkLabels[i], artRadioX + 2, 1 + artworkRadioY + 0.08 * menuScale);
         ctx.fillStyle = `hsla(0, 10%, 90%, ${colorMenuOpacity})`;
-        ctx.fillText(artworkLabels[i], artRadioX, artworkRadioY + 0.07 * menuScale);
+        ctx.fillText(artworkLabels[i], artRadioX, artworkRadioY + 0.08 * menuScale);
     }
     
     ctx.restore();
@@ -5541,31 +5572,34 @@ function drawLightingMenu() {
     const knobSpacing = knobRadius * 3.25; // Increased spacing for gaps between boxes
     const menuTopMargin = 0.2 * knobRadius + 8; // +8 pixels for spacing
     const menuWidth = knobSpacing * 2; // 3 knobs across
-    const menuHeight = knobSpacing * 7; // 7 rows (now with 21 knobs)
+    const menuHeight = knobSpacing * 6.3; 
     const padding = 1.7 * knobRadius;
     
     const menuOriginX = lightingMenuX * window.innerWidth;
     const menuOriginY = lightingMenuY * window.innerHeight;
     
     ctx.save();
-    ctx.translate(menuOriginX + knobSpacing, menuOriginY + 0.5 * knobSpacing);
+    ctx.translate(menuOriginX, menuOriginY);
     ctx.globalAlpha = lightingMenuOpacity;
     
     // Draw menu background
     const cornerRadius = 8;
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
-    ctx.fillStyle = `hsla(45, 30%, 12%, ${0.95 * lightingMenuOpacity})`;
+    const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsla(214, 0%, 35.1%, ${lightingMenuOpacity})`); 
+    menuGradient.addColorStop(1, `hsla(214, 0%, 15%, ${lightingMenuOpacity})`); 
+    ctx.fillStyle = menuGradient;
     ctx.fill();
-    ctx.strokeStyle = `hsla(45, 20%, 70%, ${lightingMenuOpacity})`;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = `hsla(214, 0%, 70%, ${lightingMenuOpacity})`; 
+    ctx.lineWidth = 1.5;
     ctx.stroke();
     
     // Draw title
     ctx.fillStyle = `hsla(45, 10%, 90%, ${lightingMenuOpacity})`;
     ctx.font = `bold ${0.05 * menuScale}px verdana`;
     ctx.textAlign = 'center';
-    ctx.fillText('LIGHTING', menuWidth / 2, -padding + 0.05 * menuScale);
+    ctx.fillText('LIGHTING', menuWidth / 2, -padding + 0.06 * menuScale);
     
     // Draw close button
     const closeIconRadius = knobRadius * 0.25;
@@ -5615,29 +5649,29 @@ function drawLightingMenu() {
     // Draw faint boxes around groups of three knobs for each light source
     const boxPadding = knobRadius * 0.3;
     const boxWidth = knobSpacing * 2 + knobRadius * 2 + boxPadding * 2;
-    const boxHeight = knobRadius * 2.35 + boxPadding * 2; // Increased to capture text labels
+    const boxHeight = knobRadius * 2.4 + boxPadding * 2; // Increased to capture text labels
     
     // Define which rows contain light source groups (Ambient=0, Overhead=1, Globe=2, Spotlight1=3, Spotlight2=4, Ornament=6)
     const lightSourceRows = [0, 1, 2, 3, 4, 6];
     
     // Define colors for each group (Spotlight 1, 2, and Penumbra/Shadow share the same color)
     const boxColors = {
-        0: `hsla(10, 30%, 15%, ${1.0 * lightingMenuOpacity})`,   // Ambient - reddish
-        1: `hsla(200, 20%, 15%, ${1.0 * lightingMenuOpacity})`,  // Overhead - cooler
-        2: `hsla(340, 25%, 15%, ${1.0 * lightingMenuOpacity})`,  // Globe - magenta/violet
+        0: `hsla(60, 30%, 15%, ${1.0 * lightingMenuOpacity})`,   // Ambient - reddish
+        1: `hsla(30, 20%, 15%, ${1.0 * lightingMenuOpacity})`,  // Overhead - cooler
+        2: `hsla(0, 25%, 15%, ${1.0 * lightingMenuOpacity})`,  // Globe - magenta/violet
         3: `hsla(190, 25%, 15%, ${1.0 * lightingMenuOpacity})`,  // Spotlight 1 - cyan
         4: `hsla(190, 25%, 15%, ${1.0 * lightingMenuOpacity})`,  // Spotlight 2 - cyan (same)
         6: `hsla(120, 20%, 15%, ${1.0 * lightingMenuOpacity})`   // Ornament - green
     };
     
-    ctx.strokeStyle = `hsla(45, 20%, 80%, ${0.3 * lightingMenuOpacity})`;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = `hsla(45, 0%, 80%, ${lightingMenuOpacity})`;
+    ctx.lineWidth = 1;
     //ctx.setLineDash([4, 4]);
     
     for (const row of lightSourceRows) {
         ctx.fillStyle = boxColors[row];
         const boxX = -knobRadius - boxPadding;
-        const boxY = row * knobSpacing + menuTopMargin - knobRadius - boxPadding + knobRadius * 0.05;
+        const boxY = row * knobSpacing + menuTopMargin - knobRadius - boxPadding + knobRadius * 0.01;
         ctx.beginPath();
         ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 6);
         ctx.fill();
@@ -5649,7 +5683,7 @@ function drawLightingMenu() {
     const narrowBoxWidth = knobSpacing * 1.1 + knobRadius * 2 + boxPadding * 2; // Width for 2 knobs, extended slightly
     const narrowBoxRow = 5;
     const narrowBoxX = -knobRadius - boxPadding;
-    const narrowBoxY = narrowBoxRow * knobSpacing + menuTopMargin - knobRadius - boxPadding + knobRadius * 0.05;
+    const narrowBoxY = narrowBoxRow * knobSpacing + menuTopMargin - knobRadius - boxPadding + knobRadius * 0.01;
     ctx.beginPath();
     ctx.roundRect(narrowBoxX, narrowBoxY, narrowBoxWidth, boxHeight, 6);
     ctx.fill();
@@ -5681,9 +5715,9 @@ function drawLightingMenu() {
         // Draw knob background
         ctx.beginPath();
         ctx.arc(knobX, knobY, knobRadius * 1.05, 0, 2 * Math.PI);
-        ctx.fillStyle = `hsla(45, 30%, 10%, ${0.9 * lightingMenuOpacity})`;
+        ctx.fillStyle = `hsla(0, 0%, 10%, ${0.9 * lightingMenuOpacity})`;
         ctx.fill();
-        ctx.strokeStyle = `hsla(45, 20%, 60%, ${lightingMenuOpacity})`;
+        ctx.strokeStyle = `hsla(0, 0%, 60%, ${lightingMenuOpacity})`;
         ctx.lineWidth = 1;
         ctx.stroke();
         
@@ -5734,7 +5768,7 @@ function drawLightingMenu() {
             }
         } else {
             // Normal single-color arc for other knobs
-            ctx.strokeStyle = `hsla(45, 60%, 60%, ${lightingMenuOpacity})`;
+            ctx.strokeStyle = `hsla(0, 0%, 85%, ${lightingMenuOpacity})`;
             ctx.beginPath();
             ctx.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
             ctx.lineWidth = 4;
@@ -5856,7 +5890,7 @@ function drawCameraMenu() {
     const knobTopMargin = 0.05 * menuScale;
     const radioSectionHeight = 7 * radioButtonSpacing + 0.05 * menuScale;
     const checkboxSectionHeight = 0.15 * menuScale; // Extra space for stereo checkbox
-    const menuHeight = radioSectionHeight + knobRadius * 3 + checkboxSectionHeight;
+    const menuHeight = 11.6 * knobRadius;
     
     // Position menu
     const menuOriginX = cameraMenuX * window.innerWidth;
@@ -5870,19 +5904,19 @@ function drawCameraMenu() {
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
     const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `hsl(210, 30%, 20%, ${cameraMenuOpacity})`);
-    menuGradient.addColorStop(1, `hsl(210, 20%, 10%, ${cameraMenuOpacity})`);
+    menuGradient.addColorStop(0, `hsla(214, 43%, 35.1%, ${cameraMenuOpacity})`); 
+    menuGradient.addColorStop(1, `hsla(214, 43%, 15%, ${cameraMenuOpacity})`); 
     ctx.fillStyle = menuGradient;
     ctx.fill();
-    ctx.strokeStyle = `hsla(210, 20%, 50%, ${cameraMenuOpacity})`;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = `hsla(214, 43%, 70%, ${cameraMenuOpacity})`; 
+    ctx.lineWidth = 1.5;
     ctx.stroke();
     
     // Draw title
     ctx.fillStyle = `hsla(210, 10%, 80%, ${cameraMenuOpacity})`;
     ctx.font = `bold ${0.05 * menuScale}px verdana`;
     ctx.textAlign = 'center';
-    ctx.fillText('CAMERA', menuWidth / 2, -padding + 0.05 * menuScale);
+    ctx.fillText('CAMERA', menuWidth / 2, -padding + 0.06 * menuScale);
     
     // Draw close button
     const closeIconRadius = 0.1 * menuScale * 0.25;
@@ -5924,21 +5958,25 @@ function drawCameraMenu() {
         ctx.beginPath();
         ctx.arc(radioX, radioY, radioButtonSize, 0, 2 * Math.PI);
         ctx.strokeStyle = `hsla(210, 20%, 60%, ${cameraMenuOpacity})`;
+        ctx.fillStyle = `hsla(214, 43%, 15%, ${0.8 * cameraMenuOpacity})`;
         ctx.lineWidth = 2;
         ctx.stroke();
+        ctx.fill();
         
         // Fill if selected
         if (gCameraMode === i) {
             ctx.beginPath();
             ctx.arc(radioX, radioY, radioButtonSize * 0.6, 0, 2 * Math.PI);
-            ctx.fillStyle = `hsla(210, 80%, 70%, ${cameraMenuOpacity})`;
+            ctx.fillStyle = `hsla(30, 70%, 60%, ${cameraMenuOpacity})`;
             ctx.fill();
         }
         
         // Draw label
-        ctx.font = `${0.035 * menuScale}px verdana`;
+        ctx.font = `${0.037 * menuScale}px verdana`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
+        ctx.fillStyle = `hsla(0, 0%, 10%, ${cameraMenuOpacity})`;
+        ctx.fillText(cameraModeNames[i], radioX + radioButtonSize + 0.03 * menuScale + 1, 1 + radioY);
         ctx.fillStyle = `hsla(210, 10%, ${gCameraMode === i ? 95 : 80}%, ${cameraMenuOpacity})`;
         ctx.fillText(cameraModeNames[i], radioX + radioButtonSize + 0.03 * menuScale, radioY);
     }
@@ -6196,13 +6234,13 @@ function drawCameraMenu() {
     ctx.fillText('R', rightLensX, lensY);
     
     // Draw label
-    ctx.font = `${0.032 * menuScale}px verdana`;
+    ctx.font = `${0.035 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = `hsla(0, 0%, 10%, ${cameraMenuOpacity})`;
-    ctx.fillText('Stereo 3D', checkboxX + 2, 1 + checkboxY + 0.08 * menuScale);
+    ctx.fillText('Stereo 3D', checkboxX + 2, 1 + checkboxY + 0.09 * menuScale);
     ctx.fillStyle = `hsla(210, 10%, 90%, ${cameraMenuOpacity})`;
-    ctx.fillText('Stereo 3D', checkboxX, checkboxY + 0.08 * menuScale);
+    ctx.fillText('Stereo 3D', checkboxX, checkboxY + 0.09 * menuScale);
     
     // Update knob positions for mouse interaction
     updateKnobPositions();
@@ -12879,7 +12917,7 @@ function onPointer(evt) {
             const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
             const dragDelta = deltaX + deltaY;
             
-            const dragSensitivity = 0.15;
+            const dragSensitivity = 0.1;
             const normalizedDelta = dragDelta / dragSensitivity;
             const rangeSize = 100; // 0 to 100 percentage
             let newValue = dragStartValue + normalizedDelta * rangeSize;
@@ -12896,7 +12934,7 @@ function onPointer(evt) {
             const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
             const dragDelta = deltaX + deltaY;
             
-            const dragSensitivity = 0.12;
+            const dragSensitivity = 0.1;
             const normalizedDelta = dragDelta / dragSensitivity;
             const rangeSize = 100; // 0 to 100 percentage
             let newValue = dragStartValue + normalizedDelta * rangeSize;
@@ -12914,7 +12952,7 @@ function onPointer(evt) {
             const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
             const dragDelta = deltaX + deltaY;
             
-            const dragSensitivity = 0.12;
+            const dragSensitivity = 0.1;
             const normalizedDelta = dragDelta / dragSensitivity;
             const rangeSize = 60; // 0 to 60 degrees
             let newValue = dragStartValue + normalizedDelta * rangeSize;
@@ -12931,7 +12969,7 @@ function onPointer(evt) {
             const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
             const dragDelta = deltaX + deltaY;
             
-            const dragSensitivity = 0.12;
+            const dragSensitivity = 0.1;
             const normalizedDelta = dragDelta / dragSensitivity;
             const rangeSize = 100; // 0 to 100 percentage
             let newValue = dragStartValue + normalizedDelta * rangeSize;
@@ -12949,7 +12987,7 @@ function onPointer(evt) {
             const menuWidth = 0.6 * menuScale;
             const wheelCenterY = 0.45 * colorWheelSize; // Match drawing code
             const menuUpperLeftX = colorMenuX * window.innerWidth;
-            const menuUpperLeftY = (colorMenuY + 0.1) * window.innerHeight;
+            const menuUpperLeftY = colorMenuY * window.innerHeight;
             const centerX = menuUpperLeftX + menuWidth / 2;
             const centerY = menuUpperLeftY + wheelCenterY;
             
@@ -12974,7 +13012,7 @@ function onPointer(evt) {
             const menuWidth = 0.6 * menuScale;
             const wheelCenterY = 0.45 * colorWheelSize; // Match drawing code
             const menuUpperLeftX = colorMenuX * window.innerWidth;
-            const menuUpperLeftY = (colorMenuY + 0.1) * window.innerHeight;
+            const menuUpperLeftY = colorMenuY * window.innerHeight;
             const centerX = menuUpperLeftX + menuWidth / 2;
             const centerY = menuUpperLeftY + wheelCenterY;
             
@@ -13001,7 +13039,7 @@ function onPointer(evt) {
             
             // Check if it's the camera FOV knob (300) - must check before >= 200
             if (draggedKnob === 300) {
-                const dragSensitivity = 0.2;
+                const dragSensitivity = 0.1;
                 const normalizedDelta = dragDelta / dragSensitivity;
                 const rangeSize = 170 - 3; // FOV range: 3 to 170
                 let newValue = dragStartValue - normalizedDelta * rangeSize; // Reversed
@@ -13017,7 +13055,7 @@ function onPointer(evt) {
             
             // Check if it's the orbit speed knob (301)
             if (draggedKnob === 301) {
-                const dragSensitivity = 0.2;
+                const dragSensitivity = 0.1;
                 const normalizedDelta = dragDelta / dragSensitivity;
                 const rangeSize = 25.0 - 0.5; // Orbit speed range: 0.5 to 25.0
                 let newValue = dragStartValue + normalizedDelta * rangeSize;
@@ -13029,7 +13067,7 @@ function onPointer(evt) {
             
             // Check if it's the dolly speed knob (302)
             if (draggedKnob === 302) {
-                const dragSensitivity = 0.2;
+                const dragSensitivity = 0.1;
                 const normalizedDelta = dragDelta / dragSensitivity;
                 const rangeSize = 0.2 - 0.01; // Speed range: 0.01 to 0.2
                 let newValue = dragStartValue + normalizedDelta * rangeSize;
@@ -13069,7 +13107,7 @@ function onPointer(evt) {
                     {min: 0, max: 100}      // 20: ornament height percentage
                 ];
                 
-                const dragSensitivity = 0.2;
+                const dragSensitivity = 0.1;
                 const normalizedDelta = dragDelta / dragSensitivity;
                 const range = ranges[lightingKnob];
                 const rangeSize = range.max - range.min;
@@ -13377,7 +13415,7 @@ function onPointer(evt) {
                     {min: 0.1, max: 2.0}        // trail radius
                 ];
                 
-                const dragSensitivity = 0.2;
+                const dragSensitivity = 0.1;
                 const normalizedDelta = dragDelta / dragSensitivity;
                 const range = ranges[stylingKnob];
                 const rangeSize = range.max - range.min;
@@ -13398,7 +13436,7 @@ function onPointer(evt) {
                 return;
             }
             
-            // Simulation menu knobs (13 knobs - removed FOV)
+            // Simulation menu knobs (15 knobs - removed FOV, added 2 blank spaces)
             const ranges = [
                 {min: 100, max: 5000},
                 {min: 0.1, max: 1.0},
@@ -13410,12 +13448,14 @@ function onPointer(evt) {
                 {min: 1.0, max: 30.0},
                 {min: 0, max: 0.2},
                 {min: 0.5, max: 5.0},
+                {min: 0, max: 1},           // blank
+                {min: 0, max: 1},           // blank
                 {min: 10, max: 60},
                 {min: 10, max: 60},
                 {min: 10, max: 60}
             ];
             
-            const dragSensitivity = 0.2;
+            const dragSensitivity = 0.1;
             const normalizedDelta = dragDelta / dragSensitivity;
             const range = ranges[draggedKnob];
             const rangeSize = range.max - range.min;
@@ -13525,7 +13565,7 @@ function onPointer(evt) {
                             }
                             
                             if (boid.geometryType === 11) {
-                                material = new THREE.MeshStandardMaterial({
+                                material = new THREE.MeshPhongMaterial({
                                 color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`),
                                 side: THREE.DoubleSide});
                             }
@@ -13574,7 +13614,9 @@ function onPointer(evt) {
                     break;
                 case 8: boidProps.turnFactor = newValue; break;
                 case 9: boidProps.margin = newValue; break;
-                case 10: // World Size X
+                case 10: break; // blank space
+                case 11: break; // blank space
+                case 12: // World Size X
                     const oldWorldSizeX = gWorldSizeX;
                     gWorldSizeX = Math.round(newValue / 10) * 10;
                     if (gWorldSizeX !== oldWorldSizeX) {
@@ -13582,7 +13624,7 @@ function onPointer(evt) {
                         updateWorldGeometry('x');
                     }
                     break;
-                case 11: // World Size Y
+                case 13: // World Size Y
                     const oldWorldSizeY = gWorldSizeY;
                     gWorldSizeY = Math.round(newValue / 10) * 10;
                     if (gWorldSizeY !== oldWorldSizeY) {
@@ -13590,7 +13632,7 @@ function onPointer(evt) {
                         updateWorldGeometry('y');
                     }
                     break;
-                case 12: // World Size Z
+                case 14: // World Size Z
                     const oldWorldSizeZ = gWorldSizeZ;
                     gWorldSizeZ = Math.round(newValue / 10) * 10;
                     if (gWorldSizeZ !== oldWorldSizeZ) {
@@ -14695,13 +14737,13 @@ function checkSimMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 4.6;  // Updated for 13 knobs
+    const menuHeight = knobSpacing * 5;  // Updated for 15 knobs (with 2 blank spaces)
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = simMenuX * window.innerWidth;
     const menuUpperLeftY = simMenuY * window.innerHeight;
-    const menuOriginX = menuUpperLeftX + knobSpacing;
-    const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+    const menuOriginX = menuUpperLeftX;
+    const menuOriginY = menuUpperLeftY;
     
     // Check close button
     const closeIconRadius = knobRadius * 0.25;
@@ -14715,8 +14757,11 @@ function checkSimMenuClick(clientX, clientY) {
         return true;
     }
     
-    // Check knobs (now 13 knobs - removed FOV)
-    for (let knob = 0; knob < 13; knob++) {
+    // Check knobs (now 15 knobs - removed FOV, added 2 blank spaces)
+    for (let knob = 0; knob < 15; knob++) {
+        // Skip blank spaces (knobs 10 and 11)
+        if (knob === 10 || knob === 11) continue;
+        
         const row = Math.floor(knob / 3);
         const col = knob % 3;
         const knobX = menuOriginX + col * knobSpacing;
@@ -14733,6 +14778,7 @@ function checkSimMenuClick(clientX, clientY) {
                 gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
                 boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
                 boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin,
+                0, 0, // blank spaces
                 gWorldSizeX, gWorldSizeY, gWorldSizeZ
             ];
             dragStartValue = menuItems[knob];
@@ -14775,9 +14821,9 @@ function checkStylingMenuClick(clientX, clientY) {
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = stylingMenuX * window.innerWidth;
-    const menuUpperLeftY = (stylingMenuY + 0.1) * window.innerHeight;
-    const menuOriginX = menuUpperLeftX + knobSpacing;
-    const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+    const menuUpperLeftY = stylingMenuY * window.innerHeight;
+    const menuOriginX = menuUpperLeftX;
+    const menuOriginY = menuUpperLeftY;
     
     // Check close button
     const closeIconRadius = knobRadius * 0.25;
@@ -14948,8 +14994,8 @@ function checkInstructionsMenuClick(clientX, clientY) {
     const menuHeight = 1.45 * menuScale;
     const padding = 0.17 * menuScale;
     
-    const menuUpperLeftX = (instructionsMenuX + 0.01) * window.innerWidth;
-    const menuUpperLeftY = (instructionsMenuY + 0.0) * window.innerHeight;
+    const menuUpperLeftX = instructionsMenuX * window.innerWidth;
+    const menuUpperLeftY = instructionsMenuY * window.innerHeight;
     const menuOriginX = menuUpperLeftX;
     const menuOriginY = menuUpperLeftY;
     
@@ -14997,7 +15043,7 @@ function checkColorMenuClick(clientX, clientY) {
     const menuTopMargin = 0.33 * colorWheelSize; // Match drawing code
     
     const menuUpperLeftX = colorMenuX * window.innerWidth;
-    const menuUpperLeftY = (colorMenuY + 0.1) * window.innerHeight;
+    const menuUpperLeftY = colorMenuY * window.innerHeight;
     const menuOriginX = menuUpperLeftX;
     const menuOriginY = menuUpperLeftY;
     
@@ -15207,8 +15253,8 @@ function checkLightingMenuClick(clientX, clientY) {
     
     const menuUpperLeftX = lightingMenuX * window.innerWidth;
     const menuUpperLeftY = lightingMenuY * window.innerHeight;
-    const menuOriginX = menuUpperLeftX + knobSpacing;
-    const menuOriginY = menuUpperLeftY + 0.5 * knobSpacing;
+    const menuOriginX = menuUpperLeftX;
+    const menuOriginY = menuUpperLeftY;
     
     // Check close button
     const closeIconRadius = knobRadius * 0.25;
