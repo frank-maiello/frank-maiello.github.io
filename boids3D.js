@@ -6008,23 +6008,101 @@ function drawCameraMenu() {
     const checkboxX = menuWidth / 2;
     const checkboxSize = 0.04 * menuScale;
     
-    // Draw checkbox outline
-    ctx.strokeStyle = `hsla(210, 20%, 60%, ${cameraMenuOpacity})`;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(checkboxX - checkboxSize / 2, checkboxY - checkboxSize / 2, checkboxSize, checkboxSize);
+    // Draw classic cardboard 3D glasses icon
+    const glassesScale = checkboxSize * 1.8;
+    const frameWidth = glassesScale * 3.7;
+    const frameHeight = glassesScale * 1.25;
+    const lensWidth = glassesScale * 1.05;
+    const lensHeight = glassesScale * 0.68;
+    const lensSpacing = glassesScale * 0.82;
+    const leftLensX = checkboxX - lensWidth / 2 - lensSpacing / 2;
+    const rightLensX = checkboxX + lensWidth / 2 + lensSpacing / 2;
+    const lensY = checkboxY;
+    const lensCornerRadius = lensHeight * 0.5;
     
-    // Fill if checked
-    if (gStereoEnabled) {
-        ctx.fillStyle = `hsla(210, 80%, 70%, ${cameraMenuOpacity})`;
-        ctx.fillRect(checkboxX - checkboxSize / 2 + 2, checkboxY - checkboxSize / 2 + 2, checkboxSize - 4, checkboxSize - 4);
+    // Adjust saturation and brightness based on checked state
+    const saturation = gStereoEnabled ? 100 : 20;
+    const brightness = gStereoEnabled ? 1.0 : 0.4;
+    const glassesOpacity = cameraMenuOpacity * brightness;
+    
+    // Draw white paper frame
+    ctx.fillStyle = `hsla(0, 0%, 95%, ${glassesOpacity})`;
+    ctx.strokeStyle = `hsla(0, 0%, 60%, ${glassesOpacity})`;
+    ctx.lineWidth = 1.5;
+    
+    // Draw frame with circular nose bridge cutout at bottom
+    const noseRadius = glassesScale * 0.35;
+    const noseY = lensY + frameHeight / 2; // Bottom edge of frame
+    
+    ctx.save();
+    ctx.beginPath();
+    // Draw the frame shape with nose cutout
+    // Start at bottom left
+    ctx.moveTo(checkboxX - frameWidth / 2, lensY + frameHeight / 2);
+    // Left edge going up
+    ctx.lineTo(checkboxX - frameWidth / 2, lensY - frameHeight / 2);
+    // Top edge
+    ctx.lineTo(checkboxX + frameWidth / 2, lensY - frameHeight / 2);
+    // Right edge going down
+    ctx.lineTo(checkboxX + frameWidth / 2, lensY + frameHeight / 2);
+    // Bottom edge to start of nose cutout
+    ctx.lineTo(checkboxX + noseRadius, lensY + frameHeight / 2);
+    // Nose cutout - half circle going inward (upward)
+    ctx.arc(checkboxX, noseY, noseRadius, 0, Math.PI, true);
+    // Continue bottom edge
+    ctx.lineTo(checkboxX - frameWidth / 2, lensY + frameHeight / 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    
+    // Helper function to draw rounded rectangle (rectangular with rounded outer edges)
+    function drawLens(x, y, width, height, radiusLeft, radiusRight, isLeft) {
+        ctx.beginPath();
+        if (isLeft) {
+            // Left lens: rounded on left side, square on right
+            ctx.moveTo(x + width, y - height / 2);
+            ctx.lineTo(x + radiusLeft, y - height / 2);
+            ctx.arcTo(x, y - height / 2, x, y, radiusLeft);
+            ctx.arcTo(x, y + height / 2, x + radiusLeft, y + height / 2, radiusLeft);
+            ctx.lineTo(x + width, y + height / 2);
+            ctx.lineTo(x + width, y - height / 2);
+        } else {
+            // Right lens: square on left, rounded on right
+            ctx.moveTo(x, y - height / 2);
+            ctx.lineTo(x + width - radiusRight, y - height / 2);
+            ctx.arcTo(x + width, y - height / 2, x + width, y, radiusRight);
+            ctx.arcTo(x + width, y + height / 2, x + width - radiusRight, y + height / 2, radiusRight);
+            ctx.lineTo(x, y + height / 2);
+            ctx.lineTo(x, y - height / 2);
+        }
+        ctx.closePath();
     }
+    
+    // Draw left lens (red) - rectangular with rounded outer edge
+    drawLens(leftLensX - lensWidth / 2, lensY, lensWidth, lensHeight, lensCornerRadius, 0, true);
+    ctx.fillStyle = `hsla(0, ${saturation}%, 50%, ${glassesOpacity * 0.6})`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(0, ${saturation * 0.5}%, 30%, ${glassesOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Draw right lens (cyan) - rectangular with rounded outer edge
+    drawLens(rightLensX - lensWidth / 2, lensY, lensWidth, lensHeight, 0, lensCornerRadius, false);
+    ctx.fillStyle = `hsla(180, ${saturation}%, 50%, ${glassesOpacity * 0.6})`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(180, ${saturation * 0.5}%, 30%, ${glassesOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
     
     // Draw label
     ctx.font = `${0.032 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(0, 0%, 10%, ${cameraMenuOpacity})`;
+    ctx.fillText('Stereo 3D', checkboxX + 2, 1 + checkboxY + 0.08 * menuScale);
     ctx.fillStyle = `hsla(210, 10%, 90%, ${cameraMenuOpacity})`;
-    ctx.fillText('Stereo (Red/Cyan Anaglyph)', checkboxX, checkboxY + 0.06 * menuScale);
+    ctx.fillText('Stereo 3D', checkboxX, checkboxY + 0.08 * menuScale);
     
     // Update knob positions for mouse interaction
     updateKnobPositions();
