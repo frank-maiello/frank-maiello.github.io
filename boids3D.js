@@ -270,6 +270,10 @@ var gMiniMammothStartY = 0; // Starting Y for mini mammoth drop
 var gMiniMammothTargetY = -10; // Target Y for mini mammoth (below floor)
 var gFullMammothStartY = -25; // Starting Y for full mammoth (below floor)
 var gFullMammothTargetY = 0; // Target Y for full mammoth (at floor level)
+var gMammothAnimating = true; // Is mini mammoth currently animating at startup
+var gMammothAnimationTimer = 0; // Timer for mini mammoth slide animation
+var gMammothStartZ = 40; // Starting Z position for slide-in animation
+var gMammothTargetZ = 25; // Target Z position
 var gTeapot = null; // Teapot model reference
 var gTeapotAnimating = true; // Is teapot currently animating
 var gTeapotAnimationTimer = 0; // Timer for teapot slide animation
@@ -3573,6 +3577,11 @@ function recreateBoidGeometries() {
         boid.visMesh.receiveShadow = true;
         gThreeScene.add(boid.visMesh);
     }
+    
+    // Reapply checkerboard pattern to lead boid after geometry change
+    if (typeof applyCheckerboardToLeadBoid === 'function') {
+        applyCheckerboardToLeadBoid();
+    }
 }
 
 function recreateBoschTriptych(newScale) {
@@ -5523,8 +5532,8 @@ function drawLightingMenu() {
     
     const ctx = gOverlayCtx;
     const knobRadius = 0.1 * menuScale;
-    const knobSpacing = knobRadius * 3;
-    const menuTopMargin = 0.2 * knobRadius;
+    const knobSpacing = knobRadius * 3.25; // Increased spacing for gaps between boxes
+    const menuTopMargin = 0.2 * knobRadius + 8; // +8 pixels for spacing
     const menuWidth = knobSpacing * 2; // 3 knobs across
     const menuHeight = knobSpacing * 7; // 7 rows (now with 21 knobs)
     const padding = 1.7 * knobRadius;
@@ -5596,6 +5605,66 @@ function drawLightingMenu() {
     
     const fullMeterSweep = 1.6 * Math.PI;
     const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+    
+    // Draw faint boxes around groups of three knobs for each light source
+    const boxPadding = knobRadius * 0.3;
+    const boxWidth = knobSpacing * 2 + knobRadius * 2 + boxPadding * 2;
+    const boxHeight = knobRadius * 2.35 + boxPadding * 2; // Increased to capture text labels
+    
+    // Define which rows contain light source groups (Ambient=0, Overhead=1, Globe=2, Spotlight1=3, Spotlight2=4, Ornament=6)
+    const lightSourceRows = [0, 1, 2, 3, 4, 6];
+    
+    // Define colors for each group (Spotlight 1, 2, and Penumbra/Shadow share the same color)
+    const boxColors = {
+        0: `hsla(10, 30%, 15%, ${1.0 * lightingMenuOpacity})`,   // Ambient - reddish
+        1: `hsla(200, 20%, 15%, ${1.0 * lightingMenuOpacity})`,  // Overhead - cooler
+        2: `hsla(340, 25%, 15%, ${1.0 * lightingMenuOpacity})`,  // Globe - magenta/violet
+        3: `hsla(190, 25%, 15%, ${1.0 * lightingMenuOpacity})`,  // Spotlight 1 - cyan
+        4: `hsla(190, 25%, 15%, ${1.0 * lightingMenuOpacity})`,  // Spotlight 2 - cyan (same)
+        6: `hsla(120, 20%, 15%, ${1.0 * lightingMenuOpacity})`   // Ornament - green
+    };
+    
+    ctx.strokeStyle = `hsla(45, 20%, 80%, ${0.3 * lightingMenuOpacity})`;
+    ctx.lineWidth = 2;
+    //ctx.setLineDash([4, 4]);
+    
+    for (const row of lightSourceRows) {
+        ctx.fillStyle = boxColors[row];
+        const boxX = -knobRadius - boxPadding;
+        const boxY = row * knobSpacing + menuTopMargin - knobRadius - boxPadding + knobRadius * 0.05;
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 6);
+        ctx.fill();
+        ctx.stroke();
+    }
+    
+    // Draw narrower box for Penumbra and Shadow Falloff (row 5, only 2 knobs) - use spotlight color
+    ctx.fillStyle = `hsla(190, 25%, 15%, ${1.0 * lightingMenuOpacity})`; // Same as spotlights (cyan)
+    const narrowBoxWidth = knobSpacing * 1.1 + knobRadius * 2 + boxPadding * 2; // Width for 2 knobs, extended slightly
+    const narrowBoxRow = 5;
+    const narrowBoxX = -knobRadius - boxPadding;
+    const narrowBoxY = narrowBoxRow * knobSpacing + menuTopMargin - knobRadius - boxPadding + knobRadius * 0.05;
+    ctx.beginPath();
+    ctx.roundRect(narrowBoxX, narrowBoxY, narrowBoxWidth, boxHeight, 6);
+    ctx.fill();
+    ctx.stroke();
+    
+    ctx.setLineDash([]);
+    
+    // Draw vertical "Spotlights" text between Penumbra and Shadow Falloff knobs
+    const spotlightsTextX = knobSpacing / 2;
+    const spotlightsTextY = 5 * knobSpacing + menuTopMargin;
+    ctx.save();
+    ctx.translate(spotlightsTextX, spotlightsTextY);
+    ctx.rotate(-0.7 *Math.PI / 2); // Rotate 90 degrees counter-clockwise for vertical text
+    ctx.font = `${0.035 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(0, 0%, 0%, ${lightingMenuOpacity})`;
+    ctx.fillText('Spotlights', -1, 2);
+    ctx.fillStyle = `hsla(45, 10%, 90%, ${lightingMenuOpacity})`;
+    ctx.fillText('Spotlights', 0, 0);
+    ctx.restore();
     
     for (let i = 0; i < knobs.length; i++) {
         const row = Math.floor(i / 3);
@@ -5750,10 +5819,19 @@ function drawLightingMenu() {
         
         // Draw label below knob
         ctx.font = `${0.35 * knobRadius}px verdana`;
+        
+        // Adjust label position for Ornament Lights and Ornament Height
+        let labelOffsetX = 0;
+        if (i === 18) { // Ornament Lights - move right
+            labelOffsetX = knobRadius * 0.35;
+        } else if (i === 20) { // Ornament Height - move left
+            labelOffsetX = -knobRadius * 0.35;
+        }
+        
         ctx.fillStyle = `hsla(0, 00%, 10%, ${lightingMenuOpacity})`;
-        ctx.fillText(knobs[i].label, knobX + 2, 1 + knobY + 1.35 * knobRadius);
+        ctx.fillText(knobs[i].label, knobX + labelOffsetX + 2, 1 + knobY + 1.35 * knobRadius);
         ctx.fillStyle = `hsla(45, 10%, 90%, ${lightingMenuOpacity})`;
-        ctx.fillText(knobs[i].label, knobX, knobY + 1.35 * knobRadius);
+        ctx.fillText(knobs[i].label, knobX + labelOffsetX, knobY + 1.35 * knobRadius);
     }
     
     ctx.restore();
@@ -5826,10 +5904,11 @@ function drawCameraMenu() {
         'Follow Boid, Look Ahead',
         'Lead Boid, Look Behind',
         'Free Roam Cam',
-        'Dolly Cam'
+        'Dolly Cam',
+        'Dolly Tracking Cam'
     ];
     
-    const radioStartY = 0.03 * menuScale;
+    const radioStartY = -0.003 * menuScale; // Moved up further
     
     for (let i = 0; i < cameraModeNames.length; i++) {
         const radioY = radioStartY + i * radioButtonSpacing;
@@ -5875,10 +5954,10 @@ function drawCameraMenu() {
     ctx.lineWidth = 1;
     ctx.stroke();
     
-    // Calculate FOV knob angle
-    const fovMin = 20;
+    // Calculate FOV knob angle (reversed - displays focal length behavior)
+    const fovMin = 3;
     const fovMax = 170;
-    const fovNormalized = (gCameraFOV - fovMin) / (fovMax - fovMin);
+    const fovNormalized = 1 - (gCameraFOV - fovMin) / (fovMax - fovMin); // Reversed
     const fullMeterSweep = 1.6 * Math.PI;
     const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
     const fovPointerAngle = meterStart + fullMeterSweep * fovNormalized;
@@ -5901,17 +5980,18 @@ function drawCameraMenu() {
     ctx.lineWidth = 2;
     ctx.stroke();
     
-    // Draw FOV value
+    // Draw FOV value as equivalent 35mm focal length
+    const focalLength = 24 / (2 * Math.tan(gCameraFOV * Math.PI / 360)); // Convert vertical FOV to 35mm equivalent
     ctx.font = `${0.3 * knobRadius}px verdana`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = `hsla(210, 60%, 70%, ${cameraMenuOpacity})`;
-    ctx.fillText(gCameraFOV.toFixed(0), fovKnobX, knobY + 0.6 * knobRadius);
+    ctx.fillText(focalLength.toFixed(0) + 'mm', fovKnobX, knobY + 0.6 * knobRadius);
     
     // Draw label
     ctx.font = `${0.35 * knobRadius}px verdana`;
     ctx.fillStyle = `hsla(210, 10%, 90%, ${cameraMenuOpacity})`;
-    ctx.fillText('Field of View', fovKnobX, knobY + 1.35 * knobRadius);
+    ctx.fillText('Focal Length', fovKnobX, knobY + 1.35 * knobRadius);
     
     // ===== Orbit Speed Knob =====
     // Draw knob background
@@ -6013,7 +6093,7 @@ function drawCameraMenu() {
     const frameWidth = glassesScale * 3.7;
     const frameHeight = glassesScale * 1.25;
     const lensWidth = glassesScale * 1.05;
-    const lensHeight = glassesScale * 0.68;
+    const lensHeight = glassesScale * 0.73;
     const lensSpacing = glassesScale * 0.82;
     const leftLensX = checkboxX - lensWidth / 2 - lensSpacing / 2;
     const rightLensX = checkboxX + lensWidth / 2 + lensSpacing / 2;
@@ -6087,6 +6167,13 @@ function drawCameraMenu() {
     ctx.lineWidth = 1;
     ctx.stroke();
     
+    // Draw "L" on left lens
+    ctx.font = `bold ${0.018 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(0, 0%, 0%, ${glassesOpacity * 0.8})`;
+    ctx.fillText('L', leftLensX, lensY);
+    
     // Draw right lens (cyan) - rectangular with rounded outer edge
     drawLens(rightLensX - lensWidth / 2, lensY, lensWidth, lensHeight, 0, lensCornerRadius, false);
     ctx.fillStyle = `hsla(180, ${saturation}%, 50%, ${glassesOpacity * 0.6})`;
@@ -6094,6 +6181,13 @@ function drawCameraMenu() {
     ctx.strokeStyle = `hsla(180, ${saturation * 0.5}%, 30%, ${glassesOpacity})`;
     ctx.lineWidth = 1;
     ctx.stroke();
+    
+    // Draw "R" on right lens
+    ctx.font = `bold ${0.018 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(0, 0%, 0%, ${glassesOpacity * 0.8})`;
+    ctx.fillText('R', rightLensX, lensY);
     
     // Draw label
     ctx.font = `${0.032 * menuScale}px verdana`;
@@ -7809,8 +7903,8 @@ function initThreeScene() {
             function(gltf) {
                 var mammoth = gltf.scene;
                 
-                // Position on floor
-                mammoth.position.set(0, 0, 25);
+                // Position on floor - start at gMammothStartZ for slide-in animation
+                mammoth.position.set(0, 0, gMammothStartZ);
                 
                 // Scale appropriately
                 mammoth.scale.set(1, 1, 1);
@@ -10922,7 +11016,7 @@ function initThreeScene() {
             gWalkingCameraPosition.y -= evt.deltaY * elevationSpeed * 0.01;
             // Clamp elevation to reasonable range
             gWalkingCameraPosition.y = Math.max(0.5, Math.min(50, gWalkingCameraPosition.y));
-        } else if (gCameraMode === 6) {
+        } else if (gCameraMode === 6 || gCameraMode === 7) {
             evt.preventDefault();
             // Adjust camera height in dolly mode
             const heightSpeed = 0.1;
@@ -11174,7 +11268,7 @@ function onPointer(evt) {
                 } else {
                     // Menu is already open, cycle camera mode
                     const previousMode = gCameraMode;
-                    gCameraMode = (gCameraMode + 1) % 7;
+                    gCameraMode = (gCameraMode + 1) % 8;
                     
                     // If we cycled back to mode 0 (completed full cycle), close the menu
                     if (gCameraMode === 0) {
@@ -11223,8 +11317,33 @@ function onPointer(evt) {
                         }
                     }
                     
+                    // Initialize dolly tracking camera when entering mode 7
+                    if (gCameraMode === 7) {
+                        // Set camera to current dolly cart position
+                        const localX = (gDollyPosition - 0.5) * gDollyRailsLength;
+                        const worldX = gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * localX;
+                        const worldZ = gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * localX;
+                        gCamera.position.set(worldX, gDollyCameraHeight, worldZ);
+                        
+                        // Initialize smooth look-at point
+                        if (gPhysicsScene.objects.length > 0) {
+                            gCamera.userData.smoothLookAt = gPhysicsScene.objects[0].pos.clone();
+                        }
+                        
+                        // Create rails and cart if they don't exist yet
+                        if (!gDollyRailsMesh) {
+                            createDollyRails();
+                        }
+                        if (!gDollyCartMesh) {
+                            createDollyCart();
+                        }
+                        if (!gDollyCameraMesh) {
+                            loadDollyCameraModel();
+                        }
+                    }
+                    
                     // Enable/disable OrbitControls based on camera mode
-                    // Modes 0, 1, 2 use OrbitControls; modes 3, 4, 5, 6 don't
+                    // Modes 0, 1, 2 use OrbitControls; modes 3, 4, 5, 6, 7 don't
                     if (gCameraMode >= 0 && gCameraMode <= 2) {
                         gCameraControl.enabled = true;
                     } else {
@@ -12861,9 +12980,9 @@ function onPointer(evt) {
             if (draggedKnob === 300) {
                 const dragSensitivity = 0.2;
                 const normalizedDelta = dragDelta / dragSensitivity;
-                const rangeSize = 170 - 20; // FOV range: 20 to 170
-                let newValue = dragStartValue + normalizedDelta * rangeSize;
-                newValue = Math.max(20, Math.min(170, newValue));
+                const rangeSize = 170 - 3; // FOV range: 3 to 170
+                let newValue = dragStartValue - normalizedDelta * rangeSize; // Reversed
+                newValue = Math.max(3, Math.min(170, newValue));
                 
                 gCameraFOV = Math.round(newValue);
                 if (gCamera) {
@@ -15057,8 +15176,8 @@ function checkLightingMenuClick(clientX, clientY) {
     if (!lightingMenuVisible || lightingMenuOpacity <= 0.5) return false;
     
     const knobRadius = 0.1 * menuScale;
-    const knobSpacing = knobRadius * 3;
-    const menuTopMargin = 0.2 * knobRadius;
+    const knobSpacing = knobRadius * 3.25; // Increased spacing for gaps between boxes
+    const menuTopMargin = 0.2 * knobRadius + 8; // +8 pixels for spacing
     const menuWidth = knobSpacing * 2;
     const menuHeight = knobSpacing * 7; // 7 rows (now with 21 knobs)
     const padding = 1.7 * knobRadius;
@@ -15176,10 +15295,10 @@ function checkCameraMenuClick(clientX, clientY) {
     }
     
     // Check radio buttons for camera modes
-    const radioStartY = menuOriginY + 0.03 * menuScale;
+    const radioStartY = menuOriginY + -0.003 * menuScale; // Moved up further
     const radioX = menuOriginX + -0.02 * menuScale;
     
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 8; i++) {
         const radioY = radioStartY + i * radioButtonSpacing;
         const rdx = clientX - radioX;
         const rdy = clientY - radioY;
@@ -15218,6 +15337,31 @@ function checkCameraMenuClick(clientX, clientY) {
                 gCamera.position.set(worldX, gDollyCameraHeight, worldZ);
                 
                 // Camera angles (yaw/pitch) are preserved from previous dolly mode session
+                // Create rails and cart if they don't exist yet
+                if (!gDollyRailsMesh) {
+                    createDollyRails();
+                }
+                if (!gDollyCartMesh) {
+                    createDollyCart();
+                }
+                if (!gDollyCameraMesh) {
+                    loadDollyCameraModel();
+                }
+            }
+            
+            // Initialize dolly tracking camera when entering mode 7
+            if (gCameraMode === 7) {
+                // Set camera to current dolly cart position
+                const localX = (gDollyPosition - 0.5) * gDollyRailsLength;
+                const worldX = gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * localX;
+                const worldZ = gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * localX;
+                gCamera.position.set(worldX, gDollyCameraHeight, worldZ);
+                
+                // Initialize smooth look-at point
+                if (gPhysicsScene.objects.length > 0) {
+                    gCamera.userData.smoothLookAt = gPhysicsScene.objects[0].pos.clone();
+                }
+                
                 // Create rails and cart if they don't exist yet
                 if (!gDollyRailsMesh) {
                     createDollyRails();
@@ -15289,21 +15433,21 @@ function checkCameraMenuClick(clientX, clientY) {
         return true;
     }
     
-    // Check Stereo checkbox - use same pattern as radio buttons
+    // Check Stereo checkbox - use rectangular hit detection
     const knobY = radioSectionHeight + knobRadius * 1.5;
     const checkboxY = menuOriginY + knobY + 2.5 * knobRadius;
     const checkboxX = menuOriginX + menuWidth / 2;
     const checkboxSize = 0.04 * menuScale;
     
-    // Check if click is near checkbox (using same circular hit detection as radio buttons)
+    // Rectangular hit detection
     const cbdx = clientX - checkboxX;
     const cbdy = clientY - checkboxY;
-    const distSq = cbdx * cbdx + cbdy * cbdy;
-    const radiusSq = (checkboxSize * 10) * (checkboxSize * 10);
+    const hitWidth = checkboxSize * 3 + 5; // Half-width
+    const hitHeight = checkboxSize * 1.2 + 2; // Half-height (slightly reduced)
     
-    console.log('Checkbox at', checkboxX, checkboxY, 'click at', clientX, clientY, 'distSq', distSq, 'radiusSq', radiusSq);
+    console.log('Checkbox at', checkboxX, checkboxY, 'click at', clientX, clientY, 'dx', cbdx, 'dy', cbdy);
     
-    if (distSq < radiusSq) {
+    if (Math.abs(cbdx) < hitWidth && Math.abs(cbdy) < hitHeight) {
         // Toggle stereo mode
         if (gAnaglyphEffect) {
             gStereoEnabled = !gStereoEnabled;
@@ -15816,6 +15960,43 @@ function update() {
                     leadBoid.pos.z + direction.z * pointLightOffset
                 );
             }
+            
+            // Update emissive intensity on lead boid's checkerboard pattern
+            if (leadBoid.visMesh) {
+                leadBoid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material && child.material.emissiveMap) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(mat => {
+                                if (mat.emissiveMap) {
+                                    mat.emissiveIntensity = 1.0;
+                                }
+                            });
+                        } else {
+                            child.material.emissiveIntensity = 1.0;
+                        }
+                    }
+                });
+            }
+        }
+    } else {
+        // Headlight is off, turn off emissive on lead boid
+        if (gPhysicsScene.objects.length > 0) {
+            const leadBoid = gPhysicsScene.objects[0];
+            if (leadBoid && leadBoid.visMesh) {
+                leadBoid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material && child.material.emissiveMap) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(mat => {
+                                if (mat.emissiveMap) {
+                                    mat.emissiveIntensity = 0;
+                                }
+                            });
+                        } else {
+                            child.material.emissiveIntensity = 0;
+                        }
+                    }
+                });
+            }
         }
     }
     
@@ -16312,6 +16493,46 @@ function update() {
                     gTeapot.position.x,
                     gTeapot.position.y + gTeapotObstacle.height / 2,
                     gTeapotTargetZ
+                ));
+            }
+        }
+    }
+    
+    // Mini Mammoth slide animation
+    if (gMammoth && gMammothAnimating) {
+        gMammothAnimationTimer += deltaT;
+        
+        // Slide from gMammothStartZ to gMammothTargetZ over 2 seconds with ease-out (deceleration)
+        var duration = 2.0;
+        var t = Math.min(gMammothAnimationTimer / duration, 1.0);
+        
+        // Cubic ease-out: y = 1 - (1-x)^3 (starts fast, ends slow - deceleration)
+        var eased = 1 - Math.pow(1 - t, 3);
+        
+        // Interpolate Z position
+        var currentZ = gMammothStartZ + (gMammothTargetZ - gMammothStartZ) * eased;
+        gMammoth.position.z = currentZ;
+        
+        // Update obstacle position during animation
+        if (gMammothObstacle) {
+            gMammothObstacle.updatePosition(new THREE.Vector3(
+                gMammoth.position.x,
+                gMammoth.position.y + 1.5,
+                currentZ
+            ));
+        }
+        
+        // Stop animation when complete
+        if (t >= 1.0) {
+            gMammothAnimating = false;
+            gMammoth.position.z = gMammothTargetZ; // Ensure final position is exact
+            
+            // Final obstacle position update
+            if (gMammothObstacle) {
+                gMammothObstacle.updatePosition(new THREE.Vector3(
+                    gMammoth.position.x,
+                    gMammoth.position.y + 1.5,
+                    gMammothTargetZ
                 ));
             }
         }
@@ -17360,6 +17581,38 @@ function update() {
             
             const lookAtPoint = gCamera.position.clone().add(baseLookDirection.multiplyScalar(10));
             gCamera.lookAt(lookAtPoint);
+        } else if (gCameraMode === 7) {
+            // Dolly tracking camera mode - camera moves along rails and tracks lead boid
+            // (dolly position is updated in the cart visibility section below)
+            
+            // Calculate position along rails
+            const localX = (gDollyPosition - 0.5) * gDollyRailsLength;
+            const worldX = gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * localX;
+            const worldZ = gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * localX;
+            
+            // Set camera position on the dolly
+            gCamera.position.set(worldX, gDollyCameraHeight, worldZ);
+            
+            // Track lead boid (boid zero) if it exists
+            if (gPhysicsScene.objects.length > 0) {
+                const leadBoid = gPhysicsScene.objects[0];
+                
+                // Simple approach: just look at the boid with smoothing
+                // Calculate target look-at point
+                const targetLookAt = leadBoid.pos.clone();
+                
+                // Use a smoothed look-at point for less jittery movement
+                if (!gCamera.userData.smoothLookAt) {
+                    gCamera.userData.smoothLookAt = targetLookAt.clone();
+                }
+                
+                // Smooth the look-at point toward the target
+                const smoothingFactor = 0.1; // Higher = more responsive, lower = smoother
+                gCamera.userData.smoothLookAt.lerp(targetLookAt, smoothingFactor);
+                
+                // Look at the smoothed position
+                gCamera.lookAt(gCamera.userData.smoothLookAt);
+            }
         }
     }
     
@@ -17417,7 +17670,7 @@ function update() {
     // Update dolly camera model visibility and position
     if (gDollyCameraMesh) {
         // Hide camera model when in dolly camera view (you don't see your own camera)
-        gDollyCameraMesh.visible = cameraMenuVisible && gCameraMode !== 6;
+        gDollyCameraMesh.visible = cameraMenuVisible && gCameraMode !== 6 && gCameraMode !== 7;
         
         // Update camera model position and orientation continuously
         updateDollyCameraModel();
@@ -17425,7 +17678,7 @@ function update() {
     
     // Update camera mount rod visibility
     if (gDollyCameraMountRod) {
-        gDollyCameraMountRod.visible = cameraMenuVisible && gCameraMode !== 6;
+        gDollyCameraMountRod.visible = cameraMenuVisible && gCameraMode !== 6 && gCameraMode !== 7;
     }
     
     // Update drag highlight box for toggle-dragging objects
@@ -17515,6 +17768,81 @@ initThreeScene();
 initColorWheel();
 onWindowResize();
 makeBoids();
+
+// Apply checkerboard pattern to lead boid for easy identification
+function applyCheckerboardToLeadBoid() {
+    if (gPhysicsScene.objects.length > 0) {
+        const leadBoid = gPhysicsScene.objects[0];
+        
+        // Create a canvas for the checkerboard texture
+        const canvas = document.createElement('canvas');
+        canvas.width = 128;
+        canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+        
+        // Draw checkerboard pattern (8x8 squares)
+        const squareSize = 32;
+        for (let y = 0; y < 32; y++) {
+            for (let x = 0; x < 8; x++) {
+                ctx.fillStyle = (x + y) % 2 === 0 ? '#ffffff' : '#000000';
+                ctx.fillRect(x * squareSize, y * squareSize, squareSize, squareSize);
+            }
+        }
+        
+        // Create THREE.js texture from canvas
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        
+        // Create emissive map canvas (white squares only)
+        const emissiveCanvas = document.createElement('canvas');
+        emissiveCanvas.width = 128;
+        emissiveCanvas.height = 128;
+        const emissiveCtx = emissiveCanvas.getContext('2d');
+        
+        // Draw emissive pattern (white squares only, black elsewhere)
+        emissiveCtx.fillStyle = '#000000';
+        emissiveCtx.fillRect(0, 0, 128, 128);
+        for (let y = 0; y < 32; y++) {
+            for (let x = 0; x < 8; x++) {
+                if ((x + y) % 2 === 0) {
+                    emissiveCtx.fillStyle = '#ffffff';
+                    emissiveCtx.fillRect(x * squareSize, y * squareSize, squareSize, squareSize);
+                }
+            }
+        }
+        
+        const emissiveTexture = new THREE.CanvasTexture(emissiveCanvas);
+        emissiveTexture.wrapS = THREE.RepeatWrapping;
+        emissiveTexture.wrapT = THREE.RepeatWrapping;
+        
+        // Apply texture to lead boid's material
+        if (leadBoid.visMesh) {
+            leadBoid.visMesh.traverse(function(child) {
+                if (child.isMesh && child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(mat => {
+                            mat.map = texture;
+                            mat.emissiveMap = emissiveTexture;
+                            mat.emissive = new THREE.Color(0xffffff);
+                            mat.emissiveIntensity = gHeadlightIntensity > 0 ? 1.0 : 0;
+                            mat.needsUpdate = true;
+                        });
+                    } else {
+                        child.material.map = texture;
+                        child.material.emissiveMap = emissiveTexture;
+                        child.material.emissive = new THREE.Color(0xffffff);
+                        child.material.emissiveIntensity = gHeadlightIntensity > 0 ? 1.0 : 0;
+                        child.material.needsUpdate = true;
+                    }
+                }
+            });
+        }
+    }
+}
+
+applyCheckerboardToLeadBoid();
+
 // Initialize spatial grid and populate it
 SpatialGrid = new SpatialHashGrid(boidProps.visualRange);
 for (var i = 0; i < gPhysicsScene.objects.length; i++) {
