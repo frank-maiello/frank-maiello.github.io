@@ -8,15 +8,13 @@
 // Asset loading management
 var gLoadingManager = null; // THREE.LoadingManager to track asset loading
 var gAssetsLoaded = false; // Flag tracking if all assets have finished loading
-var gLoadingScreenElement = null; // DOM element for loading screen
-var gLoadingBarElement = null; // DOM element for loading progress bar
-var gLoadingTextElement = null; // DOM element for loading text
+var gLoadingScreen = null; // Loading screen element
+var gLoadingBar = null; // Progress bar element
 
 var gThreeScene;
 var gRenderer;
 var gAnaglyphEffect = null; // AnaglyphEffect for stereo rendering
 var gStereoEnabled = false; // Whether stereo/anaglyph mode is enabled
-var gSavedLightnessBeforeStereo = null; // Saved lightness value before entering stereo mode
 var gCamera;
 var gCameraControl;
 var gGrabber;
@@ -330,7 +328,7 @@ var gDraggingSofa = false; // Track if dragging the sofa (toggleable)
 var gSofaInitialX = 19; // Initial X position for world resize scaling (close to left wall)
 var gSofaInitialZ = -11; // Initial Z position for world resize scaling
 var gChairSlideTimer = 0; // Timer for chair slide animation
-var gChairStartX = 100; // Starting X position for chair slide
+var gChairStartX = 60; // Starting X position for chair slide
 var gChairTargetX = -1; // Target X position for chair
 var gSofaSliding = false; // Flag for sofa slide animation (starts after loading)
 var gSofaSlideTimer = 0; // Timer for sofa slide animation
@@ -489,10 +487,10 @@ var gColumnMarbleTexture = null; // Marble texture for fluted column
 
 // Wall animation state
 var gWallAnimation = {
-    front: { timer: 0, delay: 2.0, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
-    back: { timer: 0, delay: 2.0, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 },
-    left: { timer: 0, delay: 2.0, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
-    right: { timer: 0, delay: 2.0, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 }
+    front: { timer: 0, delay: 1.15, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
+    back: { timer: 0, delay: 1.15, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 },
+    left: { timer: 0, delay: 1.15, duration: 1.2, animating: true, startRotation: Math.PI / 2, targetRotation: 0 },
+    right: { timer: 0, delay: 1.15, duration: 1.2, animating: true, startRotation: -Math.PI / 2, targetRotation: 0 }
 };
 
 var gRunning = false; // Track if simulation is running (start paused)
@@ -1639,11 +1637,11 @@ class Lamp {
         this.coneTipCapOuter.userData.initialPosition = this.coneTipCapOuter.position.clone();
         this.coneTipCapOuter.userData.initialQuaternion = this.coneTipCapOuter.quaternion.clone();
         
-        /*// Add small point light at tip to illuminate plug interior
+        // Add small point light at tip to illuminate plug interior
         this.tipLight = new THREE.PointLight(0xffffee, 2.0, 0.5);
         this.tipLight.position.copy(this.coneTipCapInner.position);
         this.rotatableGroup.add(this.tipLight);
-        this.tipLight.userData.initialPosition = this.tipLight.position.clone();*/
+        this.tipLight.userData.initialPosition = this.tipLight.position.clone();
         
         // Inner cone - bright white
         var innerConeMaterial = new THREE.MeshPhongMaterial({
@@ -2300,16 +2298,10 @@ function createBoidMaterial(materialType, hue, sat, light, wireframe, side) {
             wireframe: wireframe,
             side: materialSide
         });
-    } else if (materialType === 'phong') {
+    } else if (materialType === 'phong' || materialType === 'basic') {
         return new THREE.MeshPhongMaterial({
             color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`),
             shininess: 100,
-            wireframe: wireframe,
-            side: materialSide
-        });
-    } else if (materialType === 'basic') {
-        return new THREE.MeshBasicMaterial({
-            color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`),
             wireframe: wireframe,
             side: materialSide
         });
@@ -2369,7 +2361,7 @@ class BOID {
         // Handle duck and fish geometry specially
         if (this.geometryType === 12 && gDuckTemplate) {
             // Clone duck template for this boid
-            this.visMesh = cloneWithMaterials(gDuckTemplate);
+            this.visMesh = gDuckTemplate.clone();
             this.visMesh.scale.set(0.5, 0.5, 0.5);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -2393,7 +2385,7 @@ class BOID {
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 13 && gFishTemplate) {
             // Clone fish template for this boid
-            this.visMesh = cloneWithMaterials(gFishTemplate);
+            this.visMesh = gFishTemplate.clone();
             this.visMesh.scale.set(0.015, 0.015, 0.015);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -2417,7 +2409,7 @@ class BOID {
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 14 && gAvocadoTemplate) {
             // Clone avocado template for this boid
-            this.visMesh = cloneWithMaterials(gAvocadoTemplate);
+            this.visMesh = gAvocadoTemplate.clone();
             this.visMesh.scale.set(10.0, 10.0, 6.0);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -2441,7 +2433,7 @@ class BOID {
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 15 && gHelicopterTemplate) {
             // Clone helicopter template for this boid
-            this.visMesh = cloneWithMaterials(gHelicopterTemplate);
+            this.visMesh = gHelicopterTemplate.clone();
             this.visMesh.scale.set(1.0, 1.0, 1.0);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -2467,7 +2459,7 @@ class BOID {
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 16 && gPaperPlaneTemplate) {
             // Clone paper plane template for this boid
-            this.visMesh = cloneWithMaterials(gPaperPlaneTemplate);
+            this.visMesh = gPaperPlaneTemplate.clone();
             this.visMesh.scale.set(0.5, 0.5, 0.5);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -2491,7 +2483,7 @@ class BOID {
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 17 && gKoonsDogTemplate) {
             // Clone Koons Dog template for this boid
-            this.visMesh = cloneWithMaterials(gKoonsDogTemplate);
+            this.visMesh = gKoonsDogTemplate.clone();
             this.visMesh.scale.set(0.1, 0.1, 0.1);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -2535,11 +2527,7 @@ class BOID {
                 material = new THREE.MeshPhongMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
                     shininess: 100, 
-                    wireframe: boidProps.wireframe,
-                    side: sideOption});
-            } else if (effectiveMaterial === 'basic') {
-                material = new THREE.MeshBasicMaterial({
-                    color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
+                    shininess: 100, 
                     wireframe: boidProps.wireframe,
                     side: sideOption});
             } else if (effectiveMaterial === 'normal') {
@@ -2549,6 +2537,7 @@ class BOID {
             } else if (effectiveMaterial === 'toon') {
                 material = new THREE.MeshToonMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
+                    shininess: 100, 
                     wireframe: boidProps.wireframe,
                     side: sideOption});
             } else if (effectiveMaterial === 'depth') {
@@ -2556,7 +2545,7 @@ class BOID {
                     wireframe: boidProps.wireframe,
                     side: sideOption});
             } else {
-                material = new THREE.MeshPhongMaterial({
+                material = new THREE.MeshBasicMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
                     shininess: 100, 
                     wireframe: boidProps.wireframe,
@@ -3296,9 +3285,13 @@ function recreateBoidGeometries() {
         
         // Remove old meshes
         gThreeScene.remove(boid.visMesh);
+        if (boid.visMesh.geometry) boid.visMesh.geometry.dispose();
+        if (boid.visMesh.material) boid.visMesh.material.dispose();
         
         if (boid.visMesh2) {
             gThreeScene.remove(boid.visMesh2);
+            if (boid.visMesh2.geometry) boid.visMesh2.geometry.dispose();
+            if (boid.visMesh2.material) boid.visMesh2.material.dispose();
             boid.visMesh2 = null;
         }
         
@@ -3363,7 +3356,7 @@ function recreateBoidGeometries() {
         let material;
         if (boid.geometryType === 12 && gDuckTemplate) {
             // For duck geometry, clone the duck template
-            boid.visMesh = cloneWithMaterials(gDuckTemplate);
+            boid.visMesh = gDuckTemplate.clone();
             boid.visMesh.scale.set(0.3, 0.3, 0.3); // Scale down for boid size
             
             // Set position and add to scene
@@ -3391,7 +3384,7 @@ function recreateBoidGeometries() {
             continue; // Skip standard material creation
         } else if (boid.geometryType === 13 && gFishTemplate) {
             // For fish geometry, clone the fish template
-            boid.visMesh = cloneWithMaterials(gFishTemplate);
+            boid.visMesh = gFishTemplate.clone();
             boid.visMesh.scale.set(0.15, 0.15, 0.15); // Scale down for boid size
             
             // Set position and add to scene
@@ -3419,7 +3412,7 @@ function recreateBoidGeometries() {
             continue; // Skip standard material creation
         } else if (boid.geometryType === 14 && gAvocadoTemplate) {
             // For avocado geometry, clone the avocado template
-            boid.visMesh = cloneWithMaterials(gAvocadoTemplate);
+            boid.visMesh = gAvocadoTemplate.clone();
             boid.visMesh.scale.set(12.0, 12.0, 12.0); // Scale down for boid size
             
             // Set position and add to scene
@@ -3447,7 +3440,7 @@ function recreateBoidGeometries() {
             continue; // Skip standard material creation
         } else if (boid.geometryType === 15 && gHelicopterTemplate) {
             // For helicopter geometry, clone the helicopter template
-            boid.visMesh = cloneWithMaterials(gHelicopterTemplate);
+            boid.visMesh = gHelicopterTemplate.clone();
             boid.visMesh.scale.set(1.0, 1.0, 1.0); // Scale for boid size
             
             // Set position and add to scene
@@ -3477,7 +3470,7 @@ function recreateBoidGeometries() {
             continue; // Skip standard material creation
         } else if (boid.geometryType === 16 && gPaperPlaneTemplate) {
             // For paper plane geometry, clone the paper plane template
-            boid.visMesh = cloneWithMaterials(gPaperPlaneTemplate);
+            boid.visMesh = gPaperPlaneTemplate.clone();
             boid.visMesh.scale.set(0.2, 0.2, 0.2); // Scale for boid size
             
             // Set position and add to scene
@@ -3505,7 +3498,7 @@ function recreateBoidGeometries() {
             continue; // Skip standard material creation
         } else if (boid.geometryType === 17 && gKoonsDogTemplate) {
             // For Koons Dog geometry, clone Koons Dog template
-            boid.visMesh = cloneWithMaterials(gKoonsDogTemplate);
+            boid.visMesh = gKoonsDogTemplate.clone();
             boid.visMesh.scale.set(0.1, 0.1, 0.1); // Scale for boid size
             
             // Set position and add to scene
@@ -3549,10 +3542,6 @@ function recreateBoidGeometries() {
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                     shininess: 100, 
                     wireframe: boidProps.wireframe});
-            } else if (effectiveMaterial === 'basic') {
-                material = new THREE.MeshBasicMaterial({
-                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
-                    wireframe: boidProps.wireframe});
             } else if (effectiveMaterial === 'normal') {
                 material = new THREE.MeshNormalMaterial({
                     wireframe: boidProps.wireframe});
@@ -3564,9 +3553,8 @@ function recreateBoidGeometries() {
                 material = new THREE.MeshDepthMaterial({
                     wireframe: boidProps.wireframe});
             } else {
-                material = new THREE.MeshPhongMaterial({
+                material = new THREE.MeshBasicMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
-                    shininess: 100, 
                     wireframe: boidProps.wireframe});
             } 
         } else {
@@ -3587,10 +3575,6 @@ function recreateBoidGeometries() {
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                     shininess: 100, 
                     wireframe: boidProps.wireframe});
-            } else if (effectiveMaterial === 'basic') {
-                material = new THREE.MeshBasicMaterial({
-                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
-                    wireframe: boidProps.wireframe});
             } else if (effectiveMaterial === 'normal') {
                 material = new THREE.MeshNormalMaterial({
                     wireframe: boidProps.wireframe});
@@ -3602,9 +3586,8 @@ function recreateBoidGeometries() {
                 material = new THREE.MeshDepthMaterial({
                     wireframe: boidProps.wireframe});
             } else {
-                material = new THREE.MeshPhongMaterial({
+                material = new THREE.MeshBasicMaterial({
                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
-                    shininess: 100, 
                     wireframe: boidProps.wireframe});
             }
         }
@@ -4179,81 +4162,6 @@ function drawMainMenu() {
             ctx.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
             ctx.fill();
         }
-    } else if (gCameraMode === 6 || gCameraMode === 7) {
-        // Draw dolly camera icon (eye on railroad tracks)
-        const eyeScale = 0.7; // Make eye smaller
-        const eyeWidth = iconSize * 1.7 * eyeScale;
-        const eyeHeight = iconSize * 1.2 * eyeScale;
-        const eyeOffsetY = -iconSize * 0.6; // Move eye higher up
-        
-        // Eyeball offset for tracking mode - animate scanning back and forth
-        let eyeballOffsetX = 0;
-        if (gCameraMode === 7) {
-            const time = performance.now() * 0.001; // Time in seconds
-            const scanRange = eyeWidth * 0.25; // Maximum offset from center
-            eyeballOffsetX = Math.sin(time * 1.5) * scanRange; // Scan back and forth
-        }
-        
-        // Draw eye outline
-        ctx.strokeStyle = `hsla(0, 0%, 80%, 0.80)`;
-        ctx.lineWidth = eyeHeight * 0.1;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.arc(0, eyeOffsetY + eyeHeight * 0.3, eyeWidth / 2, -0.4, Math.PI + 0.4, true);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(0, eyeOffsetY - eyeHeight * 0.3, eyeWidth / 2, 0.4, Math.PI - 0.4, false);
-        ctx.stroke();
-        
-        // Draw iris
-        const irisRadius = eyeHeight * 0.25;
-        ctx.fillStyle = `rgba(100, 160, 180, 1.0)`;
-        ctx.beginPath();
-        ctx.arc(eyeballOffsetX, eyeOffsetY, irisRadius, 0, 2 * Math.PI);
-        ctx.fill();
-        
-        // Draw pupil
-        const pupilRadius = irisRadius * 0.4;
-        ctx.fillStyle = `rgba(26, 26, 26, 1.0)`;
-        ctx.beginPath();
-        ctx.arc(eyeballOffsetX, eyeOffsetY, pupilRadius, 0, 2 * Math.PI);
-        ctx.fill();
-        
-        // Draw railroad tracks below the eye
-        const trackY = iconSize * 0.35;
-        const trackWidth = iconSize * 2.0; // Track length
-        const railSpacing = iconSize * 0.35;
-        const tieSpacing = iconSize * 0.25;
-        const tieLength = railSpacing * 1.3; // Ties extend slightly beyond the rails
-        
-        ctx.lineCap = 'butt';
-        
-        // Draw railroad ties (sleepers) - same style as rails
-        ctx.lineWidth = iconSize * 0.08;
-        ctx.strokeStyle = `hsla(0, 0%, 70%, 0.9)`;
-        for (let i = -3; i <= 3; i++) {
-            const tieX = i * tieSpacing;
-            ctx.beginPath();
-            ctx.moveTo(tieX, trackY - tieLength / 2);
-            ctx.lineTo(tieX, trackY + tieLength / 2);
-            ctx.stroke();
-        }
-        
-        // Draw rails
-        ctx.lineWidth = iconSize * 0.12;
-        ctx.strokeStyle = `hsla(0, 0%, 75%, 1.0)`;
-        
-        // Left rail
-        ctx.beginPath();
-        ctx.moveTo(-trackWidth / 2, trackY - railSpacing / 2);
-        ctx.lineTo(trackWidth / 2, trackY - railSpacing / 2);
-        ctx.stroke();
-        
-        // Right rail
-        ctx.beginPath();
-        ctx.moveTo(-trackWidth / 2, trackY + railSpacing / 2);
-        ctx.lineTo(trackWidth / 2, trackY + railSpacing / 2);
-        ctx.stroke();
     } else {
         // Draw eye icon for first-person mode
         const eyeWidth = iconSize * 1.7;
@@ -4699,7 +4607,7 @@ function drawSimMenu() {
             'Separation', 'Alignment', 'Cohesion',
             'Minimum Speed', 'Speed Limit', 'Corralling Force', 'Corral Margin',
             '', '', // blank spaces
-            'Room Depth', 'Room Height', 'Room Width'
+            'World Size X', 'World Size Y', 'World Size Z'
         ];
         ctx.font = `${0.35 * knobRadius}px verdana`;
         ctx.textAlign = 'center';
@@ -6483,7 +6391,8 @@ function updateWorldGeometry(changedDimension) {
             new THREE.PlaneGeometry(boxSize.x * 2, boxSize.z * 2, 1, 1),
             new THREE.MeshPhongMaterial({ 
                 map: checkerTexture,
-                shininess: 1.3
+                shininess: 1.3,
+                roughness: 0.0,
             })
         );
         
@@ -6866,111 +6775,48 @@ function updateWorldGeometry(changedDimension) {
 }
 
 // ------------------------------------------
-// Loading screen UI functions
+// Minimal loading screen functions
 // ------------------------------------------
 
-// Create loading screen UI
 function createLoadingScreen() {
-    // Create loading screen overlay
-    gLoadingScreenElement = document.createElement('div');
-    gLoadingScreenElement.id = 'loading-screen';
-    gLoadingScreenElement.style.position = 'fixed';
-    gLoadingScreenElement.style.top = '0';
-    gLoadingScreenElement.style.left = '0';
-    gLoadingScreenElement.style.width = '100%';
-    gLoadingScreenElement.style.height = '100%';
-    gLoadingScreenElement.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
-    gLoadingScreenElement.style.display = 'flex';
-    gLoadingScreenElement.style.flexDirection = 'column';
-    gLoadingScreenElement.style.justifyContent = 'center';  
-    gLoadingScreenElement.style.alignItems = 'center';
-    gLoadingScreenElement.style.zIndex = '10000';
-    gLoadingScreenElement.style.fontFamily = 'verdana, sans-serif';
-    gLoadingScreenElement.style.color = '#c8dcf0';
+    gLoadingScreen = document.createElement('div');
+    gLoadingScreen.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;z-index:9999';
     
-    /*// Create text above the bar
-    gLoadingTextElement = document.createElement('div');
-    gLoadingTextElement.textContent = '';
-    gLoadingTextElement.style.fontSize = '18px';
-    gLoadingTextElement.style.marginBottom = '20px';
-    gLoadingScreenElement.appendChild(gLoadingTextElement);*/
+    const container = document.createElement('div');
+    container.style.cssText = 'width:400px;height:20px;background:rgba(77,102,128,0.3);border-radius:15px;overflow:hidden;border:2px solid rgba(200,220,240,0.5);position:relative';
     
-    // Create progress bar container
-    const barContainer = document.createElement('div');
-    barContainer.style.width = '400px';
-    barContainer.style.height = '20px';
-    barContainer.style.backgroundColor = 'rgba(77, 102, 128, 0.3)';
-    barContainer.style.borderRadius = '15px';
-    barContainer.style.overflow = 'hidden';
-    barContainer.style.border = '2px solid rgba(200, 220, 240, 0.5)';
-    barContainer.style.position = 'relative';
+    gLoadingBar = document.createElement('div');
+    gLoadingBar.style.cssText = 'width:0%;height:100%;background:rgba(153,200,220,0.8);position:absolute;left:0;top:0';
     
-    // Create progress bar fill
-    gLoadingBarElement = document.createElement('div');
-    gLoadingBarElement.style.width = '0%';
-    gLoadingBarElement.style.height = '100%';
-    gLoadingBarElement.style.backgroundColor = 'rgba(153, 200, 220, 0.8)';
-    gLoadingBarElement.style.transition = 'width 0.3s ease';
-    gLoadingBarElement.style.position = 'absolute';
-    gLoadingBarElement.style.top = '0';
-    gLoadingBarElement.style.left = '0';
-    barContainer.appendChild(gLoadingBarElement);
+    const text = document.createElement('div');
+    text.textContent = "Okay... let's do it";
+    text.style.cssText = 'position:absolute;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font:bold 14px verdana;color:rgba(255,255,255,0.95);letter-spacing:1px;clip-path:inset(0 100% 0 0)';
+    text.id = 'loadText';
     
-    // Create revealed text (only visible where progress bar has filled)
-    const revealedText = document.createElement('div');
-    revealedText.textContent = "Okay... let's do it";
-    revealedText.style.position = 'absolute';
-    revealedText.style.width = '100%';
-    revealedText.style.height = '100%';
-    revealedText.style.display = 'flex';
-    revealedText.style.alignItems = 'center';
-    revealedText.style.justifyContent = 'center';
-    revealedText.style.fontSize = '14px';
-    revealedText.style.fontWeight = 'bold';
-    revealedText.style.color = 'rgba(255, 255, 255, 0.95)';
-    revealedText.style.letterSpacing = '1px';
-    revealedText.style.clipPath = 'inset(0 100% 0 0)';
-    revealedText.style.transition = 'clip-path 0.3s ease';
-    revealedText.style.pointerEvents = 'none';
-    revealedText.id = 'revealedProgressText';
-    barContainer.appendChild(revealedText);
-    
-    gLoadingScreenElement.appendChild(barContainer);
-    
-    document.body.appendChild(gLoadingScreenElement);
+    container.appendChild(gLoadingBar);
+    container.appendChild(text);
+    gLoadingScreen.appendChild(container);
+    document.body.appendChild(gLoadingScreen);
 }
 
-// Update loading screen progress
-function updateLoadingProgress(itemsLoaded, itemsTotal) {
-    if (gLoadingBarElement) {
-        const progress = (itemsLoaded / itemsTotal * 100);
-        gLoadingBarElement.style.width = progress + '%';
-        
-        // Update revealed text clip-path
-        const revealedText = document.getElementById('revealedProgressText');
-        if (revealedText) {
-            const clipRight = 100 - progress;
-            revealedText.style.clipPath = 'inset(0 ' + clipRight + '% 0 0)';
-        }
+function updateLoadingProgress(loaded, total) {
+    if (gLoadingBar) {
+        const pct = (loaded / total * 100);
+        gLoadingBar.style.width = pct + '%';
+        const text = document.getElementById('loadText');
+        if (text) text.style.clipPath = 'inset(0 ' + (100 - pct) + '% 0 0)';
     }
 }
 
-// Hide loading screen with fade out
-function hideLoadingScreen() {
-    if (gLoadingScreenElement) {
-        gLoadingScreenElement.style.transition = 'opacity 0.5s ease';
-        gLoadingScreenElement.style.opacity = '0';
-        setTimeout(function() {
-            if (gLoadingScreenElement && gLoadingScreenElement.parentNode) {
-                gLoadingScreenElement.parentNode.removeChild(gLoadingScreenElement);
-            }
-            gLoadingScreenElement = null;
-            gLoadingBarElement = null;
-            gLoadingTextElement = null;
-        }, 500);
+function removeLoadingScreen() {
+    if (gLoadingScreen && gLoadingScreen.parentNode) {
+        gLoadingScreen.parentNode.removeChild(gLoadingScreen);
+        gLoadingScreen = null;
+        gLoadingBar = null;
     }
 }
 
+// ------------------------------------------
 // Start all animations after assets are loaded
 function startAnimations() {
     gChairSliding = true;
@@ -7173,37 +7019,6 @@ function updateDollyCartPosition() {
     
     gDollyCartMesh.position.set(worldX, gDollyRailsPosition.y, worldZ);
     gDollyCartMesh.rotation.y = gDollyRailsRotation;
-}
-
-// Helper function to fix deprecated texture formats in loaded models
-function fixTextureFormats(object) {
-    object.traverse(function(child) {
-        if (child.isMesh && child.material) {
-            const materials = Array.isArray(child.material) ? child.material : [child.material];
-            materials.forEach(function(material) {
-                // Fix all texture properties
-                ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'bumpMap', 'displacementMap', 'alphaMap'].forEach(function(textureProp) {
-                    if (material[textureProp]) {
-                        const texture = material[textureProp];
-                        // Fix deprecated RGBFormat
-                        if (texture.format === THREE.RGBFormat) {
-                            texture.format = THREE.RGBAFormat;
-                        }
-                        // Ensure sRGB textures use correct format and type
-                        if (texture.colorSpace === THREE.SRGBColorSpace || texture.encoding === THREE.sRGBEncoding) {
-                            if (texture.format !== THREE.RGBAFormat) {
-                                texture.format = THREE.RGBAFormat;
-                            }
-                            if (texture.type !== THREE.UnsignedByteType) {
-                                texture.type = THREE.UnsignedByteType;
-                            }
-                        }
-                        texture.needsUpdate = true;
-                    }
-                });
-            });
-        }
-    });
 }
 
 // ------------------------------------------
@@ -7462,31 +7277,18 @@ function initThreeScene() {
     gLoadingManager.onLoad = function() {
         console.log('All assets loaded. Starting animations...');
         gAssetsLoaded = true;
-        
-        // Hide loading screen
-        hideLoadingScreen();
-        
-        // Start animations
+        removeLoadingScreen();
         startAnimations();
-        
-        // Start the update loop
-        update();
     };
     
     gLoadingManager.onProgress = function(url, itemsLoaded, itemsTotal) {
         const progress = (itemsLoaded / itemsTotal * 100).toFixed(0);
         console.log('Loading assets: ' + progress + '% (' + itemsLoaded + '/' + itemsTotal + ')');
-        
-        // Update loading screen
         updateLoadingProgress(itemsLoaded, itemsTotal);
     };
     
     gLoadingManager.onError = function(url) {
         console.error('Error loading: ' + url);
-        if (gLoadingTextElement) {
-            gLoadingTextElement.textContent = 'Error loading: ' + url;
-            gLoadingTextElement.style.color = '#ff6666';
-        }
     };
     
     gThreeScene = new THREE.Scene();
@@ -7622,7 +7424,8 @@ function initThreeScene() {
         new THREE.MeshPhongMaterial({ 
             map: checkerTexture,
             //color: new THREE.Color(`hsl(0, 0%, 30%)`),
-            shininess: 100
+            shininess: 100,
+            roughness: 0.0,
         })
     );				
 
@@ -7652,6 +7455,7 @@ function initThreeScene() {
                 new THREE.MeshPhongMaterial({
                     map: texture,
                     shininess: 5,
+                    roughness: 0.8,
                     clippingPlanes: [clipPlane],
                     clipShadows: true
                 })
@@ -7698,9 +7502,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/stool.gltf',
             function(gltf) {
                 var stool = gltf.scene;
-                
-                // Fix deprecated texture formats
-                fixTextureFormats(stool);
                 
                 // Position on floor in center of room - start high for animation
                 
@@ -7989,7 +7790,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Duck.gltf',
             function(gltf) {
                 var duck = gltf.scene;
-                fixTextureFormats(duck);
                 
                 // Position below floor initially for entrance animation
                 duck.position.set(gDuckInitialX, gDuckStartY, gDuckInitialZ);
@@ -8095,7 +7895,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/fishBarramundi.gltf',
             function(gltf) {
                 var fish = gltf.scene;
-                fixTextureFormats(fish);
             
                 // Remove any imported lights
                 var lightsToRemove = [];
@@ -8152,7 +7951,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Avocado.gltf',
             function(gltf) {
                 var avocado = gltf.scene;
-                fixTextureFormats(avocado);
                 
                 // Position at geometric center of room (mid-height)
                 avocado.position.set(0, 8, 0);
@@ -8208,7 +8006,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/miniMammothDisplay.gltf',
             function(gltf) {
                 var mammoth = gltf.scene;
-                fixTextureFormats(mammoth);
                 
                 // Position on floor - start at gMammothStartZ for slide-in animation
                 mammoth.position.set(0, 0, gMammothStartZ);
@@ -8280,7 +8077,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/mammothSkeleton.gltf',
             function(gltf) {
                 var skeleton = gltf.scene;
-                fixTextureFormats(skeleton);
                 
                 // Position below floor initially for entrance animation
                 skeleton.position.set(0, gFullMammothStartY, 25);
@@ -8346,7 +8142,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/helicopter.gltf',
             function(gltf) {
                 var helicopter = gltf.scene;
-                fixTextureFormats(helicopter);
                 
                 // Position at geometric center of room (mid-height)
                 helicopter.position.set(0, 10, 0);
@@ -8399,7 +8194,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/paperPlane.gltf',
             function(gltf) {
                 var paperPlane = gltf.scene;
-                fixTextureFormats(paperPlane);
                 
                 // Scale appropriately
                 paperPlane.scale.set(0.5, 0.5, 0.5);
@@ -8446,7 +8240,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/teapotTable.gltf',
             function(gltf) {
                 var teapot = gltf.scene;
-                fixTextureFormats(teapot);
                 
                 // Position object at starting position
                 teapot.position.set(gTeapotInitialX, 0, gTeapotInitialZ);
@@ -8514,13 +8307,12 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/sheenChair.gltf',
             function(gltf) {
                 var chair = gltf.scene;
-                fixTextureFormats(chair);
                 
                 // Position on floor - start at slide-in position
                 chair.position.set(gChairStartX, 0, gChairInitialZ);
                 
                 // Scale appropriately
-                chair.scale.set(1.5, 1, 1);
+                chair.scale.set(1, 1, 1);
 
                 // Rotate 90-degrees 
                 chair.rotation.y = 3 * Math.PI / 2;
@@ -8585,7 +8377,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/glamVelvetSofa.gltf',
             function(gltf) {
                 var sofa = gltf.scene;
-                fixTextureFormats(sofa);
                 
                 // Position close to left wall, centered in Z - start at slide-in position
                 sofa.position.set(gSofaStartX, 0, gSofaInitialZ);
@@ -8662,7 +8453,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/globeLamp.gltf',
             function(gltf) {
                 var globeLamp = gltf.scene;
-                fixTextureFormats(globeLamp);
                 
                 // Position object at starting position
                 globeLamp.position.set(20, 10, -15);
@@ -8740,7 +8530,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Brancusi_Bird.gltf',
             function(gltf) {
                 var bird = gltf.scene;
-                fixTextureFormats(bird);
                 
                 // Position object high for drop animation
                 bird.position.set(gBirdInitialX, gBirdStartY, gBirdInitialZ);
@@ -8808,7 +8597,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/KoonsDog.gltf',
             function(gltf) {
                 var koonsDog = gltf.scene;
-                fixTextureFormats(koonsDog);
                 
                 // Store a clone as template for boid geometry BEFORE any transformations
                 gKoonsDogTemplate = koonsDog.clone();
@@ -8877,7 +8665,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/skyPig.gltf',
             function(gltf) {
                 var skyPig = gltf.scene;
-                fixTextureFormats(skyPig);
                 
                 // Position on floor initially (for rise animation)
                 skyPig.position.set(15, gSkyPigStartY, -15);
@@ -9124,10 +8911,9 @@ function initThreeScene() {
                 var coneGeometry = new THREE.CylinderGeometry(coneTopRadius, coneBottomRadius, coneHeight, 16);
                 var coneMaterial = new THREE.MeshStandardMaterial({
                     color: 0x444444,
+                    shininess: 30,
                     emissive: 0xffffff,
                     emissiveIntensity: 0.1,
-                    metalness: 0.3,
-                    roughness: 0.7
                 });
                 var cone = new THREE.Mesh(coneGeometry, coneMaterial);
                 
@@ -9231,7 +9017,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeStar.gltf',
             function(gltf) {
                 starTemplate = gltf.scene;
-                fixTextureFormats(starTemplate);
                 
                 // Remove any imported lights
                 var lightsToRemove = [];
@@ -9271,7 +9056,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeHeart.gltf',
             function(gltf) {
                 heartTemplate = gltf.scene;
-                fixTextureFormats(heartTemplate);
                 
                 // Remove any imported lights
                 var lightsToRemove = [];
@@ -9311,7 +9095,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeMoon.gltf',
             function(gltf) {
                 moonTemplate = gltf.scene;
-                fixTextureFormats(moonTemplate);
                 
                 // Remove any imported lights
                 var lightsToRemove = [];
@@ -9351,7 +9134,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeClover.gltf',
             function(gltf) {
                 cloverTemplate = gltf.scene;
-                fixTextureFormats(cloverTemplate);
                 
                 // Remove any imported lights
                 var lightsToRemove = [];
@@ -9391,7 +9173,6 @@ function initThreeScene() {
             'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/tubeDiamond.gltf',
             function(gltf) {
                 diamondTemplate = gltf.scene;
-                fixTextureFormats(diamondTemplate);
                 
                 // Remove any imported lights
                 var lightsToRemove = [];
@@ -11916,22 +11697,19 @@ function onPointer(evt) {
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableSphere && !hitSphere) {
-                // Only consider sphere as hit if its mesh is visible
-                if (intersects[i].object.visible) {
-                    hitSphere = true;
-                    hitSphereObstacle = intersects[i].object.userData.sphereObstacle;
-                    
-                    // Store the actual 3D point where the sphere was clicked
-                    var actualClickPoint = intersects[i].point;
-                    gSphereDragPlaneHeight = actualClickPoint.y;
-                    
-                    // Store offset from click point to sphere center
-                    gSphereDragOffset = new THREE.Vector3(
-                        hitSphereObstacle.position.x - actualClickPoint.x,
-                        hitSphereObstacle.position.y - actualClickPoint.y,
-                        hitSphereObstacle.position.z - actualClickPoint.z
-                    );
-                }
+                hitSphere = true;
+                hitSphereObstacle = intersects[i].object.userData.sphereObstacle;
+                
+                // Store the actual 3D point where the sphere was clicked
+                var actualClickPoint = intersects[i].point;
+                gSphereDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to sphere center
+                gSphereDragOffset = new THREE.Vector3(
+                    hitSphereObstacle.position.x - actualClickPoint.x,
+                    hitSphereObstacle.position.y - actualClickPoint.y,
+                    hitSphereObstacle.position.z - actualClickPoint.z
+                );
                 // Don't break - check if lamp components are also hit
             }
             if (intersects[i].object.userData.isDraggableSkyPig && !hitSkyPig) {
@@ -11951,30 +11729,24 @@ function onPointer(evt) {
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableCylinder && !hitCylinder) {
-                // Only consider cylinder as hit if its mesh is visible
-                if (intersects[i].object.visible) {
-                    hitCylinder = true;
-                    hitCylinderObstacle = intersects[i].object.userData.cylinderObstacle;
-                    
-                    // Store the actual 3D point where the cylinder was clicked
-                    var actualClickPoint = intersects[i].point;
-                    gCylinderDragPlaneHeight = actualClickPoint.y;
-                    
-                    // Store offset from click point to cylinder center (X and Z only)
-                    gCylinderDragOffset = new THREE.Vector3(
-                        hitCylinderObstacle.position.x - actualClickPoint.x,
-                        0,
-                        hitCylinderObstacle.position.z - actualClickPoint.z
-                    );
-                }
+                hitCylinder = true;
+                hitCylinderObstacle = intersects[i].object.userData.cylinderObstacle;
+                
+                // Store the actual 3D point where the cylinder was clicked
+                var actualClickPoint = intersects[i].point;
+                gCylinderDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to cylinder center (X and Z only)
+                gCylinderDragOffset = new THREE.Vector3(
+                    hitCylinderObstacle.position.x - actualClickPoint.x,
+                    0,
+                    hitCylinderObstacle.position.z - actualClickPoint.z
+                );
                 // Don't break - check if lamp components are also hit
             }
             if (intersects[i].object.userData.isDraggableTorus && !hitTorus) {
-                // Only consider torus as hit if its mesh is visible
-                if (intersects[i].object.visible) {
-                    hitTorus = true;
-                    hitTorusObstacle = intersects[i].object.userData.torusObstacle;
-                }
+                hitTorus = true;
+                hitTorusObstacle = intersects[i].object.userData.torusObstacle;
                 // Don't break - check if lamp components are also hit
             }
             if (intersects[i].object.userData.isLampCone) {
@@ -13782,6 +13554,8 @@ function onPointer(evt) {
                         for (let i = startIndex; i < gPhysicsScene.objects.length; i++) {
                             const boid = gPhysicsScene.objects[i];
                             gThreeScene.remove(boid.visMesh);
+                            if (boid.visMesh.geometry) boid.visMesh.geometry.dispose();
+                            if (boid.visMesh.material) boid.visMesh.material.dispose();
                             
                             let geometry;
                             const rad = boid.rad;
@@ -13818,10 +13592,6 @@ function onPointer(evt) {
                                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
                                     shininess: 100, 
                                     wireframe: boidProps.wireframe});
-                            } else if (effectiveMaterial === 'basic') {
-                                material = new THREE.MeshBasicMaterial({
-                                    color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
-                                    wireframe: boidProps.wireframe});
                             } else if (effectiveMaterial === 'normal') {
                                 material = new THREE.MeshNormalMaterial({wireframe: boidProps.wireframe});
                             } else if (effectiveMaterial === 'toon') {
@@ -13832,9 +13602,8 @@ function onPointer(evt) {
                                 material = new THREE.MeshDepthMaterial({
                                     wireframe: boidProps.wireframe});
                             } else {
-                                material = new THREE.MeshPhongMaterial({
+                                material = new THREE.MeshBasicMaterial({
                                     color: new THREE.Color(`hsl(${boid.hue}, ${boid.sat}%, ${boid.light}%)`), 
-                                    shininess: 100,
                                     wireframe: boidProps.wireframe});
                             }
                             
@@ -15794,23 +15563,6 @@ function checkCameraMenuClick(clientX, clientY) {
         // Toggle stereo mode
         if (gAnaglyphEffect) {
             gStereoEnabled = !gStereoEnabled;
-            
-            if (gStereoEnabled) {
-                // Entering stereo mode - save current lightness and set to maximum
-                gSavedLightnessBeforeStereo = gBoidLightness;
-                gBoidLightness = 100;
-                initColorWheel();
-                applyMixedColors();
-            } else {
-                // Leaving stereo mode - restore original lightness
-                if (gSavedLightnessBeforeStereo !== null) {
-                    gBoidLightness = gSavedLightnessBeforeStereo;
-                    gSavedLightnessBeforeStereo = null;
-                    initColorWheel();
-                    applyMixedColors();
-                }
-            }
-            
             console.log('Stereo mode ' + (gStereoEnabled ? 'enabled' : 'disabled'));
         } else {
             console.warn('Stereo mode not available - AnaglyphEffect not loaded');
@@ -16106,10 +15858,7 @@ function applyMixedColors() {
                     }
                 } else if (boid.visMesh.material) {
                     // For standard geometries with a single material
-                    // Only update color if material supports it (not Normal or Depth materials)
-                    if (boid.visMesh.material.color) {
-                        boid.visMesh.material.color = new THREE.Color(`hsl(${Math.round(boid.hue)}, ${boid.sat}%, ${boid.light}%)`);
-                    }
+                    boid.visMesh.material.color = new THREE.Color(`hsl(${Math.round(boid.hue)}, ${boid.sat}%, ${boid.light}%)`);
                 }
             }
         }
@@ -16976,8 +16725,8 @@ function update() {
             gRug.material.clippingPlanes[0].constant = currentX;
         }
         
-        // Stop animation when nearly complete (90%) - remove roll slightly before end
-        if (t >= 0.8) {
+        // Stop animation when complete
+        if (t >= 1.0) {
             gRugAnimating = false;
             // Remove the carpet roll
             gThreeScene.remove(gRugRoll);
@@ -17040,8 +16789,8 @@ function update() {
     if (gChairSliding && gChair) {
         gChairSlideTimer += deltaT;
         
-        // Slide from X=100 to X=-2 over 3.5 seconds with ease-out (deceleration)
-        var duration = 4.0;
+        // Slide from X=60 to X=-2 over 2 seconds with ease-out (deceleration)
+        var duration = 2.0;
         var t = Math.min(gChairSlideTimer / duration, 1.0);
         
         // Cubic ease-out: y = 1 - (1-x)^3 (starts fast, ends slow - deceleration)
@@ -18138,10 +17887,13 @@ function update() {
     }
     
     // Render scene with stereo effect if enabled
-    if (gStereoEnabled && gAnaglyphEffect) {
-        gAnaglyphEffect.render(gThreeScene, gCamera);
-    } else {
-        gRenderer.render(gThreeScene, gCamera);
+    // Skip rendering until all assets are loaded to avoid choppy initial display
+    if (gAssetsLoaded) {
+        if (gStereoEnabled && gAnaglyphEffect) {
+            gAnaglyphEffect.render(gThreeScene, gCamera);
+        } else {
+            gRenderer.render(gThreeScene, gCamera);
+        }
     }
     
     // Draw menus on overlay canvas
@@ -18175,31 +17927,11 @@ function update() {
 }
 
 // RUN -----------------------------------
-// Create and show loading screen first
 createLoadingScreen();
-
-// Initialize scene (this will begin loading assets)
 initThreeScene();
 initColorWheel();
 onWindowResize();
 makeBoids();
-
-// Helper function to clone an object with deep material cloning
-// This ensures each boid has its own material instances, preventing
-// texture/property changes on one boid from affecting others
-function cloneWithMaterials(object) {
-    const cloned = object.clone();
-    cloned.traverse(function(child) {
-        if (child.isMesh && child.material) {
-            if (Array.isArray(child.material)) {
-                child.material = child.material.map(mat => mat.clone());
-            } else {
-                child.material = child.material.clone();
-            }
-        }
-    });
-    return cloned;
-}
 
 // Apply checkerboard pattern to lead boid for easy identification
 function applyCheckerboardToLeadBoid() {
@@ -18255,24 +17987,16 @@ function applyCheckerboardToLeadBoid() {
                     if (Array.isArray(child.material)) {
                         child.material.forEach(mat => {
                             mat.map = texture;
-                            // Only apply emissive properties to materials that support them
-                            // (excludes MeshNormalMaterial, MeshBasicMaterial, MeshDepthMaterial)
-                            if (mat.emissive !== undefined) {
-                                mat.emissiveMap = emissiveTexture;
-                                mat.emissive = new THREE.Color(0xffffff);
-                                mat.emissiveIntensity = gHeadlightIntensity > 0 ? 1.0 : 0;
-                            }
+                            mat.emissiveMap = emissiveTexture;
+                            mat.emissive = new THREE.Color(0xffffff);
+                            mat.emissiveIntensity = gHeadlightIntensity > 0 ? 1.0 : 0;
                             mat.needsUpdate = true;
                         });
                     } else {
                         child.material.map = texture;
-                        // Only apply emissive properties to materials that support them
-                        // (excludes MeshNormalMaterial, MeshBasicMaterial, MeshDepthMaterial)
-                        if (child.material.emissive !== undefined) {
-                            child.material.emissiveMap = emissiveTexture;
-                            child.material.emissive = new THREE.Color(0xffffff);
-                            child.material.emissiveIntensity = gHeadlightIntensity > 0 ? 1.0 : 0;
-                        }
+                        child.material.emissiveMap = emissiveTexture;
+                        child.material.emissive = new THREE.Color(0xffffff);
+                        child.material.emissiveIntensity = gHeadlightIntensity > 0 ? 1.0 : 0;
                         child.material.needsUpdate = true;
                     }
                 }
@@ -18290,5 +18014,4 @@ for (var i = 0; i < gPhysicsScene.objects.length; i++) {
 }
 // Don't apply any initial rotations - lamps are already in correct position
 // drawButtons(); // Removed - functionality moved to main menu
-
-// Note: update() is now called from gLoadingManager.onLoad() after all assets are loaded
+update();
