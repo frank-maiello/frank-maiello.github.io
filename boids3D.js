@@ -16,6 +16,7 @@ var gThreeScene;
 var gRenderer;
 var gAnaglyphEffect = null; // AnaglyphEffect for stereo rendering
 var gStereoEnabled = false; // Whether stereo/anaglyph mode is enabled
+var gSavedLightnessBeforeStereo = null; // Saved lightness value before entering stereo mode
 var gCamera;
 var gCameraControl;
 var gGrabber;
@@ -1638,11 +1639,11 @@ class Lamp {
         this.coneTipCapOuter.userData.initialPosition = this.coneTipCapOuter.position.clone();
         this.coneTipCapOuter.userData.initialQuaternion = this.coneTipCapOuter.quaternion.clone();
         
-        // Add small point light at tip to illuminate plug interior
+        /*// Add small point light at tip to illuminate plug interior
         this.tipLight = new THREE.PointLight(0xffffee, 2.0, 0.5);
         this.tipLight.position.copy(this.coneTipCapInner.position);
         this.rotatableGroup.add(this.tipLight);
-        this.tipLight.userData.initialPosition = this.tipLight.position.clone();
+        this.tipLight.userData.initialPosition = this.tipLight.position.clone();*/
         
         // Inner cone - bright white
         var innerConeMaterial = new THREE.MeshPhongMaterial({
@@ -2368,7 +2369,7 @@ class BOID {
         // Handle duck and fish geometry specially
         if (this.geometryType === 12 && gDuckTemplate) {
             // Clone duck template for this boid
-            this.visMesh = gDuckTemplate.clone();
+            this.visMesh = cloneWithMaterials(gDuckTemplate);
             this.visMesh.scale.set(0.5, 0.5, 0.5);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -2392,7 +2393,7 @@ class BOID {
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 13 && gFishTemplate) {
             // Clone fish template for this boid
-            this.visMesh = gFishTemplate.clone();
+            this.visMesh = cloneWithMaterials(gFishTemplate);
             this.visMesh.scale.set(0.015, 0.015, 0.015);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -2416,7 +2417,7 @@ class BOID {
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 14 && gAvocadoTemplate) {
             // Clone avocado template for this boid
-            this.visMesh = gAvocadoTemplate.clone();
+            this.visMesh = cloneWithMaterials(gAvocadoTemplate);
             this.visMesh.scale.set(10.0, 10.0, 6.0);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -2440,7 +2441,7 @@ class BOID {
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 15 && gHelicopterTemplate) {
             // Clone helicopter template for this boid
-            this.visMesh = gHelicopterTemplate.clone();
+            this.visMesh = cloneWithMaterials(gHelicopterTemplate);
             this.visMesh.scale.set(1.0, 1.0, 1.0);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -2466,7 +2467,7 @@ class BOID {
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 16 && gPaperPlaneTemplate) {
             // Clone paper plane template for this boid
-            this.visMesh = gPaperPlaneTemplate.clone();
+            this.visMesh = cloneWithMaterials(gPaperPlaneTemplate);
             this.visMesh.scale.set(0.5, 0.5, 0.5);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -2490,7 +2491,7 @@ class BOID {
             gThreeScene.add(this.visMesh);
         } else if (this.geometryType === 17 && gKoonsDogTemplate) {
             // Clone Koons Dog template for this boid
-            this.visMesh = gKoonsDogTemplate.clone();
+            this.visMesh = cloneWithMaterials(gKoonsDogTemplate);
             this.visMesh.scale.set(0.1, 0.1, 0.1);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
@@ -3362,7 +3363,7 @@ function recreateBoidGeometries() {
         let material;
         if (boid.geometryType === 12 && gDuckTemplate) {
             // For duck geometry, clone the duck template
-            boid.visMesh = gDuckTemplate.clone();
+            boid.visMesh = cloneWithMaterials(gDuckTemplate);
             boid.visMesh.scale.set(0.3, 0.3, 0.3); // Scale down for boid size
             
             // Set position and add to scene
@@ -3390,7 +3391,7 @@ function recreateBoidGeometries() {
             continue; // Skip standard material creation
         } else if (boid.geometryType === 13 && gFishTemplate) {
             // For fish geometry, clone the fish template
-            boid.visMesh = gFishTemplate.clone();
+            boid.visMesh = cloneWithMaterials(gFishTemplate);
             boid.visMesh.scale.set(0.15, 0.15, 0.15); // Scale down for boid size
             
             // Set position and add to scene
@@ -3418,7 +3419,7 @@ function recreateBoidGeometries() {
             continue; // Skip standard material creation
         } else if (boid.geometryType === 14 && gAvocadoTemplate) {
             // For avocado geometry, clone the avocado template
-            boid.visMesh = gAvocadoTemplate.clone();
+            boid.visMesh = cloneWithMaterials(gAvocadoTemplate);
             boid.visMesh.scale.set(12.0, 12.0, 12.0); // Scale down for boid size
             
             // Set position and add to scene
@@ -3446,7 +3447,7 @@ function recreateBoidGeometries() {
             continue; // Skip standard material creation
         } else if (boid.geometryType === 15 && gHelicopterTemplate) {
             // For helicopter geometry, clone the helicopter template
-            boid.visMesh = gHelicopterTemplate.clone();
+            boid.visMesh = cloneWithMaterials(gHelicopterTemplate);
             boid.visMesh.scale.set(1.0, 1.0, 1.0); // Scale for boid size
             
             // Set position and add to scene
@@ -3476,7 +3477,7 @@ function recreateBoidGeometries() {
             continue; // Skip standard material creation
         } else if (boid.geometryType === 16 && gPaperPlaneTemplate) {
             // For paper plane geometry, clone the paper plane template
-            boid.visMesh = gPaperPlaneTemplate.clone();
+            boid.visMesh = cloneWithMaterials(gPaperPlaneTemplate);
             boid.visMesh.scale.set(0.2, 0.2, 0.2); // Scale for boid size
             
             // Set position and add to scene
@@ -3504,7 +3505,7 @@ function recreateBoidGeometries() {
             continue; // Skip standard material creation
         } else if (boid.geometryType === 17 && gKoonsDogTemplate) {
             // For Koons Dog geometry, clone Koons Dog template
-            boid.visMesh = gKoonsDogTemplate.clone();
+            boid.visMesh = cloneWithMaterials(gKoonsDogTemplate);
             boid.visMesh.scale.set(0.1, 0.1, 0.1); // Scale for boid size
             
             // Set position and add to scene
@@ -4178,6 +4179,81 @@ function drawMainMenu() {
             ctx.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
             ctx.fill();
         }
+    } else if (gCameraMode === 6 || gCameraMode === 7) {
+        // Draw dolly camera icon (eye on railroad tracks)
+        const eyeScale = 0.7; // Make eye smaller
+        const eyeWidth = iconSize * 1.7 * eyeScale;
+        const eyeHeight = iconSize * 1.2 * eyeScale;
+        const eyeOffsetY = -iconSize * 0.6; // Move eye higher up
+        
+        // Eyeball offset for tracking mode - animate scanning back and forth
+        let eyeballOffsetX = 0;
+        if (gCameraMode === 7) {
+            const time = performance.now() * 0.001; // Time in seconds
+            const scanRange = eyeWidth * 0.25; // Maximum offset from center
+            eyeballOffsetX = Math.sin(time * 1.5) * scanRange; // Scan back and forth
+        }
+        
+        // Draw eye outline
+        ctx.strokeStyle = `hsla(0, 0%, 80%, 0.80)`;
+        ctx.lineWidth = eyeHeight * 0.1;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(0, eyeOffsetY + eyeHeight * 0.3, eyeWidth / 2, -0.4, Math.PI + 0.4, true);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, eyeOffsetY - eyeHeight * 0.3, eyeWidth / 2, 0.4, Math.PI - 0.4, false);
+        ctx.stroke();
+        
+        // Draw iris
+        const irisRadius = eyeHeight * 0.25;
+        ctx.fillStyle = `rgba(100, 160, 180, 1.0)`;
+        ctx.beginPath();
+        ctx.arc(eyeballOffsetX, eyeOffsetY, irisRadius, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Draw pupil
+        const pupilRadius = irisRadius * 0.4;
+        ctx.fillStyle = `rgba(26, 26, 26, 1.0)`;
+        ctx.beginPath();
+        ctx.arc(eyeballOffsetX, eyeOffsetY, pupilRadius, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Draw railroad tracks below the eye
+        const trackY = iconSize * 0.35;
+        const trackWidth = iconSize * 2.0; // Track length
+        const railSpacing = iconSize * 0.35;
+        const tieSpacing = iconSize * 0.25;
+        const tieLength = railSpacing * 1.3; // Ties extend slightly beyond the rails
+        
+        ctx.lineCap = 'butt';
+        
+        // Draw railroad ties (sleepers) - same style as rails
+        ctx.lineWidth = iconSize * 0.08;
+        ctx.strokeStyle = `hsla(0, 0%, 70%, 0.9)`;
+        for (let i = -3; i <= 3; i++) {
+            const tieX = i * tieSpacing;
+            ctx.beginPath();
+            ctx.moveTo(tieX, trackY - tieLength / 2);
+            ctx.lineTo(tieX, trackY + tieLength / 2);
+            ctx.stroke();
+        }
+        
+        // Draw rails
+        ctx.lineWidth = iconSize * 0.12;
+        ctx.strokeStyle = `hsla(0, 0%, 75%, 1.0)`;
+        
+        // Left rail
+        ctx.beginPath();
+        ctx.moveTo(-trackWidth / 2, trackY - railSpacing / 2);
+        ctx.lineTo(trackWidth / 2, trackY - railSpacing / 2);
+        ctx.stroke();
+        
+        // Right rail
+        ctx.beginPath();
+        ctx.moveTo(-trackWidth / 2, trackY + railSpacing / 2);
+        ctx.lineTo(trackWidth / 2, trackY + railSpacing / 2);
+        ctx.stroke();
     } else {
         // Draw eye icon for first-person mode
         const eyeWidth = iconSize * 1.7;
@@ -6827,6 +6903,7 @@ function createLoadingScreen() {
     barContainer.style.borderRadius = '15px';
     barContainer.style.overflow = 'hidden';
     barContainer.style.border = '2px solid rgba(200, 220, 240, 0.5)';
+    barContainer.style.position = 'relative';
     
     // Create progress bar fill
     gLoadingBarElement = document.createElement('div');
@@ -6834,7 +6911,29 @@ function createLoadingScreen() {
     gLoadingBarElement.style.height = '100%';
     gLoadingBarElement.style.backgroundColor = 'rgba(153, 200, 220, 0.8)';
     gLoadingBarElement.style.transition = 'width 0.3s ease';
+    gLoadingBarElement.style.position = 'absolute';
+    gLoadingBarElement.style.top = '0';
+    gLoadingBarElement.style.left = '0';
     barContainer.appendChild(gLoadingBarElement);
+    
+    // Create revealed text (only visible where progress bar has filled)
+    const revealedText = document.createElement('div');
+    revealedText.textContent = "Okay... let's do it";
+    revealedText.style.position = 'absolute';
+    revealedText.style.width = '100%';
+    revealedText.style.height = '100%';
+    revealedText.style.display = 'flex';
+    revealedText.style.alignItems = 'center';
+    revealedText.style.justifyContent = 'center';
+    revealedText.style.fontSize = '14px';
+    revealedText.style.fontWeight = 'bold';
+    revealedText.style.color = 'rgba(255, 255, 255, 0.95)';
+    revealedText.style.letterSpacing = '1px';
+    revealedText.style.clipPath = 'inset(0 100% 0 0)';
+    revealedText.style.transition = 'clip-path 0.3s ease';
+    revealedText.style.pointerEvents = 'none';
+    revealedText.id = 'revealedProgressText';
+    barContainer.appendChild(revealedText);
     
     gLoadingScreenElement.appendChild(barContainer);
     
@@ -6846,6 +6945,13 @@ function updateLoadingProgress(itemsLoaded, itemsTotal) {
     if (gLoadingBarElement) {
         const progress = (itemsLoaded / itemsTotal * 100);
         gLoadingBarElement.style.width = progress + '%';
+        
+        // Update revealed text clip-path
+        const revealedText = document.getElementById('revealedProgressText');
+        if (revealedText) {
+            const clipRight = 100 - progress;
+            revealedText.style.clipPath = 'inset(0 ' + clipRight + '% 0 0)';
+        }
     }
 }
 
@@ -11810,19 +11916,22 @@ function onPointer(evt) {
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableSphere && !hitSphere) {
-                hitSphere = true;
-                hitSphereObstacle = intersects[i].object.userData.sphereObstacle;
-                
-                // Store the actual 3D point where the sphere was clicked
-                var actualClickPoint = intersects[i].point;
-                gSphereDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to sphere center
-                gSphereDragOffset = new THREE.Vector3(
-                    hitSphereObstacle.position.x - actualClickPoint.x,
-                    hitSphereObstacle.position.y - actualClickPoint.y,
-                    hitSphereObstacle.position.z - actualClickPoint.z
-                );
+                // Only consider sphere as hit if its mesh is visible
+                if (intersects[i].object.visible) {
+                    hitSphere = true;
+                    hitSphereObstacle = intersects[i].object.userData.sphereObstacle;
+                    
+                    // Store the actual 3D point where the sphere was clicked
+                    var actualClickPoint = intersects[i].point;
+                    gSphereDragPlaneHeight = actualClickPoint.y;
+                    
+                    // Store offset from click point to sphere center
+                    gSphereDragOffset = new THREE.Vector3(
+                        hitSphereObstacle.position.x - actualClickPoint.x,
+                        hitSphereObstacle.position.y - actualClickPoint.y,
+                        hitSphereObstacle.position.z - actualClickPoint.z
+                    );
+                }
                 // Don't break - check if lamp components are also hit
             }
             if (intersects[i].object.userData.isDraggableSkyPig && !hitSkyPig) {
@@ -11842,24 +11951,30 @@ function onPointer(evt) {
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isDraggableCylinder && !hitCylinder) {
-                hitCylinder = true;
-                hitCylinderObstacle = intersects[i].object.userData.cylinderObstacle;
-                
-                // Store the actual 3D point where the cylinder was clicked
-                var actualClickPoint = intersects[i].point;
-                gCylinderDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to cylinder center (X and Z only)
-                gCylinderDragOffset = new THREE.Vector3(
-                    hitCylinderObstacle.position.x - actualClickPoint.x,
-                    0,
-                    hitCylinderObstacle.position.z - actualClickPoint.z
-                );
+                // Only consider cylinder as hit if its mesh is visible
+                if (intersects[i].object.visible) {
+                    hitCylinder = true;
+                    hitCylinderObstacle = intersects[i].object.userData.cylinderObstacle;
+                    
+                    // Store the actual 3D point where the cylinder was clicked
+                    var actualClickPoint = intersects[i].point;
+                    gCylinderDragPlaneHeight = actualClickPoint.y;
+                    
+                    // Store offset from click point to cylinder center (X and Z only)
+                    gCylinderDragOffset = new THREE.Vector3(
+                        hitCylinderObstacle.position.x - actualClickPoint.x,
+                        0,
+                        hitCylinderObstacle.position.z - actualClickPoint.z
+                    );
+                }
                 // Don't break - check if lamp components are also hit
             }
             if (intersects[i].object.userData.isDraggableTorus && !hitTorus) {
-                hitTorus = true;
-                hitTorusObstacle = intersects[i].object.userData.torusObstacle;
+                // Only consider torus as hit if its mesh is visible
+                if (intersects[i].object.visible) {
+                    hitTorus = true;
+                    hitTorusObstacle = intersects[i].object.userData.torusObstacle;
+                }
                 // Don't break - check if lamp components are also hit
             }
             if (intersects[i].object.userData.isLampCone) {
@@ -15679,6 +15794,23 @@ function checkCameraMenuClick(clientX, clientY) {
         // Toggle stereo mode
         if (gAnaglyphEffect) {
             gStereoEnabled = !gStereoEnabled;
+            
+            if (gStereoEnabled) {
+                // Entering stereo mode - save current lightness and set to maximum
+                gSavedLightnessBeforeStereo = gBoidLightness;
+                gBoidLightness = 100;
+                initColorWheel();
+                applyMixedColors();
+            } else {
+                // Leaving stereo mode - restore original lightness
+                if (gSavedLightnessBeforeStereo !== null) {
+                    gBoidLightness = gSavedLightnessBeforeStereo;
+                    gSavedLightnessBeforeStereo = null;
+                    initColorWheel();
+                    applyMixedColors();
+                }
+            }
+            
             console.log('Stereo mode ' + (gStereoEnabled ? 'enabled' : 'disabled'));
         } else {
             console.warn('Stereo mode not available - AnaglyphEffect not loaded');
@@ -18051,6 +18183,23 @@ initThreeScene();
 initColorWheel();
 onWindowResize();
 makeBoids();
+
+// Helper function to clone an object with deep material cloning
+// This ensures each boid has its own material instances, preventing
+// texture/property changes on one boid from affecting others
+function cloneWithMaterials(object) {
+    const cloned = object.clone();
+    cloned.traverse(function(child) {
+        if (child.isMesh && child.material) {
+            if (Array.isArray(child.material)) {
+                child.material = child.material.map(mat => mat.clone());
+            } else {
+                child.material = child.material.clone();
+            }
+        }
+    });
+    return cloned;
+}
 
 // Apply checkerboard pattern to lead boid for easy identification
 function applyCheckerboardToLeadBoid() {
