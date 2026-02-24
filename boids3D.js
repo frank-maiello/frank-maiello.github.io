@@ -913,12 +913,6 @@ class SphereObstacle {
     
     createMesh() {
         var geometry = new THREE.SphereGeometry(this.radius, 16, 16);
-        //var geometry = new THREE.TorusKnotGeometry(this.radius, this.radius * 0.4, 100, 16, 2, 3);
-        //var material = new THREE.MeshPhongMaterial({color: 0xc6b1aa, shininess: 100});
-        /*var material = new THREE.MeshPhongMaterial({
-            color: 0xc6b1aa, 
-            shininess: 100, 
-            wireframe: boidProps.wireframe});*/
         var material = new THREE.MeshStandardMaterial({
             color: `${`hsl(20, 90%, 50%)`}`, 
             metalness: 0.6, 
@@ -2526,8 +2520,7 @@ class BOID {
             } else if (effectiveMaterial === 'phong') {
                 material = new THREE.MeshPhongMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
-                    shininess: 100, 
-                    shininess: 100, 
+                    shininess: 100,
                     wireframe: boidProps.wireframe,
                     side: sideOption});
             } else if (effectiveMaterial === 'normal') {
@@ -2537,7 +2530,6 @@ class BOID {
             } else if (effectiveMaterial === 'toon') {
                 material = new THREE.MeshToonMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
-                    shininess: 100, 
                     wireframe: boidProps.wireframe,
                     side: sideOption});
             } else if (effectiveMaterial === 'depth') {
@@ -2547,7 +2539,6 @@ class BOID {
             } else {
                 material = new THREE.MeshBasicMaterial({
                     color: new THREE.Color(`hsl(${hue}, ${sat}%, ${light}%)`), 
-                    shininess: 100, 
                     wireframe: boidProps.wireframe,
                     side: sideOption});
             }
@@ -4162,6 +4153,81 @@ function drawMainMenu() {
             ctx.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
             ctx.fill();
         }
+    } else if (gCameraMode === 6 || gCameraMode === 7) {
+        // Draw dolly camera icon (eye on railroad tracks)
+        const eyeScale = 0.7; // Make eye smaller
+        const eyeWidth = iconSize * 1.7 * eyeScale;
+        const eyeHeight = iconSize * 1.2 * eyeScale;
+        const eyeOffsetY = -iconSize * 0.6; // Move eye higher up
+        
+        // Eyeball offset for tracking mode - animate scanning back and forth
+        let eyeballOffsetX = 0;
+        if (gCameraMode === 7) {
+            const time = performance.now() * 0.001; // Time in seconds
+            const scanRange = eyeWidth * 0.25; // Maximum offset from center
+            eyeballOffsetX = Math.sin(time * 1.5) * scanRange; // Scan back and forth
+        }
+        
+        // Draw eye outline
+        ctx.strokeStyle = `hsla(0, 0%, 80%, 0.80)`;
+        ctx.lineWidth = eyeHeight * 0.1;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(0, eyeOffsetY + eyeHeight * 0.3, eyeWidth / 2, -0.4, Math.PI + 0.4, true);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, eyeOffsetY - eyeHeight * 0.3, eyeWidth / 2, 0.4, Math.PI - 0.4, false);
+        ctx.stroke();
+        
+        // Draw iris
+        const irisRadius = eyeHeight * 0.25;
+        ctx.fillStyle = `rgba(100, 160, 180, 1.0)`;
+        ctx.beginPath();
+        ctx.arc(eyeballOffsetX, eyeOffsetY, irisRadius, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Draw pupil
+        const pupilRadius = irisRadius * 0.4;
+        ctx.fillStyle = `rgba(26, 26, 26, 1.0)`;
+        ctx.beginPath();
+        ctx.arc(eyeballOffsetX, eyeOffsetY, pupilRadius, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Draw railroad tracks below the eye
+        const trackY = iconSize * 0.35;
+        const trackWidth = iconSize * 2.0; // Track length
+        const railSpacing = iconSize * 0.35;
+        const tieSpacing = iconSize * 0.25;
+        const tieLength = railSpacing * 1.3; // Ties extend slightly beyond the rails
+        
+        ctx.lineCap = 'butt';
+        
+        // Draw railroad ties (sleepers) - same style as rails
+        ctx.lineWidth = iconSize * 0.08;
+        ctx.strokeStyle = `hsla(0, 0%, 70%, 0.9)`;
+        for (let i = -3; i <= 3; i++) {
+            const tieX = i * tieSpacing;
+            ctx.beginPath();
+            ctx.moveTo(tieX, trackY - tieLength / 2);
+            ctx.lineTo(tieX, trackY + tieLength / 2);
+            ctx.stroke();
+        }
+        
+        // Draw rails
+        ctx.lineWidth = iconSize * 0.12;
+        ctx.strokeStyle = `hsla(0, 0%, 75%, 1.0)`;
+        
+        // Left rail
+        ctx.beginPath();
+        ctx.moveTo(-trackWidth / 2, trackY - railSpacing / 2);
+        ctx.lineTo(trackWidth / 2, trackY - railSpacing / 2);
+        ctx.stroke();
+        
+        // Right rail
+        ctx.beginPath();
+        ctx.moveTo(-trackWidth / 2, trackY + railSpacing / 2);
+        ctx.lineTo(trackWidth / 2, trackY + railSpacing / 2);
+        ctx.stroke();
     } else {
         // Draw eye icon for first-person mode
         const eyeWidth = iconSize * 1.7;
@@ -6391,8 +6457,7 @@ function updateWorldGeometry(changedDimension) {
             new THREE.PlaneGeometry(boxSize.x * 2, boxSize.z * 2, 1, 1),
             new THREE.MeshPhongMaterial({ 
                 map: checkerTexture,
-                shininess: 1.3,
-                roughness: 0.0,
+                shininess: 1.3
             })
         );
         
@@ -7424,8 +7489,7 @@ function initThreeScene() {
         new THREE.MeshPhongMaterial({ 
             map: checkerTexture,
             //color: new THREE.Color(`hsl(0, 0%, 30%)`),
-            shininess: 100,
-            roughness: 0.0,
+            shininess: 100
         })
     );				
 
@@ -7455,7 +7519,6 @@ function initThreeScene() {
                 new THREE.MeshPhongMaterial({
                     map: texture,
                     shininess: 5,
-                    roughness: 0.8,
                     clippingPlanes: [clipPlane],
                     clipShadows: true
                 })
@@ -8911,7 +8974,6 @@ function initThreeScene() {
                 var coneGeometry = new THREE.CylinderGeometry(coneTopRadius, coneBottomRadius, coneHeight, 16);
                 var coneMaterial = new THREE.MeshStandardMaterial({
                     color: 0x444444,
-                    shininess: 30,
                     emissive: 0xffffff,
                     emissiveIntensity: 0.1,
                 });
@@ -10716,8 +10778,7 @@ function initThreeScene() {
             opacity: 1.0,
             shininess: 100,
             emissive: 0xffffff,
-            emissiveIntensity: 0.3,
-            //roughness: 0.0
+            emissiveIntensity: 0.3
         });
         
         var innerSolid = new THREE.Mesh(platonicConfig[i].geometry, innerMaterial);
@@ -15386,14 +15447,6 @@ function checkCameraMenuClick(clientX, clientY) {
     const menuOriginX = menuUpperLeftX;
     const menuOriginY = menuUpperLeftY;
     
-    // Debug: log if we're anywhere near the menu
-    const inMenuX = (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding);
-    const inMenuY = (clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding);
-    if (inMenuX && inMenuY) {
-        console.log('Click in camera menu area at', clientX, clientY);
-        console.log('Menu bounds:', menuOriginX - padding, 'to', menuOriginX + menuWidth + padding, ',', menuOriginY - padding, 'to', menuOriginY + menuHeight + padding);
-    }
-    
     // Check close button
     const closeIconRadius = 0.1 * menuScale * 0.25;
     const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
@@ -15556,8 +15609,6 @@ function checkCameraMenuClick(clientX, clientY) {
     const cbdy = clientY - checkboxY;
     const hitWidth = checkboxSize * 3 + 5; // Half-width
     const hitHeight = checkboxSize * 1.2 + 2; // Half-height (slightly reduced)
-    
-    console.log('Checkbox at', checkboxX, checkboxY, 'click at', clientX, clientY, 'dx', cbdx, 'dy', cbdy);
     
     if (Math.abs(cbdx) < hitWidth && Math.abs(cbdy) < hitHeight) {
         // Toggle stereo mode
