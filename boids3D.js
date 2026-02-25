@@ -443,6 +443,7 @@ var gSkyPigStartY = 0; // Starting Y position for sky pig
 var gSkyPigTargetY = 12; // Target Y position for sky pig
 var gSkyPigStartScale = 0.1; // Starting scale for sky pig (tiny)
 var gSkyPigTargetScale = 2.0; // Target scale for sky pig (full size)
+var gFemaleHead = null; // Reference to female head model
 var gColumnBaseSliding = false; // Flag for column base slide animation (starts after loading)
 var gColumnBaseSlideTimer = 0; // Timer for column base slide animation
 var gColumnBaseStartZ = 35; // Starting Z offset for column base slide
@@ -2374,6 +2375,17 @@ class BOID {
                         }
                     }
                 });
+            } else {
+                // Clone materials to prevent shared references
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
+                        }
+                    }
+                });
             }
             
             gThreeScene.add(this.visMesh);
@@ -2398,6 +2410,17 @@ class BOID {
                         }
                     }
                 });
+            } else {
+                // Clone materials to prevent shared references
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
+                        }
+                    }
+                });
             }
             
             gThreeScene.add(this.visMesh);
@@ -2419,6 +2442,17 @@ class BOID {
                             child.material = child.material.map(() => newMaterial.clone());
                         } else {
                             child.material = newMaterial;
+                        }
+                    }
+                });
+            } else {
+                // Clone materials to prevent shared references
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
                         }
                     }
                 });
@@ -2448,6 +2482,17 @@ class BOID {
                         }
                     }
                 });
+            } else {
+                // Clone materials to prevent shared references
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
+                        }
+                    }
+                });
             }
             
             gThreeScene.add(this.visMesh);
@@ -2472,6 +2517,17 @@ class BOID {
                         }
                     }
                 });
+            } else {
+                // Clone materials to prevent shared references
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
+                        }
+                    }
+                });
             }
             
             gThreeScene.add(this.visMesh);
@@ -2493,6 +2549,17 @@ class BOID {
                             child.material = child.material.map(() => newMaterial.clone());
                         } else {
                             child.material = newMaterial;
+                        }
+                    }
+                });
+            } else {
+                // Clone materials to prevent shared references
+                this.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
                         }
                     }
                 });
@@ -3368,8 +3435,18 @@ function recreateBoidGeometries() {
                         }
                     }
                 });
+            } else {
+                // Clone materials to prevent shared references
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
+                        }
+                    }
+                });
             }
-            // For 'imported' mode, materials are preserved as-is from template clone
             
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
@@ -3396,8 +3473,18 @@ function recreateBoidGeometries() {
                         }
                     }
                 });
+            } else {
+                // Clone materials to prevent shared references
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
+                        }
+                    }
+                });
             }
-            // For 'imported' mode, materials are preserved as-is from template clone
             
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
@@ -3424,8 +3511,18 @@ function recreateBoidGeometries() {
                         }
                     }
                 });
+            } else {
+                // Clone materials to prevent shared references
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
+                        }
+                    }
+                });
             }
-            // For 'imported' mode, materials are preserved as-is from template clone
             
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
@@ -3454,8 +3551,18 @@ function recreateBoidGeometries() {
                         }
                     }
                 });
+            } else {
+                // Clone materials to prevent shared references
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
+                        }
+                    }
+                });
             }
-            // For 'imported' mode, materials are preserved as-is from template clone
             
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
@@ -3482,8 +3589,18 @@ function recreateBoidGeometries() {
                         }
                     }
                 });
+            } else {
+                // Clone materials to prevent shared references
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
+                        }
+                    }
+                });
             }
-            // For 'imported' mode, materials are preserved as-is from template clone
             
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
@@ -3510,8 +3627,18 @@ function recreateBoidGeometries() {
                         }
                     }
                 });
+            } else {
+                // Clone materials to prevent shared references
+                boid.visMesh.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => mat.clone());
+                        } else {
+                            child.material = child.material.clone();
+                        }
+                    }
+                });
             }
-            // For 'imported' mode, materials are preserved as-is from template clone
             
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
@@ -7433,18 +7560,20 @@ function initThreeScene() {
     const tileSize = 512;
     for (let i = 0; i < tileRes; i++) {
         for (let j = 0; j < tileRes; j++) {
+            //ctx.fillStyle = (i + j) % 2 === 0 ? 'hsl(0, 0%, 86%)' : 'rgb(79, 79, 79)';
+            //ctx.fillRect(i * tileSize, j * tileSize, tileSize, tileSize);
             if ((i + j) % 2 === 0) {
                 ctx.beginPath();
                 ctx.arc(
                     i * tileSize + tileSize / 2, 
                     j * tileSize + tileSize / 2, 
-                    0.2 * tileSize, 
+                    0.3 * tileSize, 
                     0, 
                     2 * Math.PI);
-                ctx.fillStyle = 'hsl(180, 30%, 15%)';
+                ctx.fillStyle = 'hsl(180, 50%, 15%)';
                 ctx.fill();
-                ctx.strokeStyle = 'hsl(0, 0%, 70%)';
-                ctx.lineWidth = 0.02 * tileSize;
+                ctx.strokeStyle = 'hsl(0, 0%, 5%)';
+                ctx.lineWidth = 0.07 * tileSize;
                 ctx.stroke();
             } else {
                 ctx.beginPath();
@@ -7454,17 +7583,14 @@ function initThreeScene() {
                     0.45 * tileSize, 
                     0, 
                     2 * Math.PI);
-                ctx.fillStyle = 'hsl(0, 0%, 0%)';
+                ctx.fillStyle = 'hsl(0, 0%, 7%)';
                 ctx.fill();
                 ctx.strokeStyle = 'hsl(0, 0%, 70%)';
-                ctx.lineWidth = 0.04 * tileSize;
+                ctx.lineWidth = 0.02 * tileSize;
                 ctx.stroke();
-
-                
             }
         }
-
-        ctx.strokeStyle = 'hsl(0, 0%, 60%)';
+        ctx.strokeStyle = 'hsl(0, 0%, 0%)';
         ctx.lineWidth = 0.01 * tileSize;
         ctx.beginPath();
         ctx.moveTo(i * tileSize, 0);
@@ -7980,7 +8106,8 @@ function initThreeScene() {
                         
                         // Brighten the material
                         if (child.material) {
-                            if (child.material.map) {
+                            // Only set emissive properties if the material supports them
+                            if (child.material.map && child.material.emissive !== undefined) {
                                 child.material.emissiveMap = child.material.map;
                                 child.material.emissive = new THREE.Color(0xffffff);
                                 child.material.emissiveIntensity = 0.3;
@@ -8792,6 +8919,54 @@ function initThreeScene() {
             }
         );
     }
+    
+    /*// Load Female Head model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var femaleHeadLoader = new THREE.GLTFLoader(gLoadingManager);
+        femaleHeadLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/femaleHead.gltf',
+            function(gltf) {
+                var femaleHead = gltf.scene;
+                
+                // Position and scale
+                femaleHead.position.set(0, 10, 0);
+                femaleHead.scale.set(1.4, 1.4, 1.4);
+                femaleHead.rotation.y = 0;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                femaleHead.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows
+                femaleHead.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                gThreeScene.add(femaleHead);
+                gFemaleHead = femaleHead; // Store global reference
+                
+                console.log('Female Head model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Female Head model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Female Head model:', error);
+            }
+        );
+    }*/
     
     // Load Tube Star, Heart, Moon, Clover, and Diamond models using GLTFLoader for hanging decorations
     if (typeof THREE.GLTFLoader !== 'undefined') {
@@ -16127,15 +16302,17 @@ function update() {
             // Update emissive intensity on lead boid's checkerboard pattern
             if (leadBoid.visMesh) {
                 leadBoid.visMesh.traverse(function(child) {
-                    if (child.isMesh && child.material && child.material.emissiveMap) {
+                    if (child.isMesh && child.material) {
                         if (Array.isArray(child.material)) {
                             child.material.forEach(mat => {
-                                if (mat.emissiveMap) {
+                                if (mat.emissiveMap && mat.emissiveIntensity !== undefined) {
                                     mat.emissiveIntensity = 1.0;
                                 }
                             });
                         } else {
-                            child.material.emissiveIntensity = 1.0;
+                            if (child.material.emissiveMap && child.material.emissiveIntensity !== undefined) {
+                                child.material.emissiveIntensity = 1.0;
+                            }
                         }
                     }
                 });
@@ -16147,15 +16324,17 @@ function update() {
             const leadBoid = gPhysicsScene.objects[0];
             if (leadBoid && leadBoid.visMesh) {
                 leadBoid.visMesh.traverse(function(child) {
-                    if (child.isMesh && child.material && child.material.emissiveMap) {
+                    if (child.isMesh && child.material) {
                         if (Array.isArray(child.material)) {
                             child.material.forEach(mat => {
-                                if (mat.emissiveMap) {
+                                if (mat.emissiveMap && mat.emissiveIntensity !== undefined) {
                                     mat.emissiveIntensity = 0;
                                 }
                             });
                         } else {
-                            child.material.emissiveIntensity = 0;
+                            if (child.material.emissiveMap && child.material.emissiveIntensity !== undefined) {
+                                child.material.emissiveIntensity = 0;
+                            }
                         }
                     }
                 });
@@ -18036,19 +18215,31 @@ function applyCheckerboardToLeadBoid() {
             leadBoid.visMesh.traverse(function(child) {
                 if (child.isMesh && child.material) {
                     if (Array.isArray(child.material)) {
-                        child.material.forEach(mat => {
-                            mat.map = texture;
-                            mat.emissiveMap = emissiveTexture;
-                            mat.emissive = new THREE.Color(0xffffff);
-                            mat.emissiveIntensity = gHeadlightIntensity > 0 ? 1.0 : 0;
-                            mat.needsUpdate = true;
+                        // Clone each material in the array to avoid affecting other boids
+                        child.material = child.material.map(mat => {
+                            const clonedMat = mat.clone();
+                            clonedMat.map = texture;
+                            // Only set emissive properties if the material supports them
+                            if (clonedMat.emissive !== undefined) {
+                                clonedMat.emissiveMap = emissiveTexture;
+                                clonedMat.emissive = new THREE.Color(0xffffff);
+                                clonedMat.emissiveIntensity = gHeadlightIntensity > 0 ? 1.0 : 0;
+                            }
+                            clonedMat.needsUpdate = true;
+                            return clonedMat;
                         });
                     } else {
-                        child.material.map = texture;
-                        child.material.emissiveMap = emissiveTexture;
-                        child.material.emissive = new THREE.Color(0xffffff);
-                        child.material.emissiveIntensity = gHeadlightIntensity > 0 ? 1.0 : 0;
-                        child.material.needsUpdate = true;
+                        // Clone the material to avoid affecting other boids
+                        const clonedMat = child.material.clone();
+                        clonedMat.map = texture;
+                        // Only set emissive properties if the material supports them
+                        if (clonedMat.emissive !== undefined) {
+                            clonedMat.emissiveMap = emissiveTexture;
+                            clonedMat.emissive = new THREE.Color(0xffffff);
+                            clonedMat.emissiveIntensity = gHeadlightIntensity > 0 ? 1.0 : 0;
+                        }
+                        clonedMat.needsUpdate = true;
+                        child.material = clonedMat;
                     }
                 }
             });
