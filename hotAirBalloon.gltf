@@ -1122,7 +1122,7 @@
           0.6375968739867731,
           1
         ],
-        "metallicFactor": 1,
+        "metallicFactor": 0.1,
         "roughnessFactor": 0.5
       }
     },
@@ -1134,7 +1134,7 @@
           0.6172065624120635,
           1
         ],
-        "metallicFactor": 1,
+        "metallicFactor": 0,
         "roughnessFactor": 1
       },
       "doubleSided": true
