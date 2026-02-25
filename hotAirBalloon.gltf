@@ -778,7 +778,6 @@
         "metallicFactor": 0,
         "roughnessFactor": 0.8
       },
-      "doubleSided": true,
       "name": "Black"
     },
     {
@@ -806,7 +805,6 @@
         "metallicFactor": 0,
         "roughnessFactor": 0.8
       },
-      "doubleSided": true,
       "name": "Yellow"
     },
     {
@@ -820,7 +818,6 @@
         "metallicFactor": 0,
         "roughnessFactor": 0.8
       },
-      "doubleSided": true,
       "name": "Red"
     },
     {
@@ -834,7 +831,6 @@
         "metallicFactor": 0,
         "roughnessFactor": 0.8
       },
-      "doubleSided": true,
       "name": "Orange"
     }
   ],
