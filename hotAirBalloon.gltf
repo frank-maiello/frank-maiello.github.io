@@ -775,7 +775,7 @@
           0.14126329113044458,
           1
         ],
-        "metallicFactor": 1,
+        "metallicFactor": 0,
         "roughnessFactor": 0.8
       },
       "doubleSided": true,
@@ -803,7 +803,7 @@
           0.07618538147321911,
           1
         ],
-        "metallicFactor": 1,
+        "metallicFactor": 0,
         "roughnessFactor": 0.8
       },
       "doubleSided": true,
@@ -817,7 +817,7 @@
           0.6795424696265424,
           1
         ],
-        "metallicFactor": 1,
+        "metallicFactor": 0,
         "roughnessFactor": 0.8
       },
       "doubleSided": true,
@@ -831,7 +831,7 @@
           0.031896033067374104,
           1
         ],
-        "metallicFactor": 1,
+        "metallicFactor": 0,
         "roughnessFactor": 0.8
       },
       "doubleSided": true,
