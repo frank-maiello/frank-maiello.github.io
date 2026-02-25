@@ -68,11 +68,11 @@
       ]
     },
     {
-      "name": "Circle_1",
+      "name": "burnerAssembly",
       "mesh": 0
     },
     {
-      "name": "Circle_2",
+      "name": "basketConnector",
       "mesh": 1
     },
     {
@@ -110,19 +110,19 @@
       ]
     },
     {
-      "name": "Sphere002",
+      "name": "envelopeMainBand",
       "mesh": 3
     },
     {
-      "name": "Sphere002_1",
+      "name": "envelopeBottomBand",
       "mesh": 4
     },
     {
-      "name": "Sphere002_2",
+      "name": "envelopeTopBand",
       "mesh": 5
     },
     {
-      "name": "Sphere002_3",
+      "name": "envelopeMidBand",
       "mesh": 6
     }
   ],
@@ -763,9 +763,7 @@
         ],
         "metallicFactor": 1,
         "roughnessFactor": 0.5
-      },
-      "doubleSided": true,
-      "name": "White"
+      }
     },
     {
       "pbrMetallicRoughness": {
@@ -777,8 +775,7 @@
         ],
         "metallicFactor": 0,
         "roughnessFactor": 0.8
-      },
-      "name": "Black"
+      }
     },
     {
       "pbrMetallicRoughness": {
@@ -791,8 +788,7 @@
         "metallicFactor": 1,
         "roughnessFactor": 1
       },
-      "doubleSided": true,
-      "name": "Tan"
+      "doubleSided": true
     },
     {
       "pbrMetallicRoughness": {
