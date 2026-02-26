@@ -947,7 +947,7 @@
         -0.08086421542161018,
         1
       ],
-      "name": "Box",
+      "name": "basketBottom",
       "mesh": 16
     },
     {
@@ -969,7 +969,7 @@
         -4.341628184941336,
         1
       ],
-      "name": "basketInnerWall",
+      "name": "basketWall",
       "mesh": 17
     },
     {
@@ -991,7 +991,7 @@
         4.12379788498893,
         1
       ],
-      "name": "basketInnerWall",
+      "name": "basketWall",
       "mesh": 18
     },
     {
@@ -1013,7 +1013,7 @@
         -0.06008014383449884,
         1
       ],
-      "name": "basketInnerWall",
+      "name": "basketWall",
       "mesh": 19
     },
     {
@@ -1035,7 +1035,7 @@
         -0.06590911628171571,
         1
       ],
-      "name": "basketInnerWall",
+      "name": "basketWall",
       "mesh": 20
     },
     {
