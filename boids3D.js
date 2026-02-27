@@ -483,8 +483,10 @@ var gToyPlaneAngle = 0; // Current angle around balloon (radians)
 var gToyPlaneOrbitRadius = 8; // Distance from balloon gondola
 var gToyPlaneOrbitSpeed = 0.5; // Radians per second
 var gToyPlaneBankAngle = Math.PI / 6; // 30 degrees banking when circling
-var gToyPlaneBlades = null; // Reference to propeller blades group
-var gToyPlaneBladesAxis = null; // Reference to blade rotation axis object
+var gToyPlaneBlades = null; // Reference to propeller blades group (legacy)
+var gToyPlanePropAssembly = null; // Reference to propAssembly group
+var gToyPlanePropShaft = null; // Reference to propShaft object for rotation axis
+var gToyPlaneBladesAxis = null; // Reference to blade rotation axis object (legacy)
 var gToyPlaneBladesSpeed = 20; // Radians per second for propeller rotation
 var gBalloonCameraLookLocked = true; // Whether balloon camera look is locked (starts locked)
 var gBalloonTrackingCameraZoom = 50; // Field of view for balloon tracking camera (degrees)
@@ -9394,13 +9396,23 @@ function initThreeScene() {
                     }
                 });
                 
-                // Enable shadows for all meshes and find blades group
+                // Enable shadows for all meshes and find propeller groups
                 toyPlane.traverse(function(child) {
                     if (child.isMesh) {
                         child.castShadow = true;
                         child.receiveShadow = true;
                     }
-                    // Find blades group and bladesAxis
+                    // Find propAssembly group (primary)
+                    if (child.name && child.name.toLowerCase() === 'propassembly') {
+                        gToyPlanePropAssembly = child;
+                        console.log('Found toy plane propAssembly group');
+                    }
+                    // Find propShaft for rotation axis
+                    if (child.name && child.name.toLowerCase() === 'propshaft') {
+                        gToyPlanePropShaft = child;
+                        console.log('Found toy plane propShaft');
+                    }
+                    // Find blades group and bladesAxis (legacy support)
                     if (child.name && child.name.toLowerCase() === 'blades') {
                         gToyPlaneBlades = child;
                         console.log('Found toy plane blades group');
@@ -17706,14 +17718,18 @@ function update() {
         // Bank inward (toward balloon center) when turning clockwise
         gToyPlane.rotateZ(-gToyPlaneBankAngle); // Negative because plane is flipped 180 degrees
         
-        // Rotate propeller blades around their axis
-        if (gToyPlaneBlades && gToyPlaneBladesAxis) {
-            // Get the axis direction from bladesAxis object
-            // Assuming bladesAxis is a cylinder aligned with its local Z axis
+        // Rotate propeller assembly around its center axis
+        // The propAssembly is pre-rotated -14.8 degrees on X-axis in the model
+        // to match the plane's upward angle. Rotating around local Z-axis
+        // will make it spin in a flat plane relative to its own orientation.
+        if (gToyPlanePropAssembly) {
+            // Rotate around local Z-axis (aligned with propShaft)
             var axis = new THREE.Vector3(0, 0, 1);
-            
-            // Rotate the blades group around the axis
-            gToyPlaneBlades.rotateOnAxis(axis, gToyPlaneBladesSpeed * deltaT);
+            gToyPlanePropAssembly.rotateOnAxis(axis, -gToyPlaneBladesSpeed * deltaT);
+        } else if (gToyPlaneBlades && gToyPlaneBladesAxis) {
+            // Legacy support: if propAssembly not found, use old blades group
+            var axis = new THREE.Vector3(0, 0, 1);
+            gToyPlaneBlades.rotateOnAxis(axis, -gToyPlaneBladesSpeed * deltaT);
         }
     }
     
