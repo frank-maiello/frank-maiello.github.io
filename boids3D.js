@@ -23,7 +23,7 @@ var gCameraAngle = 0;
 var gCameraRotationSpeed = 3.0; // Rotation state: 0 = stopped, 0.5 = forward, -0.5 = backward
 var gCameraFOV = 50; // Camera field of view (20-120)
 var gAutoRotate = true; // Enable/disable auto-rotation
-var gCameraMode = 1; // Camera mode: 0=rotate CW, 1=rotate CCW, 2=static, 3=behind boid, 4=in front of boid, 5=walking
+var gCameraMode = 1; // Camera mode: 0=rotate CW, 1=rotate CCW, 2=static, 3=behind boid, 4=in front of boid, 5=walking, 6=dolly, 7=dolly tracking, 8=balloon cam
 var gCameraManualControl = false; // Track if user is manually controlling camera
 var gCameraSpringStrength = 0.08; // Spring interpolation strength (lower = smoother)
 var gCameraOffset = new THREE.Vector3(0, 0, 0); // Manual camera offset in first-person mode
@@ -444,6 +444,26 @@ var gSkyPigTargetY = 12; // Target Y position for sky pig
 var gSkyPigStartScale = 0.1; // Starting scale for sky pig (tiny)
 var gSkyPigTargetScale = 2.0; // Target scale for sky pig (full size)
 var gFemaleHead = null; // Reference to female head model
+var gHotAirBalloon = null; // Reference to hot air balloon model
+var gBalloonBasketMeshes = []; // Array of basket meshes for transparency control
+var gBalloonArmrestMeshes = []; // Array of armrest meshes (kept opaque in free-look mode)
+var gBalloonBasketBottom = null; // Reference to basket bottom mesh (hidden in balloon cam modes)
+var gBalloonDriftVelocity = new THREE.Vector3(0.3, 0, 0.2); // Current drift velocity
+var gBalloonDriftSpeed = 0.3; // Base drift speed
+var gBalloonDriftArea = 2.0; // Multiplier for room size (2x room size)
+var gBalloonHeight = 25; // Height above floor
+var gBalloonTrackingStrength = 0.02; // How strongly balloon follows lead boid (0-1)
+var gBalloonVerticalVelocity = 0; // Current vertical velocity
+var gBalloonVerticalAcceleration = 0.5; // Acceleration when key is pressed
+var gBalloonVerticalDeceleration = 0.3; // Deceleration when key is released
+var gBalloonMaxVerticalSpeed = 3.0; // Maximum vertical speed
+var gBalloonBurnerLight = null; // Point light for balloon burner flame
+var gBalloonCameraYaw = 0; // Horizontal rotation for balloon free-look camera
+var gBalloonCameraPitch = 0; // Vertical tilt for balloon free-look camera
+var gBalloonCameraZoom = 50; // Field of view for balloon free-look camera (degrees)
+var gBalloonCameraLookLocked = true; // Whether balloon camera look is locked (starts locked)
+var gBalloonTrackingCameraZoom = 50; // Field of view for balloon tracking camera (degrees)
+var gSavedCameraFOV = null; // Saved FOV from other camera modes when entering balloon free-look mode
 var gColumnBaseSliding = false; // Flag for column base slide animation (starts after loading)
 var gColumnBaseSlideTimer = 0; // Timer for column base slide animation
 var gColumnBaseStartZ = 35; // Starting Z offset for column base slide
@@ -4146,7 +4166,9 @@ function drawMainMenu() {
         'hsla(140, 30%, 30%, 0.80)',   // Mode 4: In front of boid
         'hsla(160, 50%, 30%, 0.80)',    // Mode 5: Walking
         'hsla(180, 50%, 30%, 0.80)',    // Mode 6: Dolly
-        'hsla(200, 50%, 30%, 0.80)'     // Mode 7: Dolly tracking
+        'hsla(200, 50%, 30%, 0.80)',     // Mode 7: Dolly tracking
+        'hsla(220, 50%, 30%, 0.80)',     // Mode 8: Balloon tracking
+        'hsla(240, 50%, 30%, 0.80)'      // Mode 9: Balloon free-look
     ];
     ctx.fillStyle = cameraBackgroundColors[gCameraMode];
     ctx.fill();
@@ -4354,6 +4376,69 @@ function drawMainMenu() {
         ctx.beginPath();
         ctx.moveTo(-trackWidth / 2, trackY + railSpacing / 2);
         ctx.lineTo(trackWidth / 2, trackY + railSpacing / 2);
+        ctx.stroke();
+    } else if (gCameraMode === 8 || gCameraMode === 9) {
+        // Draw hot air balloon icon for balloon cam
+        const balloonWidth = iconSize * 1.1;
+        const balloonHeight = iconSize * 1.4;
+        const basketHeight = iconSize * 0.3;
+        const basketWidth = iconSize * 0.4;
+        const yOffset = iconSize * 0.65; // Lower the entire icon
+        
+        // Draw balloon envelope with more realistic bulbous shape
+        ctx.fillStyle = `hsla(0, 70%, 60%, 0.9)`;
+        ctx.beginPath();
+        
+        // Start at bottom center of envelope
+        const envelopeBottom = yOffset - basketHeight - balloonHeight * 0.1;
+        const envelopeTop = yOffset - basketHeight - balloonHeight;
+        const envelopeMiddle = (envelopeBottom + envelopeTop) / 2;
+        
+        // Create bulbous hot air balloon shape using bezier curves
+        ctx.moveTo(0, envelopeBottom); // Bottom center
+        
+        // Left side - bulges out more at top
+        ctx.bezierCurveTo(
+            -balloonWidth * 0.35, envelopeBottom - balloonHeight * 0.15, // Control point 1 (lower bulge)
+            -balloonWidth * 0.65, envelopeMiddle, // Control point 2 (widest point)
+            -balloonWidth * 0.35, envelopeTop + balloonHeight * 0.15 // Left side near top
+        );
+        
+        // Top arc
+        ctx.bezierCurveTo(
+            -balloonWidth * 0.15, envelopeTop, // Control point (left of top)
+            balloonWidth * 0.15, envelopeTop, // Control point (right of top)
+            balloonWidth * 0.35, envelopeTop + balloonHeight * 0.15 // Right side near top
+        );
+        
+        // Right side - bulges out more at top
+        ctx.bezierCurveTo(
+            balloonWidth * 0.65, envelopeMiddle, // Control point 1 (widest point)
+            balloonWidth * 0.35, envelopeBottom - balloonHeight * 0.15, // Control point 2 (lower bulge)
+            0, envelopeBottom // Back to bottom center
+        );
+        
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = `hsla(0, 0%, 70%, 0.8)`;
+        ctx.lineWidth = iconSize * 0.08;
+        ctx.stroke();
+        
+        // Draw basket at lowered position
+        ctx.fillStyle = `hsla(30, 50%, 50%, 0.9)`;
+        ctx.fillRect(-basketWidth/2, yOffset - basketHeight, basketWidth, basketHeight);
+        ctx.strokeStyle = `hsla(0, 0%, 70%, 0.8)`;
+        ctx.lineWidth = iconSize * 0.08;
+        ctx.strokeRect(-basketWidth/2, yOffset - basketHeight, basketWidth, basketHeight);
+        
+        // Draw ropes connecting balloon to basket at lowered position
+        ctx.strokeStyle = `hsla(0, 0%, 80%, 0.7)`;
+        ctx.lineWidth = iconSize * 0.06;
+        ctx.beginPath();
+        ctx.moveTo(-basketWidth/2, yOffset - basketHeight);
+        ctx.lineTo(-balloonWidth * 0.48, 0.7 * envelopeMiddle);
+        ctx.moveTo(basketWidth/2, yOffset - basketHeight);
+        ctx.lineTo(balloonWidth * 0.48, 0.7 * envelopeMiddle);
         ctx.stroke();
     } else {
         // Draw eye icon for first-person mode
@@ -4666,8 +4751,8 @@ function drawSimMenu() {
     const menuItems = [
         gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
         boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
-        boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin,
-        0, 0, // blank spaces
+        boidProps.minSpeed, boidProps.maxSpeed, 0, boidProps.turnFactor, boidProps.margin,
+        0, // blank space
         gWorldSizeX, gWorldSizeY, gWorldSizeZ
     ];
     // Simulation menu knobs (15 knobs - removed Camera FOV, added 2 blank spaces)
@@ -4680,9 +4765,9 @@ function drawSimMenu() {
         {min: 0, max: 0.005},       // centeringFactor
         {min: 1.0, max: 20.0},      // minSpeed
         {min: 1.0, max: 30.0},      // maxSpeed
+        {min: 0, max: 1},           // blank
         {min: 0, max: 0.2},         // turnFactor
         {min: 0.5, max: 5.0},       // margin
-        {min: 0, max: 1},           // blank
         {min: 0, max: 1},           // blank
         {min: 10, max: 60},         // worldSizeX
         {min: 10, max: 60},         // worldSizeY
@@ -4693,7 +4778,7 @@ function drawSimMenu() {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 4.2;  // 15 knobs with 2 blank spaces
+    const menuHeight = knobSpacing * 4.5;  // 15 knobs with 2 blank spaces (5 rows)
     const padding = 1.7 * knobRadius;
     
     // Convert world coordinates to screen coordinates
@@ -4745,8 +4830,8 @@ function drawSimMenu() {
     const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
     
     for (let knob = 0; knob < menuItems.length; knob++) {
-        // Skip blank spaces (knobs 10 and 11)
-        if (knob === 10 || knob === 11) continue;
+        // Skip blank spaces (knobs 8 and 11)
+        if (knob === 8 || knob === 11) continue;
         
         const row = Math.floor(knob / 3);
         const col = knob % 3;
@@ -4798,8 +4883,8 @@ function drawSimMenu() {
         const labels = [
             'Quantity', 'Size', 'Visual Range',
             'Separation', 'Alignment', 'Cohesion',
-            'Minimum Speed', 'Speed Limit', 'Corralling Force', 'Corral Margin',
-            '', '', // blank spaces
+            'Minimum Speed', 'Speed Limit', '', 'Corralling Force', 'Corral Margin',
+            '', // blank space
             'World Size X', 'World Size Y', 'World Size Z'
         ];
         ctx.font = `${0.35 * knobRadius}px verdana`;
@@ -4821,9 +4906,9 @@ function drawSimMenu() {
             case 5: valueText = boidProps.centeringFactor.toFixed(4); break;
             case 6: valueText = boidProps.minSpeed.toFixed(1); break;
             case 7: valueText = boidProps.maxSpeed.toFixed(1); break;
-            case 8: valueText = (boidProps.turnFactor >= 0.2) ? 'MAX' : boidProps.turnFactor.toFixed(3); break;
-            case 9: valueText = boidProps.margin.toFixed(1); break;
-            case 10: valueText = ''; break; // blank
+            case 8: valueText = ''; break; // blank
+            case 9: valueText = (boidProps.turnFactor >= 0.2) ? 'MAX' : boidProps.turnFactor.toFixed(3); break;
+            case 10: valueText = boidProps.margin.toFixed(1); break;
             case 11: valueText = ''; break; // blank
             case 12: valueText = gWorldSizeX.toFixed(0); break;
             case 13: valueText = gWorldSizeY.toFixed(0); break;
@@ -6080,9 +6165,9 @@ function drawCameraMenu() {
     const radioButtonSize = 0.04 * menuScale;
     const radioButtonSpacing = 0.104 * menuScale;  // Increased 30% from 0.08
     const knobTopMargin = 0.05 * menuScale;
-    const radioSectionHeight = 7 * radioButtonSpacing + 0.05 * menuScale;
+    const radioSectionHeight = 9 * radioButtonSpacing + 0.05 * menuScale;
     const checkboxSectionHeight = 0.15 * menuScale; // Extra space for stereo checkbox
-    const menuHeight = 11.6 * knobRadius;
+    const menuHeight = 14.5 * knobRadius;
     
     // Position menu
     const menuOriginX = cameraMenuX * window.innerWidth;
@@ -6135,9 +6220,11 @@ function drawCameraMenu() {
         'Manual Orbit Cam',
         'Follow Boid, Look Ahead',
         'Lead Boid, Look Behind',
-        'Free Roam Cam',
-        'Dolly Cam',
-        'Dolly Tracking Cam'
+        'Walking Free-Roam Cam',
+        'Dolly Free-Look Cam',
+        'Dolly Tracking Cam',
+        'Balloon Free-Look Cam',
+        'Balloon Tracking Cam'
     ];
     
     const radioStartY = -0.003 * menuScale; // Moved up further
@@ -6440,6 +6527,98 @@ function drawCameraMenu() {
     ctx.restore();
 }
 
+// Draw vertical speed indicator gauge for balloon camera modes
+function drawBalloonVerticalSpeedGauge() {
+    // Only show in balloon camera modes
+    if (gCameraMode !== 8 && gCameraMode !== 9) return;
+    
+    const ctx = gOverlayCtx;
+    const gaugeRadius = 0.11 * menuScale;
+    const gaugeX = window.innerWidth - gaugeRadius * 2.5;
+    const gaugeY = gaugeRadius * 2;
+    
+    ctx.save();
+    ctx.translate(gaugeX, gaugeY);
+    
+    // Draw gauge background circle
+    ctx.beginPath();
+    ctx.arc(0, 0, gaugeRadius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(30, 30, 40, 0.85)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(180, 180, 200, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Zero position is at 9 o'clock (π radians or 180 degrees)
+    const zeroAngle = Math.PI;
+    
+    // Map vertical velocity to angle
+    // Canvas Y increases downward, so positive angle change = clockwise rotation
+    // Positive velocity (ascent) -> clockwise rotation (positive angle change)
+    // Negative velocity (descent) -> counterclockwise rotation (negative angle change)
+    const maxAngle = Math.PI * 1.8; // Max rotation in either direction (234 degrees)
+    const velocityRatio = gBalloonVerticalVelocity / gBalloonMaxVerticalSpeed;
+    const needleAngle = zeroAngle + (velocityRatio * maxAngle); // Add for clockwise = positive
+    
+    // Draw filled wedge from zero position to needle position
+    if (Math.abs(gBalloonVerticalVelocity) > 0.01) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        
+        // Determine start and end angles for arc
+        let startAngle, endAngle;
+        if (gBalloonVerticalVelocity > 0) {
+            // Ascent: green, clockwise from zero
+            startAngle = zeroAngle;
+            endAngle = needleAngle;
+            ctx.fillStyle = 'rgba(50, 200, 50, 0.7)';
+        } else {
+            // Descent: yellow, counterclockwise from zero
+            startAngle = needleAngle;
+            endAngle = zeroAngle;
+            ctx.fillStyle = 'rgba(220, 200, 50, 0.7)';
+        }
+        
+        ctx.arc(0, 0, gaugeRadius * 0.85, startAngle, endAngle, false);
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    // Draw zero marker (thicker line at 9 o'clock)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-gaugeRadius * 0.75, 0);
+    ctx.lineTo(-gaugeRadius * 0.95, 0);
+    ctx.stroke();
+    
+    // Draw needle
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(
+        Math.cos(needleAngle) * gaugeRadius * 0.9,
+        Math.sin(needleAngle) * gaugeRadius * 0.9
+    );
+    ctx.stroke();
+    
+    // Draw center dot
+    ctx.beginPath();
+    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fill();
+    
+    // Draw label
+    ctx.font = `bold ${0.035 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'hsla(240, 17%, 10%, 0.90)';
+    ctx.fillText('Vertical Speed', 2, 1 + gaugeRadius + 0.06 * menuScale);
+    ctx.fillStyle = 'rgba(220, 220, 230, 0.9)';
+    ctx.fillText('Vertical Speed', 0, gaugeRadius + 0.06 * menuScale);
+    ctx.restore();
+}
+
 // Store FOV knob position for interaction
 var fovKnobInfo = { x: 0, y: 0, radius: 0 };
 var orbitSpeedKnobInfo = { x: 0, y: 0, radius: 0 };
@@ -6451,7 +6630,7 @@ function updateKnobPositions() {
     const knobSpacing = knobRadius * 3;
     const menuWidth = knobSpacing * 2 * 0.75;  // 25% narrower than original
     const radioButtonSpacing = 0.104 * menuScale;
-    const radioSectionHeight = 7 * radioButtonSpacing + 0.05 * menuScale;
+    const radioSectionHeight = 9 * radioButtonSpacing + 0.05 * menuScale;
     
     const menuOriginX = cameraMenuX * window.innerWidth;
     const menuOriginY = cameraMenuY * window.innerHeight;
@@ -8968,6 +9147,81 @@ function initThreeScene() {
         );
     }*/
     
+    // Load Hot Air Balloon model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var balloonLoader = new THREE.GLTFLoader(gLoadingManager);
+        balloonLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/hotAirBalloon.gltf',
+            function(gltf) {
+                var balloon = gltf.scene;
+                
+                // Position high above the room center
+                balloon.position.set(0, gBalloonHeight, 0);
+                balloon.scale.set(.2, .2, .2);
+                balloon.rotation.y = 0;
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                balloon.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and identify basket meshes by name
+                gBalloonBasketMeshes = []; // Reset basket array
+                gBalloonArmrestMeshes = []; // Reset armrest array
+                gBalloonBasketBottom = null; // Reset basket bottom reference
+                balloon.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        
+                        // Identify meshes by name
+                        if (child.name) {
+                            var name = child.name;
+                            var nameLower = name.toLowerCase();
+                            if (nameLower.startsWith('basketwall') || nameLower.startsWith('basketfloor')) {
+                                gBalloonBasketMeshes.push(child);
+                                console.log('Found basket mesh:', name);
+                            } else if (nameLower.startsWith('basketbottom')) {
+                                gBalloonBasketBottom = child;
+                                console.log('Found basket bottom:', name);
+                            } else if (nameLower.includes('armrest') || nameLower.includes('arm')) {
+                                gBalloonArmrestMeshes.push(child);
+                                console.log('Found armrest mesh:', name);
+                            }
+                        }
+                    }
+                });
+                
+                console.log('Found', gBalloonBasketMeshes.length, 'basket meshes,', gBalloonArmrestMeshes.length, 'armrest meshes, and', (gBalloonBasketBottom ? '1' : '0'), 'basket bottom');
+                
+                gThreeScene.add(balloon);
+                gHotAirBalloon = balloon; // Store global reference
+                
+                // Create burner light (positioned just above basket)
+                gBalloonBurnerLight = new THREE.PointLight(0xffa040, 0.8, 8, 2); // Orange, moderate intensity, short falloff
+                gBalloonBurnerLight.position.set(0, 5, 0); // Relative to balloon origin (just above basket)
+                gBalloonBurnerLight.castShadow = false; // Don't cast shadows for performance
+                balloon.add(gBalloonBurnerLight); // Parent to balloon so it moves with it
+                
+                console.log('Hot Air Balloon model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Hot Air Balloon model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Hot Air Balloon model:', error);
+            }
+        );
+    }
+    
     // Load Tube Star, Heart, Moon, Clover, and Diamond models using GLTFLoader for hanging decorations
     if (typeof THREE.GLTFLoader !== 'undefined') {
         var starTemplate, heartTemplate, moonTemplate, cloverTemplate, diamondTemplate;
@@ -11252,6 +11506,18 @@ function initThreeScene() {
             }
         }
         
+        // Arrow key controls for balloon camera mode (vertical control)
+        if (gCameraMode === 8 || gCameraMode === 9) {
+            if (evt.key === 'ArrowUp') {
+                gKeysPressed.up = true;
+                evt.preventDefault();
+            }
+            if (evt.key === 'ArrowDown') {
+                gKeysPressed.down = true;
+                evt.preventDefault();
+            }
+        }
+        
         if (evt.key === 'c' || evt.key === 'C') {
             // Log current camera configuration
             console.log('=== CAMERA CONFIGURATION DATA ===');
@@ -11363,6 +11629,24 @@ function initThreeScene() {
             gDollyCameraHeight -= evt.deltaY * heightSpeed * 0.01;
             // Clamp height to reasonable range (allow above and below world bounds)
             gDollyCameraHeight = Math.max(-15, Math.min(30, gDollyCameraHeight));
+        } else if (gCameraMode === 8) {
+            evt.preventDefault();
+            // Adjust camera zoom (FOV) in balloon free-look mode
+            const zoomSpeed = 2.0;
+            gBalloonCameraZoom += evt.deltaY * zoomSpeed * 0.01;
+            // Clamp FOV to reasonable range
+            gBalloonCameraZoom = Math.max(10, Math.min(120, gBalloonCameraZoom));
+            // Update global FOV so knob reflects the change
+            gCameraFOV = gBalloonCameraZoom;
+        } else if (gCameraMode === 9) {
+            evt.preventDefault();
+            // Adjust camera zoom (FOV) in balloon tracking mode
+            const zoomSpeed = 2.0;
+            gBalloonTrackingCameraZoom += evt.deltaY * zoomSpeed * 0.01;
+            // Clamp FOV to reasonable range
+            gBalloonTrackingCameraZoom = Math.max(10, Math.min(120, gBalloonTrackingCameraZoom));
+            // Update global FOV so knob reflects the change
+            gCameraFOV = gBalloonTrackingCameraZoom;
         }
     }, { passive: false });
 }
@@ -11412,18 +11696,24 @@ class Grabber {
         this.updateRaycaster(x, y);
         var intersects = this.raycaster.intersectObjects( gThreeScene.children );
         if (intersects.length > 0) {
-            var obj = intersects[0].object.userData;
-            if (obj) {
-                this.physicsObject = obj;
-                this.distance = intersects[0].distance;
-                var pos = this.raycaster.ray.origin.clone();
-                pos.addScaledVector(this.raycaster.ray.direction, this.distance);
-                this.physicsObject.startGrab(pos);
-                this.prevPos.copy(pos);
-                this.vel.set(0.0, 0.0, 0.0);
-                this.time = 0.0;
-                if (gPhysicsScene.paused)
-                    run();
+            // Find the first visible object
+            for (var i = 0; i < intersects.length; i++) {
+                if (intersects[i].object.visible) {
+                    var obj = intersects[i].object.userData;
+                    if (obj) {
+                        this.physicsObject = obj;
+                        this.distance = intersects[i].distance;
+                        var pos = this.raycaster.ray.origin.clone();
+                        pos.addScaledVector(this.raycaster.ray.direction, this.distance);
+                        this.physicsObject.startGrab(pos);
+                        this.prevPos.copy(pos);
+                        this.vel.set(0.0, 0.0, 0.0);
+                        this.time = 0.0;
+                        if (gPhysicsScene.paused)
+                            run();
+                        break;
+                    }
+                }
             }
         }
     }
@@ -11608,7 +11898,7 @@ function onPointer(evt) {
                 } else {
                     // Menu is already open, cycle camera mode
                     const previousMode = gCameraMode;
-                    gCameraMode = (gCameraMode + 1) % 8;
+                    gCameraMode = (gCameraMode + 1) % 10;
                     
                     // If we cycled back to mode 0 (completed full cycle), close the menu
                     if (gCameraMode === 0) {
@@ -11682,8 +11972,98 @@ function onPointer(evt) {
                         }
                     }
                     
+                    // Initialize balloon free-look camera when entering mode 8
+                    if (gCameraMode === 8) {
+                        // Save current FOV and use it for balloon camera
+                        gSavedCameraFOV = gCameraFOV;
+                        gBalloonCameraZoom = gCameraFOV;
+                        
+                        // Initialize camera orientation
+                        gBalloonCameraYaw = 0;
+                        gBalloonCameraPitch = -0.9; // Look downward
+                        gBalloonCameraLookLocked = true;
+                        
+                        // Set basket transparency (but not armrests)
+                        for (let i = 0; i < gBalloonBasketMeshes.length; i++) {
+                            var mesh = gBalloonBasketMeshes[i];
+                            if (mesh && mesh.material) {
+                                if (!mesh.userData.originalMaterial) {
+                                    mesh.userData.originalMaterial = mesh.material;
+                                    mesh.material = mesh.material.clone();
+                                }
+                                mesh.material.transparent = true;
+                                mesh.material.opacity = 0.5;
+                            }
+                        }
+                        
+                        // Hide basket bottom
+                        if (gBalloonBasketBottom) {
+                            gBalloonBasketBottom.visible = false;
+                        }
+                    }
+                    
+                    // Initialize balloon tracking camera when entering mode 9
+                    if (gCameraMode === 9) {
+                        // Save current FOV and use it for balloon tracking camera
+                        gSavedCameraFOV = gCameraFOV;
+                        gBalloonTrackingCameraZoom = gCameraFOV;
+                        
+                        // Set basket transparency (but not armrests in tracking mode)
+                        for (let i = 0; i < gBalloonBasketMeshes.length; i++) {
+                            var mesh = gBalloonBasketMeshes[i];
+                            if (mesh && mesh.material) {
+                                if (!mesh.userData.originalMaterial) {
+                                    mesh.userData.originalMaterial = mesh.material;
+                                    mesh.material = mesh.material.clone();
+                                }
+                                mesh.material.transparent = true;
+                                mesh.material.opacity = 0.5;
+                            }
+                        }
+                        
+                        // Hide basket bottom
+                        if (gBalloonBasketBottom) {
+                            gBalloonBasketBottom.visible = false;
+                        }
+                        
+                        // Initialize smooth look-at point
+                        if (gPhysicsScene.objects.length > 0) {
+                            gCamera.userData.smoothLookAt = gPhysicsScene.objects[0].pos.clone();
+                        }
+                    }
+                    
+                    // Restore FOV when leaving balloon modes
+                    if ((previousMode === 8 || previousMode === 9) && gCameraMode !== 8 && gCameraMode !== 9 && gSavedCameraFOV !== null) {
+                        gCameraFOV = gSavedCameraFOV;
+                        gCamera.fov = gCameraFOV;
+                        gCamera.updateProjectionMatrix();
+                        gSavedCameraFOV = null;
+                    }
+                    
+                    // Restore basket and armrest opacity when leaving balloon cam
+                    if ((previousMode === 8 || previousMode === 9) && gCameraMode !== 8 && gCameraMode !== 9) {
+                        for (let i = 0; i < gBalloonBasketMeshes.length; i++) {
+                            var mesh = gBalloonBasketMeshes[i];
+                            if (mesh && mesh.material) {
+                                mesh.material.opacity = 1.0;
+                                mesh.material.transparent = false;
+                            }
+                        }
+                        for (let i = 0; i < gBalloonArmrestMeshes.length; i++) {
+                            var mesh = gBalloonArmrestMeshes[i];
+                            if (mesh && mesh.material) {
+                                mesh.material.opacity = 1.0;
+                                mesh.material.transparent = false;
+                            }
+                        }
+                        // Restore basket bottom visibility
+                        if (gBalloonBasketBottom) {
+                            gBalloonBasketBottom.visible = true;
+                        }
+                    }
+                    
                     // Enable/disable OrbitControls based on camera mode
-                    // Modes 0, 1, 2 use OrbitControls; modes 3, 4, 5, 6, 7 don't
+                    // Modes 0, 1, 2 use OrbitControls; modes 3-9 don't
                     if (gCameraMode >= 0 && gCameraMode <= 2) {
                         gCameraControl.enabled = true;
                     } else {
@@ -11768,6 +12148,14 @@ function onPointer(evt) {
         // Handle mouse look for dolly camera mode - toggle lock on click (also skips object interactions)
         if (gCameraMode === 6) {
             gDollyCameraLookLocked = !gDollyCameraLookLocked;
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            return;
+        }
+        
+        // Handle mouse look for balloon free-look camera - toggle lock on click
+        if (gCameraMode === 8) {
+            gBalloonCameraLookLocked = !gBalloonCameraLookLocked;
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             return;
@@ -13329,6 +13717,12 @@ function onPointer(evt) {
                     gCamera.fov = gCameraFOV;
                     gCamera.updateProjectionMatrix();
                 }
+                // Also update balloon camera zoom if in mode 8 or 9
+                if (gCameraMode === 8) {
+                    gBalloonCameraZoom = gCameraFOV;
+                } else if (gCameraMode === 9) {
+                    gBalloonTrackingCameraZoom = gCameraFOV;
+                }
                 return;
             }
             
@@ -13725,9 +14119,9 @@ function onPointer(evt) {
                 {min: 0, max: 0.005},
                 {min: 1.0, max: 20.0},
                 {min: 1.0, max: 30.0},
+                {min: 0, max: 1},           // blank
                 {min: 0, max: 0.2},
                 {min: 0.5, max: 5.0},
-                {min: 0, max: 1},           // blank
                 {min: 0, max: 1},           // blank
                 {min: 10, max: 60},
                 {min: 10, max: 60},
@@ -13891,9 +14285,9 @@ function onPointer(evt) {
                     // Ensure minSpeed doesn't exceed maxSpeed
                     boidProps.minSpeed = Math.min(boidProps.minSpeed, newValue);
                     break;
-                case 8: boidProps.turnFactor = newValue; break;
-                case 9: boidProps.margin = newValue; break;
-                case 10: break; // blank space
+                case 8: break; // blank space
+                case 9: boidProps.turnFactor = newValue; break;
+                case 10: boidProps.margin = newValue; break;
                 case 11: break; // blank space
                 case 12: // World Size X
                     const oldWorldSizeX = gWorldSizeX;
@@ -14727,6 +15121,25 @@ function onPointer(evt) {
             gPointerLastY = evt.clientY;
             return;
         }
+        
+        // Handle mouse look for balloon free-look camera mode - only when unlocked
+        if (gCameraMode === 8 && !gBalloonCameraLookLocked) {
+            const deltaX = evt.clientX - gPointerLastX;
+            const deltaY = evt.clientY - gPointerLastY;
+            
+            // Mouse sensitivity
+            const sensitivity = 0.006;
+            
+            gBalloonCameraYaw -= deltaX * sensitivity;
+            gBalloonCameraPitch -= deltaY * sensitivity;
+            
+            // Clamp pitch to prevent camera flipping
+            gBalloonCameraPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gBalloonCameraPitch));
+            
+            gPointerLastX = evt.clientX;
+            gPointerLastY = evt.clientY;
+            return;
+        }
     }
     else if (evt.type == "pointerup") {
         // Stop spinning the bicycle wheel
@@ -14960,6 +15373,9 @@ function onPointerLeave(evt) {
     // Lock walking camera look to prevent continued panning when cursor returns
     gWalkingCameraLookLocked = true;
     
+    // Lock balloon camera look to prevent continued panning when cursor returns
+    gBalloonCameraLookLocked = true;
+    
     // Reset menu dragging
     isDraggingMenu = false;
     draggingMenuType = null;
@@ -15016,7 +15432,7 @@ function checkSimMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3;
     const menuTopMargin = 0.2 * knobRadius;
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 5;  // Updated for 15 knobs (with 2 blank spaces)
+    const menuHeight = knobSpacing * 4.5;  // 15 knobs with 2 blank spaces (5 rows)
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = simMenuX * window.innerWidth;
@@ -15038,8 +15454,8 @@ function checkSimMenuClick(clientX, clientY) {
     
     // Check knobs (now 15 knobs - removed FOV, added 2 blank spaces)
     for (let knob = 0; knob < 15; knob++) {
-        // Skip blank spaces (knobs 10 and 11)
-        if (knob === 10 || knob === 11) continue;
+        // Skip blank spaces (knobs 8 and 11)
+        if (knob === 8 || knob === 11) continue;
         
         const row = Math.floor(knob / 3);
         const col = knob % 3;
@@ -15056,8 +15472,8 @@ function checkSimMenuClick(clientX, clientY) {
             const menuItems = [
                 gPhysicsScene.objects.length, boidRadius, boidProps.visualRange,
                 boidProps.avoidFactor, boidProps.matchingFactor, boidProps.centeringFactor,
-                boidProps.minSpeed, boidProps.maxSpeed, boidProps.turnFactor, boidProps.margin,
-                0, 0, // blank spaces
+                boidProps.minSpeed, boidProps.maxSpeed, 0, boidProps.turnFactor, boidProps.margin,
+                0, // blank space
                 gWorldSizeX, gWorldSizeY, gWorldSizeZ
             ];
             dragStartValue = menuItems[knob];
@@ -15613,9 +16029,9 @@ function checkCameraMenuClick(clientX, clientY) {
     const padding = 0.17 * menuScale;
     const radioButtonSize = 0.04 * menuScale;
     const radioButtonSpacing = 0.104 * menuScale;  // Increased 30% from 0.08
-    const radioSectionHeight = 7 * radioButtonSpacing + 0.05 * menuScale;
+    const radioSectionHeight = 9 * radioButtonSpacing + 0.05 * menuScale;
     const checkboxSectionHeight = 0.15 * menuScale; // Extra space for stereo checkbox
-    const menuHeight = radioSectionHeight + knobRadius * 3 + checkboxSectionHeight;
+    const menuHeight = 14.5 * knobRadius;
     
     const menuUpperLeftX = cameraMenuX * window.innerWidth;
     const menuUpperLeftY = cameraMenuY * window.innerHeight;
@@ -15638,7 +16054,7 @@ function checkCameraMenuClick(clientX, clientY) {
     const radioStartY = menuOriginY + -0.003 * menuScale; // Moved up further
     const radioX = menuOriginX + -0.02 * menuScale;
     
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 10; i++) {
         const radioY = radioStartY + i * radioButtonSpacing;
         const rdx = clientX - radioX;
         const rdy = clientY - radioY;
@@ -15711,6 +16127,106 @@ function checkCameraMenuClick(clientX, clientY) {
                 }
                 if (!gDollyCameraMesh) {
                     loadDollyCameraModel();
+                }
+            }
+            
+            // Initialize balloon free-look camera when entering mode 8
+            if (gCameraMode === 8) {
+                // Save current FOV and use it for balloon camera
+                gSavedCameraFOV = gCameraFOV;
+                gBalloonCameraZoom = gCameraFOV; // Use current FOV
+                
+                // Initialize camera orientation
+                gBalloonCameraYaw = 0; // Face forward
+                gBalloonCameraPitch = -0.9; // Look downward
+                gBalloonCameraLookLocked = true; // Start locked
+                
+                // Set basket transparency (but not armrests in free-look mode)
+                for (let i = 0; i < gBalloonBasketMeshes.length; i++) {
+                    var mesh = gBalloonBasketMeshes[i];
+                    if (mesh && mesh.material) {
+                        // Clone material if not already cloned
+                        if (!mesh.userData.originalMaterial) {
+                            mesh.userData.originalMaterial = mesh.material;
+                            mesh.material = mesh.material.clone();
+                        }
+                        mesh.material.transparent = true;
+                        mesh.material.opacity = 0.5;
+                    }
+                }
+                
+                // Hide basket bottom
+                if (gBalloonBasketBottom) {
+                    gBalloonBasketBottom.visible = false;
+                }
+            }
+            
+            // Initialize balloon tracking camera when entering mode 9
+            if (gCameraMode === 9) {
+                // Save current FOV and use it for balloon tracking camera
+                gSavedCameraFOV = gCameraFOV;
+                gBalloonTrackingCameraZoom = gCameraFOV; // Use current FOV
+                
+                // Set basket transparency (but not armrests in tracking mode)
+                for (let i = 0; i < gBalloonBasketMeshes.length; i++) {
+                    var mesh = gBalloonBasketMeshes[i];
+                    if (mesh && mesh.material) {
+                        // Clone material if not already cloned to avoid affecting other potential instances
+                        if (!mesh.userData.originalMaterial) {
+                            mesh.userData.originalMaterial = mesh.material;
+                            mesh.material = mesh.material.clone();
+                        }
+                        mesh.material.transparent = true;
+                        mesh.material.opacity = 0.5;
+                    }
+                }
+                
+                // Hide basket bottom
+                if (gBalloonBasketBottom) {
+                    gBalloonBasketBottom.visible = false;
+                }
+                
+                // Initialize smooth look-at point
+                if (gPhysicsScene.objects.length > 0) {
+                    gCamera.userData.smoothLookAt = gPhysicsScene.objects[0].pos.clone();
+                }
+            }
+            
+            // Restore FOV when leaving balloon free-look mode
+            if (previousMode === 8 && gCameraMode !== 8 && gSavedCameraFOV !== null) {
+                gCameraFOV = gSavedCameraFOV;
+                gCamera.fov = gCameraFOV;
+                gCamera.updateProjectionMatrix();
+                gSavedCameraFOV = null;
+            }
+            
+            // Restore FOV when leaving balloon tracking mode
+            if (previousMode === 9 && gCameraMode !== 9 && gSavedCameraFOV !== null) {
+                gCameraFOV = gSavedCameraFOV;
+                gCamera.fov = gCameraFOV;
+                gCamera.updateProjectionMatrix();
+                gSavedCameraFOV = null;
+            }
+            
+            // Restore basket and armrest opacity when leaving balloon cam
+            if ((previousMode === 8 || previousMode === 9) && gCameraMode !== 8 && gCameraMode !== 9) {
+                for (let i = 0; i < gBalloonBasketMeshes.length; i++) {
+                    var mesh = gBalloonBasketMeshes[i];
+                    if (mesh && mesh.material) {
+                        mesh.material.opacity = 1.0;
+                        mesh.material.transparent = false;
+                    }
+                }
+                for (let i = 0; i < gBalloonArmrestMeshes.length; i++) {
+                    var mesh = gBalloonArmrestMeshes[i];
+                    if (mesh && mesh.material) {
+                        mesh.material.opacity = 1.0;
+                        mesh.material.transparent = false;
+                    }
+                }
+                // Restore basket bottom visibility
+                if (gBalloonBasketBottom) {
+                    gBalloonBasketBottom.visible = true;
                 }
             }
             
@@ -16355,6 +16871,123 @@ function update() {
         var torusObstacle = gObstacles.find(function(obs) { return obs instanceof TorusObstacle; });
         if (torusObstacle && torusObstacle.mesh && torusObstacle.mesh.material) {
             torusObstacle.mesh.material.color.setHSL(gTorusHue / 360, 0.9, 0.5);
+        }
+    }
+    
+    // Hot air balloon drifting and tracking
+    if (gHotAirBalloon && gPhysicsScene.objects.length > 0) {
+        const leadBoid = gPhysicsScene.objects[0];
+        
+        // Define drift boundaries (2x room size)
+        const driftBoundX = gWorldSizeX * gBalloonDriftArea;
+        const driftBoundZ = gWorldSizeZ * gBalloonDriftArea;
+        
+        // Update drift velocity with gentle course changes near boundaries
+        const softBoundary = 0.8; // Start turning when 80% to edge
+        const turnStrength = 0.01; // How quickly to change direction
+        
+        // Check X boundary and adjust velocity
+        if (Math.abs(gHotAirBalloon.position.x) > driftBoundX * softBoundary) {
+            // Gently steer away from boundary
+            const turnX = gHotAirBalloon.position.x > 0 ? -1 : 1;
+            gBalloonDriftVelocity.x += turnX * turnStrength;
+        }
+        
+        // Check Z boundary and adjust velocity
+        if (Math.abs(gHotAirBalloon.position.z) > driftBoundZ * softBoundary) {
+            // Gently steer away from boundary
+            const turnZ = gHotAirBalloon.position.z > 0 ? -1 : 1;
+            gBalloonDriftVelocity.z += turnZ * turnStrength;
+        }
+        
+        // Track lead boid position (XZ plane only)
+        if (leadBoid && leadBoid.pos) {
+            const toLeadBoid = new THREE.Vector3(
+                leadBoid.pos.x - gHotAirBalloon.position.x,
+                0,
+                leadBoid.pos.z - gHotAirBalloon.position.z
+            );
+            
+            // Add gentle tracking to drift velocity
+            gBalloonDriftVelocity.x += toLeadBoid.x * gBalloonTrackingStrength;
+            gBalloonDriftVelocity.z += toLeadBoid.z * gBalloonTrackingStrength;
+        }
+        
+        // Normalize and maintain drift speed
+        const currentSpeed = Math.sqrt(
+            gBalloonDriftVelocity.x * gBalloonDriftVelocity.x +
+            gBalloonDriftVelocity.z * gBalloonDriftVelocity.z
+        );
+        
+        if (currentSpeed > 0) {
+            gBalloonDriftVelocity.x = (gBalloonDriftVelocity.x / currentSpeed) * gBalloonDriftSpeed;
+            gBalloonDriftVelocity.z = (gBalloonDriftVelocity.z / currentSpeed) * gBalloonDriftSpeed;
+        }
+        
+        // Apply drift velocity
+        gHotAirBalloon.position.x += gBalloonDriftVelocity.x * deltaT;
+        gHotAirBalloon.position.z += gBalloonDriftVelocity.z * deltaT;
+        
+        // Handle vertical movement with inertia when in balloon cam mode
+        if (gCameraMode === 8 || gCameraMode === 9) {
+            // Apply acceleration when keys are pressed
+            if (gKeysPressed.up) {
+                gBalloonVerticalVelocity += gBalloonVerticalAcceleration * deltaT;
+            } else if (gKeysPressed.down) {
+                gBalloonVerticalVelocity -= gBalloonVerticalAcceleration * deltaT;
+            } else {
+                // Decelerate when no keys are pressed
+                if (gBalloonVerticalVelocity > 0) {
+                    gBalloonVerticalVelocity = Math.max(0, gBalloonVerticalVelocity - gBalloonVerticalDeceleration * deltaT);
+                } else if (gBalloonVerticalVelocity < 0) {
+                    gBalloonVerticalVelocity = Math.min(0, gBalloonVerticalVelocity + gBalloonVerticalDeceleration * deltaT);
+                }
+            }
+            
+            // Clamp vertical velocity to max speed
+            gBalloonVerticalVelocity = Math.max(-gBalloonMaxVerticalSpeed, Math.min(gBalloonMaxVerticalSpeed, gBalloonVerticalVelocity));
+            
+            // Apply vertical velocity to balloon height
+            gBalloonHeight += gBalloonVerticalVelocity * deltaT;
+            
+            // Clamp balloon height to reasonable bounds (5 to 2x world height)
+            gBalloonHeight = Math.max(5, Math.min(gWorldSizeY * 2, gBalloonHeight));
+            
+            // Update balloon position
+            gHotAirBalloon.position.y = gBalloonHeight;
+        } else {
+            // Keep balloon at constant height when not in balloon cam mode
+            gHotAirBalloon.position.y = gBalloonHeight;
+            // Reset vertical velocity when not in balloon cam mode
+            gBalloonVerticalVelocity = 0;
+        }
+        
+        // Update balloon burner light (flickers, intensifies when UP is pressed)
+        if (gBalloonBurnerLight) {
+            const time = performance.now() * 0.001;
+            
+            if ((gCameraMode === 8 || gCameraMode === 9) && gKeysPressed.up) {
+                // Burner is firing - intense flickering
+                const flicker = 0.7 + Math.sin(time * 30) * 0.15 + Math.sin(time * 43) * 0.1 + Math.random() * 0.05;
+                gBalloonBurnerLight.intensity = 2.5 * flicker;
+                
+                // Color shifts between orange, red, and white when firing
+                const colorFlicker = Math.random();
+                if (colorFlicker < 0.3) {
+                    gBalloonBurnerLight.color.setHex(0xff6020); // Orange-red
+                } else if (colorFlicker < 0.6) {
+                    gBalloonBurnerLight.color.setHex(0xff8040); // Bright orange
+                } else if (colorFlicker < 0.85) {
+                    gBalloonBurnerLight.color.setHex(0xffaa60); // Yellow-orange
+                } else {
+                    gBalloonBurnerLight.color.setHex(0xffffff); // White flash
+                }
+            } else {
+                // Gentle pilot light flickering
+                const flicker = 0.8 + Math.sin(time * 5) * 0.1 + Math.sin(time * 7.3) * 0.05 + Math.random() * 0.05;
+                gBalloonBurnerLight.intensity = 0.8 * flicker;
+                gBalloonBurnerLight.color.setHex(0xffa040); // Light orange
+            }
         }
     }
     
@@ -18003,6 +18636,60 @@ function update() {
                 // Look at the smoothed position
                 gCamera.lookAt(gCamera.userData.smoothLookAt);
             }
+        } else if (gCameraMode === 8) {
+            // Balloon free-look camera mode - camera in basket, user controls look direction
+            if (gHotAirBalloon) {
+                // Position camera in the balloon basket
+                const basketOffset = new THREE.Vector3(0, .7, 0);
+                const cameraPosition = gHotAirBalloon.position.clone().add(basketOffset);
+                gCamera.position.copy(cameraPosition);
+                
+                // Apply user-controlled yaw and pitch
+                const lookDirection = new THREE.Vector3(
+                    Math.sin(gBalloonCameraYaw) * Math.cos(gBalloonCameraPitch),
+                    Math.sin(gBalloonCameraPitch),
+                    Math.cos(gBalloonCameraYaw) * Math.cos(gBalloonCameraPitch)
+                );
+                lookDirection.normalize();
+                
+                const lookAtPoint = gCamera.position.clone().add(lookDirection.multiplyScalar(10));
+                gCamera.lookAt(lookAtPoint);
+                
+                // Apply zoom (FOV)
+                gCamera.fov = gBalloonCameraZoom;
+                gCamera.updateProjectionMatrix();
+            }
+        } else if (gCameraMode === 9) {
+            // Balloon tracking camera mode - camera positioned in balloon basket, tracking lead boid
+            if (gHotAirBalloon && gPhysicsScene.objects.length > 0) {
+                // Position camera in the balloon basket
+                // Offset slightly below balloon origin to be inside basket
+                const basketOffset = new THREE.Vector3(0, .7, 0);
+                const cameraPosition = gHotAirBalloon.position.clone().add(basketOffset);
+                gCamera.position.copy(cameraPosition);
+                
+                // Track lead boid (boid zero)
+                const leadBoid = gPhysicsScene.objects[0];
+                
+                // Calculate target look-at point
+                const targetLookAt = leadBoid.pos.clone();
+                
+                // Use a smoothed look-at point for less jittery movement
+                if (!gCamera.userData.smoothLookAt) {
+                    gCamera.userData.smoothLookAt = targetLookAt.clone();
+                }
+                
+                // Smooth the look-at point toward the target
+                const smoothingFactor = 0.1; // Higher = more responsive, lower = smoother
+                gCamera.userData.smoothLookAt.lerp(targetLookAt, smoothingFactor);
+                
+                // Look at the smoothed position
+                gCamera.lookAt(gCamera.userData.smoothLookAt);
+                
+                // Apply zoom (FOV)
+                gCamera.fov = gBalloonTrackingCameraZoom;
+                gCamera.updateProjectionMatrix();
+            }
         }
     }
     
@@ -18136,6 +18823,7 @@ function update() {
     drawColorMenu();
     drawLightingMenu();
     drawCameraMenu();
+    drawBalloonVerticalSpeedGauge();
     
     // Draw fade-in effect (black overlay that fades out)
     if (gFadeInTime < gFadeInDuration) {
