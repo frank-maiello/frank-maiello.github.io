@@ -352,16 +352,26 @@ var gOriginalLightIntensities = {}; // Store original light intensities when dim
 var gAmbientIntensity = 1.2; // Ambient light intensity (0-2)
 var gAmbientHue = 0; // Ambient light hue (0-360)
 var gAmbientSaturation = 0; // Ambient light saturation (0-100)
+var gAmbientEnabled = true; // Ambient light on/off state
+var gAmbientSavedIntensity = 1.2; // Saved intensity when turned off
 var gOverheadIntensity = 0.9; // Directional light intensity (0-2)
 var gOverheadHue = 0; // Overhead light hue (0-360)
 var gOverheadSaturation = 0; // Overhead light saturation (0-100)
+var gOverheadEnabled = true; // Overhead light on/off state
+var gOverheadSavedIntensity = 0.9; // Saved intensity when turned off
 var gSpotlight1Intensity = 0.8; // Spotlight 1 intensity (0-2)
 var gSpotlight1Hue = 0; // Spotlight 1 hue (0-360)
 var gSpotlight1Saturation = 0; // Spotlight 1 saturation (0-100)
+var gSpotlight1Enabled = true; // Spotlight 1 on/off state
+var gSpotlight1SavedIntensity = 0.8; // Saved intensity when turned off
 var gSpotlight2Intensity = 0.8; // Spotlight 2 intensity (0-2)
 var gSpotlight2Hue = 0; // Spotlight 2 hue (0-360)
 var gSpotlight2Saturation = 0; // Spotlight 2 saturation (0-100)
+var gSpotlight2Enabled = true; // Spotlight 2 on/off state
+var gSpotlight2SavedIntensity = 0.8; // Saved intensity when turned off
 var gMiroPaintingGroup = null; // Reference to Miro painting + frame group
+var gMiroLeftPaintingGroup = null; // Reference to Miro left painting + frame group
+var gMiroRightPaintingGroup = null; // Reference to Miro right painting + frame group
 var gDaliPaintingGroup = null; // Reference to Dali painting + frame group
 var gDuchampPaintingGroup = null; // Reference to Duchamp painting + frame group
 var gBoschPaintingGroup = null; // Reference to Bosch triptych + frames group
@@ -399,12 +409,18 @@ var gShadowCameraFar = 70; // Shadow camera far distance for lamps (10-150)
 var gHeadlightIntensity = 0; // Headlight intensity (0-2)
 var gHeadlight = null; // Headlight spotlight reference
 var gHeadlightPointLight = null; // Point light in front of boid when headlight is active
+var gHeadlightEnabled = false; // Headlight on/off state (off by default)
+var gHeadlightSavedIntensity = 1.0; // Saved intensity when turned off (1.0 default)
 var gGlobeLampIntensity = 0; // Globe lamp point light intensity (0-3)
 var gGlobeLampHue = 0; // Globe lamp hue (0-360)
 var gGlobeLampSaturation = 80; // Globe lamp saturation (0-100)
+var gGlobeLampEnabled = false; // Globe lamp on/off state (off by default)
+var gGlobeLampSavedIntensity = 1.0; // Saved intensity when turned off (1.0 default)
 var gOrnamentLightIntensity = 0; // Ornament point light intensity (0-3)
-var gOrnamentLightFalloff = 8; // Ornament point light distance/falloff (3-15)
+var gOrnamentLightFalloff = 10; // Ornament point light distance/falloff (3-15)
 var gOrnamentHeightOffset = 50; // Ornament height percentage (0=floor, 100=above ceiling)
+var gOrnamentLightEnabled = false; // Ornament lights on/off state (off by default)
+var gOrnamentLightSavedIntensity = 2.0; // Saved intensity when turned off (2.0 default)
 var gHangingStars = []; // Array of hanging star decorations
 var gStarAnimData = []; // Animation data for each star {star, wire, targetY, startY, timer, delay, animating}
 var gEnableStarSwayAndTwist = true; // Enable/disable star swaying and twisting motion
@@ -448,6 +464,7 @@ var gHotAirBalloon = null; // Reference to hot air balloon model
 var gBalloonBasketMeshes = []; // Array of basket meshes for transparency control
 var gBalloonArmrestMeshes = []; // Array of armrest meshes (kept opaque in free-look mode)
 var gBalloonBasketBottom = null; // Reference to basket bottom mesh (hidden in balloon cam modes)
+var gBalloonEnvelopeMeshes = []; // Array of envelope meshes (rendered back-side in balloon cam modes)
 var gBalloonDriftVelocity = new THREE.Vector3(0.3, 0, 0.2); // Current drift velocity
 var gBalloonDriftSpeed = 0.3; // Base drift speed
 var gBalloonDriftArea = 2.0; // Multiplier for room size (2x room size)
@@ -461,6 +478,14 @@ var gBalloonBurnerLight = null; // Point light for balloon burner flame
 var gBalloonCameraYaw = 0; // Horizontal rotation for balloon free-look camera
 var gBalloonCameraPitch = 0; // Vertical tilt for balloon free-look camera
 var gBalloonCameraZoom = 50; // Field of view for balloon free-look camera (degrees)
+var gToyPlane = null; // Reference to toy airplane model
+var gToyPlaneAngle = 0; // Current angle around balloon (radians)
+var gToyPlaneOrbitRadius = 8; // Distance from balloon gondola
+var gToyPlaneOrbitSpeed = 0.5; // Radians per second
+var gToyPlaneBankAngle = Math.PI / 6; // 30 degrees banking when circling
+var gToyPlaneBlades = null; // Reference to propeller blades group
+var gToyPlaneBladesAxis = null; // Reference to blade rotation axis object
+var gToyPlaneBladesSpeed = 20; // Radians per second for propeller rotation
 var gBalloonCameraLookLocked = true; // Whether balloon camera look is locked (starts locked)
 var gBalloonTrackingCameraZoom = 50; // Field of view for balloon tracking camera (degrees)
 var gSavedCameraFOV = null; // Saved FOV from other camera modes when entering balloon free-look mode
@@ -4793,8 +4818,8 @@ function drawSimMenu() {
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
     const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `hsla(214, 43%, 35.1%, ${menuOpacity})`); // hsl(214 43% 35.1%) rgba(51, 85, 128)
-    menuGradient.addColorStop(1, `hsla(214, 43%, 15%, ${menuOpacity})`); // hsl(214 43% 15%) rgba(13, 26, 38)
+    menuGradient.addColorStop(0, `hsla(214, 30%, 35.1%, ${menuOpacity})`); // hsl(214 43% 35.1%) rgba(51, 85, 128)
+    menuGradient.addColorStop(1, `hsla(214, 30%, 15%, ${menuOpacity})`); // hsl(214 43% 15%) rgba(13, 26, 38)
     ctx.fillStyle = menuGradient;
     ctx.fill();
     ctx.strokeStyle = `hsla(214, 43%, 70%, ${menuOpacity})`; 
@@ -5061,8 +5086,8 @@ function drawStylingMenu() {
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
     const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `hsla(214, 43%, 35.1%, ${stylingMenuOpacity})`); 
-    menuGradient.addColorStop(1, `hsla(214, 43%, 15%, ${stylingMenuOpacity})`); 
+    menuGradient.addColorStop(0, `hsla(214, 30%, 35.1%, ${stylingMenuOpacity})`); 
+    menuGradient.addColorStop(1, `hsla(214, 30%, 15%, ${stylingMenuOpacity})`); 
     ctx.fillStyle = menuGradient;
     ctx.fill();
     ctx.strokeStyle = `hsla(214, 43%, 70%, ${stylingMenuOpacity})`; 
@@ -5423,8 +5448,8 @@ function drawColorMenu() {
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
     const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `hsla(214, 43%, 35.1%, ${colorMenuOpacity})`); 
-    menuGradient.addColorStop(1, `hsla(214, 43%, 15%, ${colorMenuOpacity})`); 
+    menuGradient.addColorStop(0, `hsla(214, 30%, 35.1%, ${colorMenuOpacity})`); 
+    menuGradient.addColorStop(1, `hsla(214, 30%, 15%, ${colorMenuOpacity})`); 
     ctx.fillStyle = menuGradient;
     ctx.fill();
     ctx.strokeStyle = `hsla(214, 43%, 70%, ${colorMenuOpacity})`; 
@@ -5864,8 +5889,8 @@ function drawLightingMenu() {
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
     const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `hsla(214, 0%, 35.1%, ${lightingMenuOpacity})`); 
-    menuGradient.addColorStop(1, `hsla(214, 0%, 15%, ${lightingMenuOpacity})`); 
+    menuGradient.addColorStop(0, `hsla(214, 30%, 35.1%, ${lightingMenuOpacity})`); 
+    menuGradient.addColorStop(1, `hsla(214, 30%, 15%, ${lightingMenuOpacity})`); 
     ctx.fillStyle = menuGradient;
     ctx.fill();
     ctx.strokeStyle = `hsla(214, 0%, 70%, ${lightingMenuOpacity})`; 
@@ -6151,6 +6176,106 @@ function drawLightingMenu() {
         ctx.fillText(knobs[i].label, knobX + labelOffsetX, knobY + 1.35 * knobRadius);
     }
     
+    // Draw toggle buttons between intensity and hue knobs
+    const buttonRadius = knobRadius * 0.3;
+    const buttonSpacing = knobSpacing * 0.5; // Halfway between knobs
+    
+    // Define buttons
+    const toggleButtons = [
+        { row: 0, enabled: gAmbientEnabled },      // Ambient
+        { row: 1, enabled: gOverheadEnabled },      // Overhead
+        { row: 2, enabled: gGlobeLampEnabled },    // Globe
+        { row: 3, enabled: gSpotlight1Enabled },   // Spotlight 1
+        { row: 4, enabled: gSpotlight2Enabled },   // Spotlight 2
+        { row: 6, enabled: gOrnamentLightEnabled } // Ornament
+    ];
+    
+    for (const btn of toggleButtons) {
+        const buttonX = buttonSpacing;
+        const buttonY = btn.row * knobSpacing + menuTopMargin;
+        
+        // Draw button circle
+        ctx.beginPath();
+        ctx.arc(buttonX, buttonY, buttonRadius, 0, Math.PI * 2);
+        
+        // Glow effect based on state
+        if (btn.enabled) {
+            // Green glow when on
+            ctx.shadowColor = 'rgba(50, 255, 50, 0.8)';
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = `rgba(20, 180, 20, ${lightingMenuOpacity})`;
+        } else {
+            // Red glow when off
+            ctx.shadowColor = 'rgba(255, 50, 50, 0.8)';
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = `rgba(180, 20, 20, ${lightingMenuOpacity})`;
+        }
+        ctx.fill();
+        
+        // Reset shadow
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        
+        // Draw ON/OFF text
+        ctx.font = `bold ${buttonRadius * 0.8}px verdana`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = `hsla(0, 0%, 10%, ${lightingMenuOpacity})`;
+        ctx.fillText(btn.enabled ? 'ON' : 'OFF', buttonX, buttonY + 1);
+        
+        // Draw button border
+        ctx.strokeStyle = `hsla(0, 0%, 100%, ${lightingMenuOpacity})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+    
+    // Draw headlight toggle button at 10 o'clock position of headlight knob
+    // Headlight knob is at index 17: row 5, col 2
+    const headlightKnobRow = 5;
+    const headlightKnobCol = 2;
+    const headlightKnobX = headlightKnobCol * knobSpacing;
+    const headlightKnobY = headlightKnobRow * knobSpacing + menuTopMargin;
+    
+    // 10 o'clock position angle is 7π/6 radians (210 degrees)
+    const tenOClockAngle = 7 * Math.PI / 6;
+    const buttonDistance = knobRadius * 1.3; // Position just outside the knob
+    const headlightButtonX = headlightKnobX + Math.cos(tenOClockAngle) * buttonDistance;
+    const headlightButtonY = headlightKnobY + Math.sin(tenOClockAngle) * buttonDistance - buttonRadius; // Moved up by one radius
+    
+    // Draw button circle
+    ctx.beginPath();
+    ctx.arc(headlightButtonX, headlightButtonY, buttonRadius, 0, Math.PI * 2);
+    
+    // Glow effect based on state
+    if (gHeadlightEnabled) {
+        // Green glow when on
+        ctx.shadowColor = 'rgba(50, 255, 50, 0.8)';
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = `rgba(20, 180, 20, ${lightingMenuOpacity})`;
+    } else {
+        // Red glow when off
+        ctx.shadowColor = 'rgba(255, 50, 50, 0.8)';
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = `rgba(180, 20, 20, ${lightingMenuOpacity})`;
+    }
+    ctx.fill();
+    
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    
+    // Draw ON/OFF text
+    ctx.font = `bold ${buttonRadius * 0.8}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `hsla(0, 0%, 10%, ${lightingMenuOpacity})`;
+    ctx.fillText(gHeadlightEnabled ? 'ON' : 'OFF', headlightButtonX, headlightButtonY + 1);
+    
+    // Draw button border
+    ctx.strokeStyle = `hsla(0, 0%, 100%, ${lightingMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
     ctx.restore();
 }
 
@@ -6181,8 +6306,8 @@ function drawCameraMenu() {
     ctx.beginPath();
     ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
     const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-    menuGradient.addColorStop(0, `hsla(214, 43%, 35.1%, ${cameraMenuOpacity})`); 
-    menuGradient.addColorStop(1, `hsla(214, 43%, 15%, ${cameraMenuOpacity})`); 
+    menuGradient.addColorStop(0, `hsla(214, 30%, 35.1%, ${cameraMenuOpacity})`); 
+    menuGradient.addColorStop(1, `hsla(214, 30%, 15%, ${cameraMenuOpacity})`); 
     ctx.fillStyle = menuGradient;
     ctx.fill();
     ctx.strokeStyle = `hsla(214, 43%, 70%, ${cameraMenuOpacity})`; 
@@ -6851,6 +6976,12 @@ function updateWorldGeometry(changedDimension) {
     if (gMiroPaintingGroup) {
         gMiroPaintingGroup.position.x = paintingWallX;
     }
+    if (gMiroLeftPaintingGroup) {
+        gMiroLeftPaintingGroup.position.x = paintingWallX;
+    }
+    if (gMiroRightPaintingGroup) {
+        gMiroRightPaintingGroup.position.x = paintingWallX;
+    }
     if (gDaliPaintingGroup) {
         gDaliPaintingGroup.position.x = paintingWallX;
     }
@@ -7181,9 +7312,18 @@ function updateLoadingProgress(loaded, total) {
 
 function removeLoadingScreen() {
     if (gLoadingScreen && gLoadingScreen.parentNode) {
-        gLoadingScreen.parentNode.removeChild(gLoadingScreen);
-        gLoadingScreen = null;
-        gLoadingBar = null;
+        // Add fade-out transition
+        gLoadingScreen.style.transition = 'opacity 0.5s ease-out';
+        gLoadingScreen.style.opacity = '0';
+        
+        // Remove after fade completes
+        setTimeout(function() {
+            if (gLoadingScreen && gLoadingScreen.parentNode) {
+                gLoadingScreen.parentNode.removeChild(gLoadingScreen);
+                gLoadingScreen = null;
+                gLoadingBar = null;
+            }
+        }, 500); // Match transition duration
     }
 }
 
@@ -7646,10 +7786,14 @@ function initThreeScene() {
     gLoadingManager = new THREE.LoadingManager();
     
     gLoadingManager.onLoad = function() {
-        console.log('All assets loaded. Starting animations...');
+        console.log('All assets loaded. Waiting before starting animations...');
         gAssetsLoaded = true;
-        removeLoadingScreen();
-        startAnimations();
+        // Add delay before removing loading screen and starting animations
+        setTimeout(function() {
+            console.log('Starting animations now...');
+            removeLoadingScreen();
+            startAnimations();
+        }, 1000); // 1 second delay
     };
     
     gLoadingManager.onProgress = function(url, itemsLoaded, itemsTotal) {
@@ -9177,6 +9321,7 @@ function initThreeScene() {
                 gBalloonBasketMeshes = []; // Reset basket array
                 gBalloonArmrestMeshes = []; // Reset armrest array
                 gBalloonBasketBottom = null; // Reset basket bottom reference
+                gBalloonEnvelopeMeshes = []; // Reset envelope array
                 balloon.traverse(function(child) {
                     if (child.isMesh) {
                         child.castShadow = true;
@@ -9195,12 +9340,15 @@ function initThreeScene() {
                             } else if (nameLower.includes('armrest') || nameLower.includes('arm')) {
                                 gBalloonArmrestMeshes.push(child);
                                 console.log('Found armrest mesh:', name);
+                            } else if (nameLower.startsWith('envelope')) {
+                                gBalloonEnvelopeMeshes.push(child);
+                                console.log('Found envelope mesh:', name);
                             }
                         }
                     }
                 });
                 
-                console.log('Found', gBalloonBasketMeshes.length, 'basket meshes,', gBalloonArmrestMeshes.length, 'armrest meshes, and', (gBalloonBasketBottom ? '1' : '0'), 'basket bottom');
+                console.log('Found', gBalloonBasketMeshes.length, 'basket meshes,', gBalloonArmrestMeshes.length, 'armrest meshes,', gBalloonEnvelopeMeshes.length, 'envelope meshes, and', (gBalloonBasketBottom ? '1' : '0'), 'basket bottom');
                 
                 gThreeScene.add(balloon);
                 gHotAirBalloon = balloon; // Store global reference
@@ -9218,6 +9366,62 @@ function initThreeScene() {
             },
             function(error) {
                 console.error('Error loading Hot Air Balloon model:', error);
+            }
+        );
+    }
+    
+    // Load Toy Plane model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var toyPlaneLoader = new THREE.GLTFLoader(gLoadingManager);
+        toyPlaneLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/toyPlane.gltf',
+            function(gltf) {
+                var toyPlane = gltf.scene;
+                
+                // Scale appropriately
+                toyPlane.scale.set(0.3, 0.3, 0.3);
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                toyPlane.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows for all meshes and find blades group
+                toyPlane.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                    // Find blades group and bladesAxis
+                    if (child.name && child.name.toLowerCase() === 'blades') {
+                        gToyPlaneBlades = child;
+                        console.log('Found toy plane blades group');
+                    }
+                    if (child.name && child.name.toLowerCase() === 'bladesaxis') {
+                        gToyPlaneBladesAxis = child;
+                        console.log('Found toy plane bladesAxis');
+                    }
+                });
+                
+                // Initial position will be set in animation loop
+                gThreeScene.add(toyPlane);
+                gToyPlane = toyPlane; // Store global reference
+                
+                console.log('Toy Plane model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Toy Plane model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Toy Plane model:', error);
             }
         );
     }
@@ -10309,6 +10513,232 @@ function initThreeScene() {
     gMiroPaintingGroup.rotation.y = -Math.PI / 2;
     gMiroPaintingGroup.visible = true; // Miro is the initial painting
     gThreeScene.add(gMiroPaintingGroup);
+    
+    // ===== MIRO LEFT PAINTING GROUP =====
+    gMiroLeftPaintingGroup = new THREE.Group();
+    var miroLeftWidth = 12;  // Initial width, will be updated when texture loads
+    var miroLeftHeight = 12; // Fixed height
+    
+    // Create Miro left painting plane
+    var miroLeftPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x808080,  // Gray instead of black to avoid flicker
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x404040,
+        emissiveIntensity: 0.3,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    var miroLeftPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(miroLeftWidth, miroLeftHeight),
+        miroLeftPaintingMaterial
+    );
+    miroLeftPainting.position.set(0, 0, -frameDepth / 2);
+    miroLeftPainting.receiveShadow = true;
+    miroLeftPainting.castShadow = true;
+    gMiroLeftPaintingGroup.add(miroLeftPainting);
+    
+    // Miro left frame pieces (will be updated when texture loads)
+    var miroLeftFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(miroLeftWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    miroLeftFrameTop.position.set(0, miroLeftHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    miroLeftFrameTop.castShadow = true;
+    miroLeftFrameTop.receiveShadow = true;
+    gMiroLeftPaintingGroup.add(miroLeftFrameTop);
+    
+    var miroLeftFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(miroLeftWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    miroLeftFrameBottom.position.set(0, -miroLeftHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    miroLeftFrameBottom.castShadow = true;
+    miroLeftFrameBottom.receiveShadow = true;
+    gMiroLeftPaintingGroup.add(miroLeftFrameBottom);
+    
+    var miroLeftFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, miroLeftHeight, frameDepth),
+        frameMaterial
+    );
+    miroLeftFrameLeft.position.set(-miroLeftWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+    miroLeftFrameLeft.castShadow = true;
+    miroLeftFrameLeft.receiveShadow = true;
+    gMiroLeftPaintingGroup.add(miroLeftFrameLeft);
+    
+    var miroLeftFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, miroLeftHeight, frameDepth),
+        frameMaterial
+    );
+    miroLeftFrameRight.position.set(miroLeftWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+    miroLeftFrameRight.castShadow = true;
+    miroLeftFrameRight.receiveShadow = true;
+    gMiroLeftPaintingGroup.add(miroLeftFrameRight);
+    
+    // Load Miro left painting texture
+    var miroLeftPaintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/JoanMiro1.jpg',
+        function(texture) {
+            // Calculate width based on image aspect ratio
+            var aspectRatio = texture.image.width / texture.image.height;
+            miroLeftWidth = miroLeftHeight * aspectRatio;
+            
+            // Update painting geometry
+            miroLeftPainting.geometry.dispose();
+            miroLeftPainting.geometry = new THREE.PlaneGeometry(miroLeftWidth, miroLeftHeight);
+            
+            // Update frame geometries
+            miroLeftFrameTop.geometry.dispose();
+            miroLeftFrameTop.geometry = new THREE.BoxGeometry(miroLeftWidth + frameThickness * 2, frameThickness, frameDepth);
+            miroLeftFrameBottom.geometry.dispose();
+            miroLeftFrameBottom.geometry = new THREE.BoxGeometry(miroLeftWidth + frameThickness * 2, frameThickness, frameDepth);
+            miroLeftFrameLeft.geometry.dispose();
+            miroLeftFrameLeft.geometry = new THREE.BoxGeometry(frameThickness, miroLeftHeight, frameDepth);
+            miroLeftFrameRight.geometry.dispose();
+            miroLeftFrameRight.geometry = new THREE.BoxGeometry(frameThickness, miroLeftHeight, frameDepth);
+            
+            // Update frame positions
+            miroLeftFrameTop.position.set(0, miroLeftHeight / 2 + frameThickness / 2, -frameDepth / 2);
+            miroLeftFrameBottom.position.set(0, -miroLeftHeight / 2 - frameThickness / 2, -frameDepth / 2);
+            miroLeftFrameLeft.position.set(-miroLeftWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+            miroLeftFrameRight.position.set(miroLeftWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+            
+            // Update material
+            miroLeftPaintingMaterial.map = texture;
+            miroLeftPaintingMaterial.emissiveMap = texture;
+            miroLeftPaintingMaterial.color.setHex(0xffffff);
+            miroLeftPaintingMaterial.emissive.setHex(0xffffff);
+            miroLeftPaintingMaterial.emissiveIntensity = 0.3;
+            miroLeftPaintingMaterial.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading Miro1.jpg:', err);
+            console.log('Using fallback color for Miro left painting');
+        }
+    );
+    
+    // Position and orient group on wall (to the left of center, start high for drop animation)
+    gMiroLeftPaintingGroup.position.set(paintingWallX, paintingY + gPaintingDropStartY, -20);
+    gMiroLeftPaintingGroup.rotation.y = -Math.PI / 2;
+    gMiroLeftPaintingGroup.visible = true; // Visible with Miro
+    gThreeScene.add(gMiroLeftPaintingGroup);
+    
+    // ===== MIRO RIGHT PAINTING GROUP =====
+    gMiroRightPaintingGroup = new THREE.Group();
+    var miroRightWidth = 12;  // Initial width, will be updated when texture loads
+    var miroRightHeight = 12; // Fixed height
+    
+    // Create Miro right painting plane
+    var miroRightPaintingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x808080,  // Gray instead of black to avoid flicker
+        side: THREE.FrontSide,
+        shadowSide: THREE.FrontSide,
+        emissive: 0x404040,
+        emissiveIntensity: 0.3,
+        metalness: 0,
+        roughness: 1,
+        transparent: true,
+        opacity: 1
+    });
+    
+    var miroRightPainting = new THREE.Mesh(
+        new THREE.PlaneGeometry(miroRightWidth, miroRightHeight),
+        miroRightPaintingMaterial
+    );
+    miroRightPainting.position.set(0, 0, -frameDepth / 2);
+    miroRightPainting.receiveShadow = true;
+    miroRightPainting.castShadow = true;
+    gMiroRightPaintingGroup.add(miroRightPainting);
+    
+    // Miro right frame pieces (will be updated when texture loads)
+    var miroRightFrameTop = new THREE.Mesh(
+        new THREE.BoxGeometry(miroRightWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    miroRightFrameTop.position.set(0, miroRightHeight / 2 + frameThickness / 2, -frameDepth / 2);
+    miroRightFrameTop.castShadow = true;
+    miroRightFrameTop.receiveShadow = true;
+    gMiroRightPaintingGroup.add(miroRightFrameTop);
+    
+    var miroRightFrameBottom = new THREE.Mesh(
+        new THREE.BoxGeometry(miroRightWidth + frameThickness * 2, frameThickness, frameDepth),
+        frameMaterial
+    );
+    miroRightFrameBottom.position.set(0, -miroRightHeight / 2 - frameThickness / 2, -frameDepth / 2);
+    miroRightFrameBottom.castShadow = true;
+    miroRightFrameBottom.receiveShadow = true;
+    gMiroRightPaintingGroup.add(miroRightFrameBottom);
+    
+    var miroRightFrameLeft = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, miroRightHeight, frameDepth),
+        frameMaterial
+    );
+    miroRightFrameLeft.position.set(-miroRightWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+    miroRightFrameLeft.castShadow = true;
+    miroRightFrameLeft.receiveShadow = true;
+    gMiroRightPaintingGroup.add(miroRightFrameLeft);
+    
+    var miroRightFrameRight = new THREE.Mesh(
+        new THREE.BoxGeometry(frameThickness, miroRightHeight, frameDepth),
+        frameMaterial
+    );
+    miroRightFrameRight.position.set(miroRightWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+    miroRightFrameRight.castShadow = true;
+    miroRightFrameRight.receiveShadow = true;
+    gMiroRightPaintingGroup.add(miroRightFrameRight);
+    
+    // Load Miro right painting texture
+    var miroRightPaintingTexture = new THREE.TextureLoader().load(
+        'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/JoanMiro2.jpg',
+        function(texture) {
+            // Calculate width based on image aspect ratio
+            var aspectRatio = texture.image.width / texture.image.height;
+            miroRightWidth = miroRightHeight * aspectRatio;
+            
+            // Update painting geometry
+            miroRightPainting.geometry.dispose();
+            miroRightPainting.geometry = new THREE.PlaneGeometry(miroRightWidth, miroRightHeight);
+            
+            // Update frame geometries
+            miroRightFrameTop.geometry.dispose();
+            miroRightFrameTop.geometry = new THREE.BoxGeometry(miroRightWidth + frameThickness * 2, frameThickness, frameDepth);
+            miroRightFrameBottom.geometry.dispose();
+            miroRightFrameBottom.geometry = new THREE.BoxGeometry(miroRightWidth + frameThickness * 2, frameThickness, frameDepth);
+            miroRightFrameLeft.geometry.dispose();
+            miroRightFrameLeft.geometry = new THREE.BoxGeometry(frameThickness, miroRightHeight, frameDepth);
+            miroRightFrameRight.geometry.dispose();
+            miroRightFrameRight.geometry = new THREE.BoxGeometry(frameThickness, miroRightHeight, frameDepth);
+            
+            // Update frame positions
+            miroRightFrameTop.position.set(0, miroRightHeight / 2 + frameThickness / 2, -frameDepth / 2);
+            miroRightFrameBottom.position.set(0, -miroRightHeight / 2 - frameThickness / 2, -frameDepth / 2);
+            miroRightFrameLeft.position.set(-miroRightWidth / 2 - frameThickness / 2, 0, -frameDepth / 2);
+            miroRightFrameRight.position.set(miroRightWidth / 2 + frameThickness / 2, 0, -frameDepth / 2);
+            
+            // Update material
+            miroRightPaintingMaterial.map = texture;
+            miroRightPaintingMaterial.emissiveMap = texture;
+            miroRightPaintingMaterial.color.setHex(0xffffff);
+            miroRightPaintingMaterial.emissive.setHex(0xffffff);
+            miroRightPaintingMaterial.emissiveIntensity = 0.3;
+            miroRightPaintingMaterial.needsUpdate = true;
+        },
+        undefined,
+        function(err) {
+            console.error('Error loading JoanMiro2.jpg:', err);
+            console.log('Using fallback color for Miro right painting');
+        }
+    );
+    
+    // Position and orient group on wall (to the right of center, start high for drop animation)
+    gMiroRightPaintingGroup.position.set(paintingWallX, paintingY + gPaintingDropStartY, 20);
+    gMiroRightPaintingGroup.rotation.y = -Math.PI / 2;
+    gMiroRightPaintingGroup.visible = true; // Visible with Miro
+    gThreeScene.add(gMiroRightPaintingGroup);
     
     // ===== DALI PAINTING GROUP (Portrait 9x12) =====
     gDaliPaintingGroup = new THREE.Group();
@@ -12000,6 +12430,14 @@ function onPointer(evt) {
                         if (gBalloonBasketBottom) {
                             gBalloonBasketBottom.visible = false;
                         }
+                        
+                        // Set envelope meshes to back-side rendering
+                        for (let i = 0; i < gBalloonEnvelopeMeshes.length; i++) {
+                            var mesh = gBalloonEnvelopeMeshes[i];
+                            if (mesh && mesh.material) {
+                                mesh.material.side = THREE.BackSide;
+                            }
+                        }
                     }
                     
                     // Initialize balloon tracking camera when entering mode 9
@@ -12024,6 +12462,14 @@ function onPointer(evt) {
                         // Hide basket bottom
                         if (gBalloonBasketBottom) {
                             gBalloonBasketBottom.visible = false;
+                        }
+                        
+                        // Set envelope meshes to back-side rendering
+                        for (let i = 0; i < gBalloonEnvelopeMeshes.length; i++) {
+                            var mesh = gBalloonEnvelopeMeshes[i];
+                            if (mesh && mesh.material) {
+                                mesh.material.side = THREE.BackSide;
+                            }
                         }
                         
                         // Initialize smooth look-at point
@@ -12059,6 +12505,14 @@ function onPointer(evt) {
                         // Restore basket bottom visibility
                         if (gBalloonBasketBottom) {
                             gBalloonBasketBottom.visible = true;
+                        }
+                        
+                        // Restore envelope meshes to front-side rendering
+                        for (let i = 0; i < gBalloonEnvelopeMeshes.length; i++) {
+                            var mesh = gBalloonEnvelopeMeshes[i];
+                            if (mesh && mesh.material) {
+                                mesh.material.side = THREE.FrontSide;
+                            }
                         }
                     }
                     
@@ -13790,6 +14244,7 @@ function onPointer(evt) {
                 switch (lightingKnob) {
                     case 0: // Ambient intensity
                         gAmbientIntensity = newValue;
+                        gAmbientSavedIntensity = newValue; // Update saved value
                         if (gAmbientLight) {
                             gAmbientLight.intensity = gAmbientIntensity;
                             gAmbientLight.visible = gAmbientIntensity > 0;
@@ -13813,6 +14268,7 @@ function onPointer(evt) {
                         break;
                     case 3: // Overhead intensity
                         gOverheadIntensity = newValue;
+                        gOverheadSavedIntensity = newValue; // Update saved value
                         if (gDirectionalLight) {
                             gDirectionalLight.intensity = gOverheadIntensity;
                             gDirectionalLight.visible = gOverheadIntensity > 0;
@@ -13836,6 +14292,7 @@ function onPointer(evt) {
                         break;
                     case 6: // Globe lamp intensity
                         gGlobeLampIntensity = newValue;
+                        gGlobeLampSavedIntensity = newValue; // Update saved value
                         if (gGlobeLampLight) {
                             gGlobeLampLight.intensity = gGlobeLampIntensity;
                         }
@@ -13869,6 +14326,7 @@ function onPointer(evt) {
                         break;
                     case 9: // Spotlight 1 intensity
                         gSpotlight1Intensity = newValue;
+                        gSpotlight1SavedIntensity = newValue; // Update saved value
                         if (gLamps[1] && gLamps[1].spotlight) {
                             const isOn = gSpotlight1Intensity > 0;
                             gLamps[1].spotlight.intensity = gSpotlight1Intensity;
@@ -13907,6 +14365,7 @@ function onPointer(evt) {
                         break;
                     case 12: // Spotlight 2 intensity
                         gSpotlight2Intensity = newValue;
+                        gSpotlight2SavedIntensity = newValue; // Update saved value
                         if (gLamps[2] && gLamps[2].spotlight) {
                             const isOn = gSpotlight2Intensity > 0;
                             gLamps[2].spotlight.intensity = gSpotlight2Intensity;
@@ -13968,6 +14427,7 @@ function onPointer(evt) {
                         break;
                     case 17: // Headlight intensity
                         gHeadlightIntensity = newValue;
+                        gHeadlightSavedIntensity = newValue; // Update saved value
                         // Create or update headlight
                         if (gHeadlightIntensity > 0) {
                             if (!gHeadlight) {
@@ -14010,6 +14470,7 @@ function onPointer(evt) {
                         break;
                     case 18: // Ornament light intensity
                         gOrnamentLightIntensity = newValue;
+                        gOrnamentLightSavedIntensity = newValue; // Update saved value
                         // Update all ornament point lights
                         for (let i = 0; i < gStarAnimData.length; i++) {
                             if (gStarAnimData[i].pointLight) {
@@ -15963,6 +16424,212 @@ function checkLightingMenuClick(clientX, clientY) {
         return true;
     }
     
+    // Check toggle buttons
+    const buttonRadius = knobRadius * 0.3;
+    const buttonSpacing = knobSpacing * 0.5;
+    const toggleButtons = [
+        { row: 0, index: 0 }, // Ambient
+        { row: 1, index: 1 }, // Overhead
+        { row: 2, index: 2 }, // Globe
+        { row: 3, index: 3 }, // Spotlight 1
+        { row: 4, index: 4 }, // Spotlight 2
+        { row: 6, index: 5 }  // Ornament
+    ];
+    
+    for (const btn of toggleButtons) {
+        const buttonX = menuOriginX + buttonSpacing;
+        const buttonY = menuOriginY + btn.row * knobSpacing + menuTopMargin;
+        const bdx = clientX - buttonX;
+        const bdy = clientY - buttonY;
+        
+        if (bdx * bdx + bdy * bdy < buttonRadius * buttonRadius) {
+            // Toggle the appropriate light
+            switch (btn.index) {
+                case 0: // Ambient
+                    gAmbientEnabled = !gAmbientEnabled;
+                    if (gAmbientEnabled) {
+                        gAmbientIntensity = gAmbientSavedIntensity;
+                    } else {
+                        gAmbientSavedIntensity = gAmbientIntensity;
+                        gAmbientIntensity = 0;
+                    }
+                    // Update the light object
+                    if (gAmbientLight) {
+                        gAmbientLight.intensity = gAmbientIntensity;
+                        gAmbientLight.visible = gAmbientIntensity > 0;
+                    }
+                    break;
+                case 1: // Overhead
+                    gOverheadEnabled = !gOverheadEnabled;
+                    if (gOverheadEnabled) {
+                        gOverheadIntensity = gOverheadSavedIntensity;
+                    } else {
+                        gOverheadSavedIntensity = gOverheadIntensity;
+                        gOverheadIntensity = 0;
+                    }
+                    // Update the light object
+                    if (gDirectionalLight) {
+                        gDirectionalLight.intensity = gOverheadIntensity;
+                        gDirectionalLight.visible = gOverheadIntensity > 0;
+                    }
+                    break;
+                case 2: // Globe
+                    gGlobeLampEnabled = !gGlobeLampEnabled;
+                    if (gGlobeLampEnabled) {
+                        gGlobeLampIntensity = gGlobeLampSavedIntensity;
+                    } else {
+                        gGlobeLampSavedIntensity = gGlobeLampIntensity;
+                        gGlobeLampIntensity = 0;
+                    }
+                    // Update the light object and lamp visibility
+                    if (gGlobeLampLight) {
+                        gGlobeLampLight.intensity = gGlobeLampIntensity;
+                        gGlobeLampLight.visible = gGlobeLampIntensity > 0;
+                    }
+                    if (gGlobeLamp) {
+                        gGlobeLamp.visible = gGlobeLampIntensity > 0;
+                    }
+                    if (gGlobeLampObstacle) {
+                        gGlobeLampObstacle.enabled = gGlobeLampIntensity > 0;
+                    }
+                    break;
+                case 3: // Spotlight 1
+                    gSpotlight1Enabled = !gSpotlight1Enabled;
+                    if (gSpotlight1Enabled) {
+                        gSpotlight1Intensity = gSpotlight1SavedIntensity;
+                    } else {
+                        gSpotlight1SavedIntensity = gSpotlight1Intensity;
+                        gSpotlight1Intensity = 0;
+                    }
+                    // Update the light object and lamp appearance
+                    if (gLamps[1] && gLamps[1].spotlight) {
+                        const isOn = gSpotlight1Intensity > 0;
+                        gLamps[1].spotlight.intensity = gSpotlight1Intensity;
+                        gLamps[1].spotlight.visible = isOn;
+                        gLamps[1].bulb.material.color.setHex(isOn ? 0xffffff : 0x333333);
+                        gLamps[1].innerCone.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
+                        gLamps[1].innerCone.material.emissiveIntensity = isOn ? 0.8 : 0;
+                        gLamps[1].innerCone.material.color.setHex(isOn ? 0xffff00 : 0x222222);
+                        gLamps[1].coneTipCapInner.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
+                        gLamps[1].coneTipCapInner.material.emissiveIntensity = isOn ? 0.8 : 0;
+                        gLamps[1].coneTipCapInner.material.color.setHex(isOn ? 0xffff00 : 0x222222);
+                        gLamps[1].coneTipCapOuter.material.color.setHex(isOn ? 0xffc71e : 0x222222);
+                        gLamps[1].tipLight.visible = isOn;
+                        gLamps[1].statusIndicator.material.color.setHex(isOn ? 0x00ff00 : 0xff0000);
+                        gLamps[1].statusIndicator.material.emissive.setHex(isOn ? 0x00ff00 : 0xff0000);
+                        gLamps[1].statusIndicator.material.emissiveIntensity = 0.8;
+                    }
+                    break;
+                case 4: // Spotlight 2
+                    gSpotlight2Enabled = !gSpotlight2Enabled;
+                    if (gSpotlight2Enabled) {
+                        gSpotlight2Intensity = gSpotlight2SavedIntensity;
+                    } else {
+                        gSpotlight2SavedIntensity = gSpotlight2Intensity;
+                        gSpotlight2Intensity = 0;
+                    }
+                    // Update the light object and lamp appearance
+                    if (gLamps[2] && gLamps[2].spotlight) {
+                        const isOn = gSpotlight2Intensity > 0;
+                        gLamps[2].spotlight.intensity = gSpotlight2Intensity;
+                        gLamps[2].spotlight.visible = isOn;
+                        gLamps[2].bulb.material.color.setHex(isOn ? 0xffffff : 0x333333);
+                        gLamps[2].innerCone.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
+                        gLamps[2].innerCone.material.emissiveIntensity = isOn ? 0.8 : 0;
+                        gLamps[2].innerCone.material.color.setHex(isOn ? 0xffff00 : 0x222222);
+                        gLamps[2].coneTipCapInner.material.emissive.setHex(isOn ? 0xffffee : 0x000000);
+                        gLamps[2].coneTipCapInner.material.emissiveIntensity = isOn ? 0.8 : 0;
+                        gLamps[2].coneTipCapInner.material.color.setHex(isOn ? 0xffff00 : 0x222222);
+                        gLamps[2].coneTipCapOuter.material.color.setHex(isOn ? 0xffc71e : 0x222222);
+                        gLamps[2].tipLight.visible = isOn;
+                        gLamps[2].statusIndicator.material.color.setHex(isOn ? 0x00ff00 : 0xff0000);
+                        gLamps[2].statusIndicator.material.emissive.setHex(isOn ? 0x00ff00 : 0xff0000);
+                        gLamps[2].statusIndicator.material.emissiveIntensity = 0.8;
+                    }
+                    break;
+                case 5: // Ornament
+                    gOrnamentLightEnabled = !gOrnamentLightEnabled;
+                    if (gOrnamentLightEnabled) {
+                        gOrnamentLightIntensity = gOrnamentLightSavedIntensity;
+                    } else {
+                        gOrnamentLightSavedIntensity = gOrnamentLightIntensity;
+                        gOrnamentLightIntensity = 0;
+                    }
+                    // Update all ornament point lights
+                    for (let i = 0; i < gStarAnimData.length; i++) {
+                        if (gStarAnimData[i].pointLight) {
+                            gStarAnimData[i].pointLight.intensity = gOrnamentLightIntensity;
+                            gStarAnimData[i].pointLight.visible = gOrnamentLightIntensity > 0;
+                        }
+                    }
+                    break;
+            }
+            return true;
+        }
+    }
+    
+    // Check headlight toggle button (at 10 o'clock of headlight knob)
+    const headlightKnobRow = 5;
+    const headlightKnobCol = 2;
+    const headlightKnobX = menuOriginX + headlightKnobCol * knobSpacing;
+    const headlightKnobY = menuOriginY + headlightKnobRow * knobSpacing + menuTopMargin;
+    const tenOClockAngle = 7 * Math.PI / 6;
+    const buttonDistance = knobRadius * 1.3;
+    const headlightButtonX = headlightKnobX + Math.cos(tenOClockAngle) * buttonDistance;
+    const headlightButtonY = headlightKnobY + Math.sin(tenOClockAngle) * buttonDistance - buttonRadius; // Moved up by one radius
+    const hdx = clientX - headlightButtonX;
+    const hdy = clientY - headlightButtonY;
+    
+    if (hdx * hdx + hdy * hdy < buttonRadius * buttonRadius) {
+        gHeadlightEnabled = !gHeadlightEnabled;
+        if (gHeadlightEnabled) {
+            gHeadlightIntensity = gHeadlightSavedIntensity;
+        } else {
+            gHeadlightSavedIntensity = gHeadlightIntensity;
+            gHeadlightIntensity = 0;
+        }
+        // Create or update the headlight objects
+        if (gHeadlightIntensity > 0) {
+            if (!gHeadlight) {
+                // Create the headlight spotlight
+                gHeadlight = new THREE.SpotLight(0xffffff, gHeadlightIntensity);
+                gHeadlight.angle = Math.PI / 6; // 30 degree cone
+                gHeadlight.penumbra = gSpotlightPenumbra;
+                gHeadlight.castShadow = true;
+                gHeadlight.shadow.camera.near = 0.1;
+                gHeadlight.shadow.camera.far = 50;
+                gHeadlight.shadow.mapSize.width = 1024;
+                gHeadlight.shadow.mapSize.height = 1024;
+                gThreeScene.add(gHeadlight);
+                gHeadlight.target.position.set(0, 0, 0);
+                gThreeScene.add(gHeadlight.target);
+                
+                // Create point light in front of boid
+                gHeadlightPointLight = new THREE.PointLight(0xffffff, gHeadlightIntensity * 1.5, 15);
+                gThreeScene.add(gHeadlightPointLight);
+            } else {
+                gHeadlight.intensity = gHeadlightIntensity;
+                gHeadlight.visible = true;
+                if (gHeadlightPointLight) {
+                    gHeadlightPointLight.intensity = gHeadlightIntensity * 1.5;
+                    gHeadlightPointLight.visible = true;
+                }
+            }
+        } else {
+            // Turn off or remove headlight
+            if (gHeadlight) {
+                gThreeScene.remove(gHeadlight);
+                gThreeScene.remove(gHeadlight.target);
+                gHeadlight = null;
+            }
+            if (gHeadlightPointLight) {
+                gThreeScene.remove(gHeadlightPointLight);
+                gHeadlightPointLight = null;
+            }
+        }
+        return true;
+    }
+    
     // Check each knob
     for (let i = 0; i < 21; i++) {
         const row = Math.floor(i / 3);
@@ -16159,6 +16826,14 @@ function checkCameraMenuClick(clientX, clientY) {
                 if (gBalloonBasketBottom) {
                     gBalloonBasketBottom.visible = false;
                 }
+                
+                // Set envelope meshes to back-side rendering
+                for (let i = 0; i < gBalloonEnvelopeMeshes.length; i++) {
+                    var mesh = gBalloonEnvelopeMeshes[i];
+                    if (mesh && mesh.material) {
+                        mesh.material.side = THREE.BackSide;
+                    }
+                }
             }
             
             // Initialize balloon tracking camera when entering mode 9
@@ -16184,6 +16859,14 @@ function checkCameraMenuClick(clientX, clientY) {
                 // Hide basket bottom
                 if (gBalloonBasketBottom) {
                     gBalloonBasketBottom.visible = false;
+                }
+                
+                // Set envelope meshes to back-side rendering
+                for (let i = 0; i < gBalloonEnvelopeMeshes.length; i++) {
+                    var mesh = gBalloonEnvelopeMeshes[i];
+                    if (mesh && mesh.material) {
+                        mesh.material.side = THREE.BackSide;
+                    }
                 }
                 
                 // Initialize smooth look-at point
@@ -16227,6 +16910,14 @@ function checkCameraMenuClick(clientX, clientY) {
                 // Restore basket bottom visibility
                 if (gBalloonBasketBottom) {
                     gBalloonBasketBottom.visible = true;
+                }
+                
+                // Restore envelope meshes to front-side rendering
+                for (let i = 0; i < gBalloonEnvelopeMeshes.length; i++) {
+                    var mesh = gBalloonEnvelopeMeshes[i];
+                    if (mesh && mesh.material) {
+                        mesh.material.side = THREE.FrontSide;
+                    }
                 }
             }
             
@@ -16991,6 +17682,41 @@ function update() {
         }
     }
     
+    // Toy plane circular flight around balloon gondola
+    if (gToyPlane && gHotAirBalloon) {
+        // Update angle around balloon
+        gToyPlaneAngle += gToyPlaneOrbitSpeed * deltaT;
+        
+        // Calculate circular position around balloon gondola
+        // Gondola is at the base of the balloon (y offset of 0-2 from balloon position)
+        var gondolaY = gHotAirBalloon.position.y - 3; // Gondola is about 3 units below balloon center
+        
+        // Calculate position in circle (clockwise when viewed from above)
+        var planeX = gHotAirBalloon.position.x + Math.cos(gToyPlaneAngle) * gToyPlaneOrbitRadius;
+        var planeZ = gHotAirBalloon.position.z - Math.sin(gToyPlaneAngle) * gToyPlaneOrbitRadius;
+        var planeY = gondolaY; // Fly at gondola height
+        
+        gToyPlane.position.set(planeX, planeY, planeZ);
+        
+        // Face tangent to circle (direction of travel for clockwise motion)
+        gToyPlane.rotation.set(0, 0, 0);
+        gToyPlane.rotation.y = gToyPlaneAngle + Math.PI;
+        
+        // Apply bank (roll) - rotate around Z axis (which is now aligned with forward direction)
+        // Bank inward (toward balloon center) when turning clockwise
+        gToyPlane.rotateZ(-gToyPlaneBankAngle); // Negative because plane is flipped 180 degrees
+        
+        // Rotate propeller blades around their axis
+        if (gToyPlaneBlades && gToyPlaneBladesAxis) {
+            // Get the axis direction from bladesAxis object
+            // Assuming bladesAxis is a cylinder aligned with its local Z axis
+            var axis = new THREE.Vector3(0, 0, 1);
+            
+            // Rotate the blades group around the axis
+            gToyPlaneBlades.rotateOnAxis(axis, gToyPlaneBladesSpeed * deltaT);
+        }
+    }
+    
     // Duck entrance animation
     if (gDuck && gDuckEntranceDisc && gDuckEntranceState !== 'complete') {
         gDuckEntranceTimer += deltaT;
@@ -17274,12 +18000,28 @@ function update() {
             var currentBaseY = gCurrentPainting === 'duchamp' ? gDuchampPaintingBaseY : gPaintingBaseY;
             currentGroup.position.y = currentBaseY + eased * (gPaintingExitY - currentBaseY);
             
+            // Also move Miro side paintings if current painting is Miro
+            if (gCurrentPainting === 'miro') {
+                if (gMiroLeftPaintingGroup) {
+                    gMiroLeftPaintingGroup.position.y = currentBaseY + eased * (gPaintingExitY - currentBaseY);
+                }
+                if (gMiroRightPaintingGroup) {
+                    gMiroRightPaintingGroup.position.y = currentBaseY + eased * (gPaintingExitY - currentBaseY);
+                }
+            }
+            
             if (t >= 1.0) {
                 gPaintingAnimState = 'entering';
                 gPaintingAnimTimer = 0;
-                gCurrentPainting = gTargetPainting; // Update current painting
-                // Hide the exited painting
+                
+                // Hide the exited painting and Miro side paintings if exiting from Miro
                 currentGroup.visible = false;
+                if (gCurrentPainting === 'miro') {
+                    if (gMiroLeftPaintingGroup) gMiroLeftPaintingGroup.visible = false;
+                    if (gMiroRightPaintingGroup) gMiroRightPaintingGroup.visible = false;
+                }
+                
+                gCurrentPainting = gTargetPainting; // Update current painting
             }
         } else if (gPaintingAnimState === 'entering') {
             // Target painting drops down with ease-out over 1.0 seconds
@@ -17296,14 +18038,36 @@ function update() {
                             (gTargetPainting === 'bosch' ? gBoschPaintingGroup : gDuchampPaintingGroup));
             targetGroup.position.y = startY - eased * (startY - targetBaseY);
             
+            // Also move Miro side paintings if target painting is Miro
+            if (gTargetPainting === 'miro') {
+                if (gMiroLeftPaintingGroup) {
+                    gMiroLeftPaintingGroup.position.y = startY - eased * (startY - targetBaseY);
+                }
+                if (gMiroRightPaintingGroup) {
+                    gMiroRightPaintingGroup.position.y = startY - eased * (startY - targetBaseY);
+                }
+            }
+            
             // Make entering painting visible
             targetGroup.visible = true;
+            
+            // Also make Miro side paintings visible if entering Miro
+            if (gTargetPainting === 'miro') {
+                if (gMiroLeftPaintingGroup) gMiroLeftPaintingGroup.visible = true;
+                if (gMiroRightPaintingGroup) gMiroRightPaintingGroup.visible = true;
+            }
             
             if (t >= 1.0) {
                 gPaintingAnimState = 'idle';
                 gPaintingAnimTimer = 0;
                 // Ensure entering painting is visible
                 targetGroup.visible = true;
+                
+                // Ensure Miro side paintings visibility matches
+                if (gTargetPainting === 'miro') {
+                    if (gMiroLeftPaintingGroup) gMiroLeftPaintingGroup.visible = true;
+                    if (gMiroRightPaintingGroup) gMiroRightPaintingGroup.visible = true;
+                }
             }
         }
     }
@@ -17311,6 +18075,8 @@ function update() {
     // Ensure only current painting is visible when not animating
     if (gMiroPaintingGroup && gDaliPaintingGroup && gDuchampPaintingGroup && gBoschPaintingGroup && gPaintingAnimState === 'idle') {
         gMiroPaintingGroup.visible = (gCurrentPainting === 'miro');
+        if (gMiroLeftPaintingGroup) gMiroLeftPaintingGroup.visible = (gCurrentPainting === 'miro');
+        if (gMiroRightPaintingGroup) gMiroRightPaintingGroup.visible = (gCurrentPainting === 'miro');
         gDaliPaintingGroup.visible = (gCurrentPainting === 'dali');
         gDuchampPaintingGroup.visible = (gCurrentPainting === 'duchamp');
         gBoschPaintingGroup.visible = (gCurrentPainting === 'bosch');
@@ -18160,9 +18926,15 @@ function update() {
                 // Calculate current Y offset
                 const currentOffset = gPaintingDropStartY * (1 - easedProgress);
                 
-                // Update Miro painting group
+                // Update Miro painting groups
                 if (gMiroPaintingGroup) {
                     gMiroPaintingGroup.position.y = gPaintingBaseY + currentOffset;
+                }
+                if (gMiroLeftPaintingGroup) {
+                    gMiroLeftPaintingGroup.position.y = gPaintingBaseY + currentOffset;
+                }
+                if (gMiroRightPaintingGroup) {
+                    gMiroRightPaintingGroup.position.y = gPaintingBaseY + currentOffset;
                 }
                 
                 // Update Dali painting group (already high from swap system)
