@@ -21,7 +21,7 @@ var gGrabber;
 var gMouseDown = false;
 var gCameraAngle = 0;
 var gCameraRotationSpeed = 3.0; // Rotation state: 0 = stopped, 0.5 = forward, -0.5 = backward
-var gCameraFOV = 50; // Camera field of view (20-120)
+var gCameraFOV = 57; // Camera field of view (20-120)
 var gAutoRotate = true; // Enable/disable auto-rotation
 var gCameraMode = 1; // Camera mode: 0=rotate CW, 1=rotate CCW, 2=static, 3=behind boid, 4=in front of boid, 5=walking, 6=dolly, 7=dolly tracking, 8=balloon cam
 var gCameraManualControl = false; // Track if user is manually controlling camera
@@ -460,6 +460,12 @@ var gSkyPigTargetY = 12; // Target Y position for sky pig
 var gSkyPigStartScale = 0.1; // Starting scale for sky pig (tiny)
 var gSkyPigTargetScale = 2.0; // Target scale for sky pig (full size)
 var gFemaleHead = null; // Reference to female head model
+var gWallsVisible = true; // Track if walls are visible
+var gWallsOpacity = 1.0; // Current opacity of walls (0-1)
+var gWallsTargetOpacity = 1.0; // Target opacity for walls
+var gFloorVisible = true; // Track if floor is visible
+var gFloorOpacity = 1.0; // Current opacity of floor (0-1)
+var gFloorTargetOpacity = 1.0; // Target opacity for floor
 var gHotAirBalloon = null; // Reference to hot air balloon model
 var gBalloonBasketMeshes = []; // Array of basket meshes for transparency control
 var gBalloonArmrestMeshes = []; // Array of armrest meshes (kept opaque in free-look mode)
@@ -4945,6 +4951,62 @@ function drawSimMenu() {
         ctx.fillStyle = `hsla(153, 70%, 70%, ${menuOpacity})`; // hsl(153 43% 50%) 
         ctx.fillText(valueText, knobX, knobY + 0.6 * knobRadius);
     }
+    
+    // Draw wall and floor visibility buttons (to the right of Corral Margin knob)
+    const buttonWidth = knobRadius * 1.8;
+    const buttonHeight = knobRadius * 0.75;
+    const buttonSpacing = knobRadius * 0.2;
+    const buttonX = 2 * knobSpacing; // Centered with knob below (col 2)
+    const buttonY1 = 3 * knobSpacing + menuTopMargin - buttonHeight / 2 - buttonSpacing / 2; // Above center
+    const buttonY2 = 3 * knobSpacing + menuTopMargin + buttonHeight / 2 + buttonSpacing / 2; // Below center
+    
+    // Walls button (top)
+    ctx.beginPath();
+    ctx.roundRect(buttonX - buttonWidth / 2, buttonY1 - buttonHeight / 2, buttonWidth, buttonHeight, 4);
+    if (gWallsVisible) {
+        ctx.fillStyle = `hsla(120, 70%, 40%, ${menuOpacity})`; // Green when on
+        ctx.shadowColor = `hsla(120, 70%, 50%, ${menuOpacity * 0.8})`;
+    } else {
+        ctx.fillStyle = `hsla(0, 70%, 40%, ${menuOpacity})`; // Red when off
+        ctx.shadowColor = `hsla(0, 70%, 50%, ${menuOpacity * 0.8})`;
+    }
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `hsla(0, 0%, 20%, ${menuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Walls label
+    ctx.fillStyle = `hsla(0, 0%, 100%, ${menuOpacity})`;
+    ctx.font = `${0.28 * knobRadius}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('WALLS', buttonX, buttonY1);
+    
+    // Floor button (bottom)
+    ctx.beginPath();
+    ctx.roundRect(buttonX - buttonWidth / 2, buttonY2 - buttonHeight / 2, buttonWidth, buttonHeight, 4);
+    if (gFloorVisible) {
+        ctx.fillStyle = `hsla(120, 70%, 40%, ${menuOpacity})`; // Green when on
+        ctx.shadowColor = `hsla(120, 70%, 50%, ${menuOpacity * 0.8})`;
+    } else {
+        ctx.fillStyle = `hsla(0, 70%, 40%, ${menuOpacity})`; // Red when off
+        ctx.shadowColor = `hsla(0, 70%, 50%, ${menuOpacity * 0.8})`;
+    }
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `hsla(0, 0%, 20%, ${menuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Floor label
+    ctx.fillStyle = `hsla(0, 0%, 100%, ${menuOpacity})`;
+    ctx.font = `${0.28 * knobRadius}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('FLOOR', buttonX, buttonY2);
 
     ctx.restore();
 }
@@ -6897,6 +6959,14 @@ function updateWorldGeometry(changedDimension) {
         gFloor.rotation.x = -Math.PI / 2;
         gFloor.receiveShadow = true;
         gFloor.position.set(0, -0.05, 0);
+        
+        // Restore floor visibility state
+        if (!gFloorVisible || gFloorOpacity < 1.0) {
+            gFloor.material.transparent = true;
+            gFloor.material.opacity = gFloorOpacity;
+            gFloor.visible = gFloorOpacity > 0;
+        }
+        
         gThreeScene.add(gFloor);
     }
     
@@ -6967,6 +7037,22 @@ function updateWorldGeometry(changedDimension) {
         gBaseboards.right.geometry.dispose();
         gBaseboards.right.geometry = new THREE.BoxGeometry(baseboardDepth, baseboardHeight, boxSize.z * 2);
         gBaseboards.right.position.set(boxSize.x - baseboardDepth / 2, baseboardHeight / 2, 0);
+    }
+    
+    // Restore wall and baseboard visibility states after resize
+    if (!gWallsVisible || gWallsOpacity < 1.0) {
+        ['front', 'back', 'left', 'right'].forEach(function(side) {
+            if (gWalls[side] && gWalls[side].material) {
+                gWalls[side].material.transparent = true;
+                gWalls[side].material.opacity = gWallsOpacity;
+                gWalls[side].visible = gWallsOpacity > 0;
+            }
+            if (gBaseboards[side] && gBaseboards[side].material) {
+                gBaseboards[side].material.transparent = true;
+                gBaseboards[side].material.opacity = gWallsOpacity;
+                gBaseboards[side].visible = gWallsOpacity > 0;
+            }
+        });
     }
     
     // Update painting positions to follow walls
@@ -7976,7 +8062,7 @@ function initThreeScene() {
             );
             
             gRug.rotation.x = -Math.PI / 2; // Lie flat on floor
-            gRug.position.set(-6, 0.015, 0); // Position between teapot and chair, slightly above floor
+            gRug.position.set(-6, 0.025, 0); // Position between teapot and chair, slightly above floor
             gRug.receiveShadow = true;
             gThreeScene.add(gRug);
             
@@ -9457,7 +9543,7 @@ function initThreeScene() {
             var ceilingY = 2 * WORLD_HEIGHT; // Wire extends to 2x world height
             var minY = WORLD_HEIGHT * 0.8; // Upper part of room
             var maxY = WORLD_HEIGHT * 1.5; // Slightly below ceiling
-            var startYAboveCeiling = WORLD_HEIGHT + 12; // Start above ceiling
+            var startYAboveCeiling = WORLD_HEIGHT + 20; // Start above ceiling
             var minStarDistance = 6; // Minimum distance between stars (about 2 object sizes)
             var starPositions = []; // Track placed star positions
             
@@ -12717,6 +12803,10 @@ function onPointer(evt) {
             if (intersects[i].object.userData.isNonInteractive) {
                 continue;
             }
+            // Skip invisible objects (prevents dragging invisible obstacles)
+            if (!intersects[i].object.visible) {
+                continue;
+            }
             if (intersects[i].object.userData.isStoolLeg && !hitStoolLeg) {
                 hitStoolLeg = true;
                 // Don't break - check if other objects are also hit
@@ -15925,6 +16015,30 @@ function checkSimMenuClick(clientX, clientY) {
         return true;
     }
     
+    // Check wall and floor visibility buttons
+    const buttonWidth = knobRadius * 1.8;
+    const buttonHeight = knobRadius * 0.75;
+    const buttonSpacing = knobRadius * 0.2;
+    const buttonX = menuOriginX + 2 * knobSpacing; // Centered with knob below (col 2)
+    const buttonY1 = menuOriginY + 3 * knobSpacing + menuTopMargin - buttonHeight / 2 - buttonSpacing / 2;
+    const buttonY2 = menuOriginY + 3 * knobSpacing + menuTopMargin + buttonHeight / 2 + buttonSpacing / 2;
+    
+    // Check walls button
+    if (clientX >= buttonX - buttonWidth / 2 && clientX <= buttonX + buttonWidth / 2 &&
+        clientY >= buttonY1 - buttonHeight / 2 && clientY <= buttonY1 + buttonHeight / 2) {
+        gWallsVisible = !gWallsVisible;
+        gWallsTargetOpacity = gWallsVisible ? 1.0 : 0.0;
+        return true;
+    }
+    
+    // Check floor button
+    if (clientX >= buttonX - buttonWidth / 2 && clientX <= buttonX + buttonWidth / 2 &&
+        clientY >= buttonY2 - buttonHeight / 2 && clientY <= buttonY2 + buttonHeight / 2) {
+        gFloorVisible = !gFloorVisible;
+        gFloorTargetOpacity = gFloorVisible ? 1.0 : 0.0;
+        return true;
+    }
+    
     // Check knobs (now 15 knobs - removed FOV, added 2 blank spaces)
     for (let knob = 0; knob < 15; knob++) {
         // Skip blank spaces (knobs 8 and 11)
@@ -17471,6 +17585,110 @@ function update() {
     // Update fade-in effect
     if (gFadeInTime < gFadeInDuration) {
         gFadeInTime += deltaT;
+    }
+    
+    // Animate walls opacity (fade in/out)
+    const opacityChangeSpeed = 2.0; // Units per second
+    if (gWallsOpacity !== gWallsTargetOpacity) {
+        if (gWallsOpacity < gWallsTargetOpacity) {
+            gWallsOpacity = Math.min(gWallsTargetOpacity, gWallsOpacity + opacityChangeSpeed * deltaT);
+        } else {
+            gWallsOpacity = Math.max(gWallsTargetOpacity, gWallsOpacity - opacityChangeSpeed * deltaT);
+        }
+        
+        // Update wall materials
+        ['front', 'back', 'left', 'right'].forEach(function(side) {
+            if (gWalls[side] && gWalls[side].material) {
+                gWalls[side].material.transparent = true;
+                gWalls[side].material.opacity = gWallsOpacity;
+                gWalls[side].material.needsUpdate = true;
+                gWalls[side].visible = gWallsOpacity > 0;
+            }
+            // Update baseboard materials
+            if (gBaseboards[side] && gBaseboards[side].material) {
+                gBaseboards[side].material.transparent = true;
+                gBaseboards[side].material.opacity = gWallsOpacity;
+                gBaseboards[side].material.needsUpdate = true;
+                gBaseboards[side].visible = gWallsOpacity > 0;
+            }
+        });
+        
+        // Update painting groups opacity
+        const paintingGroups = [
+            gMiroPaintingGroup, gDaliPaintingGroup, gBoschPaintingGroup,
+            gDuchampPaintingGroup, gDuchampBridePaintingGroup, gDuchampGrinderPaintingGroup, gDuchampBrideTopPaintingGroup,
+            gMiroLeftPaintingGroup, gMiroRightPaintingGroup
+        ];
+        paintingGroups.forEach(function(group) {
+            if (group) {
+                group.traverse(function(child) {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            // Handle multi-material meshes
+                            child.material.forEach(function(mat) {
+                                mat.transparent = true;
+                                mat.opacity = gWallsOpacity;
+                                mat.needsUpdate = true;
+                            });
+                        } else {
+                            child.material.transparent = true;
+                            child.material.opacity = gWallsOpacity;
+                            child.material.needsUpdate = true;
+                        }
+                    }
+                });
+                group.visible = gWallsOpacity > 0;
+            }
+        });
+        
+        // Update oval painting
+        if (gOvalPainting && gOvalPainting.material) {
+            gOvalPainting.material.transparent = true;
+            gOvalPainting.material.opacity = gWallsOpacity;
+            gOvalPainting.material.needsUpdate = true;
+            gOvalPainting.visible = gWallsOpacity > 0;
+        }
+        if (gOvalFrame && gOvalFrame.material) {
+            gOvalFrame.material.transparent = true;
+            gOvalFrame.material.opacity = gWallsOpacity;
+            gOvalFrame.material.needsUpdate = true;
+            gOvalFrame.visible = gWallsOpacity > 0;
+        }
+        
+        // Update left wall painting
+        if (gLeftWallPainting && gLeftWallPainting.material) {
+            gLeftWallPainting.material.transparent = true;
+            gLeftWallPainting.material.opacity = gWallsOpacity;
+            gLeftWallPainting.material.needsUpdate = true;
+            gLeftWallPainting.visible = gWallsOpacity > 0;
+        }
+        
+        // Update left wall frame pieces
+        gLeftWallFramePieces.forEach(function(framePiece) {
+            if (framePiece && framePiece.material) {
+                framePiece.material.transparent = true;
+                framePiece.material.opacity = gWallsOpacity;
+                framePiece.material.needsUpdate = true;
+                framePiece.visible = gWallsOpacity > 0;
+            }
+        });
+    }
+    
+    // Animate floor opacity (fade in/out)
+    if (gFloorOpacity !== gFloorTargetOpacity) {
+        if (gFloorOpacity < gFloorTargetOpacity) {
+            gFloorOpacity = Math.min(gFloorTargetOpacity, gFloorOpacity + opacityChangeSpeed * deltaT);
+        } else {
+            gFloorOpacity = Math.max(gFloorTargetOpacity, gFloorOpacity - opacityChangeSpeed * deltaT);
+        }
+        
+        // Update floor material
+        if (gFloor && gFloor.material) {
+            gFloor.material.transparent = true;
+            gFloor.material.opacity = gFloorOpacity;
+            gFloor.material.needsUpdate = true;
+            gFloor.visible = gFloorOpacity > 0;
+        }
     }
     
     // Update button pulse animation
