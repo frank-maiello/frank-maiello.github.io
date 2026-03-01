@@ -13813,6 +13813,7 @@ function onPointer(evt) {
         
         if (hitSphere && hitSphereObstacle) {
             gDraggingSphere = true;
+            gSphereRising = false; // Stop rise animation when user starts dragging
             window.draggingSphereObstacle = hitSphereObstacle; // Store reference globally
             
             // Store the distance from camera to sphere center (for fixed plane)
@@ -13939,6 +13940,7 @@ function onPointer(evt) {
         
         if (hitTorus && hitTorusObstacle) {
             gDraggingTorus = true;
+            gTorusDropping = false; // Stop drop animation when user starts dragging
             window.draggingTorusObstacle = hitTorusObstacle; // Store reference globally
             
             // Store the distance from camera to torus center (for fixed plane)
@@ -19329,7 +19331,9 @@ function update() {
                 
                 // Update only visual mesh (not collision properties)
                 if (gTorusObstacle.mesh) {
-                    gTorusObstacle.mesh.position.set(11, currentY, 0);
+                    const newPos = new THREE.Vector3(11, currentY, 0);
+                    gTorusObstacle.mesh.position.copy(newPos);
+                    gTorusObstacle.position.copy(newPos); // Keep internal position in sync
                     const majorScale = currentMajorRadius / gTorusStartMajorRadius;
                     const minorScale = currentMinorRadius / gTorusStartMinorRadius;
                     // Scale uniformly based on major radius growth
@@ -19383,7 +19387,9 @@ function update() {
         
         // Update only visual mesh (not collision properties)
         if (gSphereObstacle.mesh) {
-            gSphereObstacle.mesh.position.set(-10, currentY, 18);
+            const newPos = new THREE.Vector3(-10, currentY, 18);
+            gSphereObstacle.mesh.position.copy(newPos);
+            gSphereObstacle.position.copy(newPos); // Keep internal position in sync
             const scale = currentRadius / gSphereStartRadius;
             gSphereObstacle.mesh.scale.set(scale, scale, scale);
         }
