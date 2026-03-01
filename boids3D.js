@@ -10294,7 +10294,8 @@ function initThreeScene() {
                     for (var tj = 0; tj < 5; tj++) {
                         // Base color: pastel blue (hsl(200, 50%, 85%))
                         var hue = 200;
-                        var sat = 50 + (Math.random() - 0.5) * 10; // 45-55%
+                        //var sat = 50 + (Math.random() - 0.5) * 10; // 45-55%
+                        var sat = 0;
                         var light = 50 + (Math.random() - 0.5) * 40; // 30-70%
                         backWallCtx.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
                         backWallCtx.fillRect(
@@ -10358,7 +10359,8 @@ function initThreeScene() {
                     for (var tj = 0; tj < 5; tj++) {
                         // Base color: pastel yellow (hsl(55, 50%, 85%))
                         var hue = 55;
-                        var sat = 50 + (Math.random() - 0.5) * 10; // 45-55%
+                        //var sat = 50 + (Math.random() - 0.5) * 10; // 45-55%
+                        var sat = 0;
                         var light = 50 + (Math.random() - 0.5) * 40; // 30-70%
                         leftWallCtx.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
                         leftWallCtx.fillRect(
@@ -10543,7 +10545,8 @@ function initThreeScene() {
                     for (var tj = 0; tj < 5; tj++) {
                         // Base color: pastel green (hsl(130, 50%, 85%))
                         var hue = 130;
-                        var sat = 50 + (Math.random() - 0.5) * 10; // 45-55%
+                        //var sat = 50 + (Math.random() - 0.5) * 10; // 45-55%
+                        var sat = 0;
                         var light = 50 + (Math.random() - 0.5) * 40; // 30-70%
                         rightWallCtx.fillStyle = `hsl(${hue}, ${sat}%, ${light}%)`;
                         rightWallCtx.fillRect(
