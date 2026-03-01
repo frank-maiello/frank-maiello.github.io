@@ -6808,6 +6808,93 @@ function drawBalloonVerticalSpeedGauge() {
     ctx.restore();
 }
 
+// Draw altimeter gauge for balloon camera modes
+function drawBalloonAltimeterGauge() {
+    // Only show in balloon camera modes
+    if (gCameraMode !== 8 && gCameraMode !== 9) return;
+    
+    const ctx = gOverlayCtx;
+    const gaugeRadius = 0.11 * menuScale;
+    const gaugeX = window.innerWidth - gaugeRadius * 2.5;
+    const gaugeY = gaugeRadius * 5.5; // Position below vertical speed gauge
+    
+    ctx.save();
+    ctx.translate(gaugeX, gaugeY);
+    
+    // Draw gauge background circle
+    ctx.beginPath();
+    ctx.arc(0, 0, gaugeRadius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(30, 30, 40, 0.85)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(180, 180, 200, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Zero position is at 6 o'clock (π/2 radians or 90 degrees)
+    const zeroAngle = Math.PI / 2;
+    
+    // Map altitude to angle
+    // Zero altitude at 6 o'clock, max altitude at 6 o'clock after full rotation
+    const maxAltitude = 60; // Maximum altitude to display
+    const maxAngle = Math.PI * 2; // Full 360-degree rotation
+    const altitudeRatio = Math.min(gBalloonHeight / maxAltitude, 1.0);
+    const needleAngle = zeroAngle + (altitudeRatio * maxAngle);
+    
+    // Draw filled wedge from zero position to needle position
+    if (gBalloonHeight > 0.1) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        
+        // Altitude: blue wedge, clockwise from zero
+        ctx.fillStyle = 'rgba(50, 150, 220, 0.6)';
+        ctx.arc(0, 0, gaugeRadius * 0.85, zeroAngle, needleAngle, false);
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    // Draw zero marker (thicker line at 6 o'clock)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, gaugeRadius * 0.75);
+    ctx.lineTo(0, gaugeRadius * 0.95);
+    ctx.stroke();
+    
+    // Draw needle
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(
+        Math.cos(needleAngle) * gaugeRadius * 0.9,
+        Math.sin(needleAngle) * gaugeRadius * 0.9
+    );
+    ctx.stroke();
+    
+    // Draw center dot
+    ctx.beginPath();
+    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fill();
+    
+    // Draw label
+    ctx.font = `bold ${0.035 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'hsla(240, 17%, 10%, 0.90)';
+    ctx.fillText('Altimeter', 2, 1 + gaugeRadius + 0.06 * menuScale);
+    ctx.fillStyle = 'rgba(220, 220, 230, 0.9)';
+    ctx.fillText('Altimeter', 0, gaugeRadius + 0.06 * menuScale);
+    
+    // Draw altitude value text
+    ctx.font = `${0.03 * menuScale}px verdana`;
+    ctx.fillStyle = 'hsla(240, 17%, 10%, 0.90)';
+    ctx.fillText(gBalloonHeight.toFixed(1), 1, -gaugeRadius * 0.35 + 1);
+    ctx.fillStyle = 'rgba(220, 220, 230, 0.9)';
+    ctx.fillText(gBalloonHeight.toFixed(1), 0, -gaugeRadius * 0.35);
+    
+    ctx.restore();
+}
+
 // Store FOV knob position for interaction
 var fovKnobInfo = { x: 0, y: 0, radius: 0 };
 var orbitSpeedKnobInfo = { x: 0, y: 0, radius: 0 };
@@ -19830,6 +19917,7 @@ function update() {
     drawLightingMenu();
     drawCameraMenu();
     drawBalloonVerticalSpeedGauge();
+    drawBalloonAltimeterGauge();
     
     // Draw fade-in effect (black overlay that fades out)
     if (gFadeInTime < gFadeInDuration) {
