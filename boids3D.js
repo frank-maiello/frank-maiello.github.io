@@ -23,7 +23,7 @@ var gCameraAngle = 0;
 var gCameraRotationSpeed = 3.0; // Rotation state: 0 = stopped, 0.5 = forward, -0.5 = backward
 var gCameraFOV = 57; // Camera field of view (20-120)
 var gAutoRotate = true; // Enable/disable auto-rotation
-var gCameraMode = 1; // Camera mode: 0=rotate CW, 1=rotate CCW, 2=static, 3=behind boid, 4=in front of boid, 5=walking, 6=dolly, 7=dolly tracking, 8=balloon cam
+var gCameraMode = 1; // Camera mode: 0=rotate CW, 1=rotate CCW, 2=static, 3=behind boid, 4=in front of boid, 5=walking, 6=dolly, 7=dolly tracking, 8=dolly balloon-tracking, 9=balloon free-look, 10=balloon tracking
 var gCameraManualControl = false; // Track if user is manually controlling camera
 var gCameraSpringStrength = 0.08; // Spring interpolation strength (lower = smoother)
 var gCameraOffset = new THREE.Vector3(0, 0, 0); // Manual camera offset in first-person mode
@@ -61,6 +61,7 @@ var gDollyCameraYaw = Math.PI; // Horizontal rotation for dolly camera mode (sta
 var gDollyCameraPitch = 0; // Vertical tilt for dolly camera mode
 var gDollyCameraHeight = 7.5; // Camera height above ground in dolly mode
 var gDollyCameraLookLocked = true; // Whether dolly camera look is locked (starts locked)
+var gDraggingDollyCameraLook = false; // Whether user is dragging to look around in dolly camera mode
 var gPointerLastX = 0;
 var gPointerLastY = 0;
 var container = null; // Container element for renderer
@@ -495,6 +496,7 @@ var gToyPlanePropShaft = null; // Reference to propShaft object for rotation axi
 var gToyPlaneBladesAxis = null; // Reference to blade rotation axis object (legacy)
 var gToyPlaneBladesSpeed = 20; // Radians per second for propeller rotation
 var gBalloonCameraLookLocked = true; // Whether balloon camera look is locked (starts locked)
+var gDraggingBalloonCameraLook = false; // Whether user is dragging to look around in balloon camera mode
 var gBalloonTrackingCameraZoom = 50; // Field of view for balloon tracking camera (degrees)
 var gSavedCameraFOV = null; // Saved FOV from other camera modes when entering balloon free-look mode
 var gColumnBaseSliding = false; // Flag for column base slide animation (starts after loading)
@@ -4200,8 +4202,9 @@ function drawMainMenu() {
         'hsla(160, 50%, 30%, 0.80)',    // Mode 5: Walking
         'hsla(180, 50%, 30%, 0.80)',    // Mode 6: Dolly
         'hsla(200, 50%, 30%, 0.80)',     // Mode 7: Dolly tracking
-        'hsla(220, 50%, 30%, 0.80)',     // Mode 8: Balloon tracking
-        'hsla(240, 50%, 30%, 0.80)'      // Mode 9: Balloon free-look
+        'hsla(210, 50%, 30%, 0.80)',     // Mode 8: Dolly balloon-tracking
+        'hsla(220, 50%, 30%, 0.80)',     // Mode 9: Balloon free-look
+        'hsla(240, 50%, 30%, 0.80)'      // Mode 10: Balloon tracking
     ];
     ctx.fillStyle = cameraBackgroundColors[gCameraMode];
     ctx.fill();
@@ -4335,7 +4338,7 @@ function drawMainMenu() {
             ctx.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
             ctx.fill();
         }
-    } else if (gCameraMode === 6 || gCameraMode === 7) {
+    } else if (gCameraMode === 6 || gCameraMode === 7 || gCameraMode === 8) {
         // Draw dolly camera icon (eye on railroad tracks)
         const eyeScale = 0.7; // Make eye smaller
         const eyeWidth = iconSize * 1.7 * eyeScale;
@@ -4344,7 +4347,7 @@ function drawMainMenu() {
         
         // Eyeball offset for tracking mode - animate scanning back and forth
         let eyeballOffsetX = 0;
-        if (gCameraMode === 7) {
+        if (gCameraMode === 7 || gCameraMode === 8) {
             const time = performance.now() * 0.001; // Time in seconds
             const scanRange = eyeWidth * 0.25; // Maximum offset from center
             eyeballOffsetX = Math.sin(time * 1.5) * scanRange; // Scan back and forth
@@ -4410,7 +4413,7 @@ function drawMainMenu() {
         ctx.moveTo(-trackWidth / 2, trackY + railSpacing / 2);
         ctx.lineTo(trackWidth / 2, trackY + railSpacing / 2);
         ctx.stroke();
-    } else if (gCameraMode === 8 || gCameraMode === 9) {
+    } else if (gCameraMode === 9 || gCameraMode === 10) {
         // Draw hot air balloon icon for balloon cam
         const balloonWidth = iconSize * 1.1;
         const balloonHeight = iconSize * 1.4;
@@ -6354,7 +6357,7 @@ function drawCameraMenu() {
     const radioButtonSize = 0.04 * menuScale;
     const radioButtonSpacing = 0.104 * menuScale;  // Increased 30% from 0.08
     const knobTopMargin = 0.05 * menuScale;
-    const radioSectionHeight = 9 * radioButtonSpacing + 0.05 * menuScale;
+    const radioSectionHeight = 11 * radioButtonSpacing + 0.05 * menuScale;
     const checkboxSectionHeight = 0.15 * menuScale; // Extra space for stereo checkbox
     const menuHeight = 14.5 * knobRadius;
     
@@ -6411,9 +6414,10 @@ function drawCameraMenu() {
         'Lead Boid, Look Behind',
         'Walking Free-Roam Cam',
         'Dolly Free-Look Cam',
-        'Dolly Tracking Cam',
+        'Dolly Boid-Tracking Cam',
+        'Dolly Balloon-Tracking Cam',
         'Balloon Free-Look Cam',
-        'Balloon Tracking Cam'
+        'Balloon Boid-Tracking Cam'
     ];
     
     const radioStartY = -0.003 * menuScale; // Moved up further
@@ -6454,7 +6458,7 @@ function drawCameraMenu() {
     const fovKnobX = menuWidth / 2 - horizontalKnobSpacing;
     const orbitSpeedKnobX = menuWidth / 2;
     const speedKnobX = menuWidth / 2 + horizontalKnobSpacing;
-    const knobY = radioSectionHeight + knobRadius * 1.5;
+    const knobY = radioSectionHeight + knobRadius * 0.3;
     
     // ===== FOV Knob =====
     // Draw knob background
@@ -6620,11 +6624,14 @@ function drawCameraMenu() {
     // Draw white paper frame
     ctx.fillStyle = `hsla(0, 0%, 95%, ${glassesOpacity})`;
     ctx.strokeStyle = `hsla(0, 0%, 60%, ${glassesOpacity})`;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1;
     
-    // Draw frame with circular nose bridge cutout at bottom
-    const noseRadius = glassesScale * 0.35;
+    // Draw frame with rounded triangular nose bridge cutout at bottom
+    const noseWidth = glassesScale * 1.0;
+    const noseHeight = glassesScale * 0.7;
     const noseY = lensY + frameHeight / 2; // Bottom edge of frame
+    const nosePeakY = noseY - noseHeight; // Peak of triangle
+    const noseCornerRadius = glassesScale * 0.15; // Radius for rounded corners
     
     ctx.save();
     ctx.beginPath();
@@ -6638,9 +6645,14 @@ function drawCameraMenu() {
     // Right edge going down
     ctx.lineTo(checkboxX + frameWidth / 2, lensY + frameHeight / 2);
     // Bottom edge to start of nose cutout
-    ctx.lineTo(checkboxX + noseRadius, lensY + frameHeight / 2);
-    // Nose cutout - half circle going inward (upward)
-    ctx.arc(checkboxX, noseY, noseRadius, 0, Math.PI, true);
+    ctx.lineTo(checkboxX + noseWidth / 2, noseY);
+    // Rounded triangular nose cutout going inward (upward)
+    // Right corner with curve
+    ctx.quadraticCurveTo(checkboxX + noseWidth / 2 - noseCornerRadius, noseY - noseCornerRadius, checkboxX + noseCornerRadius, nosePeakY + noseCornerRadius);
+    // Peak with curve
+    ctx.quadraticCurveTo(checkboxX, nosePeakY, checkboxX - noseCornerRadius, nosePeakY + noseCornerRadius);
+    // Left corner with curve
+    ctx.quadraticCurveTo(checkboxX - noseWidth / 2 + noseCornerRadius, noseY - noseCornerRadius, checkboxX - noseWidth / 2, noseY);
     // Continue bottom edge
     ctx.lineTo(checkboxX - frameWidth / 2, lensY + frameHeight / 2);
     ctx.closePath();
@@ -6719,7 +6731,7 @@ function drawCameraMenu() {
 // Draw vertical speed indicator gauge for balloon camera modes
 function drawBalloonVerticalSpeedGauge() {
     // Only show in balloon camera modes
-    if (gCameraMode !== 8 && gCameraMode !== 9) return;
+    if (gCameraMode !== 9 && gCameraMode !== 10) return;
     
     const ctx = gOverlayCtx;
     const gaugeRadius = 0.11 * menuScale;
@@ -6811,7 +6823,7 @@ function drawBalloonVerticalSpeedGauge() {
 // Draw altimeter gauge for balloon camera modes
 function drawBalloonAltimeterGauge() {
     // Only show in balloon camera modes
-    if (gCameraMode !== 8 && gCameraMode !== 9) return;
+    if (gCameraMode !== 9 && gCameraMode !== 10) return;
     
     const ctx = gOverlayCtx;
     const gaugeRadius = 0.11 * menuScale;
@@ -6906,7 +6918,7 @@ function updateKnobPositions() {
     const knobSpacing = knobRadius * 3;
     const menuWidth = knobSpacing * 2 * 0.75;  // 25% narrower than original
     const radioButtonSpacing = 0.104 * menuScale;
-    const radioSectionHeight = 9 * radioButtonSpacing + 0.05 * menuScale;
+    const radioSectionHeight = 11 * radioButtonSpacing + 0.05 * menuScale;
     
     const menuOriginX = cameraMenuX * window.innerWidth;
     const menuOriginY = cameraMenuY * window.innerHeight;
@@ -6915,7 +6927,7 @@ function updateKnobPositions() {
     const fovKnobX = menuWidth / 2 - horizontalKnobSpacing;
     const orbitSpeedKnobX = menuWidth / 2;
     const speedKnobX = menuWidth / 2 + horizontalKnobSpacing;
-    const knobY = radioSectionHeight + knobRadius * 1.5;
+    const knobY = radioSectionHeight + knobRadius * 0.3;
     
     // Convert to screen pixel coordinates
     fovKnobInfo = { x: menuOriginX + fovKnobX, y: menuOriginY + knobY, radius: knobRadius };
@@ -8026,11 +8038,11 @@ function initThreeScene() {
     //var dirLight = new THREE.DirectionalLight( 0x55505a, 2 );
     gDirectionalLight = new THREE.DirectionalLight( 0x55505a, gOverheadIntensity );
     gDirectionalLight.visible = gOverheadIntensity > 0;
-    gDirectionalLight.position.set( 0, 30, 0 );
+    gDirectionalLight.position.set( 0, 60, 0 );
     var dirLight = gDirectionalLight; // Keep backward compatibility
     dirLight.castShadow = true;
     dirLight.shadow.camera.near = 0.1;
-    dirLight.shadow.camera.far = 40;
+    dirLight.shadow.camera.far = 60;
 
     dirLight.shadow.camera.right = WORLD_WIDTH;  // Match room width
     dirLight.shadow.camera.left = -WORLD_WIDTH;
@@ -9506,13 +9518,13 @@ function initThreeScene() {
                         if (child.name) {
                             var name = child.name;
                             var nameLower = name.toLowerCase();
-                            if (nameLower.startsWith('basketwall') || nameLower.startsWith('basketfloor')) {
+                            if (nameLower.startsWith('basketimported')) {
                                 gBalloonBasketMeshes.push(child);
                                 console.log('Found basket mesh:', name);
-                            } else if (nameLower.startsWith('basketbottom')) {
+                            } else if (nameLower.startsWith('basketfloor')) {
                                 gBalloonBasketBottom = child;
                                 console.log('Found basket bottom:', name);
-                            } else if (nameLower.includes('armrest') || nameLower.includes('arm')) {
+                            } else if (nameLower.includes('armrest')) {
                                 gBalloonArmrestMeshes.push(child);
                                 console.log('Found armrest mesh:', name);
                             } else if (nameLower.startsWith('envelope')) {
@@ -12125,7 +12137,7 @@ function initThreeScene() {
         }
         
         // Arrow key controls for balloon camera mode (vertical control)
-        if (gCameraMode === 8 || gCameraMode === 9) {
+        if (gCameraMode === 9 || gCameraMode === 10) {
             if (evt.key === 'ArrowUp') {
                 gKeysPressed.up = true;
                 evt.preventDefault();
@@ -12240,14 +12252,14 @@ function initThreeScene() {
             gWalkingCameraPosition.y -= evt.deltaY * elevationSpeed * 0.01;
             // Clamp elevation to reasonable range
             gWalkingCameraPosition.y = Math.max(0.5, Math.min(50, gWalkingCameraPosition.y));
-        } else if (gCameraMode === 6 || gCameraMode === 7) {
+        } else if (gCameraMode === 6 || gCameraMode === 7 || gCameraMode === 8) {
             evt.preventDefault();
             // Adjust camera height in dolly mode
             const heightSpeed = 0.1;
             gDollyCameraHeight -= evt.deltaY * heightSpeed * 0.01;
             // Clamp height to reasonable range (allow above and below world bounds)
             gDollyCameraHeight = Math.max(-15, Math.min(30, gDollyCameraHeight));
-        } else if (gCameraMode === 8) {
+        } else if (gCameraMode === 9) {
             evt.preventDefault();
             // Adjust camera zoom (FOV) in balloon free-look mode
             const zoomSpeed = 2.0;
@@ -12256,7 +12268,7 @@ function initThreeScene() {
             gBalloonCameraZoom = Math.max(10, Math.min(120, gBalloonCameraZoom));
             // Update global FOV so knob reflects the change
             gCameraFOV = gBalloonCameraZoom;
-        } else if (gCameraMode === 9) {
+        } else if (gCameraMode === 10) {
             evt.preventDefault();
             // Adjust camera zoom (FOV) in balloon tracking mode
             const zoomSpeed = 2.0;
@@ -12516,7 +12528,7 @@ function onPointer(evt) {
                 } else {
                     // Menu is already open, cycle camera mode
                     const previousMode = gCameraMode;
-                    gCameraMode = (gCameraMode + 1) % 10;
+                    gCameraMode = (gCameraMode + 1) % 11;
                     
                     // If we cycled back to mode 0 (completed full cycle), close the menu
                     if (gCameraMode === 0) {
@@ -12590,8 +12602,33 @@ function onPointer(evt) {
                         }
                     }
                     
-                    // Initialize balloon free-look camera when entering mode 8
+                    // Initialize dolly balloon-tracking camera when entering mode 8
                     if (gCameraMode === 8) {
+                        // Set camera to current dolly cart position
+                        const localX = (gDollyPosition - 0.5) * gDollyRailsLength;
+                        const worldX = gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * localX;
+                        const worldZ = gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * localX;
+                        gCamera.position.set(worldX, gDollyCameraHeight, worldZ);
+                        
+                        // Initialize smooth look-at point to balloon
+                        if (gHotAirBalloon) {
+                            gCamera.userData.smoothLookAt = gHotAirBalloon.position.clone();
+                        }
+                        
+                        // Create rails and cart if they don't exist yet
+                        if (!gDollyRailsMesh) {
+                            createDollyRails();
+                        }
+                        if (!gDollyCartMesh) {
+                            createDollyCart();
+                        }
+                        if (!gDollyCameraMesh) {
+                            loadDollyCameraModel();
+                        }
+                    }
+                    
+                    // Initialize balloon free-look camera when entering mode 9
+                    if (gCameraMode === 9) {
                         // Save current FOV and use it for balloon camera
                         gSavedCameraFOV = gCameraFOV;
                         gBalloonCameraZoom = gCameraFOV;
@@ -12628,8 +12665,8 @@ function onPointer(evt) {
                         }
                     }
                     
-                    // Initialize balloon tracking camera when entering mode 9
-                    if (gCameraMode === 9) {
+                    // Initialize balloon tracking camera when entering mode 10
+                    if (gCameraMode === 10) {
                         // Save current FOV and use it for balloon tracking camera
                         gSavedCameraFOV = gCameraFOV;
                         gBalloonTrackingCameraZoom = gCameraFOV;
@@ -12667,7 +12704,7 @@ function onPointer(evt) {
                     }
                     
                     // Restore FOV when leaving balloon modes
-                    if ((previousMode === 8 || previousMode === 9) && gCameraMode !== 8 && gCameraMode !== 9 && gSavedCameraFOV !== null) {
+                    if ((previousMode === 9 || previousMode === 10) && gCameraMode !== 9 && gCameraMode !== 10 && gSavedCameraFOV !== null) {
                         gCameraFOV = gSavedCameraFOV;
                         gCamera.fov = gCameraFOV;
                         gCamera.updateProjectionMatrix();
@@ -12675,7 +12712,7 @@ function onPointer(evt) {
                     }
                     
                     // Restore basket and armrest opacity when leaving balloon cam
-                    if ((previousMode === 8 || previousMode === 9) && gCameraMode !== 8 && gCameraMode !== 9) {
+                    if ((previousMode === 9 || previousMode === 10) && gCameraMode !== 9 && gCameraMode !== 10) {
                         for (let i = 0; i < gBalloonBasketMeshes.length; i++) {
                             var mesh = gBalloonBasketMeshes[i];
                             if (mesh && mesh.material) {
@@ -12787,17 +12824,17 @@ function onPointer(evt) {
 
         }
         
-        // Handle mouse look for dolly camera mode - toggle lock on click (also skips object interactions)
+        // Handle mouse look for dolly camera mode - start dragging to look around (also skips object interactions)
         if (gCameraMode === 6) {
-            gDollyCameraLookLocked = !gDollyCameraLookLocked;
+            gDraggingDollyCameraLook = true;
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             return;
         }
         
-        // Handle mouse look for balloon free-look camera - toggle lock on click
-        if (gCameraMode === 8) {
-            gBalloonCameraLookLocked = !gBalloonCameraLookLocked;
+        // Handle mouse look for balloon free-look camera - start dragging to look around
+        if (gCameraMode === 9) {
+            gDraggingBalloonCameraLook = true;
             gPointerLastX = evt.clientX;
             gPointerLastY = evt.clientY;
             return;
@@ -14365,10 +14402,10 @@ function onPointer(evt) {
                     gCamera.fov = gCameraFOV;
                     gCamera.updateProjectionMatrix();
                 }
-                // Also update balloon camera zoom if in mode 8 or 9
-                if (gCameraMode === 8) {
+                // Also update balloon camera zoom if in mode 9 or 10
+                if (gCameraMode === 9) {
                     gBalloonCameraZoom = gCameraFOV;
-                } else if (gCameraMode === 9) {
+                } else if (gCameraMode === 10) {
                     gBalloonTrackingCameraZoom = gCameraFOV;
                 }
                 return;
@@ -15758,8 +15795,8 @@ function onPointer(evt) {
             return;
         }
         
-        // Handle mouse look for dolly camera mode (pan/tilt) - only when unlocked
-        if (gCameraMode === 6 && !gDraggingDolly && !gDollyCameraLookLocked) {
+        // Handle mouse look for dolly camera mode (pan/tilt) - only when dragging
+        if (gCameraMode === 6 && !gDraggingDolly && gDraggingDollyCameraLook) {
             const deltaX = evt.clientX - gPointerLastX;
             const deltaY = evt.clientY - gPointerLastY;
             
@@ -15777,8 +15814,8 @@ function onPointer(evt) {
             return;
         }
         
-        // Handle mouse look for balloon free-look camera mode - only when unlocked
-        if (gCameraMode === 8 && !gBalloonCameraLookLocked) {
+        // Handle mouse look for balloon free-look camera mode - only when dragging
+        if (gCameraMode === 9 && gDraggingBalloonCameraLook) {
             const deltaX = evt.clientX - gPointerLastX;
             const deltaY = evt.clientY - gPointerLastY;
             
@@ -15797,6 +15834,16 @@ function onPointer(evt) {
         }
     }
     else if (evt.type == "pointerup") {
+        // Stop dragging dolly camera look
+        if (gDraggingDollyCameraLook) {
+            gDraggingDollyCameraLook = false;
+        }
+        
+        // Stop dragging balloon camera look
+        if (gDraggingBalloonCameraLook) {
+            gDraggingBalloonCameraLook = false;
+        }
+        
         // Stop spinning the bicycle wheel
         if (gWheelIsSpinning) {
             gWheelIsSpinning = false;
@@ -16022,11 +16069,17 @@ function onPointerLeave(evt) {
     // Reset camera control states
     gCameraManualControl = false;
     
+    // Stop dragging dolly camera look
+    gDraggingDollyCameraLook = false;
+    
     // Lock dolly camera look to prevent continued panning when cursor returns
     gDollyCameraLookLocked = true;
     
     // Lock walking camera look to prevent continued panning when cursor returns
     gWalkingCameraLookLocked = true;
+    
+    // Stop dragging balloon camera look
+    gDraggingBalloonCameraLook = false;
     
     // Lock balloon camera look to prevent continued panning when cursor returns
     gBalloonCameraLookLocked = true;
@@ -16914,7 +16967,7 @@ function checkCameraMenuClick(clientX, clientY) {
     const padding = 0.17 * menuScale;
     const radioButtonSize = 0.04 * menuScale;
     const radioButtonSpacing = 0.104 * menuScale;  // Increased 30% from 0.08
-    const radioSectionHeight = 9 * radioButtonSpacing + 0.05 * menuScale;
+    const radioSectionHeight = 11 * radioButtonSpacing + 0.05 * menuScale;
     const checkboxSectionHeight = 0.15 * menuScale; // Extra space for stereo checkbox
     const menuHeight = 14.5 * knobRadius;
     
@@ -16939,7 +16992,7 @@ function checkCameraMenuClick(clientX, clientY) {
     const radioStartY = menuOriginY + -0.003 * menuScale; // Moved up further
     const radioX = menuOriginX + -0.02 * menuScale;
     
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 11; i++) {
         const radioY = radioStartY + i * radioButtonSpacing;
         const rdx = clientX - radioX;
         const rdy = clientY - radioY;
@@ -17015,8 +17068,33 @@ function checkCameraMenuClick(clientX, clientY) {
                 }
             }
             
-            // Initialize balloon free-look camera when entering mode 8
+            // Initialize dolly balloon-tracking camera when entering mode 8
             if (gCameraMode === 8) {
+                // Set camera to current dolly cart position
+                const localX = (gDollyPosition - 0.5) * gDollyRailsLength;
+                const worldX = gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * localX;
+                const worldZ = gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * localX;
+                gCamera.position.set(worldX, gDollyCameraHeight, worldZ);
+                
+                // Initialize smooth look-at point to balloon
+                if (gHotAirBalloon) {
+                    gCamera.userData.smoothLookAt = gHotAirBalloon.position.clone();
+                }
+                
+                // Create rails and cart if they don't exist yet
+                if (!gDollyRailsMesh) {
+                    createDollyRails();
+                }
+                if (!gDollyCartMesh) {
+                    createDollyCart();
+                }
+                if (!gDollyCameraMesh) {
+                    loadDollyCameraModel();
+                }
+            }
+            
+            // Initialize balloon free-look camera when entering mode 9
+            if (gCameraMode === 9) {
                 // Save current FOV and use it for balloon camera
                 gSavedCameraFOV = gCameraFOV;
                 gBalloonCameraZoom = gCameraFOV; // Use current FOV
@@ -17054,8 +17132,8 @@ function checkCameraMenuClick(clientX, clientY) {
                 }
             }
             
-            // Initialize balloon tracking camera when entering mode 9
-            if (gCameraMode === 9) {
+            // Initialize balloon tracking camera when entering mode 10
+            if (gCameraMode === 10) {
                 // Save current FOV and use it for balloon tracking camera
                 gSavedCameraFOV = gCameraFOV;
                 gBalloonTrackingCameraZoom = gCameraFOV; // Use current FOV
@@ -17094,14 +17172,6 @@ function checkCameraMenuClick(clientX, clientY) {
             }
             
             // Restore FOV when leaving balloon free-look mode
-            if (previousMode === 8 && gCameraMode !== 8 && gSavedCameraFOV !== null) {
-                gCameraFOV = gSavedCameraFOV;
-                gCamera.fov = gCameraFOV;
-                gCamera.updateProjectionMatrix();
-                gSavedCameraFOV = null;
-            }
-            
-            // Restore FOV when leaving balloon tracking mode
             if (previousMode === 9 && gCameraMode !== 9 && gSavedCameraFOV !== null) {
                 gCameraFOV = gSavedCameraFOV;
                 gCamera.fov = gCameraFOV;
@@ -17109,8 +17179,16 @@ function checkCameraMenuClick(clientX, clientY) {
                 gSavedCameraFOV = null;
             }
             
+            // Restore FOV when leaving balloon tracking mode
+            if (previousMode === 10 && gCameraMode !== 10 && gSavedCameraFOV !== null) {
+                gCameraFOV = gSavedCameraFOV;
+                gCamera.fov = gCameraFOV;
+                gCamera.updateProjectionMatrix();
+                gSavedCameraFOV = null;
+            }
+            
             // Restore basket and armrest opacity when leaving balloon cam
-            if ((previousMode === 8 || previousMode === 9) && gCameraMode !== 8 && gCameraMode !== 9) {
+            if ((previousMode === 9 || previousMode === 10) && gCameraMode !== 9 && gCameraMode !== 10) {
                 for (let i = 0; i < gBalloonBasketMeshes.length; i++) {
                     var mesh = gBalloonBasketMeshes[i];
                     if (mesh && mesh.material) {
@@ -17199,7 +17277,7 @@ function checkCameraMenuClick(clientX, clientY) {
     }
     
     // Check Stereo checkbox - use rectangular hit detection
-    const knobY = radioSectionHeight + knobRadius * 1.5;
+    const knobY = radioSectionHeight + knobRadius * 0.3;
     const checkboxY = menuOriginY + knobY + 2.5 * knobRadius;
     const checkboxX = menuOriginX + menuWidth / 2;
     const checkboxSize = 0.04 * menuScale;
@@ -17942,7 +18020,7 @@ function update() {
         gHotAirBalloon.position.z += gBalloonDriftVelocity.z * deltaT;
         
         // Handle vertical movement with inertia when in balloon cam mode
-        if (gCameraMode === 8 || gCameraMode === 9) {
+        if (gCameraMode === 9 || gCameraMode === 10) {
             // Apply acceleration when keys are pressed
             if (gKeysPressed.up) {
                 gBalloonVerticalVelocity += gBalloonVerticalAcceleration * deltaT;
@@ -17979,7 +18057,7 @@ function update() {
         if (gBalloonBurnerLight) {
             const time = performance.now() * 0.001;
             
-            if ((gCameraMode === 8 || gCameraMode === 9) && gKeysPressed.up) {
+            if ((gCameraMode === 9 || gCameraMode === 10) && gKeysPressed.up) {
                 // Burner is firing - intense flickering
                 const flicker = 0.7 + Math.sin(time * 30) * 0.15 + Math.sin(time * 43) * 0.1 + Math.random() * 0.05;
                 gBalloonBurnerLight.intensity = 2.5 * flicker;
@@ -17996,9 +18074,9 @@ function update() {
                     gBalloonBurnerLight.color.setHex(0xffffff); // White flash
                 }
             } else {
-                // Gentle pilot light flickering
-                const flicker = 0.8 + Math.sin(time * 5) * 0.1 + Math.sin(time * 7.3) * 0.05 + Math.random() * 0.05;
-                gBalloonBurnerLight.intensity = 0.8 * flicker;
+                // Slow pulsing pilot light
+                const pulse = 0.75 + Math.sin(time * 2) * 0.15; // Slow pulse (2 rad/s ≈ 0.3 Hz)
+                gBalloonBurnerLight.intensity = 0.8 * pulse;
                 gBalloonBurnerLight.color.setHex(0xffa040); // Light orange
             }
         }
@@ -19739,10 +19817,40 @@ function update() {
                 gCamera.lookAt(gCamera.userData.smoothLookAt);
             }
         } else if (gCameraMode === 8) {
+            // Dolly balloon-tracking camera mode - camera moves along rails and tracks hot air balloon
+            // (dolly position is updated in the cart visibility section below)
+            
+            // Calculate position along rails
+            const localX = (gDollyPosition - 0.5) * gDollyRailsLength;
+            const worldX = gDollyRailsPosition.x + Math.cos(gDollyRailsRotation) * localX;
+            const worldZ = gDollyRailsPosition.z - Math.sin(gDollyRailsRotation) * localX;
+            
+            // Set camera position on the dolly
+            gCamera.position.set(worldX, gDollyCameraHeight, worldZ);
+            
+            // Track hot air balloon if it exists
+            if (gHotAirBalloon) {
+                // Simple approach: just look at the balloon with smoothing
+                // Calculate target look-at point (aim for basket area)
+                const targetLookAt = gHotAirBalloon.position.clone();
+                
+                // Use a smoothed look-at point for less jittery movement
+                if (!gCamera.userData.smoothLookAt) {
+                    gCamera.userData.smoothLookAt = targetLookAt.clone();
+                }
+                
+                // Smooth the look-at point toward the target
+                const smoothingFactor = 0.1; // Higher = more responsive, lower = smoother
+                gCamera.userData.smoothLookAt.lerp(targetLookAt, smoothingFactor);
+                
+                // Look at the smoothed position
+                gCamera.lookAt(gCamera.userData.smoothLookAt);
+            }
+        } else if (gCameraMode === 9) {
             // Balloon free-look camera mode - camera in basket, user controls look direction
             if (gHotAirBalloon) {
                 // Position camera in the balloon basket
-                const basketOffset = new THREE.Vector3(0, .7, 0);
+                const basketOffset = new THREE.Vector3(0, 0.6, 0);
                 const cameraPosition = gHotAirBalloon.position.clone().add(basketOffset);
                 gCamera.position.copy(cameraPosition);
                 
@@ -19761,12 +19869,12 @@ function update() {
                 gCamera.fov = gBalloonCameraZoom;
                 gCamera.updateProjectionMatrix();
             }
-        } else if (gCameraMode === 9) {
+        } else if (gCameraMode === 10) {
             // Balloon tracking camera mode - camera positioned in balloon basket, tracking lead boid
             if (gHotAirBalloon && gPhysicsScene.objects.length > 0) {
                 // Position camera in the balloon basket
                 // Offset slightly below balloon origin to be inside basket
-                const basketOffset = new THREE.Vector3(0, .7, 0);
+                const basketOffset = new THREE.Vector3(0, 0.6, 0);
                 const cameraPosition = gHotAirBalloon.position.clone().add(basketOffset);
                 gCamera.position.copy(cameraPosition);
                 
@@ -19849,7 +19957,7 @@ function update() {
     // Update dolly camera model visibility and position
     if (gDollyCameraMesh) {
         // Hide camera model when in dolly camera view (you don't see your own camera)
-        gDollyCameraMesh.visible = cameraMenuVisible && gCameraMode !== 6 && gCameraMode !== 7;
+        gDollyCameraMesh.visible = cameraMenuVisible && gCameraMode !== 6 && gCameraMode !== 7 && gCameraMode !== 8;
         
         // Update camera model position and orientation continuously
         updateDollyCameraModel();
@@ -19857,7 +19965,7 @@ function update() {
     
     // Update camera mount rod visibility
     if (gDollyCameraMountRod) {
-        gDollyCameraMountRod.visible = cameraMenuVisible && gCameraMode !== 6 && gCameraMode !== 7;
+        gDollyCameraMountRod.visible = cameraMenuVisible && gCameraMode !== 6 && gCameraMode !== 7 && gCameraMode !== 8;
     }
     
     // Update drag highlight box for toggle-dragging objects
