@@ -103,6 +103,9 @@ var gSkyPigDragPlaneHeight = 0; // Store the Y height where the sky pig was grab
 var gSkyPigDragPlaneDistance = 0; // Store the distance from camera for fixed plane dragging
 var gDuckDragPlaneHeight = 0; // Store the Y height where the duck was grabbed
 var gDuckDragOffset = null; // Store offset from click point to duck center (for toggle dragging)
+var gCannonDragPlaneHeight = 0; // Store the Y height where the cannon was grabbed
+var gCannonDragOffset = null; // Store offset from click point to cannon center
+var gDraggingCannon = false; // Track if dragging the cannon (toggleable)
 var gMammothDragPlaneHeight = 0; // Store the Y height where the mammoth was grabbed
 var gMammothDragOffset = null; // Store offset from click point to mammoth center (for toggle dragging)
 var gDraggingMammothSkeleton = false; // Track if dragging the mammoth skeleton
@@ -151,8 +154,8 @@ var gLampInnerCone2 = null; // Reference to inner cone 2
 var gPinRotationAxis2 = null;
 var gInitialLampHeight = 0; // Initial lamp height
 var gLastLampBaseClickTime = { 1: 0, 2: 0 }; // Track last click time for double-click detection
-var gCurrentlyDraggingObject = null; // Track which object is currently in dragging mode: 'duck', 'mammoth', 'teapot', 'chair', 'sofa', 'stool', etc.
-var gLastObjectClickTime = { duck: 0, mammoth: 0, mammothSkeleton: 0, teapot: 0, chair: 0, sofa: 0, stool: 0, bird: 0, koonsDog: 0, globeLamp: 0 }; // Track last click time for double-click detection
+var gCurrentlyDraggingObject = null; // Track which object is currently in dragging mode: 'duck', 'mammoth', 'teapot', 'chair', 'sofa', 'stool', 'cannon', etc.
+var gLastObjectClickTime = { duck: 0, mammoth: 0, mammothSkeleton: 0, teapot: 0, chair: 0, sofa: 0, stool: 0, bird: 0, koonsDog: 0, globeLamp: 0, cannon: 0 }; // Track last click time for double-click detection
 var gDragHighlightBox = null; // BoxHelper to show which object is being dragged
 var gOverlayCanvas;
 var gOverlayCtx;
@@ -259,6 +262,25 @@ var gDuckTargetY = -0.4; // Target Y position for duck
 var gDuckStartY = -8; // Starting Y position (below floor)
 var gDuckInitialX = 18; // Initial X position for world resize scaling
 var gDuckInitialZ = 12; // Initial Z position for world resize scaling
+var gCannon = null; // Reference to cannon model
+var gCannonFullGun = null; // Reference to fullGun group (rotates around Y axis for azimuth)
+var gCannonRotatingBarrel = null; // Reference to rotatingBarrel group (rotates around Z axis for elevation)
+var gCannonInnerBarrel = null; // Reference to innerBarrel object (recoils during firing)
+var gCannonInnerBarrelInitialY = 0; // Store initial Y position of inner barrel
+var gCannonSight = null; // Reference to Sight group (moves with innerBarrel)
+var gCannonSightInitialY = 0; // Store initial Y position of sight
+var gCannonOuterBarrel = null; // Reference to outerBarrel object
+var gCannonRecoilDistance = 0.6; // How far the inner barrel recoils partially into outer barrel (in model units)
+var gCannonRecoilDuration = 0.12; // Duration of recoil snap (seconds)
+var gCannonRecoilTimer = 0; // Timer for recoil animation
+var gCannonRecoiling = false; // Is cannon currently recoiling
+var gCannonPosition = new THREE.Vector3(15, 1.6, 25); // Cannon position in scene
+var gProjectiles = []; // Array of active projectiles {mesh, velocity, position}
+var gCannonFireRate = 5.0; // Projectiles per second (twice per second)
+var gCannonFireTimer = 0; // Timer for firing rate
+var gProjectileRadius = 0.5; // Radius of projectiles
+var gProjectileSpeed = 30.0; // Initial projectile speed (fast for flatter trajectory)
+var gProjectileGravity = -9.8; // Gravity acceleration for projectiles
 var gMammoth = null; // Reference to mini mammoth display model
 var gMammothObstacle = null; // Sphere obstacle for boid avoidance
 var gDraggingMammoth = false; // Track if dragging the mammoth (toggleable)
@@ -8639,6 +8661,79 @@ function initThreeScene() {
         );
     }
     
+    // Load Cannon model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var cannonLoader = new THREE.GLTFLoader(gLoadingManager);
+        cannonLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/pongCannon.gltf',
+            function(gltf) {
+                gCannon = gltf.scene;
+                
+                // Position the cannon
+                gCannon.position.copy(gCannonPosition);
+                gCannon.scale.set(0.5, 0.5, 0.5);
+                
+                // Find the rotatable groups within the model
+                gCannon.traverse(function(child) {
+                    if (child.name === 'fullGun') {
+                        gCannonFullGun = child;
+                    }
+                    if (child.name === 'rotatingBarrel') {
+                        gCannonRotatingBarrel = child;
+                    }
+                    if (child.name === 'innerBarrel') {
+                        gCannonInnerBarrel = child;
+                        // Store initial position
+                        gCannonInnerBarrelInitialY = child.position.y;
+                    }
+                    if (child.name === 'Sight') {
+                        gCannonSight = child;
+                        // Store initial position
+                        gCannonSightInitialY = child.position.y;
+                    }
+                    if (child.name === 'outerBarrel') {
+                        gCannonOuterBarrel = child;
+                    }
+                    
+                    // Enable shadows
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.userData.isDraggableCannon = true;
+                    }
+                });
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                gCannon.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                gThreeScene.add(gCannon);
+                
+                console.log('Cannon model loaded successfully');
+                if (gCannonFullGun) console.log('Found fullGun group');
+                if (gCannonRotatingBarrel) console.log('Found rotatingBarrel group');
+                if (gCannonInnerBarrel) console.log('Found innerBarrel');
+                if (gCannonSight) console.log('Found Sight group');
+                if (gCannonOuterBarrel) console.log('Found outerBarrel');
+            },
+            function(xhr) {
+                console.log('Cannon model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Cannon model:', error);
+            }
+        );
+    }
+    
     // Load Barramundi Fish model using GLTFLoader
     if (typeof THREE.GLTFLoader !== 'undefined') {
         var fishLoader = new THREE.GLTFLoader(gLoadingManager);
@@ -10308,8 +10403,8 @@ function initThreeScene() {
     marbleImage.onerror = function(err) {
         console.error('Error loading marble texture:', err);
     };
+    //marbleImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/oysterWhite_marble_square.jpg';
     marbleImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/oysterWhite_marble_square.jpg';
-    
     // Load marble texture for platonic solid pedestals using TextureLoader with CORS
     var pedestalTextureLoader = new THREE.TextureLoader();
     pedestalTextureLoader.setCrossOrigin('anonymous');
@@ -13046,6 +13141,7 @@ function onPointer(evt) {
         var hitStoolLeg = false;
         var hitDuck = false;
         var hitDuckBeak = false;
+        var hitCannon = false;
         var hitMammoth = false;
         var hitMammothSkeleton = false;
         var hitMammothPushbutton = false;
@@ -13084,6 +13180,11 @@ function onPointer(evt) {
             
             if (intersects[i].object.userData.isDraggableDuck && !hitDuck && !hitDuckBeak) {
                 hitDuck = true;
+                // No offset calculation - object will follow cursor directly
+                // Don't break - check if other objects are also hit
+            }
+            if (intersects[i].object.userData.isDraggableCannon && !hitCannon) {
+                hitCannon = true;
                 // No offset calculation - object will follow cursor directly
                 // Don't break - check if other objects are also hit
             }
@@ -13364,6 +13465,71 @@ function onPointer(evt) {
             }
             
             gLastObjectClickTime.duck = currentTime;
+            return;
+        }
+        
+        if (hitCannon && gCannon) {
+            var currentTime = Date.now();
+            var timeSinceLastClick = currentTime - gLastObjectClickTime.cannon;
+            
+            if (gCurrentlyDraggingObject === 'cannon') {
+                // Single-click while dragging - lock position and exit dragging mode
+                gCurrentlyDraggingObject = null;
+                gDraggingCannon = false;
+                gCannonDragOffset = null;
+                // Restore lights and remove spotlight
+                restoreLightsFromDrag();
+                removeDragSpotlight();
+                if (gCameraControl) {
+                    gCameraControl.enabled = true;
+                }
+                gLastObjectClickTime.cannon = 0; // Reset to prevent accidental double-click
+                return;
+            }
+            
+            if (timeSinceLastClick < 300) { // 300ms double-click threshold
+                // Double-click detected - enter dragging mode
+                if (gCurrentlyDraggingObject !== null && gCurrentlyDraggingObject !== 'cannon') {
+                    // Another object is being dragged, ignore this double-click
+                    return;
+                }
+                gCurrentlyDraggingObject = 'cannon';
+                gDraggingCannon = true;
+                gCannonDragPlaneHeight = gCannonPosition.y;
+                
+                // Dim other lights and create spotlight
+                dimLightsForDrag();
+                createDragSpotlight(gCannon.position);
+                
+                // Calculate offset from mouse position to object center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                var cannonPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gCannonDragPlaneHeight);
+                var intersectionPoint = new THREE.Vector3();
+                raycaster.ray.intersectPlane(cannonPlane, intersectionPoint);
+                if (intersectionPoint) {
+                    gCannonDragOffset = new THREE.Vector3(
+                        gCannonPosition.x - intersectionPoint.x,
+                        0,
+                        gCannonPosition.z - intersectionPoint.z
+                    );
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging cannon
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                gLastObjectClickTime.cannon = 0; // Reset to prevent triple-click
+                return;
+            }
+            
+            gLastObjectClickTime.cannon = currentTime;
             return;
         }
         
@@ -14223,6 +14389,7 @@ function onPointer(evt) {
         if (gCurrentlyDraggingObject !== null) {
             gCurrentlyDraggingObject = null;
             gDraggingDuck = false;
+            gDraggingCannon = false;
             gDraggingMammoth = false;
             gDraggingMammothSkeleton = false;
             gDraggingTeapot = false;
@@ -14234,6 +14401,7 @@ function onPointer(evt) {
             gDraggingGlobeLamp = false;
             // Clear drag offsets
             gDuckDragOffset = null;
+            gCannonDragOffset = null;
             gMammothDragOffset = null;
             gMammothSkeletonDragOffset = null;
             gTeapotDragOffset = null;
@@ -15186,6 +15354,45 @@ function onPointer(evt) {
                 if (gDuckObstacle) {
                     gDuckObstacle.updatePosition(new THREE.Vector3(newX, gDuck.position.y + 1.5, newZ));
                 }
+            }
+            return;
+        }
+        
+        // Handle cannon dragging (translation along ground, horizontal only)
+        if (gDraggingCannon && gCannon) {
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Define plane at the height where the cannon was grabbed
+            var cannonPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -gCannonDragPlaneHeight);
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(cannonPlane, intersectionPoint);
+            
+            if (intersectionPoint) {
+                // Keep the cannon's Y position constant, only move X and Z
+                // Apply offset to maintain grab point
+                var newX = intersectionPoint.x + (gCannonDragOffset ? gCannonDragOffset.x : 0);
+                var newZ = intersectionPoint.z + (gCannonDragOffset ? gCannonDragOffset.z : 0);
+                
+                // Clamp to room boundaries
+                var minBoundX = -gPhysicsScene.worldSize.x + 2;
+                var maxBoundX = gPhysicsScene.worldSize.x - 2;
+                var minBoundZ = -gPhysicsScene.worldSize.z + 2;
+                var maxBoundZ = gPhysicsScene.worldSize.z - 2;
+                
+                newX = Math.max(minBoundX, Math.min(maxBoundX, newX));
+                newZ = Math.max(minBoundZ, Math.min(maxBoundZ, newZ));
+                
+                gCannonPosition.x = newX;
+                gCannonPosition.z = newZ;
+                
+                gCannon.position.x = newX;
+                gCannon.position.z = newZ;
             }
             return;
         }
@@ -16246,6 +16453,7 @@ function onPointerLeave(evt) {
     // Reset prop dragging
     gDraggingStool = false;
     gDraggingDuck = false;
+    gDraggingCannon = false;
     gDraggingMammoth = false;
     gDraggingMammothSkeleton = false;
     gDraggingTeapot = false;
@@ -18104,6 +18312,199 @@ function update() {
         var torusObstacle = gObstacles.find(function(obs) { return obs instanceof TorusObstacle; });
         if (torusObstacle && torusObstacle.mesh && torusObstacle.mesh.material) {
             torusObstacle.mesh.material.color.setHSL(gTorusHue / 360, 0.9, 0.5);
+        }
+    }
+    
+    // Update cannon recoil animation
+    if (gCannonInnerBarrel) {
+        if (gCannonRecoiling) {
+            gCannonRecoilTimer += deltaT;
+            const totalRecoilCycle = 1.0 / gCannonFireRate; // Total time between shots
+            
+            if (gCannonRecoilTimer < gCannonRecoilDuration) {
+                // Recoil phase: move backward quickly
+                const progress = gCannonRecoilTimer / gCannonRecoilDuration;
+                // Use easeOut for snap back on recoil
+                const easeOut = 1 - Math.pow(1 - progress, 3);
+                const recoilOffset = gCannonRecoilDistance * easeOut;
+                gCannonInnerBarrel.position.y = gCannonInnerBarrelInitialY - recoilOffset;
+                if (gCannonSight) {
+                    gCannonSight.position.y = gCannonSightInitialY - recoilOffset;
+                }
+            } else if (gCannonRecoilTimer < totalRecoilCycle) {
+                // Return phase: ease back to original position
+                const returnDuration = totalRecoilCycle - gCannonRecoilDuration;
+                const returnProgress = (gCannonRecoilTimer - gCannonRecoilDuration) / returnDuration;
+                // Use easeIn for smooth return
+                const easeIn = Math.pow(returnProgress, 2);
+                const recoilOffset = gCannonRecoilDistance * (1 - easeIn);
+                gCannonInnerBarrel.position.y = gCannonInnerBarrelInitialY - recoilOffset;
+                if (gCannonSight) {
+                    gCannonSight.position.y = gCannonSightInitialY - recoilOffset;
+                }
+            } else {
+                // Recoil cycle complete, reset for next shot
+                gCannonInnerBarrel.position.y = gCannonInnerBarrelInitialY;
+                if (gCannonSight) {
+                    gCannonSight.position.y = gCannonSightInitialY;
+                }
+                gCannonRecoiling = false;
+                gCannonRecoilTimer = 0;
+            }
+        } else {
+            // Ensure barrel is at rest position when not recoiling
+            gCannonInnerBarrel.position.y = gCannonInnerBarrelInitialY;
+            if (gCannonSight) {
+                gCannonSight.position.y = gCannonSightInitialY;
+            }
+        }
+    }
+    
+    // Update cannon aiming and firing
+    if (gCannon && gCannonFullGun && gCannonRotatingBarrel && gToyPlane && gHotAirBalloon) {
+        
+        if (gToyPlane && gToyPlane.position) {
+            // Predict future position of airplane to lead the target
+            // Start with current position and iteratively refine
+            let predictedPos = gToyPlane.position.clone();
+            let iterations = 3; // Number of refinement iterations
+            
+            for (let iter = 0; iter < iterations; iter++) {
+                // Calculate distance to predicted position
+                const dx = predictedPos.x - gCannonPosition.x;
+                const dy = predictedPos.y - gCannonPosition.y;
+                const dz = predictedPos.z - gCannonPosition.z;
+                const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                
+                // Estimate flight time (rough approximation)
+                const estimatedFlightTime = distance / (gProjectileSpeed * 0.7); // Account for arc reducing average speed
+                
+                // Predict where plane will be after flight time
+                const futureAngle = gToyPlaneAngle + gToyPlaneOrbitSpeed * estimatedFlightTime;
+                predictedPos.x = gHotAirBalloon.position.x + Math.cos(futureAngle) * gToyPlaneOrbitRadius;
+                predictedPos.z = gHotAirBalloon.position.z - Math.sin(futureAngle) * gToyPlaneOrbitRadius;
+                predictedPos.y = gHotAirBalloon.position.y; // Plane stays at balloon height
+            }
+            
+            // Calculate direction from cannon to predicted airplane position
+            const cannonToTarget = new THREE.Vector3(
+                predictedPos.x - gCannonPosition.x,
+                predictedPos.y - gCannonPosition.y,
+                predictedPos.z - gCannonPosition.z
+            );
+            
+            // Calculate azimuth (rotation around Y axis for fullGun)
+            const azimuth = Math.atan2(cannonToTarget.x, cannonToTarget.z);
+            gCannonFullGun.rotation.y = azimuth - Math.PI / 2; // Subtract 90 degrees to align visual with firing direction
+            
+            // Calculate elevation using low-arc trajectory for flatter shots
+            const horizontalDistance = Math.sqrt(cannonToTarget.x * cannonToTarget.x + cannonToTarget.z * cannonToTarget.z);
+            const targetHeight = cannonToTarget.y;
+            
+            const v = gProjectileSpeed;
+            const g = Math.abs(gProjectileGravity);
+            const x = horizontalDistance;
+            const y = targetHeight;
+            
+            // Standard ballistic equation: θ = atan((v² - √(v⁴ - g(gx² + 2yv²))) / (gx))
+            const v2 = v * v;
+            const v4 = v2 * v2;
+            const discriminant = v4 - g * (g * x * x + 2 * y * v2);
+            
+            // Use the low-arc solution for flatter trajectory
+            const sqrtDisc = discriminant >= 0 ? Math.sqrt(discriminant) : 0;
+            const elevation = Math.atan((v2 - sqrtDisc) / (g * x));
+            
+            // Subtract PI/2 because barrel points straight up in model
+            gCannonRotatingBarrel.rotation.z = elevation - Math.PI / 2;
+            
+            // Fire projectiles at specified rate
+            gCannonFireTimer += deltaT;
+            const fireInterval = 1.0 / gCannonFireRate;
+            
+            if (gCannonFireTimer >= fireInterval) {
+                gCannonFireTimer = 0;
+                
+                // Trigger recoil animation
+                gCannonRecoiling = true;
+                gCannonRecoilTimer = 0;
+                
+                // Create projectile sphere
+                const projectileGeometry = new THREE.SphereGeometry(gProjectileRadius, 16, 16);
+                const projectileMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xffffff,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 0.5
+                });
+                const projectileMesh = new THREE.Mesh(projectileGeometry, projectileMaterial);
+                projectileMesh.castShadow = true;
+                
+                // Get barrel tip position (accounting for rotations)
+                // Start with a point at the tip of the barrel in local space
+                const barrelLength = 3.0; // Approximate barrel length
+                const tipOffset = new THREE.Vector3(0, barrelLength, 0);
+                
+                // Transform the tip offset through the barrel rotation
+                tipOffset.applyAxisAngle(new THREE.Vector3(0, 0, 1), elevation - Math.PI / 2);
+                
+                // Transform through the full gun rotation (matching the visual rotation)
+                tipOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), azimuth - Math.PI / 2);
+                
+                // Add to cannon position
+                const barrelTipPosition = gCannonPosition.clone().add(tipOffset);
+                projectileMesh.position.copy(barrelTipPosition);
+                
+                // Calculate initial velocity vector based on barrel direction (not target direction)
+                // Start with a unit vector pointing along the barrel (up in local space)
+                const velocityDirection = new THREE.Vector3(0, 1, 0);
+                
+                // Apply the same rotations as the barrel
+                velocityDirection.applyAxisAngle(new THREE.Vector3(0, 0, 1), elevation - Math.PI / 2);
+                velocityDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), azimuth - Math.PI / 2);
+                
+                // Scale to projectile speed
+                const velocity = velocityDirection.multiplyScalar(gProjectileSpeed);
+                
+                // Store projectile data
+                gProjectiles.push({
+                    mesh: projectileMesh,
+                    velocity: velocity,
+                    position: barrelTipPosition.clone(),
+                    spawnPosition: barrelTipPosition.clone() // Track spawn position
+                });
+                
+                gThreeScene.add(projectileMesh);
+            }
+        }
+    }
+    
+    // Update projectiles
+    for (let i = gProjectiles.length - 1; i >= 0; i--) {
+        const projectile = gProjectiles[i];
+        
+        // Check if projectile has cleared the barrel
+        const distanceFromSpawn = projectile.position.distanceTo(projectile.spawnPosition);
+        const barrelClearanceDistance = 4.0; // Distance projectile must travel before gravity applies
+        
+        // Apply gravity to velocity only after clearing the barrel
+        if (distanceFromSpawn >= barrelClearanceDistance) {
+            projectile.velocity.y += gProjectileGravity * deltaT;
+        }
+        
+        // Update position
+        projectile.position.x += projectile.velocity.x * deltaT;
+        projectile.position.y += projectile.velocity.y * deltaT;
+        projectile.position.z += projectile.velocity.z * deltaT;
+        
+        // Update mesh position
+        projectile.mesh.position.copy(projectile.position);
+        
+        // Remove projectile if it falls below floor level
+        if (projectile.position.y < 0) {
+            gThreeScene.remove(projectile.mesh);
+            projectile.mesh.geometry.dispose();
+            projectile.mesh.material.dispose();
+            gProjectiles.splice(i, 1);
         }
     }
     
@@ -20145,6 +20546,7 @@ function update() {
         // Determine which object is being dragged and get its reference
         var targetObject = null;
         if (gCurrentlyDraggingObject === 'duck' && gDuck) targetObject = gDuck;
+        else if (gCurrentlyDraggingObject === 'cannon' && gCannon) targetObject = gCannon;
         else if (gCurrentlyDraggingObject === 'mammoth' && gMammoth) targetObject = gMammoth;
         else if (gCurrentlyDraggingObject === 'teapot' && gTeapot) targetObject = gTeapot;
         else if (gCurrentlyDraggingObject === 'chair' && gChair) targetObject = gChair;
