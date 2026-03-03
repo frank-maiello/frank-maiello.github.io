@@ -13,6 +13,8 @@ var gLoadingBar = null; // Progress bar element
 
 var gThreeScene;
 var gRenderer;
+var gStats; // Stats.js for performance monitoring
+var gStatsEnabled = false; // Track if Stats is enabled
 var gAnaglyphEffect = null; // AnaglyphEffect for stereo rendering
 var gStereoEnabled = false; // Whether stereo/anaglyph mode is enabled
 var gCamera;
@@ -495,6 +497,13 @@ var gToyPlanePropAssembly = null; // Reference to propAssembly group
 var gToyPlanePropShaft = null; // Reference to propShaft object for rotation axis
 var gToyPlaneBladesAxis = null; // Reference to blade rotation axis object (legacy)
 var gToyPlaneBladesSpeed = 20; // Radians per second for propeller rotation
+var gFlamingo = null; // Reference to flamingo bird model
+var gFlamingoAngle = Math.PI; // Current angle around balloon (radians, starts opposite to plane)
+var gFlamingoOrbitRadius = 8; // Distance from balloon gondola
+var gFlamingoOrbitSpeed = 0.5; // Radians per second
+var gFlamingoBankAngle = Math.PI / 6; // 30 degrees banking when circling
+var gFlamingoMixer = null; // AnimationMixer for flamingo's built-in animations
+var gFlamingoAnimations = null; // Animation clips from flamingo model for boid use
 var gBalloonCameraLookLocked = true; // Whether balloon camera look is locked (starts locked)
 var gDraggingBalloonCameraLook = false; // Whether user is dragging to look around in balloon camera mode
 var gBalloonTrackingCameraZoom = 50; // Field of view for balloon tracking camera (degrees)
@@ -590,13 +599,14 @@ var gTrailUpdateFrequency = 1; // Update trail every N frames
 var gTrailColorMode = 3; // 0=White, 1=Black, 2=B&W, 3=Color
 
 // Boid geometry types (multiple can be selected)
-var gSelectedBoidTypes = [3]; // Array of selected geometry types: 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter, 16=PaperPlane, 17=KoonsDog
+var gSelectedBoidTypes = [3]; // Array of selected geometry types: 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter, 16=PaperPlane, 17=Flamingo
 var gDuckTemplate = null; // Template duck model for boid geometry
 var gFishTemplate = null; // Template fish model for boid geometry
 var gAvocadoTemplate = null; // Template avocado model for boid geometry
 var gHelicopterTemplate = null; // Template helicopter model for boid geometry
 var gPaperPlaneTemplate = null; // Template paper plane model for boid geometry
-var gKoonsDogTemplate = null; // Template Koons Dog model for boid geometry
+var gKoonsDogTemplate = null; // Template Koons Dog model for boid geometry (no longer used as boid)
+var gFlamingoTemplate = null; // Template Flamingo model for boid geometry
 
 // OBSTACLE CLASSES ---------------------------------------------------------------------
 class BoxObstacle {
@@ -2586,38 +2596,37 @@ class BOID {
             }
             
             gThreeScene.add(this.visMesh);
-        } else if (this.geometryType === 17 && gKoonsDogTemplate) {
-            // Clone Koons Dog template for this boid
-            this.visMesh = gKoonsDogTemplate.clone();
+        } else if (this.geometryType === 17 && gFlamingoTemplate) {
+            // Clone Flamingo template for this boid (deep recursive clone)
+            this.visMesh = gFlamingoTemplate.clone(true);
             this.visMesh.scale.set(0.1, 0.1, 0.1);
             this.visMesh.position.copy(pos);
             this.visMesh.userData = this;
-            this.visMesh.castShadow = true;
-            this.visMesh.receiveShadow = true;
             
-            // Apply material type
-            if (boidProps.material !== 'imported') {
-                this.visMesh.traverse(function(child) {
-                    if (child.isMesh && child.material) {
-                        var newMaterial = createBoidMaterial(boidProps.material, hue, sat, light, boidProps.wireframe);
-                        if (Array.isArray(child.material)) {
-                            child.material = child.material.map(() => newMaterial.clone());
-                        } else {
-                            child.material = newMaterial;
-                        }
+            // Enable shadow casting on all child meshes
+            // Note: receiveShadow disabled for animated models to avoid conflicts
+            this.visMesh.traverse(function(child) {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = false;
+                    // Ensure material is cloned
+                    if (child.material) {
+                        if (!child.material.isMaterial) return;
+                        child.material = child.material.clone();
+                        child.material.needsUpdate = true;
                     }
-                });
-            } else {
-                // Clone materials to prevent shared references
-                this.visMesh.traverse(function(child) {
-                    if (child.isMesh && child.material) {
-                        if (Array.isArray(child.material)) {
-                            child.material = child.material.map(mat => mat.clone());
-                        } else {
-                            child.material = child.material.clone();
-                        }
-                    }
-                });
+                }
+            });
+            
+            // Create AnimationMixer for this boid's flamingo animations
+            if (gFlamingoAnimations && gFlamingoAnimations.length > 0) {
+                this.animationMixer = new THREE.AnimationMixer(this.visMesh);
+                gFlamingoAnimations.forEach(function(clip) {
+                    var action = this.animationMixer.clipAction(clip);
+                    action.play();
+                    // Start at random point in animation cycle to desynchronize boids
+                    action.time = Math.random() * clip.duration;
+                }.bind(this));
             }
             
             gThreeScene.add(this.visMesh);
@@ -2732,7 +2741,7 @@ class BOID {
                 this.pos.z + direction.z
             );
             
-            // Make mesh look at target (skip for helicopters, paper planes, and Koons Dogs which handle their own rotation)
+            // Make mesh look at target (skip for helicopters, paper planes, and Flamingos which handle their own rotation)
             if (this.geometryType !== 15 && this.geometryType !== 16 && this.geometryType !== 17) {
                 this.visMesh.lookAt(target);
             }
@@ -2800,7 +2809,7 @@ class BOID {
                     this.visMesh.rotation.z = 0;
                 }
             } else if (this.geometryType === 17) {
-                // Koons Dog - calculate direction and orient (model points along +Z axis)
+                // Flamingo - calculate direction and orient (model points along +Z axis)
                 const speed = direction.length();
                 
                 if (speed > 0.01) {
@@ -3211,10 +3220,15 @@ function handleBoidRules(boid) {
 
 // ------------------------------------------------------------------
 function simulate() {
-    // Always update orientations so paused boids show correct facing
+    // Always update orientations and animations so paused boids show correct facing
     for (var i = 0; i < gPhysicsScene.objects.length; i++) {
         var boid = gPhysicsScene.objects[i];
         boid.updateOrientation();
+        
+        // Update animation mixer for flamingo boids
+        if (boid.animationMixer) {
+            boid.animationMixer.update(deltaT);
+        }
     }
     
     if (gPhysicsScene.paused)
@@ -3659,41 +3673,48 @@ function recreateBoidGeometries() {
             
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
-        } else if (boid.geometryType === 17 && gKoonsDogTemplate) {
-            // For Koons Dog geometry, clone Koons Dog template
-            boid.visMesh = gKoonsDogTemplate.clone();
-            boid.visMesh.scale.set(0.1, 0.1, 0.1); // Scale for boid size
+        } else if (boid.geometryType === 17 && gFlamingoTemplate) {
+            // For Flamingo geometry, clone Flamingo template (deep recursive clone)
+            boid.visMesh = gFlamingoTemplate.clone(true);
+            boid.visMesh.scale.set(0.015, 0.015, 0.015); // Scale for boid size
             
             // Set position and add to scene
             boid.visMesh.position.copy(boid.pos);
             boid.visMesh.castShadow = true;
-            boid.visMesh.receiveShadow = true;
+            boid.visMesh.receiveShadow = false; // Disabled for animated models
             
-            // Apply material type
-            if (boidProps.material !== 'imported') {
-                // Create new material based on boidProps.material type
-                boid.visMesh.traverse(function(child) {
-                    if (child.isMesh && child.material) {
-                        var newMaterial = createBoidMaterial(boidProps.material, boid.hue, boid.sat, boid.light, boidProps.wireframe);
-                        if (Array.isArray(child.material)) {
-                            child.material = child.material.map(() => newMaterial.clone());
-                        } else {
-                            child.material = newMaterial;
-                        }
-                    }
-                });
-            } else {
-                // Clone materials to prevent shared references
-                boid.visMesh.traverse(function(child) {
-                    if (child.isMesh && child.material) {
-                        if (Array.isArray(child.material)) {
-                            child.material = child.material.map(mat => mat.clone());
-                        } else {
-                            child.material = child.material.clone();
-                        }
-                    }
+            // Create AnimationMixer for this boid's flamingo animations
+            if (gFlamingoAnimations && gFlamingoAnimations.length > 0) {
+                boid.animationMixer = new THREE.AnimationMixer(boid.visMesh);
+                gFlamingoAnimations.forEach(function(clip) {
+                    var action = boid.animationMixer.clipAction(clip);
+                    action.play();
+                    // Start at random point in animation cycle to desynchronize boids
+                    action.time = Math.random() * clip.duration;
                 });
             }
+            
+            // Ensure shadow casting is enabled on all child meshes and materials are properly cloned
+            // Note: receiveShadow disabled for animated models to avoid conflicts
+            boid.visMesh.traverse(function(child) {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = false;
+                    if (child.material) {
+                        if (!child.material.isMaterial) return;
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(mat => {
+                                var cloned = mat.clone();
+                                cloned.needsUpdate = true;
+                                return cloned;
+                            });
+                        } else {
+                            child.material = child.material.clone();
+                            child.material.needsUpdate = true;
+                        }
+                    }
+                }
+            });
             
             gThreeScene.add(boid.visMesh);
             continue; // Skip standard material creation
@@ -4921,7 +4942,7 @@ function drawSimMenu() {
             'Separation', 'Alignment', 'Cohesion',
             'Minimum Speed', 'Speed Limit', '', 'Corralling Force', 'Corral Margin',
             '', // blank space
-            'World Size X', 'World Size Y', 'World Size Z'
+            'Room DEPTH', 'Room HEIGHT', 'Room WIDTH'
         ];
         ctx.font = `${0.35 * knobRadius}px verdana`;
         ctx.textAlign = 'center';
@@ -4962,8 +4983,33 @@ function drawSimMenu() {
     const buttonX = 2 * knobSpacing; // Centered with knob below (col 2)
     const buttonY1 = 3 * knobSpacing + menuTopMargin - buttonHeight / 2 - buttonSpacing / 2; // Above center
     const buttonY2 = 3 * knobSpacing + menuTopMargin + buttonHeight / 2 + buttonSpacing / 2; // Below center
+    const buttonY3 = 2 * knobSpacing + menuTopMargin; // Stats button - middle of knob rows
     
-    // Walls button (top)
+    // Stats button (top)
+    ctx.beginPath();
+    ctx.roundRect(buttonX - buttonWidth / 2, buttonY3 - buttonHeight / 2, buttonWidth, buttonHeight, 4);
+    if (gStatsEnabled) {
+        ctx.fillStyle = `hsla(120, 70%, 40%, ${menuOpacity})`; // Green when on
+        ctx.shadowColor = `hsla(120, 70%, 50%, ${menuOpacity * 0.8})`;
+    } else {
+        ctx.fillStyle = `hsla(0, 70%, 40%, ${menuOpacity})`; // Red when off
+        ctx.shadowColor = `hsla(0, 70%, 50%, ${menuOpacity * 0.8})`;
+    }
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `hsla(0, 0%, 20%, ${menuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Stats label
+    ctx.fillStyle = `hsla(0, 0%, 100%, ${menuOpacity})`;
+    ctx.font = `${0.28 * knobRadius}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('STATS', buttonX, buttonY3);
+    
+    // Walls button
     ctx.beginPath();
     ctx.roundRect(buttonX - buttonWidth / 2, buttonY1 - buttonHeight / 2, buttonWidth, buttonHeight, 4);
     if (gWallsVisible) {
@@ -5199,7 +5245,7 @@ function drawStylingMenu() {
         'Tetrahedrons', 'Octahedrons', 'Dodecahedrons', 'Icosahedrons',
         'Capsules', 'Tori', 'Knots', 'Discs',
         'Rubber Ducks', 'Barramundi', 'Avocados', 'Helicopters',
-        'Paper Planes', 'Koons Dogs'
+        'Paper Planes', 'Flamingos'
     ];
     
     for (let i = 0; i < 18; i++) {
@@ -6893,9 +6939,9 @@ function drawBalloonAltimeterGauge() {
     ctx.font = `bold ${0.035 * menuScale}px verdana`;
     ctx.textAlign = 'center';
     ctx.fillStyle = 'hsla(240, 17%, 10%, 0.90)';
-    ctx.fillText('Altimeter', 2, 1 + gaugeRadius + 0.06 * menuScale);
+    ctx.fillText('Altitude', 2, 1 + gaugeRadius + 0.06 * menuScale);
     ctx.fillStyle = 'rgba(220, 220, 230, 0.9)';
-    ctx.fillText('Altimeter', 0, gaugeRadius + 0.06 * menuScale);
+    ctx.fillText('Altitude', 0, gaugeRadius + 0.06 * menuScale);
     
     // Draw altitude value text
     ctx.font = `${0.03 * menuScale}px verdana`;
@@ -8001,6 +8047,12 @@ function initThreeScene() {
         container = document.createElement('div');
         container.id = 'container';
         document.body.appendChild(container);
+    }
+    
+    // Initialize Stats.js for performance monitoring
+    gStats = new Stats();
+    if (gStatsEnabled) {
+        container.appendChild(gStats.dom);
     }
     
     // Lights
@@ -9619,6 +9671,83 @@ function initThreeScene() {
             },
             function(error) {
                 console.error('Error loading Toy Plane model:', error);
+            }
+        );
+    }
+    
+    // Load Flamingo model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var flamingoLoader = new THREE.GLTFLoader(gLoadingManager);
+        flamingoLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/flamingo.gltf',
+            function(gltf) {
+                var flamingo = gltf.scene;
+                
+                // Store animation clips globally for boid use
+                if (gltf.animations && gltf.animations.length > 0) {
+                    gFlamingoAnimations = gltf.animations;
+                    console.log('Stored ' + gltf.animations.length + ' flamingo animation clips for boid use');
+                }
+                
+                // Enable shadow casting for all meshes BEFORE cloning as template
+                // Note: receiveShadow disabled for animated models to avoid conflicts
+                flamingo.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = false;
+                    }
+                });
+                
+                // Store a clone as template for boid geometry AFTER shadow setup
+                gFlamingoTemplate = flamingo.clone();
+                
+                // Scale appropriately
+                flamingo.scale.set(0.025, 0.025, 0.025);
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                flamingo.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadow casting for all meshes
+                // Note: receiveShadow disabled for animated models to avoid conflicts
+                flamingo.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = false;
+                    }
+                });
+                
+                // Set up animation mixer if the model has animations
+                if (gltf.animations && gltf.animations.length > 0) {
+                    gFlamingoMixer = new THREE.AnimationMixer(flamingo);
+                    // Play all animations (usually just one for flamingo)
+                    gltf.animations.forEach(function(clip) {
+                        var action = gFlamingoMixer.clipAction(clip);
+                        action.play();
+                    });
+                    console.log('Flamingo animations started (' + gltf.animations.length + ' clips)');
+                }
+                
+                // Initial position will be set in animation loop
+                gThreeScene.add(flamingo);
+                gFlamingo = flamingo; // Store global reference
+                
+                console.log('Flamingo model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Flamingo model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Flamingo model:', error);
             }
         );
     }
@@ -16167,6 +16296,19 @@ function checkSimMenuClick(clientX, clientY) {
     const buttonX = menuOriginX + 2 * knobSpacing; // Centered with knob below (col 2)
     const buttonY1 = menuOriginY + 3 * knobSpacing + menuTopMargin - buttonHeight / 2 - buttonSpacing / 2;
     const buttonY2 = menuOriginY + 3 * knobSpacing + menuTopMargin + buttonHeight / 2 + buttonSpacing / 2;
+    const buttonY3 = menuOriginY + 2 * knobSpacing + menuTopMargin;
+    
+    // Check stats button
+    if (clientX >= buttonX - buttonWidth / 2 && clientX <= buttonX + buttonWidth / 2 &&
+        clientY >= buttonY3 - buttonHeight / 2 && clientY <= buttonY3 + buttonHeight / 2) {
+        gStatsEnabled = !gStatsEnabled;
+        if (gStatsEnabled && gStats) {
+            document.getElementById('container').appendChild(gStats.dom);
+        } else if (!gStatsEnabled && gStats && gStats.dom.parentNode) {
+            gStats.dom.parentNode.removeChild(gStats.dom);
+        }
+        return true;
+    }
     
     // Check walls button
     if (clientX >= buttonX - buttonWidth / 2 && clientX <= buttonX + buttonWidth / 2 &&
@@ -17564,7 +17706,7 @@ function applyMixedColors() {
             // Update boid color
             if (boid.visMesh) {
                 if (boid.geometryType >= 12 && boid.geometryType <= 17) {
-                    // For imported models (Duck, Fish, Avocado, Helicopter, Paper Plane, Koons Dog)
+                    // For imported models (Duck, Fish, Avocado, Helicopter, Paper Plane, Flamingo)
                     // Only update colors if not using 'imported' material (which preserves original colors)
                     if (boidProps.material !== 'imported') {
                         boid.visMesh.traverse(function(child) {
@@ -18118,6 +18260,36 @@ function update() {
             // Legacy support: if propAssembly not found, use old blades group
             var axis = new THREE.Vector3(0, 0, 1);
             gToyPlaneBlades.rotateOnAxis(axis, -gToyPlaneBladesSpeed * deltaT);
+        }
+    }
+    
+    // Flamingo circular flight around balloon gondola (opposite side from plane)
+    if (gFlamingo && gHotAirBalloon) {
+        // Update angle around balloon
+        gFlamingoAngle += gFlamingoOrbitSpeed * deltaT;
+        
+        // Calculate circular position around balloon gondola
+        // Gondola is at the base of the balloon (y offset of 0-2 from balloon position)
+        var gondolaY = gHotAirBalloon.position.y - 3; // Gondola is about 3 units below balloon center
+        
+        // Calculate position in circle (clockwise when viewed from above, opposite to plane)
+        var flamingoX = gHotAirBalloon.position.x + Math.cos(gFlamingoAngle) * gFlamingoOrbitRadius;
+        var flamingoZ = gHotAirBalloon.position.z - Math.sin(gFlamingoAngle) * gFlamingoOrbitRadius;
+        var flamingoY = gondolaY; // Fly at gondola height
+        
+        gFlamingo.position.set(flamingoX, flamingoY, flamingoZ);
+        
+        // Face tangent to circle (direction of travel for clockwise motion)
+        gFlamingo.rotation.set(0, 0, 0);
+        gFlamingo.rotation.y = gFlamingoAngle + Math.PI;
+        
+        // Apply bank (roll) - rotate around Z axis (which is now aligned with forward direction)
+        // Bank inward (toward balloon center) when turning clockwise
+        gFlamingo.rotateZ(-gFlamingoBankAngle);
+        
+        // Update animation mixer for flamingo's built-in animations
+        if (gFlamingoMixer) {
+            gFlamingoMixer.update(deltaT);
         }
     }
     
@@ -20051,6 +20223,11 @@ function update() {
         gCameraVelocity.z = (gCamera.position.z - gCameraPrevPosition.z) / deltaT;
     }
     gCameraPrevPosition.copy(gCamera.position);
+    
+    // Update Stats display
+    if (gStats && gStatsEnabled) {
+        gStats.update();
+    }
     
     requestAnimationFrame(update);
 }
