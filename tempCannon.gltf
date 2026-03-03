@@ -8,11 +8,6 @@
       "name": "Scene",
       "nodes": [
         0,
-        5,
-        6,
-        7,
-        8,
-        9,
         10,
         11,
         12
@@ -25,28 +20,15 @@
       "name": "fullGun",
       "children": [
         1,
-        4
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
       ]
     },
     {
-      "matrix": [
-        0.895323401834578,
-        -0.4454166657494516,
-        0,
-        0,
-        0.4454166657494516,
-        0.895323401834578,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
-        1
-      ],
       "name": "rotatingBarrel",
       "children": [
         2,
@@ -138,7 +120,7 @@
         0,
         1
       ],
-      "name": "Box",
+      "name": "bracketBottom",
       "mesh": 3
     },
     {
@@ -160,7 +142,7 @@
         1.7000871658493064,
         1
       ],
-      "name": "Box",
+      "name": "bracketSide1bottom",
       "mesh": 4
     },
     {
@@ -182,7 +164,7 @@
         1.7,
         1
       ],
-      "name": "Cylinder",
+      "name": "bracketSide1Top",
       "mesh": 5
     },
     {
@@ -204,7 +186,7 @@
         -1.7,
         1
       ],
-      "name": "Box",
+      "name": "bracketSide2bottom",
       "mesh": 4
     },
     {
@@ -226,7 +208,7 @@
         -1.7,
         1
       ],
-      "name": "Cylinder",
+      "name": "bracketSide2Top",
       "mesh": 5
     },
     {
@@ -248,7 +230,7 @@
         0,
         1
       ],
-      "name": "Cylinder",
+      "name": "basePivot",
       "mesh": 6
     },
     {
@@ -270,7 +252,7 @@
         0,
         1
       ],
-      "name": "Cylinder",
+      "name": "baseCone",
       "mesh": 7
     },
     {
@@ -292,7 +274,7 @@
         0,
         1
       ],
-      "name": "Cylinder",
+      "name": "baseBushing",
       "mesh": 8
     }
   ],
