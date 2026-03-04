@@ -18364,33 +18364,14 @@ function update() {
     if (gCannon && gCannonFullGun && gCannonRotatingBarrel && gToyPlane && gHotAirBalloon) {
         
         if (gToyPlane && gToyPlane.position) {
-            // Predict future position of airplane to lead the target
-            // Start with current position and iteratively refine
-            let predictedPos = gToyPlane.position.clone();
-            let iterations = 3; // Number of refinement iterations
+            // Aim at current airplane position
+            const targetPos = gToyPlane.position.clone();
             
-            for (let iter = 0; iter < iterations; iter++) {
-                // Calculate distance to predicted position
-                const dx = predictedPos.x - gCannonPosition.x;
-                const dy = predictedPos.y - gCannonPosition.y;
-                const dz = predictedPos.z - gCannonPosition.z;
-                const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                
-                // Estimate flight time (rough approximation)
-                const estimatedFlightTime = distance / (gProjectileSpeed * 0.7); // Account for arc reducing average speed
-                
-                // Predict where plane will be after flight time
-                const futureAngle = gToyPlaneAngle + gToyPlaneOrbitSpeed * estimatedFlightTime;
-                predictedPos.x = gHotAirBalloon.position.x + Math.cos(futureAngle) * gToyPlaneOrbitRadius;
-                predictedPos.z = gHotAirBalloon.position.z - Math.sin(futureAngle) * gToyPlaneOrbitRadius;
-                predictedPos.y = gHotAirBalloon.position.y; // Plane stays at balloon height
-            }
-            
-            // Calculate direction from cannon to predicted airplane position
+            // Calculate direction from cannon to airplane's current position
             const cannonToTarget = new THREE.Vector3(
-                predictedPos.x - gCannonPosition.x,
-                predictedPos.y - gCannonPosition.y,
-                predictedPos.z - gCannonPosition.z
+                targetPos.x - gCannonPosition.x,
+                targetPos.y - gCannonPosition.y,
+                targetPos.z - gCannonPosition.z
             );
             
             // Calculate azimuth (rotation around Y axis for fullGun)
