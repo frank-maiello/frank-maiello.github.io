@@ -217,7 +217,7 @@ var modelsMenuX = 0.136; // Models menu position (adjusted left to align with ot
 var modelsMenuY = 0.1;
 
 // Model visibility flags
-var gCannonVisible = true;
+var gCannonVisible = false;
 var gToyPlaneVisible = true;
 var gFlamingoVisible = true;
 var gHotAirBalloonVisible = true;
