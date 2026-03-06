@@ -194,6 +194,10 @@ var lightingMenuVisible = false; // Lighting submenu visibility
 var lightingMenuVisibleBeforeHide = false;
 var lightingMenuOpacity = 0;
 var lightingMenuFadeSpeed = 3.0;
+var modelsMenuVisible = false; // Models submenu visibility
+var modelsMenuVisibleBeforeHide = false;
+var modelsMenuOpacity = 0;
+var modelsMenuFadeSpeed = 3.0;
 var cameraMenuVisible = false; // Camera submenu visibility
 var cameraMenuVisibleBeforeHide = false;
 var cameraMenuOpacity = 0;
@@ -208,6 +212,26 @@ var instructionsMenuY = 0.1;
 var colorMenuX = 0.15; // Color menu position
 var colorMenuY = 0.1;
 var lightingMenuX = 0.15; // Lighting menu position
+var lightingMenuY = 0.1;
+var modelsMenuX = 0.136; // Models menu position (adjusted left to align with other menus given different padding)
+var modelsMenuY = 0.1;
+
+// Model visibility flags
+var gCannonVisible = true;
+var gToyPlaneVisible = true;
+var gFlamingoVisible = true;
+var gHotAirBalloonVisible = true;
+var gMiniMammothVisible = true;
+var gMammothSkeletonVisible = true;
+var gKoonsDogVisible = true;
+var gDuckVisible = true;
+var gTeapotVisible = true;
+var gChairVisible = true;
+var gSofaVisible = true;
+var gBicycleWheelVisible = true;
+var gBirdVisible = true;
+var gSkyPigVisible = true;
+var cameraMenuX = 0.15; // Camera menu position
 var lightingMenuY = 0.1;
 var cameraMenuX = 0.15; // Camera menu position
 var cameraMenuY = 0.1;
@@ -270,13 +294,14 @@ var gCannonInnerBarrelInitialY = 0; // Store initial Y position of inner barrel
 var gCannonSight = null; // Reference to Sight group (moves with innerBarrel)
 var gCannonSightInitialY = 0; // Store initial Y position of sight
 var gCannonOuterBarrel = null; // Reference to outerBarrel object
-var gCannonRecoilDistance = 0.6; // How far the inner barrel recoils partially into outer barrel (in model units)
+var gCannonRecoilDistance = 2.0; // How far the inner barrel recoils partially into outer barrel (in model units)
 var gCannonRecoilDuration = 0.12; // Duration of recoil snap (seconds)
 var gCannonRecoilTimer = 0; // Timer for recoil animation
 var gCannonRecoiling = false; // Is cannon currently recoiling
 var gCannonPosition = new THREE.Vector3(15, 1.6, 25); // Cannon position in scene
-var gProjectiles = []; // Array of active projectiles {mesh, velocity, position}
-var gCannonFireRate = 5.0; // Projectiles per second (twice per second)
+var gProjectiles = []; // Array of active projectiles {mesh, velocity, position, lastDistanceToTarget}
+var gExplosionParticles = []; // Array of explosion particles {mesh, position, velocity, age, lifetime}
+var gCannonFireRate = 0.5; // Projectiles per second (twice per second)
 var gCannonFireTimer = 0; // Timer for firing rate
 var gProjectileRadius = 0.5; // Radius of projectiles
 var gProjectileSpeed = 30.0; // Initial projectile speed (fast for flatter trajectory)
@@ -4170,7 +4195,7 @@ function drawMainMenu() {
     const itemHeight = 0.12 * menuScale;
     const itemWidth = 0.15 * menuScale;
     const padding = 0.02 * menuScale;
-    const menuHeight = itemHeight * 7 + (padding * 8); // Seven items now
+    const menuHeight = itemHeight * 8 + (padding * 9); // Eight items now
     const menuWidth = itemWidth + (padding * 2);
     
     const menuBaseY = ellipsisY + 0.08 * menuScale;
@@ -4782,24 +4807,83 @@ function drawMainMenu() {
     
     ctx.restore();
 
-    // Draw Instructions menu item
+    // Draw Models menu item
     const itemY7 = itemY6 + itemHeight + padding;
     ctx.beginPath();
     ctx.roundRect(itemX, itemY7, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.fillStyle = modelsMenuVisible ? 'rgba(100, 150, 220, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fill();
+    
+    // Draw 3D cube icon for models
+    const icon7X = itemX + 0.5 * itemWidth / 2;
+    const icon7Y = itemY7 + 1.6 * itemHeight / 2;
+    const icon7Color = modelsMenuVisible ? 'hsla(0, 0%, 80%, 1.0)' : 'hsla(0, 0%, 30%, 1.0)';
+    ctx.strokeStyle = icon7Color;
+    ctx.fillStyle = icon7Color;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'butt';
+    
+    ctx.save();
+    ctx.translate(icon7X - iconSize * 0.15, icon7Y + iconSize * 0.1); // Move left and down
+    
+    // Draw 3D cube as two squares with connecting lines
+    const cubeSize = iconSize * 1.2; // Twice as large
+    const offset = iconSize * 0.25; // 3D offset (twice as large)
+    
+    // Draw back square (lighter color for hidden edges) - projects to the right
+    ctx.strokeStyle = icon7Color
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(offset, -cubeSize - offset, cubeSize, cubeSize);
+    
+    // Draw front square (brighter)
+    ctx.lineWidth = 2;
+    ctx.strokeRect(0, -cubeSize, cubeSize, cubeSize);
+    
+    // Connect the four corners
+    // Top-left corner
+    ctx.beginPath();
+    ctx.moveTo(offset, -cubeSize - offset);
+    ctx.lineTo(0, -cubeSize);
+    ctx.stroke();
+    
+    // Top-right corner
+    ctx.beginPath();
+    ctx.moveTo(offset + cubeSize, -cubeSize - offset);
+    ctx.lineTo(cubeSize, -cubeSize);
+    ctx.stroke();
+    
+    // Bottom-right corner
+    ctx.beginPath();
+    ctx.moveTo(offset + cubeSize, -offset);
+    ctx.lineTo(cubeSize, 0);
+    ctx.stroke();
+    
+    // Bottom-left corner (hidden - use lighter color)
+    ctx.beginPath();
+    ctx.moveTo(offset, -offset);
+    ctx.lineTo(0, 0);
+    ctx.stroke();
+    
+    ctx.restore();
+
+    // Draw Instructions menu item
+    const itemY8 = itemY7 + itemHeight + padding;
+    ctx.beginPath();
+    ctx.roundRect(itemX, itemY8, itemWidth, itemHeight, cornerRadius * 0.5);
     ctx.fillStyle = instructionsMenuVisible ? 'rgba(255, 204, 0, 0.3)' : 'rgba(38, 38, 38, 0.8)';
     ctx.fill();
     
     // Draw question mark icon
-    const icon7X = itemX + itemWidth / 2;
-    const icon7Y = itemY7 + 0.42 * itemHeight;
-    const icon7Color = instructionsMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
-    ctx.strokeStyle = icon7Color;
-    ctx.fillStyle = icon7Color;
+    const icon8X = itemX + itemWidth / 2;
+    const icon8Y = itemY8 + 0.42 * itemHeight;
+    const icon8Color = instructionsMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+    ctx.strokeStyle = icon8Color;
+    ctx.fillStyle = icon8Color;
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     
     ctx.save();
-    ctx.translate(icon7X, icon7Y);
+    ctx.translate(icon8X, icon8Y);
     
     // Draw question mark
     const qmSize = iconSize;
@@ -6410,6 +6494,120 @@ function drawLightingMenu() {
     ctx.strokeStyle = `hsla(0, 0%, 100%, ${lightingMenuOpacity})`;
     ctx.lineWidth = 2;
     ctx.stroke();
+    
+    ctx.restore();
+}
+
+function drawModelsMenu() {
+    if (modelsMenuOpacity <= 0) return;
+    
+    const ctx = gOverlayCtx;
+    const buttonWidth = 0.364 * menuScale;
+    const buttonHeight = 0.0845 * menuScale;
+    const buttonSpacing = 0.104 * menuScale;
+    const columnSpacing = 0.416 * menuScale;
+    const menuTopMargin = 0.08 * menuScale;
+    const menuWidth = columnSpacing * 1.75;
+    const menuHeight = buttonSpacing * 7 + menuTopMargin;
+    const padding = 0.08 * menuScale; // Top and bottom padding
+    const paddingX = 0.001 * menuScale; // Left and right padding (minimal)
+    const leftMargin = (menuWidth - columnSpacing) / 2; // Center the columns
+    
+    // Convert world coordinates to screen coordinates
+    const menuOriginX = modelsMenuX * window.innerWidth;
+    const menuOriginY = modelsMenuY * window.innerHeight;
+    
+    ctx.save();
+    ctx.translate(menuOriginX, menuOriginY);
+    ctx.globalAlpha = modelsMenuOpacity;
+    
+    // Draw menu background
+    const cornerRadius = 8;
+    ctx.beginPath();
+    ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+    const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsla(214, 30%, 35.1%, ${modelsMenuOpacity})`);
+    menuGradient.addColorStop(1, `hsla(214, 30%, 15%, ${modelsMenuOpacity})`);
+    ctx.fillStyle = menuGradient;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(214, 0%, 70%, ${modelsMenuOpacity})`;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    
+    // Draw title
+    ctx.fillStyle = `hsla(45, 10%, 90%, ${modelsMenuOpacity})`;
+    ctx.font = `bold ${0.05 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.fillText('MODELS', menuWidth / 2, -padding + 0.06 * menuScale);
+    
+    // Draw close button
+    const closeIconRadius = 0.025 * menuScale;
+    const closeIconX = -padding + closeIconRadius + 0.02 * menuScale;
+    const closeIconY = -padding + closeIconRadius + 0.02 * menuScale;
+    ctx.beginPath();
+    ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(180, 40, 40, ${modelsMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(0, 0, 0, ${modelsMenuOpacity})`;
+    ctx.lineWidth = 2;
+    const xSize = closeIconRadius * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+    ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+    ctx.stroke();
+    
+    // Define model toggle buttons
+    const models = [
+        { label: 'Cannon', visible: gCannonVisible },
+        { label: 'Toy Airplane', visible: gToyPlaneVisible },
+        { label: 'Flamingo', visible: gFlamingoVisible },
+        { label: 'Hot Air Balloon', visible: gHotAirBalloonVisible },
+        { label: 'Mini Mammoth', visible: gMiniMammothVisible },
+        { label: 'Mammoth Skeleton', visible: gMammothSkeletonVisible },
+        { label: 'Koons Dog', visible: gKoonsDogVisible },
+        { label: 'Rubber Duck', visible: gDuckVisible },
+        { label: 'Teapot Table', visible: gTeapotVisible },
+        { label: 'Sheen Chair', visible: gChairVisible },
+        { label: 'Velvet Sofa', visible: gSofaVisible },
+        { label: 'Duchamp Wheel', visible: gBicycleWheelVisible },
+        { label: 'Brancusi Sculpture', visible: gBirdVisible },
+        { label: 'Pig', visible: gSkyPigVisible }
+    ];
+    
+    // Draw toggle buttons in 2 columns
+    for (let i = 0; i < models.length; i++) {
+        const col = Math.floor(i / 7);
+        const row = i % 7;
+        const buttonX = leftMargin + col * columnSpacing;
+        const buttonY = row * buttonSpacing + menuTopMargin;
+        
+        // Draw button
+        ctx.beginPath();
+        ctx.roundRect(buttonX - buttonWidth / 2, buttonY - buttonHeight / 2, buttonWidth, buttonHeight, 4);
+        
+        if (models[i].visible) {
+            ctx.fillStyle = `hsla(120, 70%, 40%, ${modelsMenuOpacity})`; // Green when on
+            ctx.shadowColor = `hsla(120, 70%, 50%, ${modelsMenuOpacity * 0.8})`;
+        } else {
+            ctx.fillStyle = `hsla(0, 70%, 40%, ${modelsMenuOpacity})`; // Red when off
+            ctx.shadowColor = `hsla(0, 70%, 50%, ${modelsMenuOpacity * 0.8})`;
+        }
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = `hsla(0, 0%, 20%, ${modelsMenuOpacity})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Draw label
+        ctx.fillStyle = `hsla(0, 0%, 100%, ${modelsMenuOpacity})`;
+        ctx.font = `${0.029 * menuScale}px verdana`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(models[i].label, buttonX, buttonY);
+    }
     
     ctx.restore();
 }
@@ -12653,6 +12851,8 @@ function onPointer(evt) {
                 colorMenuVisible = false;
                 lightingMenuVisibleBeforeHide = lightingMenuVisible;
                 lightingMenuVisible = false;
+                modelsMenuVisibleBeforeHide = modelsMenuVisible;
+                modelsMenuVisible = false;
                 cameraMenuVisibleBeforeHide = cameraMenuVisible;
                 cameraMenuVisible = false;
             } else {
@@ -12661,6 +12861,7 @@ function onPointer(evt) {
                 instructionsMenuVisible = instructionsMenuVisibleBeforeHide;
                 colorMenuVisible = colorMenuVisibleBeforeHide;
                 lightingMenuVisible = lightingMenuVisibleBeforeHide;
+                modelsMenuVisible = modelsMenuVisibleBeforeHide;
                 cameraMenuVisible = cameraMenuVisibleBeforeHide;
             }
             return;
@@ -12688,6 +12889,11 @@ function onPointer(evt) {
         
         // Check lighting submenu clicks FIRST (before main menu)
         if (checkLightingMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
+        // Check models submenu clicks FIRST (before main menu)
+        if (checkModelsMenuClick(evt.clientX, evt.clientY)) {
             return;
         }
         
@@ -12749,6 +12955,7 @@ function onPointer(evt) {
                     colorMenuVisible = false;
                     lightingMenuVisible = false;
                     instructionsMenuVisible = false;
+                    modelsMenuVisible = false;
                 } else {
                     // Menu is already open, cycle camera mode
                     const previousMode = gCameraMode;
@@ -12991,6 +13198,7 @@ function onPointer(evt) {
                 colorMenuVisible = false; // Close color menu when opening simulation
                 lightingMenuVisible = false; // Close lighting menu when opening simulation
                 cameraMenuVisible = false; // Close camera menu when opening simulation
+                modelsMenuVisible = false; // Close models menu when opening simulation
                 return;
             }
             
@@ -13004,6 +13212,7 @@ function onPointer(evt) {
                 colorMenuVisible = false; // Close color menu when opening styling
                 lightingMenuVisible = false; // Close lighting menu when opening styling
                 cameraMenuVisible = false; // Close camera menu when opening styling
+                modelsMenuVisible = false; // Close models menu when opening styling
                 return;
             }
             
@@ -13017,6 +13226,7 @@ function onPointer(evt) {
                 instructionsMenuVisible = false; // Close instructions menu when opening color
                 lightingMenuVisible = false; // Close lighting menu when opening color
                 cameraMenuVisible = false; // Close camera menu when opening color
+                modelsMenuVisible = false; // Close models menu when opening color
                 return;
             }
             
@@ -13030,19 +13240,35 @@ function onPointer(evt) {
                 instructionsMenuVisible = false; // Close instructions menu when opening lighting
                 colorMenuVisible = false; // Close color menu when opening lighting
                 cameraMenuVisible = false; // Close camera menu when opening lighting
+                modelsMenuVisible = false; // Close models menu when opening lighting
+                return;
+            }
+            
+            // Check Models menu item
+            const itemY7 = itemY6 + itemHeight + padding;
+            if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+                evt.clientY >= itemY7 && evt.clientY <= itemY7 + itemHeight) {
+                modelsMenuVisible = !modelsMenuVisible;
+                menuVisible = false; // Close simulation menu when opening models
+                stylingMenuVisible = false; // Close styling menu when opening models
+                instructionsMenuVisible = false; // Close instructions menu when opening models
+                colorMenuVisible = false; // Close color menu when opening models
+                lightingMenuVisible = false; // Close lighting menu when opening models
+                cameraMenuVisible = false; // Close camera menu when opening models
                 return;
             }
             
             // Check Instructions menu item
-            const itemY7 = itemY6 + itemHeight + padding;
+            const itemY8 = itemY7 + itemHeight + padding;
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
-                evt.clientY >= itemY7 && evt.clientY <= itemY7 + itemHeight) {
+                evt.clientY >= itemY8 && evt.clientY <= itemY8 + itemHeight) {
                 instructionsMenuVisible = !instructionsMenuVisible;
                 menuVisible = false; // Close simulation menu when opening instructions
                 stylingMenuVisible = false; // Close styling menu when opening instructions
                 colorMenuVisible = false; // Close color menu when opening instructions
                 lightingMenuVisible = false; // Close lighting menu when opening instructions
                 cameraMenuVisible = false; // Close camera menu when opening instructions
+                modelsMenuVisible = false; // Close models menu when opening instructions
                 return;
             }
 
@@ -14457,6 +14683,9 @@ function onPointer(evt) {
             } else if (draggingMenuType === 'lighting') {
                 lightingMenuX = menuStartX + deltaX / window.innerWidth;
                 lightingMenuY = menuStartY + deltaY / window.innerHeight;
+            } else if (draggingMenuType === 'models') {
+                modelsMenuX = menuStartX + deltaX / window.innerWidth;
+                modelsMenuY = menuStartY + deltaY / window.innerHeight;
             } else if (draggingMenuType === 'camera') {
                 cameraMenuX = menuStartX + deltaX / window.innerWidth;
                 cameraMenuY = menuStartY + deltaY / window.innerHeight;
@@ -17308,6 +17537,265 @@ function checkLightingMenuClick(clientX, clientY) {
     return false;
 }
 
+function checkModelsMenuClick(clientX, clientY) {
+    if (!modelsMenuVisible || modelsMenuOpacity <= 0.5) return false;
+    
+    const buttonWidth = 0.364 * menuScale;
+    const buttonHeight = 0.0845 * menuScale;
+    const buttonSpacing = 0.104 * menuScale;
+    const columnSpacing = 0.416 * menuScale;
+    const menuTopMargin = 0.08 * menuScale;
+    const menuWidth = columnSpacing * 1.75;
+    const menuHeight = buttonSpacing * 7 + menuTopMargin;
+    const padding = 0.08 * menuScale; // Top and bottom padding
+    const paddingX = 0.001 * menuScale; // Left and right padding (minimal)
+    const leftMargin = (menuWidth - columnSpacing) / 2; // Center the columns
+    
+    const menuOriginX = modelsMenuX * window.innerWidth;
+    const menuOriginY = modelsMenuY * window.innerHeight;
+    
+    // Check close button
+    const closeIconRadius = 0.025 * menuScale;
+    const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
+    const closeIconY = menuOriginY - padding + closeIconRadius + 0.02 * menuScale;
+    const cdx = clientX - closeIconX;
+    const cdy = clientY - closeIconY;
+    
+    if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+        modelsMenuVisible = false;
+        // Disable camera controls to prevent dragging
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    // Check model toggle buttons
+    const models = [
+        'gCannonVisible', 'gToyPlaneVisible', 'gFlamingoVisible', 'gHotAirBalloonVisible', 
+        'gMiniMammothVisible', 'gMammothSkeletonVisible', 'gKoonsDogVisible', 'gDuckVisible',
+        'gTeapotVisible', 'gChairVisible', 'gSofaVisible', 'gBicycleWheelVisible', 
+        'gBirdVisible', 'gSkyPigVisible'
+    ];
+    
+    for (let i = 0; i < models.length; i++) {
+        const col = Math.floor(i / 7);
+        const row = i % 7;
+        const buttonX = menuOriginX + leftMargin + col * columnSpacing;
+        const buttonY = menuOriginY + row * buttonSpacing + menuTopMargin;
+        
+        // Check if click is within button bounds
+        if (clientX >= buttonX - buttonWidth / 2 && clientX <= buttonX + buttonWidth / 2 &&
+            clientY >= buttonY - buttonHeight / 2 && clientY <= buttonY + buttonHeight / 2) {
+            
+            // Disable camera controls to prevent dragging on buttons
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            
+            // Toggle the corresponding visibility flag
+            switch (i) {
+                case 0: 
+                    gCannonVisible = !gCannonVisible; 
+                    if (gCannon) gCannon.visible = gCannonVisible;
+                    // Clean up projectiles and explosions when cannon is turned off
+                    if (!gCannonVisible) {
+                        // Remove all projectiles
+                        for (let p = gProjectiles.length - 1; p >= 0; p--) {
+                            gThreeScene.remove(gProjectiles[p].mesh);
+                            gProjectiles[p].mesh.geometry.dispose();
+                            gProjectiles[p].mesh.material.dispose();
+                        }
+                        gProjectiles.length = 0;
+                        
+                        // Remove all explosion particles
+                        for (let e = gExplosionParticles.length - 1; e >= 0; e--) {
+                            gThreeScene.remove(gExplosionParticles[e].mesh);
+                            gExplosionParticles[e].mesh.geometry.dispose();
+                            gExplosionParticles[e].mesh.material.dispose();
+                        }
+                        gExplosionParticles.length = 0;
+                    }
+                    break;
+                case 1: 
+                    gToyPlaneVisible = !gToyPlaneVisible; 
+                    if (gToyPlane) gToyPlane.visible = gToyPlaneVisible;
+                    // No obstacle for toy airplane
+                    break;
+                case 2: 
+                    gFlamingoVisible = !gFlamingoVisible; 
+                    if (gFlamingo) gFlamingo.visible = gFlamingoVisible;
+                    // No obstacle for flamingo (stool obstacle controlled by Duchamp Wheel button)
+                    break;
+                case 3: 
+                    gHotAirBalloonVisible = !gHotAirBalloonVisible; 
+                    if (gHotAirBalloon) gHotAirBalloon.visible = gHotAirBalloonVisible;
+                    // No obstacle for balloon (it moves dynamically)
+                    break;
+                case 4: 
+                    gMiniMammothVisible = !gMiniMammothVisible; 
+                    if (gMammoth) gMammoth.visible = gMiniMammothVisible;
+                    // Manage mammoth obstacle
+                    if (gMammothObstacle) {
+                        if (gMiniMammothVisible && !gObstacles.includes(gMammothObstacle)) {
+                            gObstacles.push(gMammothObstacle);
+                        } else if (!gMiniMammothVisible) {
+                            const index = gObstacles.indexOf(gMammothObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 5: 
+                    gMammothSkeletonVisible = !gMammothSkeletonVisible; 
+                    if (gMammothSkeleton) gMammothSkeleton.visible = gMammothSkeletonVisible;
+                    // Manage mammoth skeleton obstacle
+                    if (gMammothSkeletonObstacle) {
+                        if (gMammothSkeletonVisible && !gObstacles.includes(gMammothSkeletonObstacle)) {
+                            gObstacles.push(gMammothSkeletonObstacle);
+                        } else if (!gMammothSkeletonVisible) {
+                            const index = gObstacles.indexOf(gMammothSkeletonObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 6: 
+                    gKoonsDogVisible = !gKoonsDogVisible; 
+                    if (gKoonsDog) gKoonsDog.visible = gKoonsDogVisible;
+                    // Manage Koons dog obstacle
+                    if (gKoonsDogObstacle) {
+                        if (gKoonsDogVisible && !gObstacles.includes(gKoonsDogObstacle)) {
+                            gObstacles.push(gKoonsDogObstacle);
+                        } else if (!gKoonsDogVisible) {
+                            const index = gObstacles.indexOf(gKoonsDogObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 7: 
+                    gDuckVisible = !gDuckVisible; 
+                    if (gDuck) gDuck.visible = gDuckVisible;
+                    // Manage duck obstacle
+                    if (gDuckObstacle) {
+                        if (gDuckVisible && !gObstacles.includes(gDuckObstacle)) {
+                            gObstacles.push(gDuckObstacle);
+                        } else if (!gDuckVisible) {
+                            const index = gObstacles.indexOf(gDuckObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 8: 
+                    gTeapotVisible = !gTeapotVisible; 
+                    if (gTeapot) gTeapot.visible = gTeapotVisible;
+                    // Manage teapot and globe lamp obstacles
+                    if (gTeapotObstacle) {
+                        if (gTeapotVisible && !gObstacles.includes(gTeapotObstacle)) {
+                            gObstacles.push(gTeapotObstacle);
+                        } else if (!gTeapotVisible) {
+                            const index = gObstacles.indexOf(gTeapotObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    if (gGlobeLampObstacle) {
+                        if (gTeapotVisible && !gObstacles.includes(gGlobeLampObstacle)) {
+                            gObstacles.push(gGlobeLampObstacle);
+                        } else if (!gTeapotVisible) {
+                            const index = gObstacles.indexOf(gGlobeLampObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 9: 
+                    gChairVisible = !gChairVisible; 
+                    if (gChair) gChair.visible = gChairVisible;
+                    // Manage chair obstacle
+                    if (gChairObstacle) {
+                        if (gChairVisible && !gObstacles.includes(gChairObstacle)) {
+                            gObstacles.push(gChairObstacle);
+                        } else if (!gChairVisible) {
+                            const index = gObstacles.indexOf(gChairObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 10: 
+                    gSofaVisible = !gSofaVisible; 
+                    if (gSofa) gSofa.visible = gSofaVisible;
+                    // Manage sofa obstacle
+                    if (gSofaObstacle) {
+                        if (gSofaVisible && !gObstacles.includes(gSofaObstacle)) {
+                            gObstacles.push(gSofaObstacle);
+                        } else if (!gSofaVisible) {
+                            const index = gObstacles.indexOf(gSofaObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 11: 
+                    gBicycleWheelVisible = !gBicycleWheelVisible; 
+                    if (gStool) gStool.visible = gBicycleWheelVisible;
+                    // Manage stool obstacle
+                    if (gStoolObstacle) {
+                        if (gBicycleWheelVisible && !gObstacles.includes(gStoolObstacle)) {
+                            gObstacles.push(gStoolObstacle);
+                        } else if (!gBicycleWheelVisible) {
+                            const index = gObstacles.indexOf(gStoolObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 12: 
+                    gBirdVisible = !gBirdVisible; 
+                    if (gBird) gBird.visible = gBirdVisible;
+                    // Manage bird obstacle
+                    if (gBirdObstacle) {
+                        if (gBirdVisible && !gObstacles.includes(gBirdObstacle)) {
+                            gObstacles.push(gBirdObstacle);
+                        } else if (!gBirdVisible) {
+                            const index = gObstacles.indexOf(gBirdObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 13: 
+                    gSkyPigVisible = !gSkyPigVisible; 
+                    if (gSkyPig) gSkyPig.visible = gSkyPigVisible;
+                    // Manage sky pig obstacle
+                    if (gSkyPigObstacle) {
+                        if (gSkyPigVisible && !gObstacles.includes(gSkyPigObstacle)) {
+                            gObstacles.push(gSkyPigObstacle);
+                        } else if (!gSkyPigVisible) {
+                            const index = gObstacles.indexOf(gSkyPigObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+            }
+            return true;
+        }
+    }
+    
+    // Check for drag (to move the menu)
+    // Only start drag if not clicking on a button
+    if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
+        clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
+        
+        isDraggingMenu = true;
+        draggingMenuType = 'models';
+        menuDragStartX = clientX;
+        menuDragStartY = clientY;
+        menuStartX = modelsMenuX;
+        menuStartY = modelsMenuY;
+        
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    return false;
+}
+
 function checkCameraMenuClick(clientX, clientY) {
     if (!cameraMenuVisible || cameraMenuOpacity <= 0.1) return false;
     
@@ -18319,7 +18807,7 @@ function update() {
     if (gCannonInnerBarrel) {
         if (gCannonRecoiling) {
             gCannonRecoilTimer += deltaT;
-            const totalRecoilCycle = 1.0 / gCannonFireRate; // Total time between shots
+            const totalRecoilCycle = 0.5 / gCannonFireRate; // Total time between shots
             
             if (gCannonRecoilTimer < gCannonRecoilDuration) {
                 // Recoil phase: move backward quickly
@@ -18361,7 +18849,7 @@ function update() {
     }
     
     // Update cannon aiming and firing
-    if (gCannon && gCannonFullGun && gCannonRotatingBarrel && gToyPlane && gHotAirBalloon) {
+    if (gCannonVisible && gCannon && gCannonFullGun && gCannonRotatingBarrel && gToyPlane && gHotAirBalloon) {
         
         if (gToyPlane && gToyPlane.position) {
             // Aim at current airplane position
@@ -18415,7 +18903,7 @@ function update() {
                 const projectileMaterial = new THREE.MeshStandardMaterial({ 
                     color: 0xffffff,
                     emissive: 0xffffff,
-                    emissiveIntensity: 0.5
+                    emissiveIntensity: 0.0
                 });
                 const projectileMesh = new THREE.Mesh(projectileGeometry, projectileMaterial);
                 projectileMesh.castShadow = true;
@@ -18451,7 +18939,8 @@ function update() {
                     mesh: projectileMesh,
                     velocity: velocity,
                     position: barrelTipPosition.clone(),
-                    spawnPosition: barrelTipPosition.clone() // Track spawn position
+                    spawnPosition: barrelTipPosition.clone(), // Track spawn position
+                    lastDistanceToTarget: Infinity // Track distance to airplane for explosion detection
                 });
                 
                 gThreeScene.add(projectileMesh);
@@ -18460,7 +18949,8 @@ function update() {
     }
     
     // Update projectiles
-    for (let i = gProjectiles.length - 1; i >= 0; i--) {
+    if (gCannonVisible) {
+        for (let i = gProjectiles.length - 1; i >= 0; i--) {
         const projectile = gProjectiles[i];
         
         // Check if projectile has cleared the barrel
@@ -18480,6 +18970,69 @@ function update() {
         // Update mesh position
         projectile.mesh.position.copy(projectile.position);
         
+        // Check distance to airplane for explosion detection
+        let shouldExplode = false;
+        if (gToyPlane && gToyPlane.position) {
+            const distanceToTarget = projectile.position.distanceTo(gToyPlane.position);
+            
+            // Explode if we've passed the nearest point (distance is increasing)
+            if (distanceToTarget > projectile.lastDistanceToTarget && projectile.lastDistanceToTarget < 15) {
+                shouldExplode = true;
+            }
+            
+            projectile.lastDistanceToTarget = distanceToTarget;
+        }
+        
+        // Create explosion if needed
+        if (shouldExplode) {
+            // Create explosion particles
+            const particleCount = 200;
+            const particleSize = 0.08;
+            
+            for (let p = 0; p < particleCount; p++) {
+                // Random direction
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                const speed = 10 + Math.random() * 10; // Random speed between 10-20
+                
+                const vx = Math.sin(phi) * Math.cos(theta) * speed;
+                const vy = Math.sin(phi) * Math.sin(theta) * speed;
+                const vz = Math.cos(phi) * speed;
+                
+                // Create particle mesh
+                const particleGeometry = new THREE.SphereGeometry(particleSize, 8, 8);
+                const particleMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 1.0,
+                    transparent: true,
+                    opacity: 1.0
+                });
+                const particleMesh = new THREE.Mesh(particleGeometry, particleMaterial);
+                particleMesh.position.copy(projectile.position);
+                gThreeScene.add(particleMesh);
+                
+                gExplosionParticles.push({
+                    mesh: particleMesh,
+                    position: projectile.position.clone(),
+                    velocity: new THREE.Vector3(
+                        vx + projectile.velocity.x,
+                        vy + projectile.velocity.y,
+                        vz + projectile.velocity.z
+                    ),
+                    age: 0,
+                    lifetime: 1.5 // 1.5 seconds lifetime
+                });
+            }
+            
+            // Remove projectile
+            gThreeScene.remove(projectile.mesh);
+            projectile.mesh.geometry.dispose();
+            projectile.mesh.material.dispose();
+            gProjectiles.splice(i, 1);
+            continue;
+        }
+        
         // Remove projectile if it falls below floor level
         if (projectile.position.y < 0) {
             gThreeScene.remove(projectile.mesh);
@@ -18487,6 +19040,56 @@ function update() {
             projectile.mesh.material.dispose();
             gProjectiles.splice(i, 1);
         }
+    }
+    }
+    
+    // Update explosion particles
+    if (gCannonVisible) {
+        for (let i = gExplosionParticles.length - 1; i >= 0; i--) {
+        const particle = gExplosionParticles[i];
+        
+        particle.age += deltaT;
+        
+        // Apply deceleration (drag)
+        const deceleration = 0.95; // Decelerate quickly
+        particle.velocity.multiplyScalar(Math.pow(deceleration, deltaT * 60));
+        
+        // Apply gravity
+        particle.velocity.y += gProjectileGravity * deltaT;
+        
+        // Update position
+        particle.position.x += particle.velocity.x * deltaT;
+        particle.position.y += particle.velocity.y * deltaT;
+        particle.position.z += particle.velocity.z * deltaT;
+        
+        particle.mesh.position.copy(particle.position);
+        
+        // Calculate opacity based on age - smooth fade to transparent black
+        const ageRatio = particle.age / particle.lifetime;
+        const opacity = 1.0 - ageRatio;
+        
+        // Fade opacity and emissive intensity smoothly to transparent
+        particle.mesh.material.opacity = opacity;
+        particle.mesh.material.emissiveIntensity = opacity;
+        
+        // Fade color from white to black
+        const colorBrightness = 1.0 - ageRatio;
+        const r = Math.floor(255 * colorBrightness);
+        const g = Math.floor(255 * colorBrightness);
+        const b = Math.floor(255 * colorBrightness);
+        const hexColor = (r << 16) | (g << 8) | b;
+        
+        particle.mesh.material.color.setHex(hexColor);
+        particle.mesh.material.emissive.setHex(hexColor);
+        
+        // Remove particle if lifetime exceeded
+        if (particle.age >= particle.lifetime) {
+            gThreeScene.remove(particle.mesh);
+            particle.mesh.geometry.dispose();
+            particle.mesh.material.dispose();
+            gExplosionParticles.splice(i, 1);
+        }
+    }
     }
     
     // Hot air balloon drifting and tracking
@@ -19788,6 +20391,12 @@ function update() {
         lightingMenuOpacity = Math.max(0, lightingMenuOpacity - lightingMenuFadeSpeed * deltaT);
     }
     
+    if (modelsMenuVisible) {
+        modelsMenuOpacity = Math.min(0.9, modelsMenuOpacity + modelsMenuFadeSpeed * deltaT);
+    } else {
+        modelsMenuOpacity = Math.max(0, modelsMenuOpacity - modelsMenuFadeSpeed * deltaT);
+    }
+    
     if (cameraMenuVisible) {
         cameraMenuOpacity = Math.min(0.9, cameraMenuOpacity + cameraMenuFadeSpeed * deltaT);
     } else {
@@ -20587,6 +21196,7 @@ function update() {
     drawInstructionsMenu();
     drawColorMenu();
     drawLightingMenu();
+    drawModelsMenu();
     drawCameraMenu();
     drawBalloonVerticalSpeedGauge();
     drawBalloonAltimeterGauge();
