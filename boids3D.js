@@ -3310,12 +3310,13 @@ function makeBoids() {
         // Set velocity to point outward from spawn center
         vel = pos.clone().sub(spawnCenter).normalize();
         const speed = 1 + Math.random() * 4; // Random speed between 1 and 5
+        const randoPick = Math.random();
         vel.multiplyScalar(speed);
         if (i == 0) {
             hue = Math.round(180 + (2 * (-0.5 + Math.random())) * 20);
             sat = 0; 
             light = 100; 
-        } else if (i < 151) {
+        } else if (randoPick < 100/1500) {
             hue = Math.round(180 + (2 * (-0.5 + Math.random())) * 20);
             sat = gBoidSaturation; 
             light = gBoidLightness; 
