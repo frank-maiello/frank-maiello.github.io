@@ -92,6 +92,14 @@ var gDraggingSphere = false; // Track if dragging the sphere obstacle
 var gSphereDragOffset = null; // Store offset from click point to sphere center
 var gSphereDragPlaneHeight = 0; // Store the Y height where the sphere was grabbed
 var gSphereHue = 90; // Current hue value for sphere obstacle (0-360)
+var gDraggingAttractorSphere = false; // Track if dragging the attractor sphere
+var gAttractorSphereDragOffset = null; // Store offset from click point to attractor sphere center
+var gAttractorSphereDragPlaneDistance = 0; // Distance from camera for attractor sphere dragging
+var gAttractorSphereHue = 200; // Current hue value for attractor sphere (cyan-blue)
+var gDraggingRepellerSphere = false; // Track if dragging the repeller sphere
+var gRepellerSphereDragOffset = null; // Store offset from click point to repeller sphere center
+var gRepellerSphereDragPlaneDistance = 0; // Distance from camera for repeller sphere dragging
+var gRepellerSphereHue = 0; // Current hue value for repeller sphere (red)
 var gDraggingTorus = false; // Track if dragging the torus obstacle
 var gTorusDragOffset = null; // Store offset from click point to torus center
 var gTorusDragPlaneHeight = 0; // Store the Y height where the torus was grabbed
@@ -500,6 +508,8 @@ var gSphereTargetY = 15; // Target Y position for sphere
 var gSphereStartRadius = 0.1; // Starting radius for sphere
 var gSphereTargetRadius = 3; // Target radius for sphere
 var gSphereObstacle = null; // Reference to sphere obstacle
+var gAttractorSphereObstacle = null; // Reference to attractor sphere obstacle
+var gRepellerSphereObstacle = null; // Reference to repeller sphere obstacle
 var gSkyPig = null; // Reference to sky pig model
 var gSkyPigObstacle = null; // Reference to sky pig obstacle
 var gSkyPigRising = false; // Flag for sky pig rise animation
@@ -1016,12 +1026,115 @@ class TorusObstacle {
 }
 
 class SphereObstacle {
-    constructor(radius, position) {
+    constructor(radius, position, mode = 'normal') {
         this.radius = radius;
         this.position = position.clone();
         this.mesh = null;
         this.enabled = true;
+        this.mode = mode; // 'normal', 'attract', or 'repel'
+        this.symbols = []; // Array to hold symbol sprites
+        this.symbolGroup = null; // Group to hold all symbols
         this.createMesh();
+        if (mode === 'attract' || mode === 'repel') {
+            this.createSymbols();
+        }
+    }
+    
+    createSymbols() {
+        // Create a group to hold all symbols
+        this.symbolGroup = new THREE.Group();
+        
+        // Create canvas for symbol texture
+        var canvas = document.createElement('canvas');
+        canvas.width = 128;
+        canvas.height = 128;
+        var ctx = canvas.getContext('2d');
+        
+        // Draw symbol
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 20;
+        ctx.lineCap = 'round';
+        
+        if (this.mode === 'attract') {
+            // Draw plus sign
+            ctx.beginPath();
+            ctx.moveTo(64, 24);
+            ctx.lineTo(64, 104);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(24, 64);
+            ctx.lineTo(104, 64);
+            ctx.stroke();
+        } else if (this.mode === 'repel') {
+            // Draw minus sign
+            ctx.beginPath();
+            ctx.moveTo(24, 64);
+            ctx.lineTo(104, 64);
+            ctx.stroke();
+        }
+        
+        var texture = new THREE.CanvasTexture(canvas);
+        var material = new THREE.SpriteMaterial({ 
+            map: texture,
+            transparent: true,
+            opacity: 1.0,
+            depthTest: true,
+            depthWrite: false
+        });
+        
+        // Position symbols around the sphere (6 positions: front, back, left, right, top, bottom)
+        // Position them slightly outside the sphere surface to avoid clipping
+        var symbolDistance = this.radius * 1.15;
+        var positions = [
+            new THREE.Vector3(symbolDistance, 0, 0),      // right
+            new THREE.Vector3(-symbolDistance, 0, 0),     // left
+            new THREE.Vector3(0, symbolDistance, 0),      // top
+            new THREE.Vector3(0, -symbolDistance, 0),     // bottom
+            new THREE.Vector3(0, 0, symbolDistance),      // front
+            new THREE.Vector3(0, 0, -symbolDistance)      // back
+        ];
+        
+        var symbolSize = this.radius * 0.6;
+        
+        for (var i = 0; i < positions.length; i++) {
+            var sprite = new THREE.Sprite(material.clone());
+            sprite.scale.set(symbolSize, symbolSize, 1);
+            sprite.position.copy(positions[i]);
+            sprite.userData.baseOpacity = 1.0;
+            this.symbols.push(sprite);
+            this.symbolGroup.add(sprite);
+        }
+        
+        this.symbolGroup.position.copy(this.position);
+        gThreeScene.add(this.symbolGroup);
+    }
+    
+    updateSymbolBrightness(isDragging) {
+        if (!this.symbols.length) return;
+        
+        // Pulsate and rotate when dragging
+        if (isDragging) {
+            var time = Date.now() * 0.005; // Pulsate at ~5 Hz (faster)
+            var pulsate = 0.6 + Math.sin(time) * 0.4; // Oscillate between 0.2 and 1.0 (more dramatic)
+            
+            this.symbols.forEach(function(sprite) {
+                sprite.material.opacity = pulsate;
+                sprite.material.needsUpdate = true;
+            });
+            
+            // Rotate the symbol group around Y axis
+            if (this.symbolGroup) {
+                var rotationSpeed = 0.1; // Radians per frame (adjust for speed)
+                this.symbolGroup.rotation.y += rotationSpeed;
+            }
+        } else {
+            // Normal brightness when not dragging
+            this.symbols.forEach(function(sprite) {
+                sprite.material.opacity = sprite.userData.baseOpacity;
+                sprite.material.needsUpdate = true;
+            });
+        }
     }
     
     createMesh() {
@@ -1037,6 +1150,7 @@ class SphereObstacle {
         this.mesh.receiveShadow = true;
         this.mesh.userData.isDraggableSphere = true;
         this.mesh.userData.sphereObstacle = this;
+        this.mesh.userData.sphereMode = this.mode; // Store mode for identification
         gThreeScene.add(this.mesh);
     }
     
@@ -1052,6 +1166,86 @@ class SphereObstacle {
         const distance = this.getDistanceToSurface(boid.pos);
         const threshold = 3.0; // Start avoiding when within this distance
         
+        // Handle different modes
+        if (this.mode === 'attract') {
+            // Attraction mode - pull boids towards the sphere (only when being dragged)
+            if (!gDraggingAttractorSphere) {
+                return; // No attraction when not being dragged
+            }
+            
+            const attractionRadius = this.radius + 10.0; // Larger radius of influence
+            const distanceFromCenter = boid.pos.distanceTo(this.position);
+            
+            if (distanceFromCenter < attractionRadius) {
+                // Calculate direction towards sphere center
+                const attractionDir = this.position.clone().sub(boid.pos);
+                const dirLen = attractionDir.length();
+                
+                if (dirLen > 0.001) {
+                    attractionDir.normalize();
+                    
+                    // Stronger attraction when farther, weaker when very close
+                    let strength;
+                    if (distanceFromCenter > this.radius + 2.0) {
+                        // Far away - medium attraction
+                        const normalizedDist = (distanceFromCenter - this.radius) / (attractionRadius - this.radius);
+                        strength = avoidanceStrength * 0.8 * (1.0 - normalizedDist);
+                    } else if (distanceFromCenter > this.radius) {
+                        // Close but not touching - weak attraction
+                        strength = avoidanceStrength * 0.3;
+                    } else {
+                        // Inside - gentle push out to prevent clustering at center
+                        attractionDir.multiplyScalar(-1);
+                        strength = avoidanceStrength * 2.0;
+                    }
+                    
+                    boid.vel.x += attractionDir.x * strength;
+                    boid.vel.y += attractionDir.y * strength;
+                    boid.vel.z += attractionDir.z * strength;
+                }
+            }
+            return;
+        } else if (this.mode === 'repel') {
+            // Repulsion mode - push boids away from the sphere (only when being dragged)
+            if (!gDraggingRepellerSphere) {
+                return; // No repulsion when not being dragged
+            }
+            
+            const repulsionRadius = this.radius + 12.0; // Larger radius of influence
+            const distanceFromCenter = boid.pos.distanceTo(this.position);
+            
+            if (distanceFromCenter < repulsionRadius) {
+                // Calculate direction away from sphere center
+                const repulsionDir = boid.pos.clone().sub(this.position);
+                const dirLen = repulsionDir.length();
+                
+                if (dirLen > 0.001) {
+                    repulsionDir.normalize();
+                    
+                    // Stronger repulsion when closer
+                    let strength;
+                    if (distanceFromCenter < this.radius) {
+                        // Inside - EMERGENCY EJECTION
+                        strength = avoidanceStrength * 15.0;
+                    } else if (distanceFromCenter < this.radius + 3.0) {
+                        // Very close - strong repulsion
+                        const normalizedDist = (distanceFromCenter - this.radius) / 3.0;
+                        strength = avoidanceStrength * 8.0 * (1.0 - normalizedDist);
+                    } else {
+                        // Medium distance - moderate repulsion
+                        const normalizedDist = (distanceFromCenter - this.radius - 3.0) / (repulsionRadius - this.radius - 3.0);
+                        strength = avoidanceStrength * 3.0 * (1.0 - normalizedDist);
+                    }
+                    
+                    boid.vel.x += repulsionDir.x * strength;
+                    boid.vel.y += repulsionDir.y * strength;
+                    boid.vel.z += repulsionDir.z * strength;
+                }
+            }
+            return;
+        }
+        
+        // Normal avoidance mode (original behavior)
         if (distance < threshold) {
             // Calculate avoidance direction (away from sphere center)
             const gradient = boid.pos.clone().sub(this.position);
@@ -1089,6 +1283,9 @@ class SphereObstacle {
         this.position.copy(newPosition);
         if (this.mesh) {
             this.mesh.position.copy(newPosition);
+        }
+        if (this.symbolGroup) {
+            this.symbolGroup.position.copy(newPosition);
         }
     }
 }
@@ -7271,7 +7468,7 @@ function updateWorldGeometry(changedDimension) {
         
         ctx.fillStyle = 'hsl(0, 0%, 12%)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        const tileSize = 256;
+        const tileSize = 512;
         for (let i = 0; i < tileRes; i++) {
             for (let j = 0; j < tileRes; j++) {
                 if ((i + j) % 2 === 0) {
@@ -7279,14 +7476,13 @@ function updateWorldGeometry(changedDimension) {
                     ctx.arc(
                         i * tileSize + tileSize / 2, 
                         j * tileSize + tileSize / 2, 
-                        0.2 * tileSize, 
+                        0.3 * tileSize, 
                         0, 
                         2 * Math.PI);
-                    //ctx.fillStyle = 'hsl(296, 65%, 65%)';
-                    ctx.fillStyle = 'hsl(180, 30%, 15%)';
+                    ctx.fillStyle = 'hsl(180, 50%, 15%)';
                     ctx.fill();
-                    ctx.strokeStyle = 'hsl(0, 0%, 70%)';
-                    ctx.lineWidth = 0.03 * tileSize;
+                    ctx.strokeStyle = 'hsl(0, 0%, 5%)';
+                    ctx.lineWidth = 0.07 * tileSize;
                     ctx.stroke();
                 } else {
                     ctx.beginPath();
@@ -7296,12 +7492,11 @@ function updateWorldGeometry(changedDimension) {
                         0.45 * tileSize, 
                         0, 
                         2 * Math.PI);
-                    ctx.fillStyle = 'hsl(0, 0%, 0%)';
+                    ctx.fillStyle = 'hsl(0, 0%, 7%)';
                     ctx.fill();
-                    ctx.strokeStyle = 'hsl(0, 0%, 80%)';
-                    ctx.lineWidth = 0.04 * tileSize;
-                    ctx.stroke();
-                    
+                    ctx.strokeStyle = 'hsl(0, 0%, 70%)';
+                    ctx.lineWidth = 0.02 * tileSize;
+                    ctx.stroke();  
                 }
             }
         }
@@ -12453,6 +12648,22 @@ function initThreeScene() {
     gSphereObstacle.enabled = false;  // Disable collision during animation
     gObstacles.push(gSphereObstacle);
 
+    // Create attractor sphere obstacle (half the size of normal sphere)
+    gAttractorSphereObstacle = new SphereObstacle(
+        gSphereTargetRadius / 2,  // radius (half of normal sphere)
+        new THREE.Vector3(-15, 13, 15),  // position (near normal sphere, left and forward)
+        'attract'  // mode
+    );
+    gObstacles.push(gAttractorSphereObstacle);
+
+    // Create repeller sphere obstacle (half the size of normal sphere)
+    gRepellerSphereObstacle = new SphereObstacle(
+        gSphereTargetRadius / 2,  // radius (half of normal sphere)
+        new THREE.Vector3(-5, 17, 21),  // position (near normal sphere, right and back)
+        'repel'  // mode
+    );
+    gObstacles.push(gRepellerSphereObstacle);
+
     // Create torus obstacle (start high and small for drop animation)
     gTorusObstacle = new TorusObstacle(
         gTorusStartMajorRadius,  // major radius (start small)
@@ -13385,6 +13596,63 @@ function onPointer(evt) {
             if (!intersects[i].object.visible) {
                 continue;
             }
+            
+            // CHECK OBSTACLES FIRST - they should take priority over models behind them
+            if (intersects[i].object.userData.isDraggableSphere && !hitSphere) {
+                hitSphere = true;
+                hitSphereObstacle = intersects[i].object.userData.sphereObstacle;
+                
+                // Store the actual 3D point where the sphere was clicked
+                var actualClickPoint = intersects[i].point;
+                gSphereDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to sphere center
+                gSphereDragOffset = new THREE.Vector3(
+                    hitSphereObstacle.position.x - actualClickPoint.x,
+                    hitSphereObstacle.position.y - actualClickPoint.y,
+                    hitSphereObstacle.position.z - actualClickPoint.z
+                );
+                break; // Obstacle takes priority, stop checking
+            }
+            if (intersects[i].object.userData.isDraggableSkyPig && !hitSkyPig) {
+                hitSkyPig = true;
+                hitSkyPigObstacle = intersects[i].object.userData.skyPigObstacle;
+                
+                // Store the actual 3D point where the sky pig was clicked
+                var actualClickPoint = intersects[i].point;
+                gSkyPigDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to sky pig center
+                gSkyPigDragOffset = new THREE.Vector3(
+                    hitSkyPigObstacle.position.x - actualClickPoint.x,
+                    hitSkyPigObstacle.position.y - actualClickPoint.y,
+                    hitSkyPigObstacle.position.z - actualClickPoint.z
+                );
+                break; // Obstacle takes priority, stop checking
+            }
+            if (intersects[i].object.userData.isDraggableCylinder && !hitCylinder) {
+                hitCylinder = true;
+                hitCylinderObstacle = intersects[i].object.userData.cylinderObstacle;
+                
+                // Store the actual 3D point where the cylinder was clicked
+                var actualClickPoint = intersects[i].point;
+                gCylinderDragPlaneHeight = actualClickPoint.y;
+                
+                // Store offset from click point to cylinder center (X and Z only)
+                gCylinderDragOffset = new THREE.Vector3(
+                    hitCylinderObstacle.position.x - actualClickPoint.x,
+                    0,
+                    hitCylinderObstacle.position.z - actualClickPoint.z
+                );
+                break; // Obstacle takes priority, stop checking
+            }
+            if (intersects[i].object.userData.isDraggableTorus && !hitTorus) {
+                hitTorus = true;
+                hitTorusObstacle = intersects[i].object.userData.torusObstacle;
+                break; // Obstacle takes priority, stop checking
+            }
+            
+            // Now check other objects
             if (intersects[i].object.userData.isStoolLeg && !hitStoolLeg) {
                 hitStoolLeg = true;
                 // Don't break - check if other objects are also hit
@@ -13458,59 +13726,6 @@ function onPointer(evt) {
                 hitKoonsDog = true;
                 // No offset calculation - object will follow cursor directly
                 // Don't break - check if other objects are also hit
-            }
-            if (intersects[i].object.userData.isDraggableSphere && !hitSphere) {
-                hitSphere = true;
-                hitSphereObstacle = intersects[i].object.userData.sphereObstacle;
-                
-                // Store the actual 3D point where the sphere was clicked
-                var actualClickPoint = intersects[i].point;
-                gSphereDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to sphere center
-                gSphereDragOffset = new THREE.Vector3(
-                    hitSphereObstacle.position.x - actualClickPoint.x,
-                    hitSphereObstacle.position.y - actualClickPoint.y,
-                    hitSphereObstacle.position.z - actualClickPoint.z
-                );
-                // Don't break - check if lamp components are also hit
-            }
-            if (intersects[i].object.userData.isDraggableSkyPig && !hitSkyPig) {
-                hitSkyPig = true;
-                hitSkyPigObstacle = intersects[i].object.userData.skyPigObstacle;
-                
-                // Store the actual 3D point where the sky pig was clicked
-                var actualClickPoint = intersects[i].point;
-                gSkyPigDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to sky pig center
-                gSkyPigDragOffset = new THREE.Vector3(
-                    hitSkyPigObstacle.position.x - actualClickPoint.x,
-                    hitSkyPigObstacle.position.y - actualClickPoint.y,
-                    hitSkyPigObstacle.position.z - actualClickPoint.z
-                );
-                // Don't break - check if other objects are also hit
-            }
-            if (intersects[i].object.userData.isDraggableCylinder && !hitCylinder) {
-                hitCylinder = true;
-                hitCylinderObstacle = intersects[i].object.userData.cylinderObstacle;
-                
-                // Store the actual 3D point where the cylinder was clicked
-                var actualClickPoint = intersects[i].point;
-                gCylinderDragPlaneHeight = actualClickPoint.y;
-                
-                // Store offset from click point to cylinder center (X and Z only)
-                gCylinderDragOffset = new THREE.Vector3(
-                    hitCylinderObstacle.position.x - actualClickPoint.x,
-                    0,
-                    hitCylinderObstacle.position.z - actualClickPoint.z
-                );
-                // Don't break - check if lamp components are also hit
-            }
-            if (intersects[i].object.userData.isDraggableTorus && !hitTorus) {
-                hitTorus = true;
-                hitTorusObstacle = intersects[i].object.userData.torusObstacle;
-                // Don't break - check if lamp components are also hit
             }
             if (intersects[i].object.userData.isLampCone) {
                 hitLampCone = true;
@@ -14370,55 +14585,159 @@ function onPointer(evt) {
         }
         
         if (hitSphere && hitSphereObstacle) {
-            gDraggingSphere = true;
-            gSphereRising = false; // Stop rise animation when user starts dragging
-            window.draggingSphereObstacle = hitSphereObstacle; // Store reference globally
+            // Check which type of sphere was hit
+            var sphereMode = hitSphereObstacle.mode || 'normal';
             
-            // Store the distance from camera to sphere center (for fixed plane)
-            var cameraToSphere = new THREE.Vector3();
-            cameraToSphere.subVectors(hitSphereObstacle.position, gCamera.position);
-            var cameraDirection = new THREE.Vector3();
-            gCamera.getWorldDirection(cameraDirection);
-            gSphereDragPlaneDistance = cameraToSphere.dot(cameraDirection);
-            
-            // Calculate the initial drag plane intersection to get proper offset
-            var rect = gRenderer.domElement.getBoundingClientRect();
-            var mousePos = new THREE.Vector2();
-            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
-            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
-            
-            var raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(mousePos, gCamera);
-            
-            // Create the drag plane
-            var planePoint = new THREE.Vector3();
-            planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gSphereDragPlaneDistance));
-            var dragPlane = new THREE.Plane();
-            dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
-            
-            // Find where ray intersects drag plane
-            var planeIntersection = new THREE.Vector3();
-            raycaster.ray.intersectPlane(dragPlane, planeIntersection);
-            
-            if (planeIntersection) {
-                // Store offset from plane intersection to sphere center
-                gSphereDragOffset = new THREE.Vector3(
-                    hitSphereObstacle.position.x - planeIntersection.x,
-                    hitSphereObstacle.position.y - planeIntersection.y,
-                    hitSphereObstacle.position.z - planeIntersection.z
-                );
+            if (sphereMode === 'attract') {
+                gDraggingAttractorSphere = true;
+                window.draggingAttractorSphereObstacle = hitSphereObstacle;
+                
+                // Store the distance from camera to sphere center (for fixed plane)
+                var cameraToSphere = new THREE.Vector3();
+                cameraToSphere.subVectors(hitSphereObstacle.position, gCamera.position);
+                var cameraDirection = new THREE.Vector3();
+                gCamera.getWorldDirection(cameraDirection);
+                gAttractorSphereDragPlaneDistance = cameraToSphere.dot(cameraDirection);
+                
+                // Calculate the initial drag plane intersection to get proper offset
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+                
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                
+                // Create the drag plane
+                var planePoint = new THREE.Vector3();
+                planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gAttractorSphereDragPlaneDistance));
+                var dragPlane = new THREE.Plane();
+                dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+                
+                // Find where ray intersects drag plane
+                var planeIntersection = new THREE.Vector3();
+                raycaster.ray.intersectPlane(dragPlane, planeIntersection);
+                
+                if (planeIntersection) {
+                    // Store offset from plane intersection to sphere center
+                    gAttractorSphereDragOffset = new THREE.Vector3(
+                        hitSphereObstacle.position.x - planeIntersection.x,
+                        hitSphereObstacle.position.y - planeIntersection.y,
+                        hitSphereObstacle.position.z - planeIntersection.z
+                    );
+                } else {
+                    // Fallback to zero offset if plane intersection fails
+                    gAttractorSphereDragOffset = new THREE.Vector3(0, 0, 0);
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                return;
+            } else if (sphereMode === 'repel') {
+                gDraggingRepellerSphere = true;
+                window.draggingRepellerSphereObstacle = hitSphereObstacle;
+                
+                // Store the distance from camera to sphere center (for fixed plane)
+                var cameraToSphere = new THREE.Vector3();
+                cameraToSphere.subVectors(hitSphereObstacle.position, gCamera.position);
+                var cameraDirection = new THREE.Vector3();
+                gCamera.getWorldDirection(cameraDirection);
+                gRepellerSphereDragPlaneDistance = cameraToSphere.dot(cameraDirection);
+                
+                // Calculate the initial drag plane intersection to get proper offset
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+                
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                
+                // Create the drag plane
+                var planePoint = new THREE.Vector3();
+                planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gRepellerSphereDragPlaneDistance));
+                var dragPlane = new THREE.Plane();
+                dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+                
+                // Find where ray intersects drag plane
+                var planeIntersection = new THREE.Vector3();
+                raycaster.ray.intersectPlane(dragPlane, planeIntersection);
+                
+                if (planeIntersection) {
+                    // Store offset from plane intersection to sphere center
+                    gRepellerSphereDragOffset = new THREE.Vector3(
+                        hitSphereObstacle.position.x - planeIntersection.x,
+                        hitSphereObstacle.position.y - planeIntersection.y,
+                        hitSphereObstacle.position.z - planeIntersection.z
+                    );
+                } else {
+                    // Fallback to zero offset if plane intersection fails
+                    gRepellerSphereDragOffset = new THREE.Vector3(0, 0, 0);
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                return;
             } else {
-                // Fallback to zero offset if plane intersection fails
-                gSphereDragOffset = new THREE.Vector3(0, 0, 0);
+                // Normal sphere
+                gDraggingSphere = true;
+                gSphereRising = false; // Stop rise animation when user starts dragging
+                window.draggingSphereObstacle = hitSphereObstacle; // Store reference globally
+                
+                // Store the distance from camera to sphere center (for fixed plane)
+                var cameraToSphere = new THREE.Vector3();
+                cameraToSphere.subVectors(hitSphereObstacle.position, gCamera.position);
+                var cameraDirection = new THREE.Vector3();
+                gCamera.getWorldDirection(cameraDirection);
+                gSphereDragPlaneDistance = cameraToSphere.dot(cameraDirection);
+                
+                // Calculate the initial drag plane intersection to get proper offset
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+                
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                
+                // Create the drag plane
+                var planePoint = new THREE.Vector3();
+                planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gSphereDragPlaneDistance));
+                var dragPlane = new THREE.Plane();
+                dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+                
+                // Find where ray intersects drag plane
+                var planeIntersection = new THREE.Vector3();
+                raycaster.ray.intersectPlane(dragPlane, planeIntersection);
+                
+                if (planeIntersection) {
+                    // Store offset from plane intersection to sphere center
+                    gSphereDragOffset = new THREE.Vector3(
+                        hitSphereObstacle.position.x - planeIntersection.x,
+                        hitSphereObstacle.position.y - planeIntersection.y,
+                        hitSphereObstacle.position.z - planeIntersection.z
+                    );
+                } else {
+                    // Fallback to zero offset if plane intersection fails
+                    gSphereDragOffset = new THREE.Vector3(0, 0, 0);
+                }
+                
+                gPointerLastX = evt.clientX;
+                gPointerLastY = evt.clientY;
+                // Disable orbit controls while dragging sphere
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+                return;
             }
-            
-            gPointerLastX = evt.clientX;
-            gPointerLastY = evt.clientY;
-            // Disable orbit controls while dragging sphere
-            if (gCameraControl) {
-                gCameraControl.enabled = false;
-            }
-            return;
         }
         
         if (hitSkyPig && hitSkyPigObstacle) {
@@ -16067,12 +16386,107 @@ function onPointer(evt) {
                 var minBoundX = -gPhysicsScene.worldSize.x + sphereObstacle.radius;
                 var maxBoundX = gPhysicsScene.worldSize.x - sphereObstacle.radius;
                 var minBoundY = sphereObstacle.radius;
-                var maxBoundY = gPhysicsScene.worldSize.y - sphereObstacle.radius;
                 var minBoundZ = -gPhysicsScene.worldSize.z + sphereObstacle.radius;
                 var maxBoundZ = gPhysicsScene.worldSize.z - sphereObstacle.radius;
                 
                 newPosition.x = Math.max(minBoundX, Math.min(maxBoundX, newPosition.x));
-                newPosition.y = Math.max(minBoundY, Math.min(maxBoundY, newPosition.y));
+                newPosition.y = Math.max(minBoundY, newPosition.y); // No max height constraint
+                newPosition.z = Math.max(minBoundZ, Math.min(maxBoundZ, newPosition.z));
+                
+                sphereObstacle.updatePosition(newPosition);
+            }
+            return;
+        }
+        
+        // Handle attractor sphere dragging (translation in 3D)
+        if (gDraggingAttractorSphere && window.draggingAttractorSphereObstacle) {
+            var sphereObstacle = window.draggingAttractorSphereObstacle;
+            
+            // Move sphere in 3D space along a fixed plane perpendicular to camera view
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Use fixed plane at the distance established when drag started
+            var cameraDirection = new THREE.Vector3();
+            gCamera.getWorldDirection(cameraDirection);
+            var planePoint = new THREE.Vector3();
+            planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gAttractorSphereDragPlaneDistance));
+            var spherePlane = new THREE.Plane();
+            spherePlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+            
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(spherePlane, intersectionPoint);
+            
+            if (intersectionPoint && gAttractorSphereDragOffset) {
+                // Apply the offset to maintain grab point
+                var newPosition = new THREE.Vector3(
+                    intersectionPoint.x + gAttractorSphereDragOffset.x,
+                    intersectionPoint.y + gAttractorSphereDragOffset.y,
+                    intersectionPoint.z + gAttractorSphereDragOffset.z
+                );
+                
+                // Clamp to room boundaries (sphere center must stay within room)
+                var minBoundX = -gPhysicsScene.worldSize.x + sphereObstacle.radius;
+                var maxBoundX = gPhysicsScene.worldSize.x - sphereObstacle.radius;
+                var minBoundY = sphereObstacle.radius;
+                var minBoundZ = -gPhysicsScene.worldSize.z + sphereObstacle.radius;
+                var maxBoundZ = gPhysicsScene.worldSize.z - sphereObstacle.radius;
+                
+                newPosition.x = Math.max(minBoundX, Math.min(maxBoundX, newPosition.x));
+                newPosition.y = Math.max(minBoundY, newPosition.y); // No max height constraint
+                newPosition.z = Math.max(minBoundZ, Math.min(maxBoundZ, newPosition.z));
+                
+                sphereObstacle.updatePosition(newPosition);
+            }
+            return;
+        }
+        
+        // Handle repeller sphere dragging (translation in 3D)
+        if (gDraggingRepellerSphere && window.draggingRepellerSphereObstacle) {
+            var sphereObstacle = window.draggingRepellerSphereObstacle;
+            
+            // Move sphere in 3D space along a fixed plane perpendicular to camera view
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width ) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height ) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Use fixed plane at the distance established when drag started
+            var cameraDirection = new THREE.Vector3();
+            gCamera.getWorldDirection(cameraDirection);
+            var planePoint = new THREE.Vector3();
+            planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gRepellerSphereDragPlaneDistance));
+            var spherePlane = new THREE.Plane();
+            spherePlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+            
+            var intersectionPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(spherePlane, intersectionPoint);
+            
+            if (intersectionPoint && gRepellerSphereDragOffset) {
+                // Apply the offset to maintain grab point
+                var newPosition = new THREE.Vector3(
+                    intersectionPoint.x + gRepellerSphereDragOffset.x,
+                    intersectionPoint.y + gRepellerSphereDragOffset.y,
+                    intersectionPoint.z + gRepellerSphereDragOffset.z
+                );
+                
+                // Clamp to room boundaries (sphere center must stay within room)
+                var minBoundX = -gPhysicsScene.worldSize.x + sphereObstacle.radius;
+                var maxBoundX = gPhysicsScene.worldSize.x - sphereObstacle.radius;
+                var minBoundY = sphereObstacle.radius;
+                var minBoundZ = -gPhysicsScene.worldSize.z + sphereObstacle.radius;
+                var maxBoundZ = gPhysicsScene.worldSize.z - sphereObstacle.radius;
+                
+                newPosition.x = Math.max(minBoundX, Math.min(maxBoundX, newPosition.x));
+                newPosition.y = Math.max(minBoundY, newPosition.y); // No max height constraint
                 newPosition.z = Math.max(minBoundZ, Math.min(maxBoundZ, newPosition.z));
                 
                 sphereObstacle.updatePosition(newPosition);
@@ -16116,12 +16530,11 @@ function onPointer(evt) {
                 var minBoundX = -gPhysicsScene.worldSize.x + skyPigObstacle.radius;
                 var maxBoundX = gPhysicsScene.worldSize.x - skyPigObstacle.radius;
                 var minBoundY = 0; // Allow sky pig model to reach the floor
-                var maxBoundY = gPhysicsScene.worldSize.y - skyPigObstacle.radius;
                 var minBoundZ = -gPhysicsScene.worldSize.z + skyPigObstacle.radius;
                 var maxBoundZ = gPhysicsScene.worldSize.z - skyPigObstacle.radius;
                 
                 newPosition.x = Math.max(minBoundX, Math.min(maxBoundX, newPosition.x));
-                newPosition.y = Math.max(minBoundY, Math.min(maxBoundY, newPosition.y));
+                newPosition.y = Math.max(minBoundY, newPosition.y); // No max height constraint
                 newPosition.z = Math.max(minBoundZ, Math.min(maxBoundZ, newPosition.z));
                 
                 skyPigObstacle.updatePosition(newPosition);
@@ -16214,12 +16627,11 @@ function onPointer(evt) {
                 var minBoundX = -gPhysicsScene.worldSize.x + margin;
                 var maxBoundX = gPhysicsScene.worldSize.x - margin;
                 var minBoundY = margin;
-                var maxBoundY = gPhysicsScene.worldSize.y - margin;
                 var minBoundZ = -gPhysicsScene.worldSize.z + margin;
                 var maxBoundZ = gPhysicsScene.worldSize.z - margin;
                 
                 newPosition.x = Math.max(minBoundX, Math.min(maxBoundX, newPosition.x));
-                newPosition.y = Math.max(minBoundY, Math.min(maxBoundY, newPosition.y));
+                newPosition.y = Math.max(minBoundY, newPosition.y); // No max height constraint
                 newPosition.z = Math.max(minBoundZ, Math.min(maxBoundZ, newPosition.z));
                 
                 torusObstacle.updatePosition(newPosition);
@@ -16517,6 +16929,28 @@ function onPointer(evt) {
             gDraggingSphere = false;
             gSphereDragOffset = null;
             window.draggingSphereObstacle = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingAttractorSphere) {
+            gDraggingAttractorSphere = false;
+            gAttractorSphereDragOffset = null;
+            window.draggingAttractorSphereObstacle = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingRepellerSphere) {
+            gDraggingRepellerSphere = false;
+            gRepellerSphereDragOffset = null;
+            window.draggingRepellerSphereObstacle = null;
             // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
@@ -18789,10 +19223,50 @@ function update() {
     
     // Animate sphere obstacle hue
     if (gObstacles.length > 0) {
+        // Animate normal sphere hue
         gSphereHue = (gSphereHue + 1 * deltaT) % 360; // Slowly cycle through hues
-        var sphereObstacle = gObstacles.find(function(obs) { return obs instanceof SphereObstacle; });
-        if (sphereObstacle && sphereObstacle.mesh && sphereObstacle.mesh.material) {
-            sphereObstacle.mesh.material.color.setHSL(gSphereHue / 360, 0.9, 0.5);
+        if (gSphereObstacle && gSphereObstacle.mesh && gSphereObstacle.mesh.material) {
+            gSphereObstacle.mesh.material.color.setHSL(gSphereHue / 360, 0.9, 0.5);
+        }
+        
+        // Animate attractor sphere hue (cyan-blue range)
+        gAttractorSphereHue = (gAttractorSphereHue + 0.5 * deltaT) % 360; // Slower cycle
+        if (gAttractorSphereObstacle && gAttractorSphereObstacle.mesh && gAttractorSphereObstacle.mesh.material) {
+            // Keep in cyan-blue range (180-240 degrees)
+            var attractorHue = 180 + (gAttractorSphereHue % 60);
+            
+            // Pulsate brightness when being dragged
+            var attractorLightness = 0.5;
+            if (gDraggingAttractorSphere) {
+                var time = Date.now() * 0.005;
+                attractorLightness = 0.4 + Math.sin(time) * 0.2; // Oscillate between 0.2 and 0.6
+            }
+            
+            gAttractorSphereObstacle.mesh.material.color.setHSL(attractorHue / 360, 0.9, attractorLightness);
+        }
+        
+        // Animate repeller sphere hue (red-orange range)
+        gRepellerSphereHue = (gRepellerSphereHue + 0.5 * deltaT) % 360; // Slower cycle
+        if (gRepellerSphereObstacle && gRepellerSphereObstacle.mesh && gRepellerSphereObstacle.mesh.material) {
+            // Keep in red-orange range (0-40 degrees)
+            var repellerHue = (gRepellerSphereHue % 40);
+            
+            // Pulsate brightness when being dragged
+            var repellerLightness = 0.5;
+            if (gDraggingRepellerSphere) {
+                var time = Date.now() * 0.005;
+                repellerLightness = 0.4 + Math.sin(time) * 0.2; // Oscillate between 0.2 and 0.6
+            }
+            
+            gRepellerSphereObstacle.mesh.material.color.setHSL(repellerHue / 360, 0.9, repellerLightness);
+        }
+        
+        // Update symbol brightness based on dragging state
+        if (gAttractorSphereObstacle) {
+            gAttractorSphereObstacle.updateSymbolBrightness(gDraggingAttractorSphere);
+        }
+        if (gRepellerSphereObstacle) {
+            gRepellerSphereObstacle.updateSymbolBrightness(gDraggingRepellerSphere);
         }
         
         // Animate torus obstacle hue (opposite direction, same rate)
