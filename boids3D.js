@@ -163,7 +163,7 @@ var gPinRotationAxis2 = null;
 var gInitialLampHeight = 0; // Initial lamp height
 var gLastLampBaseClickTime = { 1: 0, 2: 0 }; // Track last click time for double-click detection
 var gCurrentlyDraggingObject = null; // Track which object is currently in dragging mode: 'duck', 'mammoth', 'teapot', 'chair', 'sofa', 'stool', 'cannon', etc.
-var gLastObjectClickTime = { duck: 0, mammoth: 0, mammothSkeleton: 0, teapot: 0, chair: 0, sofa: 0, stool: 0, bird: 0, koonsDog: 0, globeLamp: 0, cannon: 0 }; // Track last click time for double-click detection
+var gLastObjectClickTime = { duck: 0, mammoth: 0, mammothSkeleton: 0, teapot: 0, chair: 0, sofa: 0, stool: 0, bird: 0, koonsDog: 0, globeLamp: 0, cannon: 0, weight16Ton: 0, soccerBall: 0 }; // Track last click time for double-click detection
 var gDragHighlightBox = null; // BoxHelper to show which object is being dragged
 var gOverlayCanvas;
 var gOverlayCtx;
@@ -370,6 +370,27 @@ var gKoonsDogObstacle = null; // Sphere obstacle for boid avoidance
 var gDraggingKoonsDog = false; // Track if dragging the Koons Dog (toggleable)
 var gKoonsDogInitialX = -25; // Initial X position for world resize scaling
 var gKoonsDogInitialZ = 26; // Initial Z position for world resize scaling
+var g16TonWeight = null; // 16-ton weight model reference
+var g16TonWeightInitialY = 24; // Initial Y position (height above ground)
+var g16TonWeightFalling = false; // Flag for weight falling animation
+var g16TonWeightFallTimer = 0; // Timer for weight fall animation
+var g16TonWeightRising = false; // Flag for weight rising animation
+var g16TonWeightRiseTimer = 0; // Timer for weight rise animation
+var g16TonWeightSquashTimer = 0; // Timer for dog squashing and recovery
+var gKoonsDogOriginalScaleY = 1; // Original Y scale of Koons Dog
+var gKoonsDogSquashed = false; // Flag indicating if dog is squashed
+var gKoonsDogApproximateHeight = 4.0; // Approximate height of dog model in world units
+var gSoccerBall = null; // Soccer ball model reference
+var gSoccerBallRadius = 2.0; // Radius of soccer ball (model center to surface, with 0.5 scale)
+var gSoccerBallPosition = new THREE.Vector3(32, 50, -18); // Current position
+var gSoccerBallVelocity = new THREE.Vector3(0, 0, 0); // Current velocity
+var gDraggingSoccerBall = false; // Track if dragging the soccer ball
+var gSoccerBallDragOffset = null; // Offset from click point to ball center
+var gSoccerBallDragPlaneDistance = 0; // Distance from camera for dragging
+var gSoccerBallGravity = 120.0; // Gravity constant for ball physics (higher for faster fall)
+var gSoccerBallBounceCoefficient = 0.9; // Energy retained after bounce (0-1) - coefficient of restitution
+var gSoccerBallFriction = 0.98; // Velocity damping per frame
+var gSoccerBallGroundFriction = 0.85; // Extra friction when rolling on ground
 var gGlobeLamp = null; // Globe lamp model reference
 var gGlobeLampLight = null; // Point light at center of globe lamp
 var gGlobeLampObstacle = null; // Sphere obstacle for boid avoidance
@@ -463,7 +484,7 @@ var gBoschPanelHeight = 12; // Base height for Bosch panels (scaled by gBoschTri
 var gBoschBottomHeight = 0; // Bottom height of Bosch triptych (constant regardless of scale)
 var gSelectedArtwork = 'miro'; // Selected artwork for right wall: 'miro', 'dali', or 'bosch'
 var gSpotlightPenumbra = 0.2; // Spotlight penumbra (0-1)
-var gShadowCameraFar = 70; // Shadow camera far distance for lamps (10-150)
+var gShadowCameraFar = 100; // Shadow camera far distance for lamps (10-150)
 var gHeadlightIntensity = 0; // Headlight intensity (0-2)
 var gHeadlight = null; // Headlight spotlight reference
 var gHeadlightPointLight = null; // Point light in front of boid when headlight is active
@@ -581,8 +602,8 @@ var gFadeInDuration = 1.0; // Fade in over 1 second
 // Master world size constants
 //var WORLD_WIDTH = 69.5 * 0.5; // X dimension Parthenon
 //var WORLD_DEPTH = 31 * 0.5;   // Z dimension Parthenon
-var WORLD_WIDTH = 30;   // X dimension
-var WORLD_HEIGHT = 20;  // Y dimension  
+var WORLD_WIDTH = 40;   // X dimension
+var WORLD_HEIGHT = 30;  // Y dimension  
 var WORLD_DEPTH = 30;   // Z dimension
 
 // Individual world size controls (for menu knobs)
@@ -6355,10 +6376,10 @@ function drawLightingMenu() {
         { label: 'Hue', value: gSpotlight2Hue, min: 0, max: 360 },
         { label: 'Saturation', value: gSpotlight2Saturation, min: 0, max: 100 },
         { label: 'Penumbra', value: gSpotlightPenumbra, min: 0, max: 1 },
-        { label: 'Shadow Falloff', value: gShadowCameraFar, min: 10, max: 150 },
+        { label: 'Shadow Range', value: gShadowCameraFar, min: 10, max: 150 },
         { label: 'Boid Headlight', value: gHeadlightIntensity, min: 0, max: 2 },
         { label: 'Ornament Lights', value: gOrnamentLightIntensity, min: 0, max: 3 },
-        { label: 'Falloff', value: gOrnamentLightFalloff, min: 3, max: 15 },
+        { label: 'Falloff', value: gOrnamentLightFalloff, min: 3, max: 30 },
         { label: 'Ornament Height', value: gOrnamentHeightOffset, min: 0, max: 100 }
     ];
     
@@ -6564,6 +6585,10 @@ function drawLightingMenu() {
             displayValue = Math.round(knobs[i].value).toString();
         } else if (i === 16) {
             // Shadow Far - show as integer
+            ctx.fillStyle = `hsla(45, 60%, 70%, ${lightingMenuOpacity})`;
+            displayValue = Math.round(knobs[i].value).toString();
+        } else if (i === 19) {
+            // Ornament Light Falloff - show as integer
             ctx.fillStyle = `hsla(45, 60%, 70%, ${lightingMenuOpacity})`;
             displayValue = Math.round(knobs[i].value).toString();
         } else if (i === 20) {
@@ -9895,6 +9920,106 @@ function initThreeScene() {
             },
             function(error) {
                 console.error('Error loading Koons Dog sculpture:', error);
+            }
+        );
+    }
+    
+    // Load 16-ton weight model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var weight16TonLoader = new THREE.GLTFLoader(gLoadingManager);
+        weight16TonLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/16tonWeight.gltf',
+            function(gltf) {
+                var weight = gltf.scene;
+                
+                // Position directly above the Koons Dog sculpture
+                weight.position.set(gKoonsDogInitialX + 1.0, g16TonWeightInitialY, gKoonsDogInitialZ);
+                
+                // Scale appropriately
+                weight.scale.set(5.5, 5.5, 5.5);
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                weight.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and mark as clickable for all meshes
+                weight.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.userData.isDraggable16TonWeight = true;
+                    }
+                });
+                
+                gThreeScene.add(weight);
+                g16TonWeight = weight; // Store global reference
+                
+                console.log('16-ton weight model loaded successfully');
+            },
+            function(xhr) {
+                console.log('16-ton weight model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading 16-ton weight model:', error);
+            }
+        );
+    }
+    
+    // Load Soccer Ball model using GLTFLoader
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var soccerBallLoader = new THREE.GLTFLoader(gLoadingManager);
+        soccerBallLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/soccerBallSmooth.gltf',
+            function(gltf) {
+                var ball = gltf.scene;
+                
+                // Position at starting location
+                ball.position.copy(gSoccerBallPosition);
+                
+                // Scale to appropriate size
+                ball.scale.set(0.5, 0.5, 0.5);
+                
+                // Remove any imported lights
+                var lightsToRemove = [];
+                ball.traverse(function(child) {
+                    if (child.isLight) {
+                        lightsToRemove.push(child);
+                    }
+                });
+                lightsToRemove.forEach(function(light) {
+                    if (light.parent) {
+                        light.parent.remove(light);
+                    }
+                });
+                
+                // Enable shadows and mark as draggable for all meshes
+                ball.traverse(function(child) {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                        child.userData.isDraggableSoccerBall = true;
+                    }
+                });
+                
+                gThreeScene.add(ball);
+                gSoccerBall = ball; // Store global reference
+                
+                console.log('Soccer ball model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Soccer ball model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading soccer ball model:', error);
             }
         );
     }
@@ -13576,6 +13701,8 @@ function onPointer(evt) {
         var hitStool = false;
         var hitBird = false;
         var hitKoonsDog = false;
+        var hitWeight16Ton = false;
+        var hitSoccerBall = false;
         var hitStoolLeg = false;
         var hitDuck = false;
         var hitDuckBeak = false;
@@ -13726,6 +13853,16 @@ function onPointer(evt) {
             if (intersects[i].object.userData.isDraggableKoonsDog && !hitKoonsDog) {
                 hitKoonsDog = true;
                 // No offset calculation - object will follow cursor directly
+                // Don't break - check if other objects are also hit
+            }
+            if (intersects[i].object.userData.isDraggable16TonWeight && !hitWeight16Ton) {
+                hitWeight16Ton = true;
+                // No offset calculation - trigger animation on click
+                // Don't break - check if other objects are also hit
+            }
+            if (intersects[i].object.userData.isDraggableSoccerBall && !hitSoccerBall) {
+                hitSoccerBall = true;
+                // No offset calculation - object will be picked up
                 // Don't break - check if other objects are also hit
             }
             if (intersects[i].object.userData.isLampCone) {
@@ -14585,6 +14722,72 @@ function onPointer(evt) {
             return;
         }
         
+        if (hitWeight16Ton && g16TonWeight) {
+            // Single click triggers the falling/squashing animation
+            // Only trigger if not already animating
+            if (!g16TonWeightFalling && !g16TonWeightRising && !gKoonsDogSquashed) {
+                g16TonWeightFalling = true;
+                g16TonWeightFallTimer = 0;
+                g16TonWeightSquashTimer = 0;
+                // Store original dog scale before animation
+                if (gKoonsDog) {
+                    gKoonsDogOriginalScaleY = gKoonsDog.scale.y;
+                }
+                console.log('16-ton weight falling!');
+            }
+            return;
+        }
+        
+        if (hitSoccerBall && gSoccerBall) {
+            // Single click picks up the ball and starts dragging (released on pointerup)
+            if (!gDraggingSoccerBall) {
+                // Start dragging the ball
+                gDraggingSoccerBall = true;
+                // Reset velocity when picked up
+                gSoccerBallVelocity.set(0, 0, 0);
+                
+                // Calculate drag plane distance from camera
+                var cameraToSphere = new THREE.Vector3();
+                cameraToSphere.subVectors(gSoccerBallPosition, gCamera.position);
+                var cameraDirection = new THREE.Vector3();
+                gCamera.getWorldDirection(cameraDirection);
+                gSoccerBallDragPlaneDistance = cameraToSphere.dot(cameraDirection);
+                
+                // Calculate offset from mouse to ball center
+                var rect = gRenderer.domElement.getBoundingClientRect();
+                var mousePos = new THREE.Vector2();
+                mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+                mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+                
+                var raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mousePos, gCamera);
+                
+                // Create drag plane
+                var planePoint = new THREE.Vector3();
+                planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gSoccerBallDragPlaneDistance));
+                var dragPlane = new THREE.Plane();
+                dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+                
+                // Find intersection
+                var planeIntersection = new THREE.Vector3();
+                raycaster.ray.intersectPlane(dragPlane, planeIntersection);
+                
+                if (planeIntersection) {
+                    gSoccerBallDragOffset = new THREE.Vector3(
+                        gSoccerBallPosition.x - planeIntersection.x,
+                        gSoccerBallPosition.y - planeIntersection.y,
+                        gSoccerBallPosition.z - planeIntersection.z
+                    );
+                }
+                
+                // Disable orbit controls while dragging
+                if (gCameraControl) {
+                    gCameraControl.enabled = false;
+                }
+            }
+            return;
+        }
+        
         if (hitSphere && hitSphereObstacle) {
             // Check which type of sphere was hit
             var sphereMode = hitSphereObstacle.mode || 'normal';
@@ -15307,7 +15510,7 @@ function onPointer(evt) {
                     {min: 10, max: 150},    // 16: shadow camera far
                     {min: 0, max: 2},       // 17: headlight intensity
                     {min: 0, max: 3},       // 18: ornament light intensity
-                    {min: 3, max: 15},      // 19: ornament light falloff
+                    {min: 3, max: 30},      // 19: ornament light falloff
                     {min: 0, max: 100}      // 20: ornament height percentage
                 ];
                 
@@ -16343,10 +16546,69 @@ function onPointer(evt) {
                 gKoonsDog.position.x = newX;
                 gKoonsDog.position.z = newZ;
                 
+                // Update 16-ton weight position to track with dog
+                if (g16TonWeight) {
+                    g16TonWeight.position.x = newX + 0.5; // Match initial offset
+                    g16TonWeight.position.z = newZ;
+                    // Y position depends on animation state
+                    if (!g16TonWeightFalling && !g16TonWeightRising && !gKoonsDogSquashed) {
+                        // Not animating - weight at initial height
+                        g16TonWeight.position.y = g16TonWeightInitialY;
+                    }
+                    // If animating or squashed, the animation code will handle Y position
+                }
+                
                 // Update obstacle position
                 if (gKoonsDogObstacle) {
                     gKoonsDogObstacle.updatePosition(new THREE.Vector3(newX, 2, newZ));
                 }
+            }
+            return;
+        }
+        
+        // Handle soccer ball dragging
+        if (gDraggingSoccerBall && gSoccerBall) {
+            var rect = gRenderer.domElement.getBoundingClientRect();
+            var mousePos = new THREE.Vector2();
+            mousePos.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+            mousePos.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            var raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mousePos, gCamera);
+            
+            // Create drag plane perpendicular to camera
+            var cameraDirection = new THREE.Vector3();
+            gCamera.getWorldDirection(cameraDirection);
+            var planePoint = new THREE.Vector3();
+            planePoint.addVectors(gCamera.position, cameraDirection.multiplyScalar(gSoccerBallDragPlaneDistance));
+            var dragPlane = new THREE.Plane();
+            dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, planePoint);
+            
+            // Find where ray intersects drag plane
+            var planeIntersection = new THREE.Vector3();
+            raycaster.ray.intersectPlane(dragPlane, planeIntersection);
+            
+            if (planeIntersection && gSoccerBallDragOffset) {
+                // Apply offset to get ball position
+                var newPos = new THREE.Vector3(
+                    planeIntersection.x + gSoccerBallDragOffset.x,
+                    planeIntersection.y + gSoccerBallDragOffset.y,
+                    planeIntersection.z + gSoccerBallDragOffset.z
+                );
+                
+                // Clamp to room boundaries (accounting for center-origin model)
+                var minBoundX = -gPhysicsScene.worldSize.x + gSoccerBallRadius;
+                var maxBoundX = gPhysicsScene.worldSize.x - gSoccerBallRadius;
+                var minBoundY = gSoccerBallRadius; // Center can't go below radius (bottom would be below ground)
+                var maxBoundY = 2 * gPhysicsScene.worldSize.y - gSoccerBallRadius;
+                var minBoundZ = -gPhysicsScene.worldSize.z + gSoccerBallRadius;
+                var maxBoundZ = gPhysicsScene.worldSize.z - gSoccerBallRadius;
+                
+                newPos.x = Math.max(minBoundX, Math.min(maxBoundX, newPos.x));
+                newPos.y = Math.max(minBoundY, Math.min(maxBoundY, newPos.y));
+                newPos.z = Math.max(minBoundZ, Math.min(maxBoundZ, newPos.z));
+                
+                gSoccerBallPosition.copy(newPos);
             }
             return;
         }
@@ -16963,6 +17225,17 @@ function onPointer(evt) {
             gDraggingSkyPig = false;
             gSkyPigDragOffset = null;
             window.draggingSkyPigObstacle = null;
+            // Re-enable orbit controls if in normal camera mode
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        if (gDraggingSoccerBall) {
+            gDraggingSoccerBall = false;
+            gSoccerBallDragOffset = null;
+            // Ball will start falling with gravity from current position
             // Re-enable orbit controls if in normal camera mode
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
@@ -20812,6 +21085,218 @@ function update() {
                     ));
                 }
             }
+        }
+    }
+    
+    // 16-ton weight falling animation
+    if (g16TonWeightFalling && g16TonWeight && gKoonsDog) {
+        g16TonWeightFallTimer += deltaT;
+        
+        // Fall with high gravity over 0.5 seconds (very fast, dramatic)
+        var fallDuration = 0.5;
+        var t = Math.min(g16TonWeightFallTimer / fallDuration, 1.0);
+        
+        // Quartic ease-in for very strong acceleration (even higher gravitational constant: y = x^4)
+        var eased = t * t * t * t;
+        
+        // Weight falls from initial height to squashed dog top position
+        var startY = g16TonWeightInitialY;
+        var finalSquashedDogTop = gKoonsDog.position.y + gKoonsDogApproximateHeight * 0.05;
+        var currentY = startY + (finalSquashedDogTop - startY) * eased;
+        g16TonWeight.position.y = currentY;
+        
+        // Progressive squashing: as weight descends past the dog's original top, squash the dog
+        var unsquashedDogTop = gKoonsDog.position.y + gKoonsDogApproximateHeight * (gKoonsDogOriginalScaleY || 1.0);
+        
+        if (currentY <= unsquashedDogTop) {
+            // Weight is at or below the dog's top - calculate squash amount
+            // As weight goes from dog top to final squashed position, squash from 100% to 5%
+            var squashProgress = (unsquashedDogTop - currentY) / (unsquashedDogTop - finalSquashedDogTop);
+            squashProgress = Math.max(0, Math.min(1, squashProgress));
+            
+            // Scale from 1.0 down to 0.05
+            var targetScale = 1.0 - (squashProgress * 0.95);
+            if (gKoonsDog) {
+                if (gKoonsDogOriginalScaleY === 1 && gKoonsDog.scale.y === 1) {
+                    gKoonsDogOriginalScaleY = gKoonsDog.scale.y;
+                }
+                gKoonsDog.scale.y = (gKoonsDogOriginalScaleY || 1.0) * targetScale;
+            }
+        }
+        
+        // When weight finishes falling, transition to squashed state
+        if (t >= 1.0) {
+            g16TonWeightFalling = false;
+            gKoonsDogSquashed = true;
+            g16TonWeightSquashTimer = 0;
+            
+            // Ensure dog is fully squashed
+            if (gKoonsDog) {
+                gKoonsDog.scale.y = (gKoonsDogOriginalScaleY || 1.0) * 0.05;
+            }
+            // Weight is already at correct position from the animation
+            g16TonWeight.position.y = finalSquashedDogTop;
+        }
+    }
+    
+    // Handle weight pause and rising, plus dog recovery
+    if (gKoonsDogSquashed && g16TonWeight && gKoonsDog) {
+        g16TonWeightSquashTimer += deltaT;
+        
+        // After 1 second, start rising the weight
+        if (g16TonWeightSquashTimer >= 1.0 && !g16TonWeightRising) {
+            g16TonWeightRising = true;
+            g16TonWeightRiseTimer = 0;
+        }
+        
+        // Weight rising animation
+        if (g16TonWeightRising) {
+            g16TonWeightRiseTimer += deltaT;
+            
+            // Rise over 1 second with ease-out
+            var riseDuration = 1.0;
+            var t = Math.min(g16TonWeightRiseTimer / riseDuration, 1.0);
+            
+            // Cubic ease-out (decelerating rise)
+            var eased = 1 - Math.pow(1 - t, 3);
+            
+            // Dog recovery animation - starts slow, then pops
+            // Use total time since squash for dog recovery
+            var dogRecoveryStart = 1.0; // Start recovery at 1 second
+            var dogRecoveryDuration = 1.2; // Total recovery takes 1.2 seconds
+            
+            if (g16TonWeightSquashTimer >= dogRecoveryStart) {
+                var dogT = Math.min((g16TonWeightSquashTimer - dogRecoveryStart) / dogRecoveryDuration, 1.0);
+                
+                // Custom easing: very slow start, then sudden pop
+                // Use exponential easing for the pop effect
+                var dogEased;
+                if (dogT < 0.7) {
+                    // First 70% of time: very slow gradual recovery
+                    var slowT = dogT / 0.7;
+                    dogEased = slowT * slowT * 0.3; // Only recover to 30% by t=0.7
+                } else {
+                    // Last 30% of time: sudden pop to full height
+                    var popT = (dogT - 0.7) / 0.3;
+                    // Exponential pop
+                    dogEased = 0.3 + (1 - 0.3) * Math.pow(popT, 0.3);
+                }
+                
+                // Interpolate from squashed (0.05) to original scale
+                var squashedScale = gKoonsDogOriginalScaleY * 0.05;
+                gKoonsDog.scale.y = squashedScale + (gKoonsDogOriginalScaleY - squashedScale) * dogEased;
+            }
+            
+            // Calculate where dog top is currently (for weight tracking)
+            var currentDogTopY = gKoonsDog.position.y + gKoonsDogApproximateHeight * gKoonsDog.scale.y;
+            
+            // Weight position: blend between tracking dog top and returning to initial position
+            // During dog recovery (first part), weight tracks dog. Then it rises independently.
+            var weightTrackingBlend = Math.max(0, 1 - t); // Start at 1, go to 0
+            var targetWeightY = currentDogTopY * weightTrackingBlend + g16TonWeightInitialY * (1 - weightTrackingBlend) * eased;
+            
+            // Also blend from squashed dog top to initial Y
+            var squashedDogTopY = gKoonsDog.position.y + gKoonsDogApproximateHeight * 0.05;
+            var finalWeightY = squashedDogTopY + (g16TonWeightInitialY - squashedDogTopY) * eased;
+            
+            // Use the max to ensure weight rises smoothly while tracking dog
+            g16TonWeight.position.y = Math.max(currentDogTopY, finalWeightY);
+            
+            // When weight is back and dog is recovered, reset everything
+            if (t >= 1.0 && g16TonWeightSquashTimer >= (dogRecoveryStart + dogRecoveryDuration)) {
+                g16TonWeightRising = false;
+                gKoonsDogSquashed = false;
+                g16TonWeight.position.y = g16TonWeightInitialY;
+                gKoonsDog.scale.y = gKoonsDogOriginalScaleY;
+            }
+        } else {
+            // While paused (before rising), keep weight on top of squashed dog
+            var dogTopY = gKoonsDog.position.y + gKoonsDogApproximateHeight * gKoonsDog.scale.y;
+            g16TonWeight.position.y = dogTopY;
+        }
+    }
+    
+    // Soccer ball physics simulation
+    // NOTE: Soccer ball model origin is at geometric center, so position.y is the center height
+    // When center is at Y=radius, the bottom touches ground (Y=0)
+    if (gSoccerBall) {
+        // Update ball visual position to match physics position
+        gSoccerBall.position.copy(gSoccerBallPosition);
+        
+        // Apply physics only when not being dragged
+        if (!gDraggingSoccerBall) {
+            // Apply gravity
+            gSoccerBallVelocity.y -= gSoccerBallGravity * deltaT;
+            
+            // Apply air friction
+            gSoccerBallVelocity.multiplyScalar(gSoccerBallFriction);
+            
+            // Update position based on velocity
+            gSoccerBallPosition.x += gSoccerBallVelocity.x * deltaT;
+            gSoccerBallPosition.y += gSoccerBallVelocity.y * deltaT;
+            gSoccerBallPosition.z += gSoccerBallVelocity.z * deltaT;
+            
+            // Ground collision and bounce (center at Y=radius means bottom at Y=0)
+            if (gSoccerBallPosition.y <= gSoccerBallRadius) {
+                gSoccerBallPosition.y = gSoccerBallRadius;
+                
+                // Bounce if velocity is significant
+                if (Math.abs(gSoccerBallVelocity.y) > 0.5) {
+                    gSoccerBallVelocity.y = -gSoccerBallVelocity.y * gSoccerBallBounceCoefficient;
+                } else {
+                    // Ball has settled on ground
+                    gSoccerBallVelocity.y = 0;
+                    // Apply strong ground friction to horizontal movement
+                    gSoccerBallVelocity.x *= gSoccerBallGroundFriction;
+                    gSoccerBallVelocity.z *= gSoccerBallGroundFriction;
+                    
+                    // Stop completely if moving very slowly
+                    if (gSoccerBallVelocity.length() < 0.1) {
+                        gSoccerBallVelocity.set(0, 0, 0);
+                    }
+                }
+            }
+            
+            // Wall collisions and bounce (center offset from walls by radius)
+            var minBoundX = -gPhysicsScene.worldSize.x + gSoccerBallRadius;
+            var maxBoundX = gPhysicsScene.worldSize.x - gSoccerBallRadius;
+            var minBoundZ = -gPhysicsScene.worldSize.z + gSoccerBallRadius;
+            var maxBoundZ = gPhysicsScene.worldSize.z - gSoccerBallRadius;
+            
+            // X walls
+            if (gSoccerBallPosition.x <= minBoundX) {
+                gSoccerBallPosition.x = minBoundX;
+                gSoccerBallVelocity.x = -gSoccerBallVelocity.x * gSoccerBallBounceCoefficient;
+            } else if (gSoccerBallPosition.x >= maxBoundX) {
+                gSoccerBallPosition.x = maxBoundX;
+                gSoccerBallVelocity.x = -gSoccerBallVelocity.x * gSoccerBallBounceCoefficient;
+            }
+            
+            // Z walls
+            if (gSoccerBallPosition.z <= minBoundZ) {
+                gSoccerBallPosition.z = minBoundZ;
+                gSoccerBallVelocity.z = -gSoccerBallVelocity.z * gSoccerBallBounceCoefficient;
+            } else if (gSoccerBallPosition.z >= maxBoundZ) {
+                gSoccerBallPosition.z = maxBoundZ;
+                gSoccerBallVelocity.z = -gSoccerBallVelocity.z * gSoccerBallBounceCoefficient;
+            }
+            
+            // Ceiling collision (center at ceiling-radius means top at ceiling)
+            var maxBoundY = 2 * gPhysicsScene.worldSize.y - gSoccerBallRadius;
+            if (gSoccerBallPosition.y >= maxBoundY) {
+                gSoccerBallPosition.y = maxBoundY;
+                gSoccerBallVelocity.y = -gSoccerBallVelocity.y * gSoccerBallBounceCoefficient;
+            }
+        }
+        
+        // Update visual position
+        gSoccerBall.position.copy(gSoccerBallPosition);
+        
+        // Add rotation based on velocity for realism
+        if (gSoccerBallVelocity.length() > 0.1) {
+            var axis = new THREE.Vector3(-gSoccerBallVelocity.z, 0, gSoccerBallVelocity.x).normalize();
+            var angle = gSoccerBallVelocity.length() * deltaT / gSoccerBallRadius;
+            gSoccerBall.rotateOnWorldAxis(axis, angle);
         }
     }
     
