@@ -243,6 +243,21 @@ var cameraMenuX = 0.15; // Camera menu position
 var lightingMenuY = 0.1;
 var cameraMenuX = 0.15; // Camera menu position
 var cameraMenuY = 0.1;
+var skyMenuVisible = false; // Sky submenu visibility
+var skyMenuVisibleBeforeHide = false;
+var skyMenuOpacity = 0;
+var skyMenuFadeSpeed = 3.0;
+var skyMenuX = 0.15; // Sky menu position
+var skyMenuY = 0.1;
+var autoElevation = false; // Auto elevation mode for sky
+var autoElevationRate = 0.02; // Rate of auto elevation change
+var skyRenderingEnabled = true; // Whether to render the sky
+var draggedSkyKnob = null; // Index of sky knob being dragged
+var isDraggingSkyMenu = false;
+var skyMenuDragStartX = 0;
+var skyMenuDragStartY = 0;
+var skyMenuStartX = 0;
+var skyMenuStartY = 0;
 var gColorWheelCanvas = null; // Offscreen canvas for color wheel
 var gColorWheelCtx = null;
 var gPrimaryHue = 180; // Primary hue (0-360)
@@ -4414,7 +4429,7 @@ function drawMainMenu() {
     const itemHeight = 0.12 * menuScale;
     const itemWidth = 0.15 * menuScale;
     const padding = 0.02 * menuScale;
-    const menuHeight = itemHeight * 8 + (padding * 9); // Eight items now
+    const menuHeight = itemHeight * 9 + (padding * 10); // Nine items now (added sky)
     const menuWidth = itemWidth + (padding * 2);
     
     const menuBaseY = ellipsisY + 0.08 * menuScale;
@@ -5085,24 +5100,72 @@ function drawMainMenu() {
     
     ctx.restore();
 
-    // Draw Instructions menu item
+    // Draw Sky menu item
     const itemY8 = itemY7 + itemHeight + padding;
     ctx.beginPath();
     ctx.roundRect(itemX, itemY8, itemWidth, itemHeight, cornerRadius * 0.5);
+    ctx.fillStyle = skyMenuVisible ? 'rgba(100, 150, 220, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+    ctx.fill();
+    
+    // Draw cloud icon
+    const icon8X = itemX + itemWidth / 2;
+    const icon8Y = itemY8 + itemHeight / 2;
+    const icon8Color = skyMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+    ctx.fillStyle = icon8Color;
+    
+    ctx.save();
+    ctx.translate(icon8X, icon8Y);
+    
+    // Draw asymmetrical cloud icon with truly flat bottom using clipping
+    const cloudRadius = iconSize * 0.50;
+    const flatBottomY = cloudRadius * 1.2;
+    
+    // Create clipping rectangle to cut off bottom at flat line
+    const clipLeft = -cloudRadius * 1.8;
+    const clipRight = cloudRadius * 1.8;
+    const clipTop = -cloudRadius * 1.5;
+    ctx.beginPath();
+    ctx.rect(clipLeft, clipTop, clipRight - clipLeft, flatBottomY - clipTop);
+    ctx.clip();
+    
+    // Now draw the circles - they'll be clipped at the bottom
+    ctx.beginPath();
+    // Left puff (medium)
+    ctx.arc(-cloudRadius * 0.95, flatBottomY - cloudRadius * 0.5, cloudRadius * 0.82, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.beginPath();
+    // Center puff (largest)
+    ctx.arc(0, flatBottomY, cloudRadius * 1.05, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.beginPath();
+    // Right puff (small)
+    ctx.arc(cloudRadius * 0.9, flatBottomY - cloudRadius * 0.55, cloudRadius * 0.7, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.beginPath();
+    // Fourth puff adds height above center-left
+    ctx.arc(-cloudRadius * 0.3, -cloudRadius * 0.15, cloudRadius * 0.88, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    ctx.restore();
+
+    // Draw Instructions menu item
+    const itemY9 = itemY8 + itemHeight + padding;
+    ctx.beginPath();
+    ctx.roundRect(itemX, itemY9, itemWidth, itemHeight, cornerRadius * 0.5);
     ctx.fillStyle = instructionsMenuVisible ? 'rgba(255, 204, 0, 0.3)' : 'rgba(38, 38, 38, 0.8)';
     ctx.fill();
     
     // Draw question mark icon
-    const icon8X = itemX + itemWidth / 2;
-    const icon8Y = itemY8 + 0.42 * itemHeight;
-    const icon8Color = instructionsMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
-    ctx.strokeStyle = icon8Color;
-    ctx.fillStyle = icon8Color;
+    const icon9X = itemX + itemWidth / 2;
+    const icon9Y = itemY9 + 0.42 * itemHeight;
+    const icon9Color = instructionsMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+    ctx.strokeStyle = icon9Color;
+    ctx.fillStyle = icon9Color;
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     
     ctx.save();
-    ctx.translate(icon8X, icon8Y);
+    ctx.translate(icon9X, icon9Y);
     
     // Draw question mark
     const qmSize = iconSize;
@@ -5320,7 +5383,7 @@ function drawSimMenu() {
         ctx.fillStyle = `hsla(0, 70%, 40%, ${menuOpacity})`; // Red when off
         ctx.shadowColor = `hsla(0, 70%, 50%, ${menuOpacity * 0.8})`;
     }
-    ctx.shadowBlur = 8;
+    //ctx.shadowBlur = 8;
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = `hsla(0, 0%, 20%, ${menuOpacity})`;
@@ -5368,7 +5431,7 @@ function drawSimMenu() {
         ctx.fillStyle = `hsla(0, 70%, 40%, ${menuOpacity})`; // Red when off
         ctx.shadowColor = `hsla(0, 70%, 50%, ${menuOpacity * 0.8})`;
     }
-    ctx.shadowBlur = 8;
+    //ctx.shadowBlur = 8;
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = `hsla(0, 0%, 20%, ${menuOpacity})`;
@@ -7213,6 +7276,314 @@ function drawCameraMenu() {
     
     // Update knob positions for mouse interaction
     updateKnobPositions();
+    
+    ctx.restore();
+}
+
+function drawSkyMenu() {
+    // Only draw menu if it has some opacity
+    if (skyMenuOpacity <= 0 || !window.skyRenderer) return;
+    
+    const ctx = gOverlayCtx;
+    const skyCtrl = window.skyRenderer.effectController;
+    const menuItems = [
+        skyCtrl.turbidity,
+        skyCtrl.rayleigh,
+        skyCtrl.mieCoefficient,
+        skyCtrl.mieDirectionalG,
+        skyCtrl.azimuth,
+        -skyCtrl.rotationSpeed,
+        skyCtrl.elevation,
+        skyCtrl.exposure,
+        skyCtrl.fov,
+        autoElevationRate
+    ];
+    
+    const ranges = [
+        {min: 0, max: 20},           // turbidity
+        {min: 0, max: 4},             // rayleigh
+        {min: 0, max: 0.1},           // mieCoefficient
+        {min: 0, max: 1},             // mieDirectionalG
+        {min: 0, max: 359},           // azimuth
+        {min: -2, max: 2},            // rotationSpeed
+        {min: -2, max: 10},           // elevation
+        {min: 0, max: 1},             // exposure
+        {min: 10, max: 120},          // fov
+        {min: 0.01, max: 0.10}        // autoElevationRate
+    ];
+    
+    const labels = ['Turbidity', 'Rayleigh Scattering', 'Mie Scattering', 'Scatter Focus', 'Sun Azimuth', 'Auto Azimuth', 'Sun Elevation', 'Exposure', 'Field of View', 'Auto Elevation'];
+    
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuUpperLeftX = skyMenuX * window.innerWidth;
+    const menuUpperLeftY = skyMenuY * window.innerHeight;
+    const fullMeterSweep = 1.6 * Math.PI;
+    const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+    
+    ctx.save();
+    ctx.globalAlpha = skyMenuOpacity;
+    ctx.translate(menuUpperLeftX + knobSpacing, menuUpperLeftY + 0.5 * knobSpacing);
+    
+    // Draw overall menu background with rounded corners
+    const menuWidth = knobSpacing * 3;
+    const menuHeight = knobSpacing * 2.25;
+    const padding = 1.7 * knobRadius;
+    
+    const cornerRadius = 0.05 * menuScale;
+    ctx.beginPath();
+    ctx.moveTo(-padding + cornerRadius, -padding);
+    ctx.lineTo(menuWidth + padding - cornerRadius, -padding);
+    ctx.quadraticCurveTo(menuWidth + padding, -padding, menuWidth + padding, -padding + cornerRadius);
+    ctx.lineTo(menuWidth + padding, menuHeight + padding - cornerRadius);
+    ctx.quadraticCurveTo(menuWidth + padding, menuHeight + padding, menuWidth + padding - cornerRadius, menuHeight + padding);
+    ctx.lineTo(-padding + cornerRadius, menuHeight + padding);
+    ctx.quadraticCurveTo(-padding, menuHeight + padding, -padding, menuHeight + padding - cornerRadius);
+    ctx.lineTo(-padding, -padding + cornerRadius);
+    ctx.quadraticCurveTo(-padding, -padding, -padding + cornerRadius, -padding);
+    ctx.closePath();
+    ctx.strokeStyle = 'hsla(30, 80%, 60%, 1.0)';
+    ctx.lineWidth = 0.004 * menuScale;
+    const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, 'hsla(30, 70%, 25%, 0.9)');
+    menuGradient.addColorStop(1, 'hsla(30, 70%, 10%, 0.9)');
+    ctx.fillStyle = menuGradient;
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw close icon in upper left corner (round button)
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = -padding + closeIconRadius + 0.2 * knobRadius;
+    
+    // Red background circle
+    ctx.beginPath();
+    ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = 'hsla(0, 70%, 40%, 1.0)';
+    ctx.fill();
+    
+    // Black X
+    ctx.strokeStyle = 'hsla(0, 0%, 0%, 1.0)';
+    ctx.lineWidth = 0.05 * knobRadius;
+    ctx.lineCap = 'round';
+    const xSize = closeIconRadius * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+    ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+    ctx.stroke();
+    
+    // Draw title
+    ctx.fillStyle = 'hsla(30, 10%, 90%, 1.0)';
+    ctx.font = `bold ${0.05 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.fillText('SKY', menuWidth / 2, 2 -padding + 0.04 * menuScale);
+    
+    // Draw knobs for each parameter
+    for (let i = 0; i < menuItems.length && i < 10; i++) {
+        let x = (i % 4) * knobSpacing;
+        let y = Math.floor(i / 4) * knobSpacing;
+        // Special positioning for exposure knob (index 7) - move to column 1, row 2
+        if (i === 7) {
+            x = 1 * knobSpacing;
+            y = 2 * knobSpacing;
+        }
+        // Special positioning for FOV knob (index 8) - move to column 3, row 2
+        if (i === 8) {
+            x = 3 * knobSpacing;
+            y = 2 * knobSpacing;
+        }
+        // Special positioning for autoElevationRate knob (index 9) - move to column 3, row 1
+        if (i === 9) {
+            x = 3 * knobSpacing;
+            y = 1 * knobSpacing;
+        }
+        
+        const value = menuItems[i];
+        const range = ranges[i];
+        const normalized = (value - range.min) / (range.max - range.min);
+        
+        // Draw knob background circle
+        ctx.beginPath();
+        ctx.arc(x, y, knobRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = 'hsla(30, 40%, 15%, 0.9)';
+        ctx.fill();
+        ctx.strokeStyle = 'hsla(30, 60%, 40%, 1.0)';
+        ctx.lineWidth = 0.003 * menuScale;
+        ctx.stroke();
+        
+        // Draw meter arc - for azimuth (index 4), draw full circle
+        ctx.beginPath();
+        if (i === 4) {
+            // Azimuth - draw full circle
+            ctx.arc(x, y, knobRadius * 0.85, 0, 2 * Math.PI);
+        } else if (i === 8) {
+            // FOV knob - draw inverted arc
+            ctx.arc(x, y, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * (1 - normalized));
+        } else {
+            // Other knobs - draw partial arc
+            ctx.arc(x, y, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalized);
+        }
+        const gradient = ctx.createLinearGradient(
+            x + Math.cos(meterStart) * knobRadius,
+            y + Math.sin(meterStart) * knobRadius,
+            x + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+            y + Math.sin(meterStart + fullMeterSweep) * knobRadius
+        );
+        gradient.addColorStop(0, 'hsla(20, 80%, 60%, 1.0)');
+        gradient.addColorStop(0.5, 'hsla(35, 80%, 60%, 1.0)');
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 0.02 * menuScale;
+        ctx.stroke();
+        
+        // Draw knob pointer
+        let pointerAngle;
+        if (i === 4) {
+            // Azimuth - full 360 degree rotation (reversed)
+            pointerAngle = (1 - normalized) * 2 * Math.PI;
+        } else if (i === 8) {
+            // FOV - inverted
+            pointerAngle = meterStart + fullMeterSweep * (1 - normalized);
+        } else {
+            // Other knobs - normal
+            pointerAngle = meterStart + fullMeterSweep * normalized;
+        }
+        const pointerLength = knobRadius * 0.6;
+        const pointerEndX = x + Math.cos(pointerAngle) * pointerLength;
+        const pointerEndY = y + Math.sin(pointerAngle) * pointerLength;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(pointerEndX, pointerEndY);
+        ctx.strokeStyle = 'hsla(30, 80%, 80%, 1.0)';
+        ctx.lineWidth = 0.008 * menuScale;
+        ctx.stroke();
+        
+        // Draw label
+        
+        ctx.font = `${0.035 * menuScale}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'hsla(0, 0%, 10%, 1.0)';
+        ctx.fillText(labels[i], x + 1, 2 + y + knobRadius + 0.04 * menuScale);
+        ctx.fillStyle = 'hsla(0, 0%, 80%, 1.0)';
+        ctx.fillText(labels[i], x, y + knobRadius + 0.04 * menuScale);
+        
+        // Draw value
+        let decimals;
+        if (i === 1 || i === 5 || i === 7 || i === 9) decimals = 2;
+        else if (i === 4) decimals = 0;
+        else if (i === 6) decimals = 1;
+        else decimals = value < 1 ? 3 : value < 10 ? 1 : 0;
+        let displayValue = value.toFixed(decimals);
+        if (i === 4 || i === 8) displayValue += '°';
+        ctx.fillStyle = 'hsla(150, 50%, 60%, 1.0)';
+        ctx.font = `${0.025 * menuScale}px sans-serif`;
+        ctx.fillText(displayValue, x, y + knobRadius * 0.60);
+    }
+    
+    // Draw toggle buttons below the knobs
+    const buttonY = knobSpacing * 2;
+    const checkboxRadius = knobRadius * 0.25;
+    
+    // Auto Rotate checkbox (centered under Rotation Speed knob at col 1, row 1)
+    const autoRotateX = knobSpacing * 1.0;
+    const autoRotateY = knobSpacing * 1.0;
+    
+    // Draw outer circle with knob fill color
+    ctx.beginPath();
+    ctx.arc(autoRotateX, autoRotateY, checkboxRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = 'hsla(30, 40%, 15%, 0.9)';
+    ctx.fill();
+    ctx.strokeStyle = 'hsla(30, 60%, 40%, 1.0)';
+    ctx.lineWidth = 0.003 * menuScale;
+    ctx.stroke();
+    
+    // Draw filled center (green when on, red when off)
+    ctx.beginPath();
+    ctx.arc(autoRotateX, autoRotateY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+    if (skyCtrl.autoRotate) {
+        ctx.fillStyle = 'hsla(120, 80%, 50%, 1.0)';
+    } else {
+        ctx.fillStyle = 'hsla(0, 80%, 50%, 1.0)';
+    }
+    ctx.fill();
+    
+    // Auto Elevation checkbox (centered under Elevation Rate knob at col 3, row 1)
+    const autoElevationX = knobSpacing * 3.0;
+    const autoElevationY = knobSpacing * 1.0;
+    
+    // Draw outer circle with knob fill color
+    ctx.beginPath();
+    ctx.arc(autoElevationX, autoElevationY, checkboxRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = 'hsla(30, 40%, 15%, 0.9)';
+    ctx.fill();
+    ctx.strokeStyle = 'hsla(30, 60%, 40%, 1.0)';
+    ctx.lineWidth = 0.003 * menuScale;
+    ctx.stroke();
+    
+    // Draw filled center (green when on, red when off)
+    ctx.beginPath();
+    ctx.arc(autoElevationX, autoElevationY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+    if (autoElevation) {
+        ctx.fillStyle = 'hsla(120, 80%, 50%, 1.0)';
+    } else {
+        ctx.fillStyle = 'hsla(0, 80%, 50%, 1.0)';
+    }
+    ctx.fill();
+    
+    // Show Grid checkbox (centered under FOV knob at col 3, row 2)
+    const showGridX = knobSpacing * 3.0;
+    const showGridY = knobSpacing * 2.0;
+    
+    // Draw outer circle with knob fill color
+    ctx.beginPath();
+    ctx.arc(showGridX, showGridY, checkboxRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = 'hsla(30, 40%, 15%, 0.9)';
+    ctx.fill();
+    ctx.strokeStyle = 'hsla(30, 60%, 40%, 1.0)';
+    ctx.lineWidth = 0.003 * menuScale;
+    ctx.stroke();
+    
+    // Draw filled center (green when on, red when off)
+    ctx.beginPath();
+    ctx.arc(showGridX, showGridY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+    if (skyCtrl.showGrid) {
+        ctx.fillStyle = 'hsla(120, 80%, 50%, 1.0)';
+    } else {
+        ctx.fillStyle = 'hsla(0, 80%, 50%, 1.0)';
+    }
+    ctx.fill();
+    
+    // Sky Rendering Enabled checkbox (bottom left corner)
+    const skyEnabledX = -padding + knobRadius * 0.8;
+    const skyEnabledY = menuHeight + padding - knobRadius * 0.8;
+    
+    // Draw outer circle with knob fill color
+    ctx.beginPath();
+    ctx.arc(skyEnabledX, skyEnabledY, checkboxRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = 'hsla(30, 40%, 15%, 0.9)';
+    ctx.fill();
+    ctx.strokeStyle = 'hsla(30, 60%, 40%, 1.0)';
+    ctx.lineWidth = 0.003 * menuScale;
+    ctx.stroke();
+    
+    // Draw filled center (green when on, red when off)
+    ctx.beginPath();
+    ctx.arc(skyEnabledX, skyEnabledY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+    if (skyRenderingEnabled) {
+        ctx.fillStyle = 'hsla(120, 80%, 50%, 1.0)';
+    } else {
+        ctx.fillStyle = 'hsla(0, 80%, 50%, 1.0)';
+    }
+    ctx.fill();
+    
+    // Draw label
+    ctx.font = `${0.035 * menuScale}px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'hsla(0, 0%, 10%, 1.0)';
+    ctx.fillText('Sky on/off', skyEnabledX + checkboxRadius * 1.8 + 1, 2 + skyEnabledY + 0.008 * menuScale);
+    ctx.fillStyle = 'hsla(0, 0%, 80%, 1.0)';
+    ctx.fillText('Sky on/off', skyEnabledX + checkboxRadius * 1.8, skyEnabledY + 0.008 * menuScale);
     
     ctx.restore();
 }
@@ -12810,13 +13181,20 @@ function initThreeScene() {
     gObstacles.push(gColumnObstacle);
     gColumnDropping = true; // Enable drop animation
     
-    // Renderer
-    gRenderer = new THREE.WebGLRenderer();
+    // Renderer with transparent background to show sky canvas behind
+    gRenderer = new THREE.WebGLRenderer({ alpha: true });
     gRenderer.shadowMap.enabled = true;
     gRenderer.localClippingEnabled = true; // Enable clipping planes
     gRenderer.setPixelRatio( window.devicePixelRatio );
     gRenderer.setSize( 0.8 * window.innerWidth, 0.8 * window.innerHeight );
     window.addEventListener( 'resize', onWindowResize, false );
+    
+    // Style the renderer canvas to be positioned above sky canvas
+    gRenderer.domElement.style.position = 'absolute';
+    gRenderer.domElement.style.top = '0';
+    gRenderer.domElement.style.left = '0';
+    gRenderer.domElement.style.zIndex = '50';
+    
     container.appendChild( gRenderer.domElement );
     
     // Initialize AnaglyphEffect for stereo rendering
@@ -12840,6 +13218,21 @@ function initThreeScene() {
     gCameraControl.zoomSpeed = 0.3;
     gCameraControl.panSpeed = 0.5;
     gCameraControl.update(); // Initialize OrbitControls state
+
+    // Create sky canvas for background (behind everything)
+    const skyCanvas = document.createElement('canvas');
+    skyCanvas.id = 'skyCanvas';
+    skyCanvas.style.position = 'absolute';
+    skyCanvas.style.top = '0';
+    skyCanvas.style.left = '0';
+    skyCanvas.style.width = '100%';
+    skyCanvas.style.height = '100%';
+    skyCanvas.style.zIndex = '0'; // Behind everything
+    skyCanvas.style.display = 'block'; // Initially visible
+    skyCanvas.width = window.innerWidth;
+    skyCanvas.height = window.innerHeight;
+    document.body.insertBefore(skyCanvas, document.body.firstChild); // Insert as first child
+    window.skyCanvasElement = skyCanvas; // Store reference for later use
 
     // Create overlay canvas for buttons programmatically
     gOverlayCanvas = document.createElement('canvas');
@@ -13239,6 +13632,11 @@ function onPointer(evt) {
             return;
         }
         
+        // Check sky menu click
+        if (checkSkyMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
         // Check dolly rails click (when in dolly camera mode)
         if (checkDollyRailsClick(evt.clientX, evt.clientY)) {
             return;
@@ -13249,7 +13647,7 @@ function onPointer(evt) {
             const itemHeight = 0.12 * menuScale;
             const itemWidth = 0.15 * menuScale;
             const padding = 0.02 * menuScale;
-            const menuHeight = itemHeight * 7 + (padding * 8);
+            const menuHeight = itemHeight * 9 + (padding * 10); // Nine items now (added sky)
             const menuBaseY = ellipsisY + 0.08 * menuScale;
             const menuBaseX = ellipsisX - padding;
             const mainMenuPosX = menuBaseX + mainMenuXOffset * menuScale;
@@ -13293,6 +13691,7 @@ function onPointer(evt) {
                     lightingMenuVisible = false;
                     instructionsMenuVisible = false;
                     modelsMenuVisible = false;
+                    skyMenuVisible = false;
                 } else {
                     // Menu is already open, cycle camera mode
                     const previousMode = gCameraMode;
@@ -13536,6 +13935,7 @@ function onPointer(evt) {
                 lightingMenuVisible = false; // Close lighting menu when opening simulation
                 cameraMenuVisible = false; // Close camera menu when opening simulation
                 modelsMenuVisible = false; // Close models menu when opening simulation
+                skyMenuVisible = false; // Close sky menu when opening simulation
                 return;
             }
             
@@ -13550,6 +13950,7 @@ function onPointer(evt) {
                 lightingMenuVisible = false; // Close lighting menu when opening styling
                 cameraMenuVisible = false; // Close camera menu when opening styling
                 modelsMenuVisible = false; // Close models menu when opening styling
+                skyMenuVisible = false; // Close sky menu when opening styling
                 return;
             }
             
@@ -13564,6 +13965,7 @@ function onPointer(evt) {
                 lightingMenuVisible = false; // Close lighting menu when opening color
                 cameraMenuVisible = false; // Close camera menu when opening color
                 modelsMenuVisible = false; // Close models menu when opening color
+                skyMenuVisible = false; // Close sky menu when opening color
                 return;
             }
             
@@ -13578,6 +13980,7 @@ function onPointer(evt) {
                 colorMenuVisible = false; // Close color menu when opening lighting
                 cameraMenuVisible = false; // Close camera menu when opening lighting
                 modelsMenuVisible = false; // Close models menu when opening lighting
+                skyMenuVisible = false; // Close sky menu when opening lighting
                 return;
             }
             
@@ -13592,13 +13995,29 @@ function onPointer(evt) {
                 colorMenuVisible = false; // Close color menu when opening models
                 lightingMenuVisible = false; // Close lighting menu when opening models
                 cameraMenuVisible = false; // Close camera menu when opening models
+                skyMenuVisible = false; // Close sky menu when opening models
+                return;
+            }
+            
+            // Check Sky menu item
+            const itemY8 = itemY7 + itemHeight + padding;
+            if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+                evt.clientY >= itemY8 && evt.clientY <= itemY8 + itemHeight) {
+                skyMenuVisible = !skyMenuVisible;
+                menuVisible = false; // Close simulation menu when opening sky
+                stylingMenuVisible = false; // Close styling menu when opening sky
+                instructionsMenuVisible = false; // Close instructions menu when opening sky
+                colorMenuVisible = false; // Close color menu when opening sky
+                lightingMenuVisible = false; // Close lighting menu when opening sky
+                cameraMenuVisible = false; // Close camera menu when opening sky
+                modelsMenuVisible = false; // Close models menu when opening sky
                 return;
             }
             
             // Check Instructions menu item
-            const itemY8 = itemY7 + itemHeight + padding;
+            const itemY9 = itemY8 + itemHeight + padding;
             if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
-                evt.clientY >= itemY8 && evt.clientY <= itemY8 + itemHeight) {
+                evt.clientY >= itemY9 && evt.clientY <= itemY9 + itemHeight) {
                 instructionsMenuVisible = !instructionsMenuVisible;
                 menuVisible = false; // Close simulation menu when opening instructions
                 stylingMenuVisible = false; // Close styling menu when opening instructions
@@ -13606,6 +14025,7 @@ function onPointer(evt) {
                 lightingMenuVisible = false; // Close lighting menu when opening instructions
                 cameraMenuVisible = false; // Close camera menu when opening instructions
                 modelsMenuVisible = false; // Close models menu when opening instructions
+                skyMenuVisible = false; // Close sky menu when opening instructions
                 return;
             }
 
@@ -16058,6 +16478,91 @@ function onPointer(evt) {
             return;
         }
         
+        // Handle sky knob dragging
+        if (draggedSkyKnob !== null && window.skyRenderer) {
+            const ranges = [
+                {min: 0, max: 20},           // turbidity
+                {min: 0, max: 4},             // rayleigh
+                {min: 0, max: 0.1},           // mieCoefficient
+                {min: 0, max: 1},             // mieDirectionalG
+                {min: 0, max: 359},           // azimuth
+                {min: -2, max: 2},            // rotationSpeed
+                {min: -2, max: 10},           // elevation
+                {min: 0, max: 1},             // exposure
+                {min: 10, max: 120},          // fov
+                {min: 0.01, max: 0.10}        // autoElevationRate
+            ];
+            
+            // Calculate drag delta
+            const dragDeltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+            const dragDeltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+            let dragDelta = dragDeltaX + dragDeltaY;
+            
+            // Reverse delta for FOV knob (index 8)
+            if (draggedSkyKnob === 8) {
+                dragDelta = -dragDelta;
+            }
+            
+            // Sensitivity
+            const dragSensitivity = 0.1;
+            const normalizedDelta = dragDelta / dragSensitivity;
+            
+            const range = ranges[draggedSkyKnob];
+            const rangeSize = range.max - range.min;
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            
+            // For azimuth (index 4), allow continuous rotation (wrap around)
+            if (draggedSkyKnob === 4) {
+                // Wrap azimuth from 0 to 359
+                while (newValue >= 360) newValue -= 360;
+                while (newValue < 0) newValue += 360;
+            } else {
+                // Clamp to range for other knobs
+                newValue = Math.max(range.min, Math.min(range.max, newValue));
+            }
+            
+            // Apply the new value
+            const skyCtrl = window.skyRenderer.effectController;
+            switch (draggedSkyKnob) {
+                case 0: skyCtrl.turbidity = newValue; break;
+                case 1: skyCtrl.rayleigh = newValue; break;
+                case 2: skyCtrl.mieCoefficient = newValue; break;
+                case 3: skyCtrl.mieDirectionalG = newValue; break;
+                case 4: skyCtrl.azimuth = 359 - newValue; break; // Reverse direction
+                case 5: skyCtrl.rotationSpeed = -newValue; break; // Reverse direction
+                case 6: skyCtrl.elevation = newValue; break;
+                case 7: skyCtrl.exposure = newValue; break;
+                case 8: skyCtrl.fov = newValue; break;
+                case 9: autoElevationRate = newValue; break;
+            }
+            return;
+        }
+        
+        // Handle sky menu dragging
+        if (isDraggingSkyMenu) {
+            const deltaX = (evt.clientX - skyMenuDragStartX) / window.innerWidth;
+            const deltaY = (evt.clientY - skyMenuDragStartY) / window.innerHeight;
+            
+            skyMenuX = skyMenuStartX + deltaX;
+            skyMenuY = skyMenuStartY + deltaY;
+            
+            // Clamp to screen bounds
+            const knobRadius = 0.1 * menuScale;
+            const padding = 1.7 * knobRadius;
+            const menuWidth = knobRadius * 9; // 3 knobs * 3 spacing
+            const menuHeight = knobRadius * 6.75; // 2.25 knobs * 3 spacing
+            
+            const minX = (padding - knobRadius * 3) / window.innerWidth;
+            const maxX = 1 - (menuWidth + padding + knobRadius * 3) / window.innerWidth;
+            const minY = (padding - knobRadius * 0.5) / window.innerHeight;
+            const maxY = 1 - (menuHeight + padding + knobRadius * 0.5) / window.innerHeight;
+            
+            skyMenuX = Math.max(minX, Math.min(maxX, skyMenuX));
+            skyMenuY = Math.max(minY, Math.min(maxY, skyMenuY));
+            
+            return;
+        }
+        
         // Handle duck beak rotation (rotate duck around vertical Y axis)
         if (gRotatingDuckBeak && gDuck) {
             var deltaX = evt.clientX - gPointerLastX;
@@ -17160,6 +17665,24 @@ function onPointer(evt) {
         
         if (draggedKnob !== null) {
             draggedKnob = null;
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        // Clean up sky knob dragging
+        if (draggedSkyKnob !== null) {
+            draggedSkyKnob = null;
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
+        // Clean up sky menu dragging
+        if (isDraggingSkyMenu) {
+            isDraggingSkyMenu = false;
             if (gCameraMode < 3 && gCameraControl) {
                 gCameraControl.enabled = true;
             }
@@ -18854,6 +19377,147 @@ function checkCameraMenuClick(clientX, clientY) {
         menuDragStartY = clientY;
         menuStartX = cameraMenuX;
         menuStartY = cameraMenuY;
+        
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    return false;
+}
+
+function checkSkyMenuClick(clientX, clientY) {
+    if (!skyMenuVisible || skyMenuOpacity <= 0.5 || !window.skyRenderer) return false;
+    
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuWidth = knobSpacing * 3;
+    const menuHeight = knobSpacing * 2.25;
+    const padding = 1.7 * knobRadius;
+    const menuOriginX = skyMenuX * window.innerWidth + knobSpacing;
+    const menuOriginY = skyMenuY * window.innerHeight + 0.5 * knobSpacing;
+    
+    // Check close button
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = menuOriginX - padding + closeIconRadius + 0.2 * knobRadius;
+    const closeIconY = menuOriginY - padding + closeIconRadius + 0.2 * knobRadius;
+    const cdx = clientX - closeIconX;
+    const cdy = clientY - closeIconY;
+    
+    if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+        skyMenuVisible = false;
+        return true;
+    }
+    
+    // Check toggle buttons
+    const checkboxRadius = knobRadius * 0.25;
+    const skyCtrl = window.skyRenderer.effectController;
+    
+    // Auto Rotate checkbox
+    const autoRotateX = menuOriginX + knobSpacing * 1.0;
+    const autoRotateY = menuOriginY + knobSpacing * 1.0;
+    const ardx = clientX - autoRotateX;
+    const ardy = clientY - autoRotateY;
+    
+    if (ardx * ardx + ardy * ardy < checkboxRadius * checkboxRadius) {
+        skyCtrl.autoRotate = !skyCtrl.autoRotate;
+        return true;
+    }
+    
+    // Auto Elevation checkbox
+    const autoElevationX = menuOriginX + knobSpacing * 3.0;
+    const autoElevationY = menuOriginY + knobSpacing * 1.0;
+    const aedx = clientX - autoElevationX;
+    const aedy = clientY - autoElevationY;
+    
+    if (aedx * aedx + aedy * aedy < checkboxRadius * checkboxRadius) {
+        autoElevation = !autoElevation;
+        return true;
+    }
+    
+    // Show Grid checkbox
+    const showGridX = menuOriginX + knobSpacing * 3.0;
+    const showGridY = menuOriginY + knobSpacing * 2.0;
+    const sgdx = clientX - showGridX;
+    const sgdy = clientY - showGridY;
+    
+    if (sgdx * sgdx + sgdy * sgdy < checkboxRadius * checkboxRadius) {
+        skyCtrl.showGrid = !skyCtrl.showGrid;
+        return true;
+    }
+    
+    // Sky Rendering Enabled checkbox (bottom left corner)
+    const skyEnabledX = menuOriginX - padding + knobRadius * 0.8;
+    const skyEnabledY = menuOriginY + menuHeight + padding - knobRadius * 0.8;
+    const sedx = clientX - skyEnabledX;
+    const sedy = clientY - skyEnabledY;
+    
+    if (sedx * sedx + sedy * sedy < checkboxRadius * checkboxRadius) {
+        skyRenderingEnabled = !skyRenderingEnabled;
+        return true;
+    }
+    
+    // Check knobs
+    for (let knob = 0; knob < 10; knob++) {
+        let row = Math.floor(knob / 4);
+        let col = knob % 4;
+        
+        // Special positioning for exposure knob (index 7)
+        if (knob === 7) {
+            row = 2;
+            col = 1;
+        }
+        // Special positioning for FOV knob (index 8)
+        if (knob === 8) {
+            row = 2;
+            col = 3;
+        }
+        // Special positioning for autoElevationRate knob (index 9)
+        if (knob === 9) {
+            row = 1;
+            col = 3;
+        }
+        
+        const knobX = menuOriginX + col * knobSpacing;
+        const knobY = menuOriginY + row * knobSpacing;
+        
+        const kdx = clientX - knobX;
+        const kdy = clientY - knobY;
+        if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
+            draggedSkyKnob = knob;
+            dragStartMouseX = clientX;
+            dragStartMouseY = clientY;
+            
+            const menuItems = [
+                skyCtrl.turbidity,
+                skyCtrl.rayleigh,
+                skyCtrl.mieCoefficient,
+                skyCtrl.mieDirectionalG,
+                skyCtrl.azimuth,
+                -skyCtrl.rotationSpeed,
+                skyCtrl.elevation,
+                skyCtrl.exposure,
+                skyCtrl.fov,
+                autoElevationRate
+            ];
+            dragStartValue = menuItems[knob];
+            
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        }
+    }
+    
+    // Check if menu background clicked (for dragging)
+    if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
+        clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
+        isDraggingSkyMenu = true;
+        skyMenuDragStartX = clientX;
+        skyMenuDragStartY = clientY;
+        skyMenuStartX = skyMenuX;
+        skyMenuStartY = skyMenuY;
         
         if (gCameraControl) {
             gCameraControl.enabled = false;
@@ -21363,6 +22027,24 @@ function update() {
         cameraMenuOpacity = Math.max(0, cameraMenuOpacity - cameraMenuFadeSpeed * deltaT);
     }
     
+    // Update sky menu opacity
+    if (skyMenuVisible) {
+        skyMenuOpacity = Math.min(0.9, skyMenuOpacity + skyMenuFadeSpeed * deltaT);
+    } else {
+        skyMenuOpacity = Math.max(0, skyMenuOpacity - skyMenuFadeSpeed * deltaT);
+    }
+    
+    // Handle auto elevation mode for sky
+    if (autoElevation && window.skyRenderer) {
+        window.skyRenderer.effectController.elevation += autoElevationRate * deltaT;
+        // Keep elevation reasonable
+        if (window.skyRenderer.effectController.elevation > 10) {
+            window.skyRenderer.effectController.elevation = 10;
+        } else if (window.skyRenderer.effectController.elevation < -2) {
+            window.skyRenderer.effectController.elevation = -2;
+        }
+    }
+    
     // Update colors if in dynamic mode (by direction, speed, or doppler)
     if (gColorationMode === 1 || gColorationMode === 2 || gColorationMode === 3) {
         applyMixedColors();
@@ -22140,6 +22822,29 @@ function update() {
     // Render scene with stereo effect if enabled
     // Skip rendering until all assets are loaded to avoid choppy initial display
     if (gAssetsLoaded) {
+        // Render sky first (background layer) if enabled
+        if (window.skyRenderer && skyRenderingEnabled) {
+            if (window.skyCanvasElement) window.skyCanvasElement.style.display = 'block';
+            
+            // Synchronize sky camera with main camera rotation
+            // Use camera's world matrix to get stable orientation (avoids gimbal lock)
+            const direction = new THREE.Vector3();
+            gCamera.getWorldDirection(direction);
+            
+            // Convert direction vector to pitch and yaw
+            const pitch = Math.asin(-direction.y);
+            const yaw = -Math.atan2(direction.x, direction.z);  // Negated for correct left/right
+            
+            window.skyRenderer.effectController.cameraPitch = pitch;
+            window.skyRenderer.effectController.cameraYaw = yaw;
+            window.skyRenderer.effectController.fov = gCamera.fov;
+            
+            window.skyRenderer.render();
+        } else if (window.skyCanvasElement) {
+            // Hide the sky canvas when rendering is disabled
+            window.skyCanvasElement.style.display = 'none';
+        }
+        
         if (gStereoEnabled && gAnaglyphEffect) {
             gAnaglyphEffect.render(gThreeScene, gCamera);
         } else {
@@ -22158,6 +22863,7 @@ function update() {
     drawLightingMenu();
     drawModelsMenu();
     drawCameraMenu();
+    drawSkyMenu();
     drawBalloonVerticalSpeedGauge();
     drawBalloonAltimeterGauge();
     
