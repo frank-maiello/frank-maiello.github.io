@@ -239,6 +239,14 @@ var gSofaVisible = true;
 var gBicycleWheelVisible = true;
 var gBirdVisible = true;
 var gSkyPigVisible = true;
+var gSoccerBallVisible = true;
+var gPlatonicSolidsVisible = true;
+var gColumnAndRingsVisible = true;
+var gRugVisible = true;
+var gTorusObstacleVisible = true;
+var gSphereObstaclesVisible = true;
+var gOrnamentsVisible = true;
+var gSpotlightsVisible = true;
 var cameraMenuX = 0.15; // Camera menu position
 var lightingMenuY = 0.1;
 var cameraMenuX = 0.15; // Camera menu position
@@ -251,7 +259,7 @@ var skyMenuX = 0.15; // Sky menu position
 var skyMenuY = 0.1;
 var autoElevation = false; // Auto elevation mode for sky
 var autoElevationRate = 0.02; // Rate of auto elevation change
-var skyRenderingEnabled = true; // Whether to render the sky
+var skyRenderingEnabled = false; // Whether to render the sky
 var draggedSkyKnob = null; // Index of sky knob being dragged
 var isDraggingSkyMenu = false;
 var skyMenuDragStartX = 0;
@@ -396,7 +404,7 @@ var gKoonsDogOriginalScaleY = 1; // Original Y scale of Koons Dog
 var gKoonsDogSquashed = false; // Flag indicating if dog is squashed
 var gKoonsDogApproximateHeight = 4.0; // Approximate height of dog model in world units
 var gSoccerBall = null; // Soccer ball model reference
-var gSoccerBallRadius = 2.0; // Radius of soccer ball (model center to surface, with 0.5 scale)
+var gSoccerBallRadius = 1.3; // Radius of soccer ball (model center to surface, with 0.5 scale)
 var gSoccerBallPosition = new THREE.Vector3(32, 50, -18); // Current position
 var gSoccerBallVelocity = new THREE.Vector3(0, 0, 0); // Current velocity
 var gDraggingSoccerBall = false; // Track if dragging the soccer ball
@@ -463,6 +471,10 @@ var gSpotlight2Hue = 0; // Spotlight 2 hue (0-360)
 var gSpotlight2Saturation = 0; // Spotlight 2 saturation (0-100)
 var gSpotlight2Enabled = true; // Spotlight 2 on/off state
 var gSpotlight2SavedIntensity = 0.8; // Saved intensity when turned off
+var gSunLightIntensity = 0.0; // Sun directional light intensity (0-2)
+var gSunLightHue = 45; // Sun light hue (0-360)
+var gSunLightSaturation = 20; // Sun light saturation (0-100)
+var gSunLight = null; // Reference to sun directional light
 var gMiroPaintingGroup = null; // Reference to Miro painting + frame group
 var gMiroLeftPaintingGroup = null; // Reference to Miro left painting + frame group
 var gMiroRightPaintingGroup = null; // Reference to Miro right painting + frame group
@@ -641,6 +653,7 @@ var gFloor = null;
 var gRug = null; // Afghan rug mesh
 var gMarbleTexture = null; // Marble texture for wall squares
 var gPedestalMarbleTexture = null; // Marble texture for platonic solid pedestals
+var gPlatonicSolidPedestals = []; // Array to hold the five platonic solid pedestals
 var gColumnMarbleTexture = null; // Marble texture for fluted column
 
 // Wall animation state
@@ -2241,6 +2254,28 @@ class Lamp {
         
         // Store base center for lamp assembly rotation
         this.baseCenter = new THREE.Vector3(poleBasePosition.x + baseOffsetX, 0, poleBasePosition.z + baseOffsetZ);
+        
+        // Set initial visibility based on spotlight state (intensity > 0)
+        const initialVisibility = this.spotlight.intensity > 0;
+        this.basePlate.visible = initialVisibility;
+        if (this.poleSections) {
+            this.poleSections.forEach(section => section.visible = initialVisibility);
+        }
+        if (this.poleCollars) {
+            this.poleCollars.forEach(collar => collar.visible = initialVisibility);
+        }
+        if (this.sleeve) this.sleeve.visible = initialVisibility;
+        if (this.outerCone) this.outerCone.visible = initialVisibility;
+        if (this.innerCone) this.innerCone.visible = initialVisibility;
+        if (this.bulb) this.bulb.visible = initialVisibility;
+        if (this.coneTipCapOuter) this.coneTipCapOuter.visible = initialVisibility;
+        if (this.coneTipCapInner) this.coneTipCapInner.visible = initialVisibility;
+        if (this.discs) {
+            this.discs.forEach(disc => disc.visible = initialVisibility);
+        }
+        if (this.pin) this.pin.visible = initialVisibility;
+        if (this.statusIndicator) this.statusIndicator.visible = initialVisibility;
+        if (this.statusCollar) this.statusCollar.visible = initialVisibility;
     }
     
     rotateLamp() {
@@ -5455,7 +5490,7 @@ function drawInstructionsMenu() {
 
     const menuTopMargin = 0.02 * menuScale;
     const menuWidth = menuScale;
-    const menuHeight = 1.45 * menuScale;
+    const menuHeight = 1.8 * menuScale;
     const padding = 0.17 * menuScale;
     
     // Position menu slightly below simulation menu
@@ -5510,8 +5545,9 @@ function drawInstructionsMenu() {
     const textY = menuTopMargin;
     const lineHeight = 0.06 * menuScale;
     ctx.fillText('What is this?', textX, 0);
-    ctx.fillText('Camera Controls', textX, textY + 13 * lineHeight);
-    ctx.fillText('Lighting Controls', textX, textY + 19 * lineHeight);
+    ctx.fillText('Object Controls', textX, textY + 13 * lineHeight);
+    ctx.fillText('Camera Controls (varies by mode)', textX, textY + 18 * lineHeight);
+    ctx.fillText('Lighting Controls', textX, textY + 26 * lineHeight);
     const instructionText = [
         'Boids is a computer simulation created in 1986 by',
         'programmer and graphics researcher, Craig Reynolds.',
@@ -5526,15 +5562,22 @@ function drawInstructionsMenu() {
         'created by ThreeJS.org. Enjoy the show!',
         '',
         '',
-        '- Left-click and drag to rotate camera',
-        '- Scroll wheel to move forward and backward',
-        '- Right-click and drag to move focus point',
-        '- Camera icon to change camera mode',
+        '- Most objects are moveable',
+        '- Some objects are immediately draggable',
+        '- Double-click to select others',
         '',
         '',
-        '- Lamps are interactive. Double-click to turn on/off',
+        '- Left drag to orbit or aim camera',
+        '- Right drag to move focus point (orbit cam)',
+        '- Scroll wheel to move...',
+        '   forward/backwards (orbit & boid cam),',
+        '   zoom (balloon cam)',
+        '   camera up/down (dolly & free cam)',
+        '',
+        '',
+        '- Spotlights are interactive',
         '- Left-click and drag...',
-        '   BASE to move horizontally',
+        '   BASE to move',
         '   POLE to rotate and raise/lower',
         '   CONE UP/DOWN to point upward/downward',
         '   CONE LEFT/RIGHT to adjust light spread',
@@ -6375,7 +6418,7 @@ function drawLightingMenu() {
     const knobSpacing = knobRadius * 3.25; // Increased spacing for gaps between boxes
     const menuTopMargin = 0.2 * knobRadius + 8; // +8 pixels for spacing
     const menuWidth = knobSpacing * 2; // 3 knobs across
-    const menuHeight = knobSpacing * 6.3; 
+    const menuHeight = knobSpacing * 7.6; // Extended for sun light row 
     const padding = 1.7 * knobRadius;
     
     const menuOriginX = lightingMenuX * window.innerWidth;
@@ -6443,7 +6486,10 @@ function drawLightingMenu() {
         { label: 'Boid Headlight', value: gHeadlightIntensity, min: 0, max: 2 },
         { label: 'Ornament Lights', value: gOrnamentLightIntensity, min: 0, max: 3 },
         { label: 'Falloff', value: gOrnamentLightFalloff, min: 3, max: 30 },
-        { label: 'Ornament Height', value: gOrnamentHeightOffset, min: 0, max: 100 }
+        { label: 'Ornament Height', value: gOrnamentHeightOffset, min: 0, max: 100 },
+        { label: 'Sun', value: gSunLightIntensity, min: 0, max: 2 },
+        { label: 'Hue', value: gSunLightHue, min: 0, max: 360 },
+        { label: 'Saturation', value: gSunLightSaturation, min: 0, max: 100 }
     ];
     
     const fullMeterSweep = 1.6 * Math.PI;
@@ -6454,8 +6500,8 @@ function drawLightingMenu() {
     const boxWidth = knobSpacing * 2 + knobRadius * 2 + boxPadding * 2;
     const boxHeight = knobRadius * 2.4 + boxPadding * 2; // Increased to capture text labels
     
-    // Define which rows contain light source groups (Ambient=0, Overhead=1, Globe=2, Spotlight1=3, Spotlight2=4, Ornament=6)
-    const lightSourceRows = [0, 1, 2, 3, 4, 6];
+    // Define which rows contain light source groups (Ambient=0, Overhead=1, Globe=2, Spotlight1=3, Spotlight2=4, Ornament=6, Sun=7)
+    const lightSourceRows = [0, 1, 2, 3, 4, 6, 7];
     
     // Define colors for each group (Spotlight 1, 2, and Penumbra/Shadow share the same color)
     const boxColors = {
@@ -6464,7 +6510,8 @@ function drawLightingMenu() {
         2: `hsla(0, 25%, 15%, ${1.0 * lightingMenuOpacity})`,  // Globe - magenta/violet
         3: `hsla(190, 25%, 15%, ${1.0 * lightingMenuOpacity})`,  // Spotlight 1 - cyan
         4: `hsla(190, 25%, 15%, ${1.0 * lightingMenuOpacity})`,  // Spotlight 2 - cyan (same)
-        6: `hsla(120, 20%, 15%, ${1.0 * lightingMenuOpacity})`   // Ornament - green
+        6: `hsla(120, 20%, 15%, ${1.0 * lightingMenuOpacity})`,  // Ornament - green
+        7: `hsla(45, 30%, 15%, ${1.0 * lightingMenuOpacity})`    // Sun - yellow
     };
     
     ctx.strokeStyle = `hsla(45, 0%, 80%, ${lightingMenuOpacity})`;
@@ -6528,8 +6575,8 @@ function drawLightingMenu() {
         const normalizedValue = (knobs[i].value - knobs[i].min) / (knobs[i].max - knobs[i].min);
         
         // Draw meter arc
-        // For all Hue knobs (1, 4, 7, 10, 13), draw a continuous color gradient
-        if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13) {
+        // For all Hue knobs (1, 4, 7, 10, 13, 22), draw a continuous color gradient
+        if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13 || i === 22) {
             // Draw continuous hue gradient arc
             const numSegments = 30; // Reduced from 60 for better performance
             const segmentAngle = fullMeterSweep / numSegments;
@@ -6545,7 +6592,7 @@ function drawLightingMenu() {
                 ctx.arc(knobX, knobY, knobRadius * 0.85, segStart, segEnd);
                 ctx.stroke();
             }
-        } else if (i === 2 || i === 5 || i === 8 || i === 11 || i === 14) {
+        } else if (i === 2 || i === 5 || i === 8 || i === 11 || i === 14 || i === 23) {
             // Saturation knobs - draw gradient from gray to full color
             const numSegments = 20; // Reduced from 40 for better performance
             const segmentAngle = fullMeterSweep / numSegments;
@@ -6558,6 +6605,7 @@ function drawLightingMenu() {
             else if (i === 8) hueToUse = gGlobeLampHue;
             else if (i === 11) hueToUse = gSpotlight1Hue;
             else if (i === 14) hueToUse = gSpotlight2Hue;
+            else if (i === 23) hueToUse = gSunLightHue;
             
             for (let seg = 0; seg < numSegments; seg++) {
                 const segStart = meterStart + seg * segmentAngle;
@@ -6588,7 +6636,7 @@ function drawLightingMenu() {
         ctx.lineTo(pointerEndX, pointerEndY);
         
         // For Hue and Saturation knobs, make needle match the selected color
-        if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13) {
+        if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13 || i === 22) {
             // Hue knobs - needle in the selected hue
             ctx.strokeStyle = `hsla(${knobs[i].value}, 80%, 60%, ${lightingMenuOpacity})`;
         } else if (i === 2) {
@@ -6606,6 +6654,9 @@ function drawLightingMenu() {
         } else if (i === 14) {
             // Spotlight 2 saturation - needle in spotlight 2 color
             ctx.strokeStyle = `hsla(${gSpotlight2Hue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+        } else if (i === 23) {
+            // Sun saturation - needle in sun color
+            ctx.strokeStyle = `hsla(${gSunLightHue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
         } else {
             ctx.strokeStyle = `hsla(45, 30%, 80%, ${lightingMenuOpacity})`;
         }
@@ -6617,12 +6668,12 @@ function drawLightingMenu() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // Check if this is an intensity knob at 0 (Ambient, Overhead, Globe, Spot1, Spot2, Headlight, Ornament)
+        // Check if this is an intensity knob at 0 (Ambient, Overhead, Globe, Spot1, Spot2, Headlight, Ornament, Sun)
         let displayValue;
-        if ((i === 0 || i === 3 || i === 6 || i === 9 || i === 12 || i === 17 || i === 18) && knobs[i].value === 0) {
+        if ((i === 0 || i === 3 || i === 6 || i === 9 || i === 12 || i === 17 || i === 18 || i === 21) && knobs[i].value === 0) {
             displayValue = 'OFF';
             ctx.fillStyle = `hsla(0, 80%, 50%, ${lightingMenuOpacity})`; // Red color for OFF
-        } else if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13) {
+        } else if (i === 1 || i === 4 || i === 7 || i === 10 || i === 13 || i === 22) {
             // Hue knobs - show number in the selected hue color
             ctx.fillStyle = `hsla(${knobs[i].value}, 80%, 60%, ${lightingMenuOpacity})`;
             displayValue = Math.round(knobs[i].value).toString();
@@ -6645,6 +6696,10 @@ function drawLightingMenu() {
         } else if (i === 14) {
             // Spotlight 2 Saturation - show number in spotlight 2 color
             ctx.fillStyle = `hsla(${gSpotlight2Hue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
+            displayValue = Math.round(knobs[i].value).toString();
+        } else if (i === 23) {
+            // Sun Saturation - show number in sun color
+            ctx.fillStyle = `hsla(${gSunLightHue}, ${knobs[i].value}%, 60%, ${lightingMenuOpacity})`;
             displayValue = Math.round(knobs[i].value).toString();
         } else if (i === 16) {
             // Shadow Far - show as integer
@@ -6692,7 +6747,8 @@ function drawLightingMenu() {
         { row: 2, enabled: gGlobeLampEnabled },    // Globe
         { row: 3, enabled: gSpotlight1Enabled },   // Spotlight 1
         { row: 4, enabled: gSpotlight2Enabled },   // Spotlight 2
-        { row: 6, enabled: gOrnamentLightEnabled } // Ornament
+        { row: 6, enabled: gOrnamentLightEnabled }, // Ornament
+        { row: 7, enabled: gSunLightIntensity > 0 } // Sun (no toggle, just indicator)
     ];
     
     for (const btn of toggleButtons) {
@@ -6794,7 +6850,7 @@ function drawModelsMenu() {
     const columnSpacing = 0.416 * menuScale;
     const menuTopMargin = 0.08 * menuScale;
     const menuWidth = columnSpacing * 1.75;
-    const menuHeight = buttonSpacing * 7 + menuTopMargin;
+    const menuHeight = buttonSpacing * 12 + menuTopMargin;
     const padding = 0.08 * menuScale; // Top and bottom padding
     const paddingX = 0.001 * menuScale; // Left and right padding (minimal)
     const leftMargin = (menuWidth - columnSpacing) / 2; // Center the columns
@@ -6844,6 +6900,45 @@ function drawModelsMenu() {
     ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
     ctx.stroke();
     
+    // Draw All On / All Off buttons at the top (aligned with the two columns)
+    const allOnX = leftMargin;  // Left column
+    const allOffX = leftMargin + columnSpacing;  // Right column
+    const allOnOffY = menuTopMargin;
+    
+    // All On button
+    ctx.beginPath();
+    ctx.roundRect(allOnX - buttonWidth / 2, allOnOffY - buttonHeight / 2, buttonWidth, buttonHeight, 4);
+    ctx.fillStyle = `hsla(210, 70%, 45%, ${modelsMenuOpacity})`; // Blue
+    ctx.shadowColor = `hsla(210, 70%, 55%, ${modelsMenuOpacity * 0.8})`;
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `hsla(0, 0%, 20%, ${modelsMenuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = `hsla(0, 0%, 100%, ${modelsMenuOpacity})`;
+    ctx.font = `bold ${0.032 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ALL ON', allOnX, allOnOffY);
+    
+    // All Off button
+    ctx.beginPath();
+    ctx.roundRect(allOffX - buttonWidth / 2, allOnOffY - buttonHeight / 2, buttonWidth, buttonHeight, 4);
+    ctx.fillStyle = `hsla(30, 70%, 40%, ${modelsMenuOpacity})`; // Orange
+    ctx.shadowColor = `hsla(30, 70%, 50%, ${modelsMenuOpacity * 0.8})`;
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `hsla(0, 0%, 20%, ${modelsMenuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = `hsla(0, 0%, 100%, ${modelsMenuOpacity})`;
+    ctx.font = `bold ${0.032 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ALL OFF', allOffX, allOnOffY);
+    
     // Define model toggle buttons
     const models = [
         { label: 'Cannon', visible: gCannonVisible },
@@ -6859,13 +6954,21 @@ function drawModelsMenu() {
         { label: 'Velvet Sofa', visible: gSofaVisible },
         { label: 'Duchamp Wheel', visible: gBicycleWheelVisible },
         { label: 'Brancusi Sculpture', visible: gBirdVisible },
-        { label: 'Pig', visible: gSkyPigVisible }
+        { label: 'Pig', visible: gSkyPigVisible },
+        { label: 'Soccer Ball', visible: gSoccerBallVisible },
+        { label: 'Platonic Solids', visible: gPlatonicSolidsVisible },
+        { label: 'Column & Rings', visible: gColumnAndRingsVisible },
+        { label: 'Rug', visible: gRugVisible },
+        { label: 'Torus Obstacle', visible: gTorusObstacleVisible },
+        { label: 'Sphere Obstacles', visible: gSphereObstaclesVisible },
+        { label: 'Ornaments', visible: gOrnamentsVisible },
+        { label: 'Spotlights', visible: gSpotlightsVisible }
     ];
     
-    // Draw toggle buttons in 2 columns
+    // Draw toggle buttons in 2 columns (shifted down by 1 row)
     for (let i = 0; i < models.length; i++) {
-        const col = Math.floor(i / 7);
-        const row = i % 7;
+        const col = Math.floor(i / 11);
+        const row = (i % 11) + 1; // Add 1 to shift down
         const buttonX = leftMargin + col * columnSpacing;
         const buttonY = row * buttonSpacing + menuTopMargin;
         
@@ -7554,36 +7657,34 @@ function drawSkyMenu() {
     }
     ctx.fill();
     
-    // Sky Rendering Enabled checkbox (bottom left corner)
-    const skyEnabledX = -padding + knobRadius * 0.8;
-    const skyEnabledY = menuHeight + padding - knobRadius * 0.8;
+    // Sky Rendering Enabled button (at row 2, col 0)
+    const skyButtonWidth = knobRadius * 1.8;
+    const skyButtonHeight = knobRadius * 0.75;
+    const skyButtonX = 0 * knobSpacing; // Column 0
+    const skyButtonY = 2 * knobSpacing; // Row 2
     
-    // Draw outer circle with knob fill color
+    // Draw rounded rectangle button
     ctx.beginPath();
-    ctx.arc(skyEnabledX, skyEnabledY, checkboxRadius, 0, 2 * Math.PI);
-    ctx.fillStyle = 'hsla(30, 40%, 15%, 0.9)';
-    ctx.fill();
-    ctx.strokeStyle = 'hsla(30, 60%, 40%, 1.0)';
-    ctx.lineWidth = 0.003 * menuScale;
-    ctx.stroke();
-    
-    // Draw filled center (green when on, red when off)
-    ctx.beginPath();
-    ctx.arc(skyEnabledX, skyEnabledY, checkboxRadius * 0.5, 0, 2 * Math.PI);
+    ctx.roundRect(skyButtonX - skyButtonWidth / 2, skyButtonY - skyButtonHeight / 2, skyButtonWidth, skyButtonHeight, 4);
     if (skyRenderingEnabled) {
-        ctx.fillStyle = 'hsla(120, 80%, 50%, 1.0)';
+        ctx.fillStyle = 'hsla(120, 70%, 40%, 0.9)'; // Green when on
+        ctx.shadowColor = 'hsla(120, 70%, 50%, 0.8)';
     } else {
-        ctx.fillStyle = 'hsla(0, 80%, 50%, 1.0)';
+        ctx.fillStyle = 'hsla(0, 70%, 40%, 0.9)'; // Red when off
+        ctx.shadowColor = 'hsla(0, 70%, 50%, 0.8)';
     }
     ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'hsla(0, 0%, 20%, 0.9)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
     
-    // Draw label
-    ctx.font = `${0.035 * menuScale}px sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = 'hsla(0, 0%, 10%, 1.0)';
-    ctx.fillText('Sky on/off', skyEnabledX + checkboxRadius * 1.8 + 1, 2 + skyEnabledY + 0.008 * menuScale);
-    ctx.fillStyle = 'hsla(0, 0%, 80%, 1.0)';
-    ctx.fillText('Sky on/off', skyEnabledX + checkboxRadius * 1.8, skyEnabledY + 0.008 * menuScale);
+    // Draw label inside button
+    ctx.fillStyle = 'hsla(0, 0%, 100%, 1.0)';
+    ctx.font = `${0.28 * knobRadius}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SKY', skyButtonX, skyButtonY);
     
     ctx.restore();
 }
@@ -8422,10 +8523,20 @@ function createDollyRails() {
         metalness: 0.6, 
         roughness: 0.3 
     });
-    const endCapMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xcc6666, 
-        metalness: 0.5, 
-        roughness: 0.4 
+    const coneOrangeMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xFF6600, 
+        specular: 0x222222, 
+        shininess: 30 
+    });
+    const coneWhiteMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xFFFFFF, 
+        specular: 0x444444, 
+        shininess: 50 
+    });
+    const coneBaseMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xFF6600, 
+        specular: 0x222222, 
+        shininess: 30 
     });
     
     // Create rail geometry
@@ -8462,21 +8573,66 @@ function createDollyRails() {
         railsGroup.add(crossbeam);
     }
     
-    // Create end caps for dragging
-    // End cap diameter should equal the clear space between rails
-    const clearSpace = railSpacing - (2 * railRadius);
-    const endCapGeometry = new THREE.SphereGeometry(clearSpace / 2, 16, 16);
+    // Create traffic cone end caps for dragging
+    // Traffic cone dimensions
+    const coneHeight = 2.5;
+    const coneRadius = 0.8;
+    const baseHeight = 0.15;
+    const baseSize = 1.8;
     
-    const startEndCap = new THREE.Mesh(endCapGeometry, endCapMaterial);
-    startEndCap.position.set(-railLength / 2, 0, 0);
+    // Helper function to create a traffic cone
+    function createTrafficCone() {
+        const coneGroup = new THREE.Group();
+        
+        // Main cone body (frustum - truncated cone with flat top)
+        const coneTopRadius = 0.15;
+        const coneGeometry = new THREE.CylinderGeometry(coneTopRadius, coneRadius, coneHeight, 16);
+        const coneMesh = new THREE.Mesh(coneGeometry, coneOrangeMaterial);
+        coneMesh.position.y = baseHeight + coneHeight / 2;
+        coneMesh.castShadow = true;
+        coneGroup.add(coneMesh);
+        
+        // White reflective stripes (3 rings)
+        const stripeHeight = 0.15;
+        const stripePositions = [0.3, 0.55, 0.75]; // Relative positions along cone height
+        
+        for (let i = 0; i < stripePositions.length; i++) {
+            const relPos = stripePositions[i];
+            const yPos = baseHeight + coneHeight * relPos;
+            // Calculate radius at this height (frustum tapers from coneRadius at bottom to coneTopRadius at top)
+            const stripeRadius = coneRadius * (1 - relPos) + coneTopRadius * relPos + 0.02;
+            
+            const stripeGeometry = new THREE.CylinderGeometry(
+                stripeRadius, stripeRadius, stripeHeight, 16
+            );
+            const stripeMesh = new THREE.Mesh(stripeGeometry, coneWhiteMaterial);
+            stripeMesh.position.y = yPos;
+            stripeMesh.castShadow = true;
+            coneGroup.add(stripeMesh);
+        }
+        
+        // Square base
+        const baseGeometry = new THREE.BoxGeometry(baseSize, baseHeight, baseSize);
+        const baseMesh = new THREE.Mesh(baseGeometry, coneBaseMaterial);
+        baseMesh.position.y = baseHeight / 2;
+        baseMesh.castShadow = true;
+        baseMesh.receiveShadow = true;
+        coneGroup.add(baseMesh);
+        
+        return coneGroup;
+    }
+    
+    // Position cones beyond the track ends by one cone diameter (coneRadius * 2)
+    const coneDiameter = coneRadius * 2;
+    
+    const startEndCap = createTrafficCone();
+    startEndCap.position.set(-railLength / 2 - coneDiameter, 0, 0);
     startEndCap.name = 'startEndCap';
-    startEndCap.castShadow = true;
     railsGroup.add(startEndCap);
     
-    const endEndCap = new THREE.Mesh(endCapGeometry, endCapMaterial);
-    endEndCap.position.set(railLength / 2, 0, 0);
+    const endEndCap = createTrafficCone();
+    endEndCap.position.set(railLength / 2 + coneDiameter, 0, 0);
     endEndCap.name = 'endEndCap';
-    endEndCap.castShadow = true;
     railsGroup.add(endEndCap);
     
     // Position the rails group
@@ -8717,14 +8873,16 @@ function updateDollyRailsLength(newLength) {
     const railRadius = 0.1;
     const railSpacing = 1.5;
     const crossbeamSpacing = 2.5;
+    const coneRadius = 0.8;
+    const coneDiameter = coneRadius * 2;
     
     // Find and update rails and end caps
     const itemsToRemove = [];
     gDollyRailsMesh.children.forEach(child => {
         if (child.name === 'startEndCap') {
-            child.position.x = -newLength / 2;
+            child.position.x = -newLength / 2 - coneDiameter;
         } else if (child.name === 'endEndCap') {
-            child.position.x = newLength / 2;
+            child.position.x = newLength / 2 + coneDiameter;
         } else if (child.userData && child.userData.type === 'rail') {
             // Update rail geometry
             child.geometry.dispose();
@@ -8782,8 +8940,12 @@ function checkDollyRailsClick(clientX, clientY) {
     if (intersects.length > 0) {
         const hitObject = intersects[0].object;
         
-        // Check if hit an end cap
-        if (hitObject.name === 'startEndCap') {
+        // Check if hit an end cap (or a child of an end cap group)
+        const endCapObject = hitObject.name === 'startEndCap' || hitObject.name === 'endEndCap' 
+            ? hitObject 
+            : hitObject.parent;
+        
+        if (endCapObject && endCapObject.name === 'startEndCap') {
             gDraggingDollyEnd = 'start';
             gDraggingDolly = true;
             gDollyDragStartMouseX = clientX;
@@ -8801,7 +8963,7 @@ function checkDollyRailsClick(clientX, clientY) {
                 gCameraControl.enabled = false;
             }
             return true;
-        } else if (hitObject.name === 'endEndCap') {
+        } else if (endCapObject && endCapObject.name === 'endEndCap') {
             gDraggingDollyEnd = 'end';
             gDraggingDolly = true;
             gDollyDragStartMouseX = clientX;
@@ -8916,6 +9078,15 @@ function initThreeScene() {
     dirLight.shadow.mapSize.width = res;
     dirLight.shadow.mapSize.height = res;
     gThreeScene.add( dirLight );
+    
+    // Sun Directional Light (follows sky sun position)
+    gSunLight = new THREE.DirectionalLight(0xfff5e6, gSunLightIntensity);
+    gSunLight.visible = gSunLightIntensity > 0 && skyRenderingEnabled;
+    gSunLight.position.set(0, 60, 0);
+    gSunLight.castShadow = true; 
+    gSunLight.shadow.camera.near = 0.1;
+    gSunLight.shadow.camera.far = 60;
+    gThreeScene.add(gSunLight);
     
     /*// Spawn Point Light
     gSpawnPointLight = new THREE.PointLight( 0xffffff, 1.0, 30 ); // white light, intensity 1.0, distance 30
@@ -9040,6 +9211,10 @@ function initThreeScene() {
             gRugRoll.position.set(gRugStartX, gRugRollRadius, 0); // Start at left edge
             gRugRoll.castShadow = true;
             gThreeScene.add(gRugRoll);
+            
+            // Set initial visibility based on flag
+            gRug.visible = gRugVisible;
+            gRugRoll.visible = gRugVisible;
             
             console.log('Afghan rug loaded successfully with aspect ratio: ' + aspectRatio.toFixed(3));
         },
@@ -9507,6 +9682,9 @@ function initThreeScene() {
                 });
                 
                 gThreeScene.add(gCannon);
+                
+                // Set initial visibility based on flag
+                gCannon.visible = gCannonVisible;
                 
                 console.log('Cannon model loaded successfully');
                 if (gCannonFullGun) console.log('Found fullGun group');
@@ -10334,6 +10512,9 @@ function initThreeScene() {
                 gThreeScene.add(weight);
                 g16TonWeight = weight; // Store global reference
                 
+                // Set initial visibility based on Koons Dog flag (linked)
+                weight.visible = gKoonsDogVisible;
+                
                 console.log('16-ton weight model loaded successfully');
             },
             function(xhr) {
@@ -10357,7 +10538,7 @@ function initThreeScene() {
                 ball.position.copy(gSoccerBallPosition);
                 
                 // Scale to appropriate size
-                ball.scale.set(0.5, 0.5, 0.5);
+                ball.scale.set(0.3, 0.3, 0.3);
                 
                 // Remove any imported lights
                 var lightsToRemove = [];
@@ -10383,6 +10564,9 @@ function initThreeScene() {
                 
                 gThreeScene.add(ball);
                 gSoccerBall = ball; // Store global reference
+                
+                // Set initial visibility based on flag
+                ball.visible = gSoccerBallVisible;
                 
                 console.log('Soccer ball model loaded successfully');
             },
@@ -10893,6 +11077,9 @@ function initThreeScene() {
                 gThreeScene.add(star);
                 gHangingStars.push(star);
                 
+                // Set initial visibility based on flag
+                star.visible = gOrnamentsVisible;
+                
                 // Create thin wire from top of star up to ceiling
                 // Wire connects to model's origin (0,0,0)
                 var starHeight = 0; // No offset - connect to model origin
@@ -10910,6 +11097,9 @@ function initThreeScene() {
                 wire.receiveShadow = true;
                 
                 gThreeScene.add(wire);
+                
+                // Set initial visibility based on flag
+                wire.visible = gOrnamentsVisible;
                 
                 // Create truncated upside-down cone at hanging point
                 var coneHeight = 0.5;
@@ -10930,6 +11120,9 @@ function initThreeScene() {
                 cone.receiveShadow = true;
                 
                 gThreeScene.add(cone);
+                
+                // Set initial visibility based on flag
+                cone.visible = gOrnamentsVisible;
                 
                 // Create sphere obstacle for boid avoidance
                 // Adjust parameters based on ornament type
@@ -12931,6 +13124,7 @@ function initThreeScene() {
         pedestal.castShadow = true;
         pedestal.receiveShadow = true;
         gThreeScene.add(pedestal);
+        gPlatonicSolidPedestals.push(pedestal); // Store for toggling visibility
         
         // Create outer transparent Platonic solid
         var solidMaterial = new THREE.MeshPhongMaterial({
@@ -13409,8 +13603,6 @@ function initThreeScene() {
             // Adjust camera height in dolly mode
             const heightSpeed = 0.1;
             gDollyCameraHeight -= evt.deltaY * heightSpeed * 0.01;
-            // Clamp height to reasonable range (allow above and below world bounds)
-            gDollyCameraHeight = Math.max(-15, Math.min(30, gDollyCameraHeight));
         } else if (gCameraMode === 9) {
             evt.preventDefault();
             // Adjust camera zoom (FOV) in balloon free-look mode
@@ -15654,42 +15846,39 @@ function onPointer(evt) {
                 raycaster.ray.intersectPlane(groundPlane, intersectionPoint);
                 
                 if (intersectionPoint && gDollyDragPivotPosition) {
-                    // The pivot end stays at its fixed world position
-                    // The dragged end moves to the mouse intersection
+                    // The pivot end stays at its fixed world position (at the rail end, not cone)
+                    // The dragged cone moves to the mouse intersection
+                    // Rail length = distance from pivot to cone position, minus cone offset
                     
-                    let startCapWorldPos, endCapWorldPos;
+                    const coneRadius = 0.8;
+                    const coneDiameter = coneRadius * 2;
                     
-                    if (gDraggingDollyEnd === 'start') {
-                        // Dragging the start cap - it follows the mouse
-                        startCapWorldPos = new THREE.Vector3(intersectionPoint.x, 0, intersectionPoint.z);
-                        // End cap stays at stored pivot
-                        endCapWorldPos = new THREE.Vector3(gDollyDragPivotPosition.x, 0, gDollyDragPivotPosition.z);
-                    } else {
-                        // Dragging the end cap - it follows the mouse
-                        endCapWorldPos = new THREE.Vector3(intersectionPoint.x, 0, intersectionPoint.z);
-                        // Start cap stays at stored pivot
-                        startCapWorldPos = new THREE.Vector3(gDollyDragPivotPosition.x, 0, gDollyDragPivotPosition.z);
+                    // Calculate vector from pivot (fixed rail end) to mouse (moving cone)
+                    const dx = intersectionPoint.x - gDollyDragPivotPosition.x;
+                    const dz = intersectionPoint.z - gDollyDragPivotPosition.z;
+                    const distanceToCone = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (distanceToCone > 0.1) { // Avoid division by zero
+                        // Rail extends from pivot to one diameter before the cone
+                        const newLength = Math.max(10, distanceToCone - coneDiameter);
+                        gDollyRailsLength = newLength;
+                        
+                        // Calculate rotation (direction from pivot to mouse)
+                        gDollyRailsRotation = Math.atan2(-dz, dx);
+                        
+                        // Rail center is halfway from pivot in the direction of the mouse
+                        const normalizedDx = dx / distanceToCone;
+                        const normalizedDz = dz / distanceToCone;
+                        
+                        gDollyRailsPosition.set(
+                            gDollyDragPivotPosition.x + (normalizedDx * newLength / 2),
+                            0,
+                            gDollyDragPivotPosition.z + (normalizedDz * newLength / 2)
+                        );
+                        
+                        // Update the existing mesh instead of recreating
+                        updateDollyRailsMeshForDrag(gDollyRailsLength);
                     }
-                    
-                    // Calculate new length from the distance between the caps
-                    const dx = endCapWorldPos.x - startCapWorldPos.x;
-                    const dz = endCapWorldPos.z - startCapWorldPos.z;
-                    const newLength = Math.sqrt(dx * dx + dz * dz);
-                    gDollyRailsLength = Math.max(10, newLength);
-                    
-                    // Calculate rotation (direction from start to end)
-                    // NOTE: Negating dz because of how Three.js rotation around Y-axis works
-                    gDollyRailsRotation = Math.atan2(-dz, dx);
-                    
-                    // Calculate center (midpoint between the two caps)
-                    gDollyRailsPosition.set(
-                        (startCapWorldPos.x + endCapWorldPos.x) / 2,
-                        0,
-                        (startCapWorldPos.z + endCapWorldPos.z) / 2
-                    );
-                    
-                    // Update the existing mesh instead of recreating
-                    updateDollyRailsMeshForDrag(gDollyRailsLength);
                 }
             } else {
                 // Translating the entire dolly rails horizontally
@@ -15931,7 +16120,10 @@ function onPointer(evt) {
                     {min: 0, max: 2},       // 17: headlight intensity
                     {min: 0, max: 3},       // 18: ornament light intensity
                     {min: 3, max: 30},      // 19: ornament light falloff
-                    {min: 0, max: 100}      // 20: ornament height percentage
+                    {min: 0, max: 100},     // 20: ornament height percentage
+                    {min: 0, max: 2},       // 21: sun light intensity
+                    {min: 0, max: 360},     // 22: sun light hue
+                    {min: 0, max: 100}      // 23: sun light saturation
                 ];
                 
                 const dragSensitivity = 0.1;
@@ -16045,6 +16237,27 @@ function onPointer(evt) {
                             gLamps[1].statusIndicator.material.color.setHex(isOn ? 0x00ff00 : 0xff0000);
                             gLamps[1].statusIndicator.material.emissive.setHex(isOn ? 0x00ff00 : 0xff0000);
                             gLamps[1].statusIndicator.material.emissiveIntensity = 0.8;
+                            
+                            // Toggle visibility of all lamp components
+                            if (gLamps[1].basePlate) gLamps[1].basePlate.visible = isOn;
+                            if (gLamps[1].poleSections) {
+                                gLamps[1].poleSections.forEach(section => section.visible = isOn);
+                            }
+                            if (gLamps[1].poleCollars) {
+                                gLamps[1].poleCollars.forEach(collar => collar.visible = isOn);
+                            }
+                            if (gLamps[1].sleeve) gLamps[1].sleeve.visible = isOn;
+                            if (gLamps[1].outerCone) gLamps[1].outerCone.visible = isOn;
+                            if (gLamps[1].innerCone) gLamps[1].innerCone.visible = isOn;
+                            if (gLamps[1].bulb) gLamps[1].bulb.visible = isOn;
+                            if (gLamps[1].coneTipCapOuter) gLamps[1].coneTipCapOuter.visible = isOn;
+                            if (gLamps[1].coneTipCapInner) gLamps[1].coneTipCapInner.visible = isOn;
+                            if (gLamps[1].discs) {
+                                gLamps[1].discs.forEach(disc => disc.visible = isOn);
+                            }
+                            if (gLamps[1].pin) gLamps[1].pin.visible = isOn;
+                            if (gLamps[1].statusIndicator) gLamps[1].statusIndicator.visible = isOn;
+                            if (gLamps[1].statusCollar) gLamps[1].statusCollar.visible = isOn;
                         }
                         break;
                     case 10: // Spotlight 1 hue
@@ -16084,6 +16297,27 @@ function onPointer(evt) {
                             gLamps[2].statusIndicator.material.color.setHex(isOn ? 0x00ff00 : 0xff0000);
                             gLamps[2].statusIndicator.material.emissive.setHex(isOn ? 0x00ff00 : 0xff0000);
                             gLamps[2].statusIndicator.material.emissiveIntensity = 0.8;
+                            
+                            // Toggle visibility of all lamp components
+                            if (gLamps[2].basePlate) gLamps[2].basePlate.visible = isOn;
+                            if (gLamps[2].poleSections) {
+                                gLamps[2].poleSections.forEach(section => section.visible = isOn);
+                            }
+                            if (gLamps[2].poleCollars) {
+                                gLamps[2].poleCollars.forEach(collar => collar.visible = isOn);
+                            }
+                            if (gLamps[2].sleeve) gLamps[2].sleeve.visible = isOn;
+                            if (gLamps[2].outerCone) gLamps[2].outerCone.visible = isOn;
+                            if (gLamps[2].innerCone) gLamps[2].innerCone.visible = isOn;
+                            if (gLamps[2].bulb) gLamps[2].bulb.visible = isOn;
+                            if (gLamps[2].coneTipCapOuter) gLamps[2].coneTipCapOuter.visible = isOn;
+                            if (gLamps[2].coneTipCapInner) gLamps[2].coneTipCapInner.visible = isOn;
+                            if (gLamps[2].discs) {
+                                gLamps[2].discs.forEach(disc => disc.visible = isOn);
+                            }
+                            if (gLamps[2].pin) gLamps[2].pin.visible = isOn;
+                            if (gLamps[2].statusIndicator) gLamps[2].statusIndicator.visible = isOn;
+                            if (gLamps[2].statusCollar) gLamps[2].statusCollar.visible = isOn;
                         }
                         break;
                     case 13: // Spotlight 2 hue
@@ -16235,6 +16469,31 @@ function onPointer(evt) {
                                 const angle = Math.atan2(dx, dz);
                                 starData.wire.rotation.set(Math.atan(Math.sqrt(dx*dx + dz*dz) / wireLength), 0, -angle);
                             }
+                        }
+                        break;
+                    case 21: // Sun light intensity
+                        gSunLightIntensity = newValue;
+                        if (gSunLight) {
+                            gSunLight.intensity = gSunLightIntensity;
+                            gSunLight.visible = gSunLightIntensity > 0 && skyRenderingEnabled;
+                        }
+                        break;
+                    case 22: // Sun light hue
+                        gSunLightHue = newValue;
+                        if (gSunLight) {
+                            const lightness = 50 + gSunLightSaturation * 0.2;
+                            const color = new THREE.Color();
+                            color.setHSL(gSunLightHue / 360, gSunLightSaturation / 100, lightness / 100);
+                            gSunLight.color = color;
+                        }
+                        break;
+                    case 23: // Sun light saturation
+                        gSunLightSaturation = newValue;
+                        if (gSunLight) {
+                            const lightness = 50 + gSunLightSaturation * 0.2;
+                            const color = new THREE.Color();
+                            color.setHSL(gSunLightHue / 360, gSunLightSaturation / 100, lightness / 100);
+                            gSunLight.color = color;
                         }
                         break;
                 }
@@ -18228,7 +18487,7 @@ function checkInstructionsMenuClick(clientX, clientY) {
     
     const menuTopMargin = 0.02 * menuScale;
     const menuWidth = menuScale;
-    const menuHeight = 1.45 * menuScale;
+    const menuHeight = 1.8 * menuScale;
     const padding = 0.17 * menuScale;
     
     const menuUpperLeftX = instructionsMenuX * window.innerWidth;
@@ -18485,7 +18744,7 @@ function checkLightingMenuClick(clientX, clientY) {
     const knobSpacing = knobRadius * 3.25; // Increased spacing for gaps between boxes
     const menuTopMargin = 0.2 * knobRadius + 8; // +8 pixels for spacing
     const menuWidth = knobSpacing * 2;
-    const menuHeight = knobSpacing * 7; // 7 rows (now with 21 knobs)
+    const menuHeight = knobSpacing * 7.6; // Extended for sun light row
     const padding = 1.7 * knobRadius;
     
     const menuUpperLeftX = lightingMenuX * window.innerWidth;
@@ -18599,6 +18858,27 @@ function checkLightingMenuClick(clientX, clientY) {
                         gLamps[1].statusIndicator.material.color.setHex(isOn ? 0x00ff00 : 0xff0000);
                         gLamps[1].statusIndicator.material.emissive.setHex(isOn ? 0x00ff00 : 0xff0000);
                         gLamps[1].statusIndicator.material.emissiveIntensity = 0.8;
+                        
+                        // Toggle visibility of all lamp components
+                        if (gLamps[1].basePlate) gLamps[1].basePlate.visible = isOn;
+                        if (gLamps[1].poleSections) {
+                            gLamps[1].poleSections.forEach(section => section.visible = isOn);
+                        }
+                        if (gLamps[1].poleCollars) {
+                            gLamps[1].poleCollars.forEach(collar => collar.visible = isOn);
+                        }
+                        if (gLamps[1].sleeve) gLamps[1].sleeve.visible = isOn;
+                        if (gLamps[1].outerCone) gLamps[1].outerCone.visible = isOn;
+                        if (gLamps[1].innerCone) gLamps[1].innerCone.visible = isOn;
+                        if (gLamps[1].bulb) gLamps[1].bulb.visible = isOn;
+                        if (gLamps[1].coneTipCapOuter) gLamps[1].coneTipCapOuter.visible = isOn;
+                        if (gLamps[1].coneTipCapInner) gLamps[1].coneTipCapInner.visible = isOn;
+                        if (gLamps[1].discs) {
+                            gLamps[1].discs.forEach(disc => disc.visible = isOn);
+                        }
+                        if (gLamps[1].pin) gLamps[1].pin.visible = isOn;
+                        if (gLamps[1].statusIndicator) gLamps[1].statusIndicator.visible = isOn;
+                        if (gLamps[1].statusCollar) gLamps[1].statusCollar.visible = isOn;
                     }
                     break;
                 case 4: // Spotlight 2
@@ -18626,6 +18906,27 @@ function checkLightingMenuClick(clientX, clientY) {
                         gLamps[2].statusIndicator.material.color.setHex(isOn ? 0x00ff00 : 0xff0000);
                         gLamps[2].statusIndicator.material.emissive.setHex(isOn ? 0x00ff00 : 0xff0000);
                         gLamps[2].statusIndicator.material.emissiveIntensity = 0.8;
+                        
+                        // Toggle visibility of all lamp components
+                        if (gLamps[2].basePlate) gLamps[2].basePlate.visible = isOn;
+                        if (gLamps[2].poleSections) {
+                            gLamps[2].poleSections.forEach(section => section.visible = isOn);
+                        }
+                        if (gLamps[2].poleCollars) {
+                            gLamps[2].poleCollars.forEach(collar => collar.visible = isOn);
+                        }
+                        if (gLamps[2].sleeve) gLamps[2].sleeve.visible = isOn;
+                        if (gLamps[2].outerCone) gLamps[2].outerCone.visible = isOn;
+                        if (gLamps[2].innerCone) gLamps[2].innerCone.visible = isOn;
+                        if (gLamps[2].bulb) gLamps[2].bulb.visible = isOn;
+                        if (gLamps[2].coneTipCapOuter) gLamps[2].coneTipCapOuter.visible = isOn;
+                        if (gLamps[2].coneTipCapInner) gLamps[2].coneTipCapInner.visible = isOn;
+                        if (gLamps[2].discs) {
+                            gLamps[2].discs.forEach(disc => disc.visible = isOn);
+                        }
+                        if (gLamps[2].pin) gLamps[2].pin.visible = isOn;
+                        if (gLamps[2].statusIndicator) gLamps[2].statusIndicator.visible = isOn;
+                        if (gLamps[2].statusCollar) gLamps[2].statusCollar.visible = isOn;
                     }
                     break;
                 case 5: // Ornament
@@ -18712,7 +19013,7 @@ function checkLightingMenuClick(clientX, clientY) {
     }
     
     // Check each knob
-    for (let i = 0; i < 21; i++) {
+    for (let i = 0; i < 24; i++) {
         const row = Math.floor(i / 3);
         const col = i % 3;
         const knobX = menuOriginX + col * knobSpacing;
@@ -18738,7 +19039,8 @@ function checkLightingMenuClick(clientX, clientY) {
                 gHeadlightIntensity,
                 gOrnamentLightIntensity,
                 gOrnamentLightFalloff,
-                gOrnamentHeightOffset
+                gOrnamentHeightOffset,
+                gSunLightIntensity, gSunLightHue, gSunLightSaturation
             ];
             dragStartValue = values[i];
             
@@ -18777,13 +19079,240 @@ function checkModelsMenuClick(clientX, clientY) {
     const columnSpacing = 0.416 * menuScale;
     const menuTopMargin = 0.08 * menuScale;
     const menuWidth = columnSpacing * 1.75;
-    const menuHeight = buttonSpacing * 7 + menuTopMargin;
+    const menuHeight = buttonSpacing * 12 + menuTopMargin;
     const padding = 0.08 * menuScale; // Top and bottom padding
     const paddingX = 0.001 * menuScale; // Left and right padding (minimal)
     const leftMargin = (menuWidth - columnSpacing) / 2; // Center the columns
     
     const menuOriginX = modelsMenuX * window.innerWidth;
     const menuOriginY = modelsMenuY * window.innerHeight;
+    
+    // Check All On / All Off buttons (aligned with the two columns)
+    const allOnX = menuOriginX + leftMargin;  // Left column
+    const allOffX = menuOriginX + leftMargin + columnSpacing;  // Right column
+    const allOnOffY = menuOriginY + menuTopMargin;
+    
+    // Check All On button
+    if (clientX >= allOnX - buttonWidth / 2 && clientX <= allOnX + buttonWidth / 2 &&
+        clientY >= allOnOffY - buttonHeight / 2 && clientY <= allOnOffY + buttonHeight / 2) {
+        // Turn all models on
+        gCannonVisible = true;
+        gToyPlaneVisible = true;
+        gFlamingoVisible = true;
+        gHotAirBalloonVisible = true;
+        gMiniMammothVisible = true;
+        gMammothSkeletonVisible = true;
+        gKoonsDogVisible = true;
+        gDuckVisible = true;
+        gTeapotVisible = true;
+        gChairVisible = true;
+        gSofaVisible = true;
+        gBicycleWheelVisible = true;
+        gBirdVisible = true;
+        gSkyPigVisible = true;
+        gSoccerBallVisible = true;
+        gPlatonicSolidsVisible = true;
+        gColumnAndRingsVisible = true;
+        gRugVisible = true;
+        gTorusObstacleVisible = true;
+        gSphereObstaclesVisible = true;
+        gOrnamentsVisible = true;
+        gSpotlightsVisible = true;
+        
+        // Apply visibility to all objects
+        if (gCannon) gCannon.visible = true;
+        if (gToyPlane) gToyPlane.visible = true;
+        if (gFlamingo) gFlamingo.visible = true;
+        if (gHotAirBalloon) gHotAirBalloon.visible = true;
+        if (gMammoth) gMammoth.visible = true;
+        if (gMammothSkeleton) gMammothSkeleton.visible = true;
+        if (gKoonsDog) gKoonsDog.visible = true;
+        if (g16TonWeight) g16TonWeight.visible = true;
+        if (gDuck) gDuck.visible = true;
+        if (gTeapot) gTeapot.visible = true;
+        if (gChair) gChair.visible = true;
+        if (gSofa) gSofa.visible = true;
+        if (gBicycleWheel) gBicycleWheel.visible = true;
+        if (gStool) gStool.visible = true;
+        if (gBird) gBird.visible = true;
+        if (gSkyPig) gSkyPig.visible = true;
+        if (gSoccerBall) gSoccerBall.visible = true;
+        if (window.gPlatonicSolids) {
+            for (let i = 0; i < window.gPlatonicSolids.length; i++) {
+                window.gPlatonicSolids[i].visible = true;
+            }
+        }
+        if (gPlatonicSolidPedestals) {
+            for (let i = 0; i < gPlatonicSolidPedestals.length; i++) {
+                gPlatonicSolidPedestals[i].visible = true;
+            }
+        }
+        if (gColumnObstacle) {
+            if (gColumnObstacle.columnSections) gColumnObstacle.columnSections.forEach(s => s.visible = true);
+            if (gColumnObstacle.groutLayers) gColumnObstacle.groutLayers.forEach(g => g.visible = true);
+            if (gColumnObstacle.ringMeshes) gColumnObstacle.ringMeshes.forEach(r => r.visible = true);
+            if (gColumnObstacle.minorToricPedestalMesh) gColumnObstacle.minorToricPedestalMesh.visible = true;
+            if (gColumnObstacle.majorToricPedestalMesh) gColumnObstacle.majorToricPedestalMesh.visible = true;
+            if (gColumnObstacle.pedestalMesh) gColumnObstacle.pedestalMesh.visible = true;
+            if (gColumnObstacle.discMesh) gColumnObstacle.discMesh.visible = true;
+        }
+        if (gTori) gTori.forEach(t => t.visible = true);
+        if (gRug) gRug.visible = true;
+        if (gRugRoll) gRugRoll.visible = true;
+        if (gTorusObstacle && gTorusObstacle.mesh) gTorusObstacle.mesh.visible = true;
+        if (gSphereObstacle) {
+            if (gSphereObstacle.mesh) gSphereObstacle.mesh.visible = true;
+            if (gSphereObstacle.symbolGroup) gSphereObstacle.symbolGroup.visible = true;
+        }
+        if (gAttractorSphereObstacle) {
+            if (gAttractorSphereObstacle.mesh) gAttractorSphereObstacle.mesh.visible = true;
+            if (gAttractorSphereObstacle.symbolGroup) gAttractorSphereObstacle.symbolGroup.visible = true;
+        }
+        if (gRepellerSphereObstacle) {
+            if (gRepellerSphereObstacle.mesh) gRepellerSphereObstacle.mesh.visible = true;
+            if (gRepellerSphereObstacle.symbolGroup) gRepellerSphereObstacle.symbolGroup.visible = true;
+        }
+        if (gStarAnimData) {
+            for (let i = 0; i < gStarAnimData.length; i++) {
+                if (gStarAnimData[i].star) gStarAnimData[i].star.visible = true;
+                if (gStarAnimData[i].wire) gStarAnimData[i].wire.visible = true;
+                if (gStarAnimData[i].cone) gStarAnimData[i].cone.visible = true;
+            }
+        }
+        if (gLamps) {
+            for (let i = 0; i < gLamps.length; i++) {
+                if (gLamps[i]) {
+                    if (gLamps[i].basePlate) gLamps[i].basePlate.visible = true;
+                    if (gLamps[i].poleSections) gLamps[i].poleSections.forEach(s => s.visible = true);
+                    if (gLamps[i].poleCollars) gLamps[i].poleCollars.forEach(c => c.visible = true);
+                    if (gLamps[i].sleeve) gLamps[i].sleeve.visible = true;
+                    if (gLamps[i].outerCone) gLamps[i].outerCone.visible = true;
+                    if (gLamps[i].innerCone) gLamps[i].innerCone.visible = true;
+                    if (gLamps[i].bulb) gLamps[i].bulb.visible = true;
+                    if (gLamps[i].coneTipCapOuter) gLamps[i].coneTipCapOuter.visible = true;
+                    if (gLamps[i].coneTipCapInner) gLamps[i].coneTipCapInner.visible = true;
+                    if (gLamps[i].discs) gLamps[i].discs.forEach(d => d.visible = true);
+                    if (gLamps[i].pin) gLamps[i].pin.visible = true;
+                    if (gLamps[i].statusIndicator) gLamps[i].statusIndicator.visible = true;
+                    if (gLamps[i].statusCollar) gLamps[i].statusCollar.visible = true;
+                }
+            }
+        }
+        
+        if (gCameraControl) gCameraControl.enabled = false;
+        return true;
+    }
+    
+    // Check All Off button
+    if (clientX >= allOffX - buttonWidth / 2 && clientX <= allOffX + buttonWidth / 2 &&
+        clientY >= allOnOffY - buttonHeight / 2 && clientY <= allOnOffY + buttonHeight / 2) {
+        // Turn all models off
+        gCannonVisible = false;
+        gToyPlaneVisible = false;
+        gFlamingoVisible = false;
+        gHotAirBalloonVisible = false;
+        gMiniMammothVisible = false;
+        gMammothSkeletonVisible = false;
+        gKoonsDogVisible = false;
+        gDuckVisible = false;
+        gTeapotVisible = false;
+        gChairVisible = false;
+        gSofaVisible = false;
+        gBicycleWheelVisible = false;
+        gBirdVisible = false;
+        gSkyPigVisible = false;
+        gSoccerBallVisible = false;
+        gPlatonicSolidsVisible = false;
+        gColumnAndRingsVisible = false;
+        gRugVisible = false;
+        gTorusObstacleVisible = false;
+        gSphereObstaclesVisible = false;
+        gOrnamentsVisible = false;
+        gSpotlightsVisible = false;
+        
+        // Apply visibility to all objects
+        if (gCannon) gCannon.visible = false;
+        if (gToyPlane) gToyPlane.visible = false;
+        if (gFlamingo) gFlamingo.visible = false;
+        if (gHotAirBalloon) gHotAirBalloon.visible = false;
+        if (gMammoth) gMammoth.visible = false;
+        if (gMammothSkeleton) gMammothSkeleton.visible = false;
+        if (gKoonsDog) gKoonsDog.visible = false;
+        if (g16TonWeight) g16TonWeight.visible = false;
+        if (gDuck) gDuck.visible = false;
+        if (gTeapot) gTeapot.visible = false;
+        if (gChair) gChair.visible = false;
+        if (gSofa) gSofa.visible = false;
+        if (gBicycleWheel) gBicycleWheel.visible = false;
+        if (gStool) gStool.visible = false;
+        if (gBird) gBird.visible = false;
+        if (gSkyPig) gSkyPig.visible = false;
+        if (gSoccerBall) gSoccerBall.visible = false;
+        if (window.gPlatonicSolids) {
+            for (let i = 0; i < window.gPlatonicSolids.length; i++) {
+                window.gPlatonicSolids[i].visible = false;
+            }
+        }
+        if (gPlatonicSolidPedestals) {
+            for (let i = 0; i < gPlatonicSolidPedestals.length; i++) {
+                gPlatonicSolidPedestals[i].visible = false;
+            }
+        }
+        if (gColumnObstacle) {
+            if (gColumnObstacle.columnSections) gColumnObstacle.columnSections.forEach(s => s.visible = false);
+            if (gColumnObstacle.groutLayers) gColumnObstacle.groutLayers.forEach(g => g.visible = false);
+            if (gColumnObstacle.ringMeshes) gColumnObstacle.ringMeshes.forEach(r => r.visible = false);
+            if (gColumnObstacle.minorToricPedestalMesh) gColumnObstacle.minorToricPedestalMesh.visible = false;
+            if (gColumnObstacle.majorToricPedestalMesh) gColumnObstacle.majorToricPedestalMesh.visible = false;
+            if (gColumnObstacle.pedestalMesh) gColumnObstacle.pedestalMesh.visible = false;
+            if (gColumnObstacle.discMesh) gColumnObstacle.discMesh.visible = false;
+        }
+        if (gTori) gTori.forEach(t => t.visible = false);
+        if (gRug) gRug.visible = false;
+        if (gRugRoll) gRugRoll.visible = false;
+        if (gTorusObstacle && gTorusObstacle.mesh) gTorusObstacle.mesh.visible = false;
+        if (gSphereObstacle) {
+            if (gSphereObstacle.mesh) gSphereObstacle.mesh.visible = false;
+            if (gSphereObstacle.symbolGroup) gSphereObstacle.symbolGroup.visible = false;
+        }
+        if (gAttractorSphereObstacle) {
+            if (gAttractorSphereObstacle.mesh) gAttractorSphereObstacle.mesh.visible = false;
+            if (gAttractorSphereObstacle.symbolGroup) gAttractorSphereObstacle.symbolGroup.visible = false;
+        }
+        if (gRepellerSphereObstacle) {
+            if (gRepellerSphereObstacle.mesh) gRepellerSphereObstacle.mesh.visible = false;
+            if (gRepellerSphereObstacle.symbolGroup) gRepellerSphereObstacle.symbolGroup.visible = false;
+        }
+        if (gStarAnimData) {
+            for (let i = 0; i < gStarAnimData.length; i++) {
+                if (gStarAnimData[i].star) gStarAnimData[i].star.visible = false;
+                if (gStarAnimData[i].wire) gStarAnimData[i].wire.visible = false;
+                if (gStarAnimData[i].cone) gStarAnimData[i].cone.visible = false;
+            }
+        }
+        if (gLamps) {
+            for (let i = 0; i < gLamps.length; i++) {
+                if (gLamps[i]) {
+                    if (gLamps[i].basePlate) gLamps[i].basePlate.visible = false;
+                    if (gLamps[i].poleSections) gLamps[i].poleSections.forEach(s => s.visible = false);
+                    if (gLamps[i].poleCollars) gLamps[i].poleCollars.forEach(c => c.visible = false);
+                    if (gLamps[i].sleeve) gLamps[i].sleeve.visible = false;
+                    if (gLamps[i].outerCone) gLamps[i].outerCone.visible = false;
+                    if (gLamps[i].innerCone) gLamps[i].innerCone.visible = false;
+                    if (gLamps[i].bulb) gLamps[i].bulb.visible = false;
+                    if (gLamps[i].coneTipCapOuter) gLamps[i].coneTipCapOuter.visible = false;
+                    if (gLamps[i].coneTipCapInner) gLamps[i].coneTipCapInner.visible = false;
+                    if (gLamps[i].discs) gLamps[i].discs.forEach(d => d.visible = false);
+                    if (gLamps[i].pin) gLamps[i].pin.visible = false;
+                    if (gLamps[i].statusIndicator) gLamps[i].statusIndicator.visible = false;
+                    if (gLamps[i].statusCollar) gLamps[i].statusCollar.visible = false;
+                }
+            }
+        }
+        
+        if (gCameraControl) gCameraControl.enabled = false;
+        return true;
+    }
     
     // Check close button
     const closeIconRadius = 0.025 * menuScale;
@@ -18806,12 +19335,14 @@ function checkModelsMenuClick(clientX, clientY) {
         'gCannonVisible', 'gToyPlaneVisible', 'gFlamingoVisible', 'gHotAirBalloonVisible', 
         'gMiniMammothVisible', 'gMammothSkeletonVisible', 'gKoonsDogVisible', 'gDuckVisible',
         'gTeapotVisible', 'gChairVisible', 'gSofaVisible', 'gBicycleWheelVisible', 
-        'gBirdVisible', 'gSkyPigVisible'
+        'gBirdVisible', 'gSkyPigVisible', 'gSoccerBallVisible', 'gPlatonicSolidsVisible',
+        'gColumnAndRingsVisible', 'gRugVisible', 'gTorusObstacleVisible', 'gSphereObstaclesVisible',
+        'gOrnamentsVisible', 'gSpotlightsVisible'
     ];
     
     for (let i = 0; i < models.length; i++) {
-        const col = Math.floor(i / 7);
-        const row = i % 7;
+        const col = Math.floor(i / 11);
+        const row = (i % 11) + 1; // Add 1 to shift down
         const buttonX = menuOriginX + leftMargin + col * columnSpacing;
         const buttonY = menuOriginY + row * buttonSpacing + menuTopMargin;
         
@@ -18892,6 +19423,8 @@ function checkModelsMenuClick(clientX, clientY) {
                 case 6: 
                     gKoonsDogVisible = !gKoonsDogVisible; 
                     if (gKoonsDog) gKoonsDog.visible = gKoonsDogVisible;
+                    // Also hide/show 16-ton weight with Koons dog
+                    if (g16TonWeight) g16TonWeight.visible = gKoonsDogVisible;
                     // Manage Koons dog obstacle
                     if (gKoonsDogObstacle) {
                         if (gKoonsDogVisible && !gObstacles.includes(gKoonsDogObstacle)) {
@@ -18998,6 +19531,175 @@ function checkModelsMenuClick(clientX, clientY) {
                         } else if (!gSkyPigVisible) {
                             const index = gObstacles.indexOf(gSkyPigObstacle);
                             if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 14: 
+                    gSoccerBallVisible = !gSoccerBallVisible; 
+                    if (gSoccerBall) gSoccerBall.visible = gSoccerBallVisible;
+                    break;
+                case 15: 
+                    gPlatonicSolidsVisible = !gPlatonicSolidsVisible; 
+                    if (window.gPlatonicSolids) {
+                        for (let i = 0; i < window.gPlatonicSolids.length; i++) {
+                            window.gPlatonicSolids[i].visible = gPlatonicSolidsVisible;
+                        }
+                    }
+                    // Toggle pedestals visibility
+                    if (gPlatonicSolidPedestals) {
+                        for (let i = 0; i < gPlatonicSolidPedestals.length; i++) {
+                            gPlatonicSolidPedestals[i].visible = gPlatonicSolidsVisible;
+                        }
+                    }
+                    break;
+                case 16: 
+                    gColumnAndRingsVisible = !gColumnAndRingsVisible; 
+                    if (gColumnObstacle) {
+                        // Toggle visibility of column sections
+                        if (gColumnObstacle.columnSections) {
+                            gColumnObstacle.columnSections.forEach(section => {
+                                section.visible = gColumnAndRingsVisible;
+                            });
+                        }
+                        // Toggle visibility of grout layers
+                        if (gColumnObstacle.groutLayers) {
+                            gColumnObstacle.groutLayers.forEach(grout => {
+                                grout.visible = gColumnAndRingsVisible;
+                            });
+                        }
+                        // Toggle visibility of rings
+                        if (gColumnObstacle.ringMeshes) {
+                            gColumnObstacle.ringMeshes.forEach(ring => {
+                                ring.visible = gColumnAndRingsVisible;
+                            });
+                        }
+                        // Toggle visibility of pedestals
+                        if (gColumnObstacle.minorToricPedestalMesh) {
+                            gColumnObstacle.minorToricPedestalMesh.visible = gColumnAndRingsVisible;
+                        }
+                        if (gColumnObstacle.majorToricPedestalMesh) {
+                            gColumnObstacle.majorToricPedestalMesh.visible = gColumnAndRingsVisible;
+                        }
+                        if (gColumnObstacle.pedestalMesh) {
+                            gColumnObstacle.pedestalMesh.visible = gColumnAndRingsVisible;
+                        }
+                        if (gColumnObstacle.discMesh) {
+                            gColumnObstacle.discMesh.visible = gColumnAndRingsVisible;
+                        }
+                    }
+                    // Toggle visibility of torii (rings on top of column)
+                    if (gTori) {
+                        gTori.forEach(torus => {
+                            torus.visible = gColumnAndRingsVisible;
+                        });
+                    }
+                    // Manage column obstacle
+                    if (gColumnObstacle) {
+                        if (gColumnAndRingsVisible && !gObstacles.includes(gColumnObstacle)) {
+                            gObstacles.push(gColumnObstacle);
+                        } else if (!gColumnAndRingsVisible) {
+                            const index = gObstacles.indexOf(gColumnObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 17: 
+                    gRugVisible = !gRugVisible; 
+                    if (gRug) gRug.visible = gRugVisible;
+                    if (gRugRoll) gRugRoll.visible = gRugVisible;
+                    break;
+                case 18: 
+                    gTorusObstacleVisible = !gTorusObstacleVisible; 
+                    if (gTorusObstacle && gTorusObstacle.mesh) {
+                        gTorusObstacle.mesh.visible = gTorusObstacleVisible;
+                    }
+                    if (gTorusObstacle) {
+                        if (gTorusObstacleVisible && !gObstacles.includes(gTorusObstacle)) {
+                            gObstacles.push(gTorusObstacle);
+                        } else if (!gTorusObstacleVisible) {
+                            const index = gObstacles.indexOf(gTorusObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 19: 
+                    gSphereObstaclesVisible = !gSphereObstaclesVisible; 
+                    // Toggle visibility and obstacle status for all three spheres
+                    if (gSphereObstacle) {
+                        if (gSphereObstacle.mesh) gSphereObstacle.mesh.visible = gSphereObstaclesVisible;
+                        if (gSphereObstacle.symbolGroup) gSphereObstacle.symbolGroup.visible = gSphereObstaclesVisible;
+                        if (gSphereObstaclesVisible && !gObstacles.includes(gSphereObstacle)) {
+                            gObstacles.push(gSphereObstacle);
+                        } else if (!gSphereObstaclesVisible) {
+                            const index = gObstacles.indexOf(gSphereObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    if (gAttractorSphereObstacle) {
+                        if (gAttractorSphereObstacle.mesh) gAttractorSphereObstacle.mesh.visible = gSphereObstaclesVisible;
+                        if (gAttractorSphereObstacle.symbolGroup) gAttractorSphereObstacle.symbolGroup.visible = gSphereObstaclesVisible;
+                        if (gSphereObstaclesVisible && !gObstacles.includes(gAttractorSphereObstacle)) {
+                            gObstacles.push(gAttractorSphereObstacle);
+                        } else if (!gSphereObstaclesVisible) {
+                            const index = gObstacles.indexOf(gAttractorSphereObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    if (gRepellerSphereObstacle) {
+                        if (gRepellerSphereObstacle.mesh) gRepellerSphereObstacle.mesh.visible = gSphereObstaclesVisible;
+                        if (gRepellerSphereObstacle.symbolGroup) gRepellerSphereObstacle.symbolGroup.visible = gSphereObstaclesVisible;
+                        if (gSphereObstaclesVisible && !gObstacles.includes(gRepellerSphereObstacle)) {
+                            gObstacles.push(gRepellerSphereObstacle);
+                        } else if (!gSphereObstaclesVisible) {
+                            const index = gObstacles.indexOf(gRepellerSphereObstacle);
+                            if (index > -1) gObstacles.splice(index, 1);
+                        }
+                    }
+                    break;
+                case 20: 
+                    gOrnamentsVisible = !gOrnamentsVisible; 
+                    // Toggle visibility of all ornaments (stars, hearts, moons, clovers, diamonds)
+                    if (gStarAnimData) {
+                        for (let i = 0; i < gStarAnimData.length; i++) {
+                            const ornament = gStarAnimData[i];
+                            if (ornament.star) ornament.star.visible = gOrnamentsVisible;
+                            if (ornament.wire) ornament.wire.visible = gOrnamentsVisible;
+                            if (ornament.cone) ornament.cone.visible = gOrnamentsVisible;
+                        }
+                    }
+                    break;
+                case 21: 
+                    gSpotlightsVisible = !gSpotlightsVisible; 
+                    // Toggle visibility of spotlight lamp objects (not the lights themselves)
+                    if (gLamps) {
+                        for (let i = 0; i < gLamps.length; i++) {
+                            if (gLamps[i]) {
+                                if (gLamps[i].basePlate) gLamps[i].basePlate.visible = gSpotlightsVisible;
+                                if (gLamps[i].poleSections) {
+                                    gLamps[i].poleSections.forEach(section => {
+                                        if (section) section.visible = gSpotlightsVisible;
+                                    });
+                                }
+                                if (gLamps[i].poleCollars) {
+                                    gLamps[i].poleCollars.forEach(collar => {
+                                        if (collar) collar.visible = gSpotlightsVisible;
+                                    });
+                                }
+                                if (gLamps[i].sleeve) gLamps[i].sleeve.visible = gSpotlightsVisible;
+                                if (gLamps[i].outerCone) gLamps[i].outerCone.visible = gSpotlightsVisible;
+                                if (gLamps[i].innerCone) gLamps[i].innerCone.visible = gSpotlightsVisible;
+                                if (gLamps[i].bulb) gLamps[i].bulb.visible = gSpotlightsVisible;
+                                if (gLamps[i].coneTipCapOuter) gLamps[i].coneTipCapOuter.visible = gSpotlightsVisible;
+                                if (gLamps[i].coneTipCapInner) gLamps[i].coneTipCapInner.visible = gSpotlightsVisible;
+                                if (gLamps[i].discs) {
+                                    gLamps[i].discs.forEach(disc => {
+                                        if (disc) disc.visible = gSpotlightsVisible;
+                                    });
+                                }
+                                if (gLamps[i].pin) gLamps[i].pin.visible = gSpotlightsVisible;
+                                if (gLamps[i].statusIndicator) gLamps[i].statusIndicator.visible = gSpotlightsVisible;
+                                if (gLamps[i].statusCollar) gLamps[i].statusCollar.visible = gSpotlightsVisible;
+                            }
                         }
                     }
                     break;
@@ -19447,13 +20149,14 @@ function checkSkyMenuClick(clientX, clientY) {
         return true;
     }
     
-    // Sky Rendering Enabled checkbox (bottom left corner)
-    const skyEnabledX = menuOriginX - padding + knobRadius * 0.8;
-    const skyEnabledY = menuOriginY + menuHeight + padding - knobRadius * 0.8;
-    const sedx = clientX - skyEnabledX;
-    const sedy = clientY - skyEnabledY;
+    // Sky Rendering Enabled button (at row 2, col 0)
+    const skyButtonWidth = knobRadius * 1.8;
+    const skyButtonHeight = knobRadius * 0.75;
+    const skyButtonX = menuOriginX + 0 * knobSpacing; // Column 0
+    const skyButtonY = menuOriginY + 2 * knobSpacing; // Row 2
     
-    if (sedx * sedx + sedy * sedy < checkboxRadius * checkboxRadius) {
+    if (clientX >= skyButtonX - skyButtonWidth / 2 && clientX <= skyButtonX + skyButtonWidth / 2 &&
+        clientY >= skyButtonY - skyButtonHeight / 2 && clientY <= skyButtonY + skyButtonHeight / 2) {
         skyRenderingEnabled = !skyRenderingEnabled;
         return true;
     }
@@ -22840,9 +23543,49 @@ function update() {
             window.skyRenderer.effectController.fov = gCamera.fov;
             
             window.skyRenderer.render();
-        } else if (window.skyCanvasElement) {
+            
+            // Keep renderer transparent when sky is visible
+            gRenderer.setClearColor(0x000000, 0);
+            
+            // Update sun directional light direction based on sky sun position
+            if (gSunLight && gSunLightIntensity > 0) {
+                const skyCtrl = window.skyRenderer.effectController;
+                const azimuth = skyCtrl.azimuth * Math.PI / 180; // Convert to radians
+                const elevation = skyCtrl.elevation * Math.PI / 180; // Convert to radians
+                
+                // Calculate sun direction vector (pointing FROM sun TO origin)
+                // Azimuth: 0=north, 90=east, 180=south, 270=west
+                // In THREE.js: +X=right, +Z=forward (toward viewer), +Y=up
+                const sunX = Math.sin(azimuth) * Math.cos(elevation);
+                const sunY = Math.sin(elevation);
+                const sunZ = Math.cos(azimuth) * Math.cos(elevation);
+                
+                // Position light far away in opposite direction (light shines toward origin)
+                const distance = 100;
+                gSunLight.position.set(-sunX * distance, -sunY * distance, -sunZ * distance);
+                
+                // Update sun light color based on hue and saturation
+                const lightness = 50 + gSunLightSaturation * 0.2; // Increase lightness with saturation
+                const color = new THREE.Color();
+                color.setHSL(gSunLightHue / 360, gSunLightSaturation / 100, lightness / 100);
+                gSunLight.color = color;
+                gSunLight.intensity = gSunLightIntensity;
+                gSunLight.visible = true;
+            } else if (gSunLight) {
+                gSunLight.visible = false;
+            }
+        } else {
             // Hide the sky canvas when rendering is disabled
-            window.skyCanvasElement.style.display = 'none';
+            if (window.skyCanvasElement) {
+                window.skyCanvasElement.style.display = 'none';
+            }
+            // Set black background when sky is off
+            gRenderer.setClearColor(0x000000, 1);
+            
+            // Hide sun light when sky is disabled
+            if (gSunLight) {
+                gSunLight.visible = false;
+            }
         }
         
         if (gStereoEnabled && gAnaglyphEffect) {
