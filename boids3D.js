@@ -10,7 +10,8 @@ var gLoadingManager = null; // THREE.LoadingManager to track asset loading
 var gAssetsLoaded = false; // Flag tracking if all assets have finished loading
 var gLoadingScreen = null; // Loading screen element
 var gLoadingBar = null; // Progress bar element
-
+var gBoidRules = true; // Whether to apply boid rules
+var gPhysicsRules = false; // Whether to apply simple physics rules
 var gThreeScene;
 var gRenderer;
 var gStats; // Stats.js for performance monitoring
@@ -257,6 +258,12 @@ var skyMenuOpacity = 0;
 var skyMenuFadeSpeed = 3.0;
 var skyMenuX = 0.15; // Sky menu position
 var skyMenuY = 0.1;
+var physicsMenuVisible = false; // Physics submenu visibility
+var physicsMenuVisibleBeforeHide = false;
+var physicsMenuOpacity = 0;
+var physicsMenuFadeSpeed = 3.0;
+var physicsMenuX = 0.36; // Physics menu position (to the right of simulation menu)
+var physicsMenuY = 0.1;
 var autoElevation = false; // Auto elevation mode for sky
 var autoElevationRate = 0.02; // Rate of auto elevation change
 var skyRenderingEnabled = false; // Whether to render the sky
@@ -285,6 +292,7 @@ var gDraggingPrimaryRing = false; // Track if dragging primary ring
 var gDraggingSecondaryRing = false; // Track if dragging secondary ring
 var gRingDragStartAngle = 0; // Starting angle when drag began
 var draggedKnob = null; // Currently dragged knob index
+var draggedPhysicsKnob = null; // Currently dragged physics knob index
 var dragStartMouseX = 0;
 var dragStartMouseY = 0;
 var dragStartValue = 0;
@@ -690,6 +698,14 @@ var boidProps = {
     margin: 2.0, // Distance from boundary to start turning
     wireframe: false, // Render boids in wireframe mode
     material: 'imported' // Material type: 'basic', 'phong', 'standard', 'normal', 'toon', 'depth', 'imported'
+};
+
+// Physics mode properties
+var physicsProps = {
+    repulsionEnabled: false, // Whether repulsion is active
+    repulsionForce: 0.5, // Repulsion force strength (0-2)
+    repulsionDist: 1.5, // Repulsion distance multiplier (0-3)
+    restitution: 0.8, // Coefficient of restitution for collisions (0-1)
 };
 
 // Boid trail tracking variables
@@ -3438,6 +3454,15 @@ function makeBoids() {
     console.log("Spawned " + gPhysicsScene.objects.length + " boids total ");
 }
 
+//  HANDLE SIMPLE PHYSICS RULES ------------------------------------------------------------------
+function handlePhysicsRules(boid) {
+
+// handle boid on boid direct imapcts
+
+// handle boid repulsation at a distance (like gravity but repulsive and with a customizable radius of effect)
+
+}
+
 
 //  HANDLE BOID RULES -------------
 function handleBoidRules(boid) {
@@ -3533,6 +3558,207 @@ function handleBoidRules(boid) {
     }
 }
 
+//  HANDLE BOID-TO-BOID PHYSICS COLLISIONS (3D version of handleBallHits from slosh.js) --------------------------------------------------------------------
+function handleBoidHits(boid1, boid2) {
+    // Calculate direction vector between boids
+    const dx = boid2.pos.x - boid1.pos.x;
+    const dy = boid2.pos.y - boid1.pos.y;
+    const dz = boid2.pos.z - boid1.pos.z;
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    
+    // Check if boids are colliding
+    if (d == 0.0 || d >= boid1.rad + boid2.rad)
+        return;
+    
+    // Normalize direction vector
+    const dirX = dx / d;
+    const dirY = dy / d;
+    const dirZ = dz / d;
+    
+    // Calculate overlap and correction
+    const corr = (boid1.rad + boid2.rad - d) / 2.0 + 0.001; // Small buffer to prevent immediate re-collision
+    
+    // Calculate velocity components along collision normal
+    const v1 = boid1.vel.x * dirX + boid1.vel.y * dirY + boid1.vel.z * dirZ;
+    const v2 = boid2.vel.x * dirX + boid2.vel.y * dirY + boid2.vel.z * dirZ;
+    
+    // Calculate masses (based on volume/radius cubed)
+    const m1 = boid1.rad * boid1.rad * boid1.rad;
+    const m2 = boid2.rad * boid2.rad * boid2.rad;
+    
+    // Calculate new velocities based on restitution
+    let newV1, newV2;
+    if (physicsProps.restitution == 0) {
+        newV1 = (m1 * v1 + m2 * v2) / (m1 + m2);
+        newV2 = (m1 * v1 + m2 * v2) / (m1 + m2);
+    } else {
+        newV1 = (m1 * v1 + m2 * v2 - m2 * (v1 - v2) * physicsProps.restitution) / (m1 + m2);
+        newV2 = (m1 * v1 + m2 * v2 - m1 * (v2 - v1) * physicsProps.restitution) / (m1 + m2);
+    }
+    
+    // Apply position corrections
+    boid1.pos.x -= dirX * corr;
+    boid1.pos.y -= dirY * corr;
+    boid1.pos.z -= dirZ * corr;
+    boid2.pos.x += dirX * corr;
+    boid2.pos.y += dirY * corr;
+    boid2.pos.z += dirZ * corr;
+    
+    // Apply velocity changes
+    boid1.vel.x += dirX * (newV1 - v1);
+    boid1.vel.y += dirY * (newV1 - v1);
+    boid1.vel.z += dirZ * (newV1 - v1);
+    boid2.vel.x += dirX * (newV2 - v2);
+    boid2.vel.y += dirY * (newV2 - v2);
+    boid2.vel.z += dirZ * (newV2 - v2);
+}
+
+//  HANDLE BOID-TO-BOID REPULSION (3D version of handleBallRepulsion from slosh.js) --------------------------------------------------------------------
+function handleBoidRepulsion(boid1, boid2) {
+    const dx = boid2.pos.x - boid1.pos.x;
+    const dy = boid2.pos.y - boid1.pos.y;
+    const dz = boid2.pos.z - boid1.pos.z;
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    
+    // Automatic repulsion scaling: reduce repulsion for larger particles
+    const maxRadius = Math.max(boid1.rad, boid2.rad);
+    const baseRadius = 0.25; // Match boidRadius default
+    const repulsionScale = maxRadius <= baseRadius ? 1.0 : baseRadius / maxRadius;
+    
+    const scaledRepulsionDist = physicsProps.repulsionDist * repulsionScale;
+    const repulsionThreshold = scaledRepulsionDist * (boid1.rad + boid2.rad);
+    
+    if (d == 0.0 || d >= repulsionThreshold)
+        return;
+    
+    // Normalize direction vector
+    const dirX = dx / d;
+    const dirY = dy / d;
+    const dirZ = dz / d;
+    
+    const compression = Math.abs(repulsionThreshold - d);
+    const scaledRepulsionForce = physicsProps.repulsionForce * repulsionScale;
+    const force = scaledRepulsionForce * compression;
+    
+    // Calculate masses (based on volume/radius cubed)
+    const m1 = boid1.rad * boid1.rad * boid1.rad;
+    const m2 = boid2.rad * boid2.rad * boid2.rad;
+    const totalMass = m1 + m2;
+    const force1 = force * (m2 / totalMass);
+    const force2 = force * (m1 / totalMass);
+    
+    boid1.vel.x -= dirX * force1;
+    boid1.vel.y -= dirY * force1;
+    boid1.vel.z -= dirZ * force1;
+    boid2.vel.x += dirX * force2;
+    boid2.vel.y += dirY * force2;
+    boid2.vel.z += dirZ * force2;
+}
+
+//  HANDLE PHYSICS RULES (collision + repulsion + boundaries + obstacles) --------------------------------------------------------------------
+function handlePhysicsRules(boid) {
+    // Get nearby boids for collision detection
+    const nearbyBoids = SpatialGrid.getNearby(boid, boidProps.visualRange);
+    
+    // Handle boid-to-boid collisions
+    for (let i = 0; i < nearbyBoids.length; i++) {
+        const otherBoid = nearbyBoids[i];
+        if (otherBoid !== boid) {
+            handleBoidHits(boid, otherBoid);
+            
+            // Handle repulsion if enabled
+            if (physicsProps.repulsionEnabled) {
+                handleBoidRepulsion(boid, otherBoid);
+            }
+        }
+    }
+    
+    // Handle boundary collisions
+    handlePhysicsBoundaries(boid);
+    
+    // Handle obstacle collisions
+    for (let i = 0; i < gObstacles.length; i++) {
+        if (gObstacles[i].enabled) {
+            handlePhysicsObstacle(boid, gObstacles[i]);
+        }
+    }
+}
+
+//  HANDLE PHYSICS BOUNDARIES (walls, floor, ceiling) --------------------------------------------------------------------
+function handlePhysicsBoundaries(boid) {
+    const margin = 0.1; // Small margin for boundary checks
+    
+    // Floor collision
+    if (boid.pos.y - boid.rad < margin) {
+        boid.pos.y = margin + boid.rad;
+        boid.vel.y = Math.abs(boid.vel.y) * physicsProps.restitution;
+    }
+    
+    // Ceiling collision
+    if (boid.pos.y + boid.rad > gWorldSizeY - margin) {
+        boid.pos.y = gWorldSizeY - margin - boid.rad;
+        boid.vel.y = -Math.abs(boid.vel.y) * physicsProps.restitution;
+    }
+    
+    // Left wall collision
+    if (boid.pos.x - boid.rad < -gWorldSizeX + margin) {
+        boid.pos.x = -gWorldSizeX + margin + boid.rad;
+        boid.vel.x = Math.abs(boid.vel.x) * physicsProps.restitution;
+    }
+    
+    // Right wall collision
+    if (boid.pos.x + boid.rad > gWorldSizeX - margin) {
+        boid.pos.x = gWorldSizeX - margin - boid.rad;
+        boid.vel.x = -Math.abs(boid.vel.x) * physicsProps.restitution;
+    }
+    
+    // Back wall collision
+    if (boid.pos.z - boid.rad < -gWorldSizeZ + margin) {
+        boid.pos.z = -gWorldSizeZ + margin + boid.rad;
+        boid.vel.z = Math.abs(boid.vel.z) * physicsProps.restitution;
+    }
+    
+    // Front wall collision
+    if (boid.pos.z + boid.rad > gWorldSizeZ - margin) {
+        boid.pos.z = gWorldSizeZ - margin - boid.rad;
+        boid.vel.z = -Math.abs(boid.vel.z) * physicsProps.restitution;
+    }
+}
+
+//  HANDLE PHYSICS OBSTACLE COLLISIONS --------------------------------------------------------------------
+function handlePhysicsObstacle(boid, obstacle) {
+    // Check if obstacle is a sphere
+    if (obstacle.radius !== undefined) {
+        const dx = boid.pos.x - obstacle.position.x;
+        const dy = boid.pos.y - obstacle.position.y;
+        const dz = boid.pos.z - obstacle.position.z;
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        
+        if (d < boid.rad + obstacle.radius && d > 0) {
+            // Normalize direction
+            const dirX = dx / d;
+            const dirY = dy / d;
+            const dirZ = dz / d;
+            
+            // Calculate overlap
+            const overlap = boid.rad + obstacle.radius - d;
+            
+            // Push boid out
+            boid.pos.x += dirX * overlap;
+            boid.pos.y += dirY * overlap;
+            boid.pos.z += dirZ * overlap;
+            
+            // Reflect velocity
+            const vn = boid.vel.x * dirX + boid.vel.y * dirY + boid.vel.z * dirZ;
+            boid.vel.x -= 2 * vn * dirX * physicsProps.restitution;
+            boid.vel.y -= 2 * vn * dirY * physicsProps.restitution;
+            boid.vel.z -= 2 * vn * dirZ * physicsProps.restitution;
+        }
+    }
+    // For box and torus obstacles, use the existing avoidance system
+    // as they already have distance calculation methods
+}
+
 
 // ------------------------------------------------------------------
 function simulate() {
@@ -3551,9 +3777,19 @@ function simulate() {
         return;
         
     // Apply boid rules to all boids
-    for (var i = 0; i < gPhysicsScene.objects.length; i++) {
-        var boid = gPhysicsScene.objects[i];
-        handleBoidRules(boid);
+    if (gBoidRules) {
+        for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+            var boid = gPhysicsScene.objects[i];
+            handleBoidRules(boid);
+        }
+    }
+
+    // Apply kinetic rules to all boids
+    if (gPhysicsRules) {
+         for (var i = 0; i < gPhysicsScene.objects.length; i++) {
+            var boid = gPhysicsScene.objects[i];
+            handlePhysicsRules(boid);
+        }
     }
     
     // Update positions and spatial grid
@@ -5479,6 +5715,57 @@ function drawSimMenu() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('FLOOR', buttonX, buttonY2);
+    
+    // Physics mode arrow button - Large arrow shape
+    const arrowY = 4 * knobSpacing + menuTopMargin + knobRadius * 2.2; // Position at bottom, below knobs
+    const arrowWidth = knobSpacing * 2.5; // Wider arrow
+    const arrowHeight = knobRadius * 0.85;
+    const arrowHeadWidth = knobRadius * 0.8;
+    const arrowBodyHeight = knobRadius * 0.45;
+    const arrowStartX = 0;
+    
+    // Draw arrow shape
+    ctx.beginPath();
+    // Start at left side of arrow body
+    ctx.moveTo(arrowStartX, arrowY - arrowBodyHeight / 2);
+    // Top of arrow body
+    ctx.lineTo(arrowStartX + arrowWidth - arrowHeadWidth, arrowY - arrowBodyHeight / 2);
+    // Top of arrow head
+    ctx.lineTo(arrowStartX + arrowWidth - arrowHeadWidth, arrowY - arrowHeight / 2);
+    // Arrow point
+    ctx.lineTo(arrowStartX + arrowWidth, arrowY);
+    // Bottom of arrow head
+    ctx.lineTo(arrowStartX + arrowWidth - arrowHeadWidth, arrowY + arrowHeight / 2);
+    // Bottom of arrow body
+    ctx.lineTo(arrowStartX + arrowWidth - arrowHeadWidth, arrowY + arrowBodyHeight / 2);
+    // Back to start
+    ctx.lineTo(arrowStartX, arrowY + arrowBodyHeight / 2);
+    ctx.closePath();
+    
+    // Fill arrow
+    if (gPhysicsRules) {
+        ctx.fillStyle = `hsla(39, 70%, 45%, ${menuOpacity})`; // Orange when on
+        ctx.shadowColor = `hsla(39, 70%, 50%, ${menuOpacity * 0.8})`;
+        ctx.shadowBlur = 8;
+    } else {
+        ctx.fillStyle = `hsla(214, 30%, 35%, ${menuOpacity})`; // Blue-grey when off
+        ctx.shadowColor = `hsla(214, 30%, 40%, ${menuOpacity * 0.5})`;
+        ctx.shadowBlur = 5;
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // Arrow outline
+    ctx.strokeStyle = `hsla(0, 0%, 20%, ${menuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Add text "Physics Mode" on arrow
+    ctx.fillStyle = `hsla(0, 0%, 100%, ${menuOpacity})`;
+    ctx.font = `bold ${0.27 * knobRadius}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Physics Mode', arrowStartX + arrowWidth / 2 - arrowHeadWidth / 4, arrowY);
 
     ctx.restore();
 }
@@ -7685,6 +7972,168 @@ function drawSkyMenu() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('SKY', skyButtonX, skyButtonY);
+    
+    ctx.restore();
+}
+
+// Draw physics menu ========================================
+function drawPhysicsMenu() {
+    if (physicsMenuOpacity <= 0) return;
+    
+    const ctx = gOverlayCtx;
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuTopMargin = 0.2 * knobRadius;
+    const menuWidth = knobSpacing * 1; // Only 2 columns for compact menu
+    const menuHeight = knobSpacing * 1.5; // 2 rows plus button
+    const padding = 1.7 * knobRadius;
+    
+    // Use stored menu position (set when menu opens or updated by dragging)
+    const menuUpperLeftX = physicsMenuX * window.innerWidth;
+    const menuUpperLeftY = physicsMenuY * window.innerHeight;
+    
+    ctx.save();
+    ctx.translate(menuUpperLeftX, menuUpperLeftY);
+    
+    // Draw menu background
+    const cornerRadius = 8;
+    ctx.beginPath();
+    ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+    const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+    menuGradient.addColorStop(0, `hsla(39, 40%, 35%, ${physicsMenuOpacity})`); // Orange theme
+    menuGradient.addColorStop(1, `hsla(39, 40%, 15%, ${physicsMenuOpacity})`);
+    ctx.fillStyle = menuGradient;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(39, 50%, 70%, ${physicsMenuOpacity})`;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    
+    // Draw title
+    ctx.fillStyle = `hsla(39, 50%, 85%, ${physicsMenuOpacity})`;
+    ctx.font = `bold ${0.05 * menuScale}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.fillText('PHYSICS', menuWidth / 2, -padding + 0.06 * menuScale);
+    
+    // Draw close button
+    const closeIconRadius = 0.1 * menuScale * 0.25;
+    const closeIconX = -padding + closeIconRadius + 0.02 * menuScale;
+    const closeIconY = -padding + closeIconRadius + 0.02 * menuScale;
+    ctx.beginPath();
+    ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = `rgba(180, 40, 40, ${physicsMenuOpacity})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(0, 0, 0, ${physicsMenuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Draw X in close button
+    const xSize = closeIconRadius * 0.5;
+    ctx.strokeStyle = `rgba(255, 255, 255, ${physicsMenuOpacity})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+    ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+    ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+    ctx.stroke();
+    
+    // Draw knobs
+    const meterStart = Math.PI * 0.75;
+    const fullMeterSweep = Math.PI * 1.5;
+    
+    const knobs = [
+        { value: physicsProps.repulsionForce, min: 0, max: 2.0, label: 'Repulsion Force' },
+        { value: physicsProps.repulsionDist, min: 0, max: 3.0, label: 'Repulsion Dist' },
+        { value: physicsProps.restitution, min: 0, max: 1.0, label: 'Restitution' }
+    ];
+    
+    for (let i = 0; i < knobs.length; i++) {
+        const row = Math.floor(i / 2);
+        const col = i % 2;
+        const knobX = col * knobSpacing;
+        const knobY = row * knobSpacing + menuTopMargin;
+        
+        // Draw knob background
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, 1.05 * knobRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsla(39, 50%, 15%, ${0.9 * physicsMenuOpacity})`;
+        ctx.fill();
+        ctx.strokeStyle = `hsla(39, 50%, 50%, ${physicsMenuOpacity})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Calculate normalized value
+        const normalizedValue = (knobs[i].value - knobs[i].min) / (knobs[i].max - knobs[i].min);
+        
+        // Draw meter arc
+        const gradient = ctx.createLinearGradient(
+            knobX + Math.cos(meterStart) * knobRadius,
+            knobY + Math.sin(meterStart) * knobRadius,
+            knobX + Math.cos(meterStart + fullMeterSweep) * knobRadius,
+            knobY + Math.sin(meterStart + fullMeterSweep) * knobRadius
+        );
+        gradient.addColorStop(0, `hsla(39, 60%, 50%, ${physicsMenuOpacity})`);
+        gradient.addColorStop(1, `hsla(39, 60%, 70%, ${physicsMenuOpacity})`);
+        ctx.strokeStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(knobX, knobY, knobRadius * 0.85, meterStart, meterStart + fullMeterSweep * normalizedValue);
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        
+        // Draw needle
+        const pointerAngle = meterStart + fullMeterSweep * normalizedValue;
+        const pointerLength = knobRadius * 0.6;
+        const pointerEndX = knobX + Math.cos(pointerAngle) * pointerLength;
+        const pointerEndY = knobY + Math.sin(pointerAngle) * pointerLength;
+        ctx.beginPath();
+        ctx.moveTo(knobX, knobY);
+        ctx.lineTo(pointerEndX, pointerEndY);
+        ctx.strokeStyle = `hsla(39, 50%, 85%, ${physicsMenuOpacity})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw label
+        ctx.font = `${0.35 * knobRadius}px verdana`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = `hsla(0, 0%, 10%, ${physicsMenuOpacity})`;
+        ctx.fillText(knobs[i].label, knobX + 1, 1 + knobY + 1.35 * knobRadius);
+        ctx.fillStyle = `hsla(39, 50%, 85%, ${physicsMenuOpacity})`;
+        ctx.fillText(knobs[i].label, knobX, knobY + 1.35 * knobRadius);
+        
+        // Draw value
+        ctx.font = `${0.3 * knobRadius}px verdana`;
+        ctx.fillStyle = `hsla(153, 70%, 70%, ${physicsMenuOpacity})`;
+        ctx.fillText(knobs[i].value.toFixed(2), knobX, knobY + 0.6 * knobRadius);
+    }
+    
+    // Draw repulsion ON/OFF button (positioned where 4th knob would be)
+    const buttonWidth = knobRadius * 1.8;
+    const buttonHeight = knobRadius * 0.75;
+    const buttonX = knobSpacing; // Column 1, row 1 (4th knob position)
+    const buttonY = 1 * knobSpacing + menuTopMargin;
+    
+    ctx.beginPath();
+    ctx.roundRect(buttonX - buttonWidth / 2, buttonY - buttonHeight / 2, buttonWidth, buttonHeight, 4);
+    if (physicsProps.repulsionEnabled) {
+        ctx.fillStyle = `hsla(120, 70%, 40%, ${physicsMenuOpacity})`;
+        ctx.shadowColor = `hsla(120, 70%, 50%, ${physicsMenuOpacity * 0.8})`;
+    } else {
+        ctx.fillStyle = `hsla(0, 70%, 40%, ${physicsMenuOpacity})`;
+        ctx.shadowColor = `hsla(0, 70%, 50%, ${physicsMenuOpacity * 0.8})`;
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `hsla(0, 0%, 20%, ${physicsMenuOpacity})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // Button label
+    ctx.fillStyle = `hsla(0, 0%, 100%, ${physicsMenuOpacity})`;
+    ctx.font = `${0.28 * knobRadius}px verdana`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('REPULSION', buttonX, buttonY);
     
     ctx.restore();
 }
@@ -13777,6 +14226,10 @@ function onPointer(evt) {
                 modelsMenuVisible = false;
                 cameraMenuVisibleBeforeHide = cameraMenuVisible;
                 cameraMenuVisible = false;
+                skyMenuVisibleBeforeHide = skyMenuVisible;
+                skyMenuVisible = false;
+                physicsMenuVisibleBeforeHide = physicsMenuVisible;
+                physicsMenuVisible = false;
             } else {
                 menuVisible = menuVisibleBeforeHide;
                 stylingMenuVisible = stylingMenuVisibleBeforeHide;
@@ -13785,12 +14238,19 @@ function onPointer(evt) {
                 lightingMenuVisible = lightingMenuVisibleBeforeHide;
                 modelsMenuVisible = modelsMenuVisibleBeforeHide;
                 cameraMenuVisible = cameraMenuVisibleBeforeHide;
+                skyMenuVisible = skyMenuVisibleBeforeHide;
+                physicsMenuVisible = physicsMenuVisibleBeforeHide;
             }
             return;
         }
         
         // Check simulation submenu clicks FIRST (before main menu)
         if (checkSimMenuClick(evt.clientX, evt.clientY)) {
+            return;
+        }
+        
+        // Check physics submenu clicks
+        if (checkPhysicsMenuClick(evt.clientX, evt.clientY)) {
             return;
         }
         
@@ -15806,6 +16266,9 @@ function onPointer(evt) {
             if (draggingMenuType === 'sim') {
                 simMenuX = menuStartX + deltaX / window.innerWidth;
                 simMenuY = menuStartY + deltaY / window.innerHeight;
+            } else if (draggingMenuType === 'physics') {
+                physicsMenuX = menuStartX + deltaX / window.innerWidth;
+                physicsMenuY = menuStartY + deltaY / window.innerHeight;
             } else if (draggingMenuType === 'styling') {
                 stylingMenuX = menuStartX + deltaX / window.innerWidth;
                 stylingMenuY = menuStartY + deltaY / window.innerHeight;
@@ -16734,6 +17197,31 @@ function onPointer(evt) {
                     }
                     break;
             }
+            return;
+        }
+        
+        // Handle physics knob dragging
+        if (draggedPhysicsKnob !== null) {
+            const ranges = [
+                {min: 0, max: 2.0, prop: 'repulsionForce'},      // Repulsion Force
+                {min: 0, max: 3.0, prop: 'repulsionDist'},       // Repulsion Distance
+                {min: 0, max: 1.0, prop: 'restitution'}          // Restitution
+            ];
+            
+            const dragDeltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+            const dragDeltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+            const dragDelta = dragDeltaX + dragDeltaY;
+            
+            const dragSensitivity = 0.1;
+            const normalizedDelta = dragDelta / dragSensitivity;
+            
+            const range = ranges[draggedPhysicsKnob];
+            const rangeSize = range.max - range.min;
+            let newValue = dragStartValue + normalizedDelta * rangeSize;
+            newValue = Math.max(range.min, Math.min(range.max, newValue));
+            
+            // Update the physics property
+            physicsProps[range.prop] = newValue;
             return;
         }
         
@@ -17930,6 +18418,15 @@ function onPointer(evt) {
             return;
         }
         
+        // Clean up physics knob dragging
+        if (draggedPhysicsKnob !== null) {
+            draggedPhysicsKnob = null;
+            if (gCameraMode < 3 && gCameraControl) {
+                gCameraControl.enabled = true;
+            }
+            return;
+        }
+        
         // Clean up sky knob dragging
         if (draggedSkyKnob !== null) {
             draggedSkyKnob = null;
@@ -18253,6 +18750,34 @@ function checkSimMenuClick(clientX, clientY) {
         return true;
     }
     
+    // Check physics arrow button (at bottom of menu)
+    const arrowY = menuOriginY + 4 * knobSpacing + menuTopMargin + knobRadius * 2.2;
+    const arrowWidth = knobSpacing * 2.5;
+    const arrowHeight = knobRadius * 0.85;
+    const arrowStartX = menuOriginX;
+    
+    // Simple rectangular hit box for the arrow
+    if (clientX >= arrowStartX && clientX <= arrowStartX + arrowWidth &&
+        clientY >= arrowY - arrowHeight / 2 && clientY <= arrowY + arrowHeight / 2) {
+        // Toggle physics mode
+        gPhysicsRules = !gPhysicsRules;
+        if (gPhysicsRules) {
+            gBoidRules = false; // Disable boid rules when physics is enabled
+            physicsMenuVisible = true; // Open physics menu
+            
+            // Calculate physics menu position to the right of the arrow
+            var physicsMenuSpacing = 20;
+            var physicsArrowEndX = simMenuX + arrowStartX + arrowWidth;
+            var physicsArrowY = simMenuY + arrowY;
+            physicsMenuX = (physicsArrowEndX + physicsMenuSpacing) / window.innerWidth;
+            physicsMenuY = physicsArrowY / window.innerHeight;
+        } else {
+            gBoidRules = true; // Re-enable boid rules when physics is disabled
+            physicsMenuVisible = false; // Close physics menu
+        }
+        return true;
+    }
+    
     // Check knobs (now 15 knobs - removed FOV, added 2 blank spaces)
     for (let knob = 0; knob < 15; knob++) {
         // Skip blank spaces (knobs 8 and 11)
@@ -18295,6 +18820,94 @@ function checkSimMenuClick(clientX, clientY) {
         menuDragStartY = clientY;
         menuStartX = simMenuX;
         menuStartY = simMenuY;
+        
+        // Disable orbit controls while dragging menu
+        if (gCameraControl) {
+            gCameraControl.enabled = false;
+        }
+        return true;
+    }
+    
+    return false;
+}
+
+function checkPhysicsMenuClick(clientX, clientY) {
+    if (!physicsMenuVisible || physicsMenuOpacity <= 0.5) return false;
+    
+    const knobRadius = 0.1 * menuScale;
+    const knobSpacing = knobRadius * 3;
+    const menuTopMargin = 0.2 * knobRadius;
+    const menuWidth = knobSpacing * 1;
+    const menuHeight = knobSpacing * 1.5;
+    const padding = 1.7 * knobRadius;
+    
+    // Use stored menu position (set when menu opens or updated by dragging)
+    const menuOriginX = physicsMenuX * window.innerWidth;
+    const menuOriginY = physicsMenuY * window.innerHeight;
+    
+    // Check close button
+    const closeIconRadius = knobRadius * 0.25;
+    const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
+    const closeIconY = menuOriginY - padding + closeIconRadius + 0.02 * menuScale;
+    const cdx = clientX - closeIconX;
+    const cdy = clientY - closeIconY;
+    
+    if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius) {
+        physicsMenuVisible = false;
+        gPhysicsRules = false; // Disable physics when closing menu
+        gBoidRules = true; // Re-enable boid rules
+        return true;
+    }
+    
+    // Check repulsion button (positioned where 4th knob would be)
+    const buttonWidth = knobRadius * 1.8;
+    const buttonHeight = knobRadius * 0.75;
+    const buttonX = menuOriginX + knobSpacing; // Column 1, row 1 (4th knob position)
+    const buttonY = menuOriginY + 1 * knobSpacing + menuTopMargin;
+    
+    if (clientX >= buttonX - buttonWidth / 2 && clientX <= buttonX + buttonWidth / 2 &&
+        clientY >= buttonY - buttonHeight / 2 && clientY <= buttonY + buttonHeight / 2) {
+        physicsProps.repulsionEnabled = !physicsProps.repulsionEnabled;
+        return true;
+    }
+    
+    // Check knobs
+    const knobs = [
+        { prop: 'repulsionForce', min: 0, max: 2.0 },
+        { prop: 'repulsionDist', min: 0, max: 3.0 },
+        { prop: 'restitution', min: 0, max: 1.0 }
+    ];
+    
+    for (let i = 0; i < knobs.length; i++) {
+        const row = Math.floor(i / 2);
+        const col = i % 2;
+        const knobX = menuOriginX + col * knobSpacing;
+        const knobY = menuOriginY + row * knobSpacing + menuTopMargin;
+        
+        const kdx = clientX - knobX;
+        const kdy = clientY - knobY;
+        if (kdx * kdx + kdy * kdy < knobRadius * knobRadius) {
+            draggedPhysicsKnob = i;
+            dragStartMouseX = clientX;
+            dragStartMouseY = clientY;
+            dragStartValue = physicsProps[knobs[i].prop];
+            
+            if (gCameraControl) {
+                gCameraControl.enabled = false;
+            }
+            return true;
+        }
+    }
+    
+    // Check if menu background clicked (for dragging)
+    if (clientX >= menuOriginX - padding && clientX <= menuOriginX + menuWidth + padding &&
+        clientY >= menuOriginY - padding && clientY <= menuOriginY + menuHeight + padding) {
+        isDraggingMenu = true;
+        draggingMenuType = 'physics';
+        menuDragStartX = clientX;
+        menuDragStartY = clientY;
+        menuStartX = physicsMenuX;
+        menuStartY = physicsMenuY;
         
         // Disable orbit controls while dragging menu
         if (gCameraControl) {
@@ -22737,6 +23350,13 @@ function update() {
         skyMenuOpacity = Math.max(0, skyMenuOpacity - skyMenuFadeSpeed * deltaT);
     }
     
+    // Update physics menu opacity
+    if (physicsMenuVisible) {
+        physicsMenuOpacity = Math.min(0.9, physicsMenuOpacity + physicsMenuFadeSpeed * deltaT);
+    } else {
+        physicsMenuOpacity = Math.max(0, physicsMenuOpacity - physicsMenuFadeSpeed * deltaT);
+    }
+    
     // Handle auto elevation mode for sky
     if (autoElevation && window.skyRenderer) {
         window.skyRenderer.effectController.elevation += autoElevationRate * deltaT;
@@ -23607,6 +24227,7 @@ function update() {
     drawModelsMenu();
     drawCameraMenu();
     drawSkyMenu();
+    drawPhysicsMenu();
     drawBalloonVerticalSpeedGauge();
     drawBalloonAltimeterGauge();
     
