@@ -266,7 +266,7 @@ function setupScene() {
     spawnCube();
     spawnPong();
 
-    makeSnow();
+    // makeSnow();
     
     /*
     // Create Christmas lights
@@ -3750,10 +3750,12 @@ function simulate() {
         PongGame.simulate();
     }
 
+    /*
     for (var i = 0; i < Snowfield.length; i++) {
         var snow = Snowfield[i];
         snow.simulate();
     }
+    */
     
     // Simulate smoke puffs
     smokeSpawnTimer += dT;
@@ -3958,11 +3960,13 @@ function drawEverything() {
     }
 
     // Draw first 1/3 of light snow (will be behind both hills)
-    const snowThird = Math.floor(Snowfield.length / 3);
+    // const snowThird = Math.floor(Snowfield.length / 3);
+    /*
     for (var i = 0; i < snowThird; i++) {
         var snow = Snowfield[i];
         snow.draw();
     }
+    
 
     // Draw middle hill (covers first third of snow)
     const hillBaseY = simHeight * cScale * 0.55;
@@ -3995,10 +3999,12 @@ function drawEverything() {
     c.fill();
     
     // Draw second 1/3 of light snow (will be behind front hill)
+    /*
     for (var i = snowThird; i < snowThird * 2; i++) {
         var snow = Snowfield[i];
         snow.draw();
     }
+    
 
     // Draw front hill (covers second third of snow)
     c.beginPath();
@@ -4030,10 +4036,12 @@ function drawEverything() {
     c.restore();
 
     // Draw final 1/3 of light snow (will appear in front of hills)
+    /*
     for (var i = snowThird * 2; i < Snowfield.length; i++) {
         var snow = Snowfield[i];
         snow.draw();
     }
+    */
 
     // Draw side fades
     const sideFade = c.createLinearGradient(0, 0, canvas.width, 0);
@@ -4094,10 +4102,12 @@ function drawEverything() {
     */
 
     // draw big snowflakes
+    /*
     for (var i = 0; i < Snowfield.length; i++) {
         var snow = Snowfield[i];
         snow.drawBig();
     }
+    */
 
     /*
     // Draw Christmas light wires

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="en">
+	<head>
+		<title>Water</title>
+		<style>
+			body {
+				margin: 0;
+				padding: 0;
+				overflow: hidden;
+			}
+			#container {
+				width: 100vw;
+				height: 100vh;
+			}
+			canvas {
+				display: block;
+				width: 100%;
+				height: 100%;
+			}
+		</style>
+	</head>
+	
+	<body>	
+        <div id="container"></div>
+		
+		<script id="waterVertexShader" type="x-shader/x-vertex">
+			varying vec3 varNormal;
+			varying vec2 varScreenPos;
+			varying vec3 varPos;
+			varying vec3 varWorldPos;
+
+			void main() {
+				vec4 pos = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+				varScreenPos = vec2(0.5, 0.5) + 0.5 * vec2(pos) / pos.z;
+				varPos = vec3(position);       
+				varWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+				varNormal = normal;	
+				gl_Position = pos;
+			}
+		</script>
+
+		<script id="waterFragmentShader" type="x-shader/x-fragment">
+			uniform sampler2D background;
+			uniform vec2 boatMaskCenter;
+			uniform vec2 boatMaskCosSin;
+			uniform vec2 boatMaskHalfExtents;
+			varying vec3 varNormal;
+			varying vec2 varScreenPos;
+			varying vec3 varPos;
+			varying vec3 varWorldPos;
+
+			void main() {
+				vec2 delta = varWorldPos.xz - boatMaskCenter;
+				float c = boatMaskCosSin.x;
+				float sinYaw = boatMaskCosSin.y;
+				vec2 local = vec2(
+					c * delta.x + sinYaw * delta.y,
+					-sinYaw * delta.x + c * delta.y
+				);
+
+				if (abs(local.x) <= boatMaskHalfExtents.x && abs(local.y) <= boatMaskHalfExtents.y) {
+					discard;
+				}
+
+				float r = 0.02;	// todo: should be distance dependent!
+				vec2 uv = varScreenPos + r * vec2(varNormal.x, varNormal.z);
+				vec4 color = texture2D(background, uv);
+				color.z = min(color.z + 0.2, 1.0);
+
+				vec3 L = normalize(vec3(10.0, 10.0, 10.0) - varPos);   
+				float diffuse = max(dot(varNormal,L), 0.0); 
+				color *= (0.5 + 0.5 * diffuse);
+			 
+				gl_FragColor = color;
+			}
+		</script>
+		<script src="three.min.js"></script>
+		<script src="GLTFLoader.js"></script>	
+		<script src="OrbitControls.js"></script>
+		<script src="speedboat.js"></script>	
+	</body>
+</html>
