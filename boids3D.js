@@ -432,6 +432,13 @@ var gDraggingChair = false; // Track if dragging the chair (toggleable)
 var gChairInitialX = -2; // Initial X position for world resize scaling
 var gChairInitialZ = 0; // Initial Z position for world resize scaling
 var gChairSliding = false; // Flag for chair slide animation (starts after loading)
+var gSkull = null; // Reference to skull group in chair model
+var gLowerJaw = null; // Reference to lower jaw group in chair model
+var gSkullLaughing = false; // Flag for skull laugh animation
+var gSkullLaughTime = 0; // Timer for laugh animation
+var gSkullLaughSequence = []; // Array of laugh syllables with timing
+var gSkullDefaultRotationX = 0; // Default X rotation of skull
+var gLowerJawDefaultRotationX = 0; // Default X rotation of lower jaw
 var gSofa = null; // Glam velvet sofa model reference
 var gSofaObstacle = null; // Box obstacle for boid avoidance
 var gDraggingSofa = false; // Track if dragging the sofa (toggleable)
@@ -680,7 +687,7 @@ var gBoidsStarted = false; // Track if boids have started animating
 var restitution = {
     ball: 0,
     boundary: 1,
-    floor: 0.7,
+    floor: 1,
 };
 
 var boidRadius = 0.25; // Radius of each Boid
@@ -5479,7 +5486,7 @@ function drawSimMenu() {
         {min: 0, max: 0.2},         // avoidFactor
         {min: 0, max: 0.2},         // matchingFactor
         {min: 0, max: 0.005},       // centeringFactor
-        {min: 1.0, max: 20.0},      // minSpeed
+        {min: 0.0, max: 20.0},      // minSpeed
         {min: 1.0, max: 30.0},      // maxSpeed
         {min: 0, max: 1},           // blank
         {min: 0, max: 0.2},         // turnFactor
@@ -10606,6 +10613,20 @@ function initThreeScene() {
                 gThreeScene.add(chair);
                 gChair = chair; // Store global reference
                 
+                // Find skull and lower jaw groups for animation
+                chair.traverse(function(child) {
+                    if (child.name && child.name.toLowerCase() === 'skull') {
+                        gSkull = child;
+                        gSkullDefaultRotationX = child.rotation.x;
+                        console.log('Found skull group, default rotation:', gSkullDefaultRotationX);
+                    }
+                    if (child.name && child.name.toLowerCase() === 'lowerjaw') {
+                        gLowerJaw = child;
+                        gLowerJawDefaultRotationX = child.rotation.x;
+                        console.log('Found lowerJaw group, default rotation:', gLowerJawDefaultRotationX);
+                    }
+                });
+                
                 // Create box obstacle for boid avoidance
                 var chairObstacleWidth = 2.0;  // X dimension
                 var chairObstacleHeight = 3.5; // Y dimension
@@ -10630,82 +10651,6 @@ function initThreeScene() {
             },
             function(error) {
                 console.error('Error loading Sheen Chair model:', error);
-            }
-        );
-    }
-    
-    // Load Sheen Chair model using GLTFLoader\n    if (typeof THREE.GLTFLoader !== 'undefined') {\n        var chairLoader = new THREE.GLTFLoader(gLoadingManager);\n        chairLoader.load(\n            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/sheenChair.gltf',\n            function(gltf) {\n                var chair = gltf.scene;\n                \n                // Position on floor\n                chair.position.set(gChairInitialX, 0, gChairInitialZ);\n                \n                // Scale appropriately\n                chair.scale.set(1, 1, 1);\n                \n                // Remove any imported lights\n                var lightsToRemove = [];\n                chair.traverse(function(child) {\n                    if (child.isLight) {\n                        lightsToRemove.push(child);\n                    }\n                });\n                lightsToRemove.forEach(function(light) {\n                    if (light.parent) {\n                        light.parent.remove(light);\n                    }\n                });\n                \n                // Enable shadows and mark as draggable for all meshes\n                chair.traverse(function(child) {\n                    if (child.isMesh) {\n                        child.castShadow = true;\n                        child.receiveShadow = true;\n                        child.userData.isDraggableChair = true;\n                    }\n                });\n                \n                gThreeScene.add(chair);\n                gChair = chair; // Store global reference\n                \n                // Create box obstacle for boid avoidance\n                var chairObstacleWidth = 2.0;  // X dimension\n                var chairObstacleHeight = 3.5; // Y dimension\n                var chairObstacleDepth = 2.0;  // Z dimension\n                gChairObstacle = new BoxObstacle(\n                    chairObstacleWidth,\n                    chairObstacleHeight,\n                    chairObstacleDepth,\n                    new THREE.Vector3(chair.position.x, chair.position.y + chairObstacleHeight / 2, chair.position.z),\n                    { x: 0, y: chair.rotation.y, z: 0 }\n                );\n                // Make the obstacle invisible\n                if (gChairObstacle.mesh) {\n                    gChairObstacle.mesh.visible = false;\n                }\n                gObstacles.push(gChairObstacle);\n                \n                console.log('Sheen Chair model loaded successfully');\n            },\n            function(xhr) {\n                console.log('Sheen Chair model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');\n            },\n            function(error) {\n                console.error('Error loading Sheen Chair model:', error);\n            }\n        );\n    }\n    \n    // Load Glam Velvet Sofa model using GLTFLoader
-    if (typeof THREE.GLTFLoader !== 'undefined') {
-        var sofaLoader = new THREE.GLTFLoader(gLoadingManager);
-        sofaLoader.load(
-            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/glamVelvetSofa.gltf',
-            function(gltf) {
-                var sofa = gltf.scene;
-                
-                // Position close to left wall, centered in Z - start at slide-in position
-                sofa.position.set(gSofaStartX, 0, gSofaInitialZ);
-                
-                // Scale appropriately
-                sofa.scale.set(9, 9, 9);
-
-                sofa.rotation.y = -0.25 * Math.PI; // Rotate 90 degrees to face forward
-                
-                // Remove any imported lights
-                var lightsToRemove = [];
-                sofa.traverse(function(child) {
-                    if (child.isLight) {
-                        lightsToRemove.push(child);
-                    }
-                });
-                lightsToRemove.forEach(function(light) {
-                    if (light.parent) {
-                        light.parent.remove(light);
-                    }
-                });
-                
-                // Enable shadows and mark as draggable for all meshes
-                sofa.traverse(function(child) {
-                    if (child.isMesh) {
-                        child.castShadow = true;
-                        child.receiveShadow = true;
-                        child.userData.isDraggableSofa = true;
-                    }
-                });
-                
-                gThreeScene.add(sofa);
-                gSofa = sofa; // Store global reference
-                
-                // Create box obstacle for boid avoidance
-                var sofaObstacleWidth = 22.0;  // X dimension (width)
-                var sofaObstacleHeight = 7.0; // Y dimension
-                var sofaObstacleDepth = 10.0;  // Z dimension (depth/length)
-                
-                // Calculate offset toward rear of sofa accounting for rotation
-                var sofaRotation = sofa.rotation.y; // -0.25 * Math.PI
-                var rearOffset = 1.2; // Move 1.2 units toward rear in local coordinates
-                var offsetX = -rearOffset * Math.sin(sofaRotation);
-                var offsetZ = -rearOffset * Math.cos(sofaRotation);
-                
-                gSofaObstacle = new BoxObstacle(
-                    sofaObstacleWidth,
-                    sofaObstacleHeight,
-                    sofaObstacleDepth,
-                    new THREE.Vector3(sofa.position.x + offsetX, sofa.position.y + sofaObstacleHeight / 2, sofa.position.z + offsetZ),
-                    { x: 0, y: sofa.rotation.y, z: 0 }
-                );
-                // Make the obstacle invisible
-                if (gSofaObstacle.mesh) {
-                    gSofaObstacle.mesh.visible = false;
-                }
-                gObstacles.push(gSofaObstacle);
-                
-                console.log('Glam Velvet Sofa model loaded successfully');
-            },
-            function(xhr) {
-                console.log('Glam Velvet Sofa model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
-            },
-            function(error) {
-                console.error('Error loading Glam Velvet Sofa model:', error);
             }
         );
     }
@@ -15454,6 +15399,11 @@ function onPointer(evt) {
                 return;
             }
             
+            // Single-click while NOT dragging - trigger skull laugh
+            if (gSkull && gLowerJaw && !gSkullLaughing) {
+                startSkullLaugh();
+            }
+            
             gLastObjectClickTime.chair = currentTime;
             return;
         }
@@ -17000,7 +16950,7 @@ function onPointer(evt) {
                 {min: 0, max: 0.2},
                 {min: 0, max: 0.2},
                 {min: 0, max: 0.005},
-                {min: 1.0, max: 20.0},
+                {min: 0.0, max: 20.0},
                 {min: 1.0, max: 30.0},
                 {min: 0, max: 1},           // blank
                 {min: 0, max: 0.2},
@@ -21264,6 +21214,97 @@ function run() {
     requestAnimationFrame(createBatch);
 }*/
 
+// Skull laugh animation functions -----------------------------------
+function startSkullLaugh() {
+    if (gSkullLaughing) return;
+    
+    // Define laugh sequence: [duration, jawRotation, skullRotation]
+    // "HA ha ha ha ha ha" - first is more intense, decreasing
+    gSkullLaughSequence = [
+        // First "HA" - most intense
+        { type: 'open', duration: 0.08, jawRot: gLowerJawDefaultRotationX + 0.35, skullRot: gSkullDefaultRotationX - 0.08 },   // Quick open
+        { type: 'close', duration: 0.15 },   // Slower close to default
+        { type: 'pause', duration: 0.08 },
+        
+        // Second "ha"
+        { type: 'open', duration: 0.08, jawRot: gLowerJawDefaultRotationX + 0.28, skullRot: gSkullDefaultRotationX - 0.06 },
+        { type: 'close', duration: 0.15 },
+        { type: 'pause', duration: 0.08 },
+        
+        // Third "ha"
+        { type: 'open', duration: 0.08, jawRot: gLowerJawDefaultRotationX + 0.23, skullRot: gSkullDefaultRotationX - 0.05 },
+        { type: 'close', duration: 0.15 },
+        { type: 'pause', duration: 0.08 },
+        
+        // Fourth "ha"
+        { type: 'open', duration: 0.08, jawRot: gLowerJawDefaultRotationX + 0.18, skullRot: gSkullDefaultRotationX - 0.04 },
+        { type: 'close', duration: 0.15 },
+        { type: 'pause', duration: 0.08 },
+        
+        // Fifth "ha"
+        { type: 'open', duration: 0.08, jawRot: gLowerJawDefaultRotationX + 0.14, skullRot: gSkullDefaultRotationX - 0.03 },
+        { type: 'close', duration: 0.15 },
+        { type: 'pause', duration: 0.08 },
+        
+        // Sixth "ha" - least intense
+        { type: 'open', duration: 0.08, jawRot: gLowerJawDefaultRotationX + 0.10, skullRot: gSkullDefaultRotationX - 0.02 },
+        { type: 'close', duration: 0.15 },
+    ];
+    
+    gSkullLaughing = true;
+    gSkullLaughTime = 0;
+    console.log('Skull laugh animation started');
+}
+
+function updateSkullLaugh(deltaTime) {
+    if (!gSkullLaughing || !gSkull || !gLowerJaw) return;
+    
+    gSkullLaughTime += deltaTime;
+    
+    // Calculate which phase we're in
+    let accumulatedTime = 0;
+    let currentPhase = null;
+    let phaseStartTime = 0;
+    
+    for (let i = 0; i < gSkullLaughSequence.length; i++) {
+        const phase = gSkullLaughSequence[i];
+        if (gSkullLaughTime < accumulatedTime + phase.duration) {
+            currentPhase = phase;
+            phaseStartTime = accumulatedTime;
+            break;
+        }
+        accumulatedTime += phase.duration;
+    }
+    
+    // If animation is complete
+    if (!currentPhase) {
+        gSkullLaughing = false;
+        gSkullLaughTime = 0;
+        // Reset to default position
+        gLowerJaw.rotation.x = gLowerJawDefaultRotationX;
+        gSkull.rotation.x = gSkullDefaultRotationX;
+        console.log('Skull laugh animation complete');
+        return;
+    }
+    
+    // Calculate progress within current phase (0 to 1)
+    const phaseProgress = (gSkullLaughTime - phaseStartTime) / currentPhase.duration;
+    
+    if (currentPhase.type === 'open') {
+        // Quick open - ease out
+        const t = 1 - Math.pow(1 - phaseProgress, 3);
+        gLowerJaw.rotation.x = gLowerJawDefaultRotationX + t * (currentPhase.jawRot - gLowerJawDefaultRotationX);
+        gSkull.rotation.x = gSkullDefaultRotationX + t * (currentPhase.skullRot - gSkullDefaultRotationX);
+    } else if (currentPhase.type === 'close') {
+        // Slower close - ease in (interpolate back to default)
+        const t = 1 - Math.pow(phaseProgress, 2);
+        const prevPhase = gSkullLaughSequence[gSkullLaughSequence.indexOf(currentPhase) - 1];
+        gLowerJaw.rotation.x = gLowerJawDefaultRotationX + t * (prevPhase.jawRot - gLowerJawDefaultRotationX);
+        gSkull.rotation.x = gSkullDefaultRotationX + t * (prevPhase.skullRot - gSkullDefaultRotationX);
+    }
+    // pause type doesn't change rotations
+}
+
 //  RUN -----------------------------------
 function update() {
     simulate();
@@ -21277,6 +21318,9 @@ function update() {
             gPhysicsScene.paused = false;
         }
     }
+    
+    // Update skull laugh animation
+    updateSkullLaugh(deltaT);
     
     // Update fade-in effect
     if (gFadeInTime < gFadeInDuration) {
