@@ -1,4 +1,4 @@
-// BALL3D : 3D Particle Simulation
+// Circle Pong : a 3D fussball/pong style game in a circular boundary
 // copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -9,11 +9,10 @@
 const DeltaT = 1.0 / 60.0;
 const Gravity = -9.8;
 const MaxSpeed = 10.0;
-const RepulsionStrength = 0.002; // Strength of ball-to-ball repulsion
-const worldRadius = 8; // Circular boundary radius
+const worldRadius = 10; // Circular boundary radius
 const worldSizeY = 6;
 
-const numBalls = 1000;
+const numBalls = 1;
 
 var gThreeScene;
 var gRenderer;
@@ -22,476 +21,26 @@ var Camera;
 var CameraControl;
 var gGrabber;
 var gMouseDown;
-var repulsionEnabled = false;
-var gravityEnabled = false;
+var gravityEnabled = true;
 var buttonCanvas;
 var buttonCtx;
-var repulsionButtonX, repulsionButtonY, buttonWidth, buttonHeight;
+var buttonWidth, buttonHeight;
 var gravityButtonX, gravityButtonY;
 var stats;
+var paddleMesh;
+var paddleAngle = 0; // Current rotation angle of the paddle
+var paddleRotationSpeed = 2.0; // Radians per second
+var leftArrowPressed = false;
+var rightArrowPressed = false;
 
-// Attractor Puck Cue Class -------------------------------------------
-class ATTRACTOR {
-	constructor(pos, radius, strength, color, noDamping = false, isHemisphere = false, fixed = false, edgeOnly = false) {
-		this.pos = new THREE.Vector3(pos.x, pos.y, pos.z);
-		this.vel = new THREE.Vector3(0.0, 0.0, 0.0);
-		this.strength = strength;
-		this.radius = radius;
-		this.color = color;
-		this.noDamping = noDamping;
-		this.fixed = fixed;
-		this.edgeOnly = edgeOnly;
-		this.mass = 4.0 * Math.PI / 3.0 * this.radius * this.radius * this.radius;
-		this.restitution = 0.98;
-		this.grabbed = false;
+// Paddle collision parameters
+const paddleRadius = worldRadius * 0.8; // 8.0
+const paddleTubeRadius = 0.5; // Collision thickness - should be at least the ball radius
+const paddleHalfArc = Math.PI / 18; // Half of the arc angle (total arc is PI/9)
+const paddleYMin = 0;
+const paddleYMax = worldSizeY;
 
-		// visual mesh
-		let geometry;
-		if (isHemisphere) {
-			// Create top hemisphere only (thetaStart = 0, thetaLength = PI/2)
-			geometry = new THREE.SphereGeometry(this.radius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
-		} else {
-			geometry = new THREE.SphereGeometry(this.radius, 32, 32);
-		}
-		let material = new THREE.MeshPhongMaterial({color: color});
-		this.visMesh = new THREE.Mesh( geometry, material );
-		this.visMesh.position.copy(pos);
-		this.visMesh.userData = this;		// for raycasting
-		this.visMesh.layers.enable(1);
-		this.visMesh.castShadow = true;
-		this.visMesh.receiveShadow = true;
-		this.visMesh.material.side = THREE.DoubleSide; // Ensure hemispheres are visible from below
-		gThreeScene.add(this.visMesh);
-	}
-	applyTo(ball) {
-		if (!this.grabbed)
-			return;
 
-		let dir = new THREE.Vector3();
-		dir.subVectors(this.pos, ball.pos);
-		let d2 = dir.lengthSq();
-		if (d2 < 0.01)
-			d2 = 0.01;
-		dir.normalize();
-		let force = this.strength / d2;
-		ball.vel.addScaledVector(dir, force * DeltaT);
-	}
-	startGrab(pos) {
-		this.grabbed = true;
-		this.pos.copy(pos);
-		// Keep fixed objects on ground
-		if (this.fixed) {
-			this.pos.y = 0;
-		}
-		this.vel.set(0.0, 0.0, 0.0);
-		this.visMesh.position.copy(this.pos);
-	}
-	moveGrabbed(pos, vel) {
-		this.pos.copy(pos);
-		// Keep fixed objects on ground
-		if (this.fixed) {
-			this.pos.y = 0;
-		}
-		this.vel.copy(vel);
-		this.visMesh.position.copy(this.pos);
-	}
-	endGrab(pos, vel) {
-		this.grabbed = false;
-		// Keep fixed objects on ground plane with minimal velocity modification
-		if (this.fixed) {
-			// Use only horizontal velocity components with minimal amplification
-			this.vel.x = vel.x * 1.2;
-			this.vel.y = 0;
-			this.vel.z = vel.z * 1.2;
-		} else {
-			// Amplify throw velocity to make it more responsive for flying objects
-			this.vel.copy(vel).multiplyScalar(3.0);
-		}
-	}
-	simulate() {
-		if (this.grabbed || this.strength !== 0)
-			return;
-		
-		// For fixed ground objects (hemispheres), only allow x-z movement
-		if (this.fixed) {
-			// Apply damping
-			this.vel.multiplyScalar(0.9999);
-			// Zero out y velocity - stay on ground
-			this.vel.y = 0;
-			// Update position (only x and z will change)
-			this.pos.addScaledVector(this.vel, DeltaT);
-			// Keep y at 0
-			this.pos.y = 0;
-			
-			// Circular boundary check in x-z plane
-			let distFromCenter = Math.sqrt(this.pos.x * this.pos.x + this.pos.z * this.pos.z);
-			let maxDist = worldRadius; // - this.radius;
-			
-			if (this.edgeOnly) {
-				// Constrain to exactly the edge radius
-				if (distFromCenter < 0.01) distFromCenter = 0.01; // Avoid division by zero
-				let nx = this.pos.x / distFromCenter;
-				let nz = this.pos.z / distFromCenter;
-				
-				// Force position to be exactly on the edge
-				this.pos.x = nx * maxDist;
-				this.pos.z = nz * maxDist;
-				
-				// Project velocity to be tangent to the circle (remove radial component)
-				let velDotNormal = this.vel.x * nx + this.vel.z * nz;
-				this.vel.x -= velDotNormal * nx;
-				this.vel.z -= velDotNormal * nz;
-			} else if (distFromCenter > maxDist) {
-				// Calculate normal direction (pointing inward)
-				let nx = this.pos.x / distFromCenter;
-				let nz = this.pos.z / distFromCenter;
-				
-				// Push object back inside circle
-				this.pos.x = nx * maxDist;
-				this.pos.z = nz * maxDist;
-				
-				// Reflect velocity along normal
-				let velDotNormal = this.vel.x * nx + this.vel.z * nz;
-				if (velDotNormal > 0) {
-					this.vel.x -= 2 * velDotNormal * nx * this.restitution;
-					this.vel.z -= 2 * velDotNormal * nz * this.restitution;
-				}
-			}
-			
-			this.visMesh.position.copy(this.pos);
-			return;
-		}
-		
-		// Cue ball physics (only for strength = 0)
-		if (!this.noDamping) {
-			this.vel.multiplyScalar(0.9995);
-		}
-		if (gravityEnabled) {
-			this.vel.y += Gravity * DeltaT;
-		}
-		this.pos.addScaledVector(this.vel, DeltaT);
-		
-		let worldEdgeY = worldSizeY - this.radius;
-		
-		// Use perfect elastic collisions (restitution = 1.0) for continuous bouncing
-		let bounceRestitution = this.noDamping ? 1.0 : this.restitution;
-		
-		// Circular boundary check in x-z plane
-		let distFromCenter = Math.sqrt(this.pos.x * this.pos.x + this.pos.z * this.pos.z);
-		let maxDist = worldRadius - this.radius;
-		
-		if (distFromCenter > maxDist) {
-			// Calculate normal direction (pointing inward)
-			let nx = this.pos.x / distFromCenter;
-			let nz = this.pos.z / distFromCenter;
-			
-			// Push object back inside circle
-			this.pos.x = nx * maxDist;
-			this.pos.z = nz * maxDist;
-			
-			// Reflect velocity along normal
-			let velDotNormal = this.vel.x * nx + this.vel.z * nz;
-			if (velDotNormal > 0) {
-				this.vel.x -= 2 * velDotNormal * nx * bounceRestitution;
-				this.vel.z -= 2 * velDotNormal * nz * bounceRestitution;
-			}
-		}
-		
-		//if (this.pos.y > worldEdgeY) {
-		//	this.pos.y = worldEdgeY;
-		//	this.vel.y = -bounceRestitution * this.vel.y;
-		//}
-		if (this.pos.y < this.radius) {
-			this.pos.y = this.radius;
-			this.vel.y = -bounceRestitution * this.vel.y;
-		}
-		
-		// Limit maximum speed (only for dampened cue balls, not continuous bouncers)
-		if (!this.noDamping) {
-			let speed = this.vel.length();
-			if (speed > MaxSpeed) {
-				this.vel.multiplyScalar(MaxSpeed / speed);
-			}
-		}
-		
-		this.visMesh.position.copy(this.pos);
-	}
-	handleCollisionWithBall(ball) {
-		let dir = new THREE.Vector3();
-		dir.subVectors(ball.pos, this.pos);
-		let d = dir.length();
-
-		let minDist = this.radius + ball.radius;
-		if (d >= minDist)
-			return;
-
-		dir.multiplyScalar(1.0 / d);
-		let corr = (minDist - d) / 2.0;
-		
-		// If strength is 0, this is a cue ball - use momentum-based collision
-		if (this.strength === 0) {
-			// Position correction - only push ball away, attractor stays fixed
-			ball.pos.addScaledVector(dir, minDist - d);
-			
-			// If fixed to ground, treat as immovable wall
-			if (this.fixed) {
-				// Calculate relative velocity
-				let relativeVel = new THREE.Vector3();
-				relativeVel.subVectors(ball.vel, this.vel);
-				let normalVel = relativeVel.dot(dir);
-				
-				if (normalVel < 0) {
-					// Reflect ball velocity - hemisphere stays immovable
-					let collisionRestitution = this.restitution;
-					ball.vel.addScaledVector(dir, -normalVel * (1.0 + collisionRestitution));
-					// No momentum transfer to hemisphere - it's immovable
-				}
-			} else {
-				// Original immovable behavior for non-fixed cue balls
-				let relativeVel = new THREE.Vector3();
-				relativeVel.subVectors(ball.vel, this.vel);
-				let normalVel = relativeVel.dot(dir);
-				
-				if (normalVel < 0) {
-					// Use perfect elastic collisions for continuous bouncing
-					let collisionRestitution = this.noDamping ? 1.0 : this.restitution;
-					ball.vel.addScaledVector(dir, -normalVel * (1.0 + collisionRestitution));
-				}
-			}
-		} else {
-			// Push ball away from attractor (attractor is stationary)
-			ball.pos.addScaledVector(dir, corr);
-			
-			// Reflect ball velocity
-			let v = ball.vel.dot(dir);
-			if (v < 0) {
-				ball.vel.addScaledVector(dir, -v * (1.0 + 0.5 * ball.restitution));
-			}
-		}
-	}
-	handleCollisionWithAttractor(other) {
-		let dir = new THREE.Vector3();
-		dir.subVectors(other.pos, this.pos);
-		let d = dir.length();
-
-		let minDist = this.radius + other.radius;
-		if (d >= minDist)
-			return;
-
-		dir.multiplyScalar(1.0 / d);
-		
-		// If both are fixed, handle as immovable objects
-		if (this.fixed && other.fixed) {
-			// Both are fixed - just reflect velocities
-			let relativeVel = new THREE.Vector3();
-			relativeVel.subVectors(other.vel, this.vel);
-			let normalVel = relativeVel.dot(dir);
-			
-			if (normalVel < 0) {
-				let collisionRestitution = (this.restitution + other.restitution) / 2;
-				let impulse = -normalVel * (1.0 + collisionRestitution);
-				this.vel.addScaledVector(dir, -impulse * 0.5);
-				other.vel.addScaledVector(dir, impulse * 0.5);
-				
-				// Keep fixed objects on ground
-				this.vel.y = 0;
-				other.vel.y = 0;
-			}
-			return;
-		}
-		
-		// If one is fixed, treat it as immovable
-		if (this.fixed) {
-			// This is fixed, push other away completely
-			other.pos.addScaledVector(dir, minDist - d);
-			
-			// Reflect other's velocity
-			let relativeVel = new THREE.Vector3();
-			relativeVel.subVectors(other.vel, this.vel);
-			let normalVel = relativeVel.dot(dir);
-			
-			if (normalVel < 0) {
-				let collisionRestitution = (this.restitution + other.restitution) / 2;
-				other.vel.addScaledVector(dir, -normalVel * (1.0 + collisionRestitution));
-			}
-			
-			// Keep this at ground level
-			this.pos.y = 0;
-			this.visMesh.position.copy(this.pos);
-			return;
-		}
-		
-		if (other.fixed) {
-			// Other is fixed, push this away completely
-			this.pos.addScaledVector(dir, -(minDist - d));
-			
-			// Reflect this's velocity
-			let relativeVel = new THREE.Vector3();
-			relativeVel.subVectors(this.vel, other.vel);
-			let normalVel = relativeVel.dot(dir);
-			
-			if (normalVel > 0) {
-				let collisionRestitution = (this.restitution + other.restitution) / 2;
-				this.vel.addScaledVector(dir, -normalVel * (1.0 + collisionRestitution));
-			}
-			
-			// Keep other at ground level
-			other.pos.y = 0;
-			other.visMesh.position.copy(other.pos);
-			return;
-		}
-		
-		// Neither is fixed - standard momentum-based collision
-		let corr = (minDist - d) / 2.0;
-		this.pos.addScaledVector(dir, -corr);
-		other.pos.addScaledVector(dir, corr);
-
-		let v1 = this.vel.dot(dir);
-		let v2 = other.vel.dot(dir);
-
-		let m1 = this.mass;
-		let m2 = other.mass;
-		
-		let effectiveRestitution = (this.restitution + other.restitution) / 2;
-
-		let newV1 = (m1 * v1 + m2 * v2 - m2 * (v1 - v2) * effectiveRestitution) / (m1 + m2);
-		let newV2 = (m1 * v1 + m2 * v2 - m1 * (v2 - v1) * effectiveRestitution) / (m1 + m2);
-
-		this.vel.addScaledVector(dir, newV1 - v1);
-		other.vel.addScaledVector(dir, newV2 - v2);
-		
-		// Update visual mesh positions
-		this.visMesh.position.copy(this.pos);
-		other.visMesh.position.copy(other.pos);
-	}		
-}
-
-// Fountain Attractor Class -------------------------------------------
-// Automatic fountain-style attractor that creates geyser effects
-class FOUNTAINATTRACTOR {
-	constructor(basePos, minInterval, maxInterval, minHeight, maxHeight, strength, radius, color) {
-		this.basePos = new THREE.Vector3(basePos.x, 0.2, basePos.z); // Just above floor
-		this.pos = new THREE.Vector3(basePos.x, 0.2, basePos.z);
-		this.vel = new THREE.Vector3(0.0, 0.0, 0.0);
-		this.strength = strength;
-		this.radius = radius;
-		this.color = color;
-		this.minInterval = minInterval; // Minimum time between eruptions (seconds)
-		this.maxInterval = maxInterval; // Maximum time between eruptions
-		this.minHeight = minHeight; // Minimum cutoff height
-		this.maxHeight = maxHeight; // Maximum cutoff height
-		this.upwardSpeed = 15.0; // Speed of upward acceleration
-		
-		// State variables
-		this.active = false;
-		this.attracting = false;
-		this.targetHeight = 0;
-		this.nextEruptionTime = this.getRandomInterval();
-		this.elapsedTime = 0;
-		
-		// Visual mesh - starts invisible
-		let geometry = new THREE.SphereGeometry(this.radius, 32, 32);
-		let material = new THREE.MeshPhongMaterial({
-			color: color,
-			transparent: true,
-			opacity: 0.8,
-			emissive: color,
-			emissiveIntensity: 0.5
-		});
-		this.visMesh = new THREE.Mesh(geometry, material);
-		this.visMesh.position.copy(this.pos);
-		this.visMesh.visible = false;
-		gThreeScene.add(this.visMesh);
-	}
-	
-	getRandomInterval() {
-		return this.minInterval + Math.random() * (this.maxInterval - this.minInterval);
-	}
-	
-	applyTo(ball) {
-		if (!this.attracting)
-			return;
-		
-		let dir = new THREE.Vector3();
-		dir.subVectors(this.pos, ball.pos);
-		let d2 = dir.lengthSq();
-		if (d2 < 0.01)
-			d2 = 0.01;
-		dir.normalize();
-		let force = this.strength / d2;
-		ball.vel.addScaledVector(dir, force * DeltaT);
-	}
-	
-	simulate() {
-		this.elapsedTime += DeltaT;
-		
-		if (!this.active) {
-			// Waiting for next eruption
-			if (this.elapsedTime >= this.nextEruptionTime) {
-				this.startEruption();
-			}
-		} else {
-			// Erupting - move upward
-			this.vel.y = this.upwardSpeed;
-			this.pos.addScaledVector(this.vel, DeltaT);
-			
-			// Check if reached target height
-			if (this.pos.y >= this.targetHeight) {
-				this.endEruption();
-			}
-			
-			this.visMesh.position.copy(this.pos);
-		}
-	}
-	
-	startEruption() {
-		this.active = true;
-		this.attracting = true;
-		this.pos.copy(this.basePos);
-		this.vel.set(0, 0, 0);
-		this.targetHeight = this.minHeight + Math.random() * (this.maxHeight - this.minHeight);
-		// Keep invisible - this.visMesh.visible = true;
-		this.elapsedTime = 0;
-	}
-	
-	endEruption() {
-		this.active = false;
-		this.attracting = false;
-		// Keep invisible - this.visMesh.visible = false;
-		this.pos.copy(this.basePos);
-		this.nextEruptionTime = this.getRandomInterval();
-		this.elapsedTime = 0;
-	}
-	
-	/*handleCollisionWithBall(ball) {
-		if (!this.active)
-			return;
-			
-		let dir = new THREE.Vector3();
-		dir.subVectors(ball.pos, this.pos);
-		let d = dir.length();
-		
-		let minDist = this.radius + ball.radius;
-		if (d >= minDist)
-			return;
-		
-		dir.multiplyScalar(1.0 / d);
-		
-		// Push ball away
-		ball.pos.addScaledVector(dir, minDist - d);
-		
-		// Add upward impulse to create splash effect
-		let relativeVel = new THREE.Vector3();
-		relativeVel.subVectors(ball.vel, this.vel);
-		let normalVel = relativeVel.dot(dir);
-		
-		if (normalVel < 0) {
-			// Strong upward bounce for geyser effect
-			ball.vel.addScaledVector(dir, -normalVel * 2.0);
-		}
-	}*/
-}
-	
 // Ball Class -------------------------------------------
 var nextBallId = 0;
 class BALL {
@@ -502,7 +51,7 @@ class BALL {
 		this.radius = radius;
 		this.color = color;
 		this.mass = 4.0 * Math.PI / 3.0 * radius * radius * radius;
-		this.restitution = 0.90;
+		this.restitution = 1.0;
 		this.grabbed = false;
 	
 		// visual mesh
@@ -548,74 +97,13 @@ class BALL {
 		other.vel.addScaledVector(dir, newV2 - v2);					
 
 	}
-	applyRepulsion(other) {
-		if (!repulsionEnabled)
-			return;
-		
-		let dir = new THREE.Vector3();
-		dir.subVectors(this.pos, other.pos);
-		let d = dir.length();
-		
-		let collisionDist = this.radius + other.radius;
-		
-		// If balls are nearly overlapping, apply a fixed separation impulse
-		let minSafeDist = collisionDist * 0.5;
-		if (d < minSafeDist) {
-			// Apply fixed separation impulse when too close
-			// Use random direction if exactly overlapping
-			if (d < 0.001) {
-				dir.set(
-					Math.random() - 0.5,
-					Math.random() - 0.5,
-					Math.random() - 0.5
-				);
-				dir.normalize();
-			} else {
-				dir.normalize();
-			}
-			
-			// Apply strong fixed impulse to separate
-			let separationImpulse = 0.1;
-			this.vel.addScaledVector(dir, separationImpulse);
-			other.vel.addScaledVector(dir, -separationImpulse);
-			return;
-		}
-		
-		// Only apply repulsion within 5 radii
-		let maxDist = 5.0 * collisionDist;
-		if (d >= maxDist)
-			return;
-		
-		dir.normalize();
-		
-		// Use stronger repulsion when close, but with a minimum distance to prevent extreme forces
-		let effectiveD = Math.max(d, collisionDist * 0.8);
-		let force;
-		if (d < collisionDist * 1.5) {
-			// Strong repulsion when close - prevents sticking
-			force = RepulsionStrength * 5.0 / (effectiveD * effectiveD);
-		} else {
-			// Normal inverse square law for distant repulsion
-			force = RepulsionStrength / (effectiveD * effectiveD);
-		}
-		
-		// Cap maximum force to prevent oscillations
-		let maxForce = 0.5;
-		force = Math.min(force, maxForce);
-		
-		// Apply force to both balls (Newton's third law)
-		let acceleration1 = force * DeltaT / this.mass;
-		let acceleration2 = force * DeltaT / other.mass;
-		
-		this.vel.addScaledVector(dir, acceleration1);
-		other.vel.addScaledVector(dir, -acceleration2);
-	}
+	
 	simulate(){
 		if (this.grabbed)
 			return;
 
 		// slow velocity a bit to make the simulation more stable
-		this.vel.multiplyScalar(0.99); // Increased damping to prevent feedback loops
+		//this.vel.multiplyScalar(0.99); // Increased damping to prevent feedback loops
 		if (gravityEnabled) {
 			this.vel.y += Gravity * DeltaT;
 		}
@@ -655,6 +143,9 @@ class BALL {
 			this.vel.y = -this.restitution * this.vel.y;
 		}
 		
+		// Check collision with paddle
+		this.checkPaddleCollision();
+		
 		// Limit maximum speed
 		let speed = this.vel.length();
 		if (speed > MaxSpeed) {
@@ -662,10 +153,70 @@ class BALL {
 		}
 		
 		// Update color based on velocity
-		this.updateColor();
+		//this.updateColor();
 		
 		this.visMesh.position.copy(this.pos);
 	}
+	checkPaddleCollision() {
+		// Check if ball collides with the paddle (vertical cylindrical arc)
+		
+		// 1. Check vertical range
+		if (this.pos.y < paddleYMin - this.radius || this.pos.y > paddleYMax + this.radius) {
+			return; // Ball is outside vertical range
+		}
+		
+		// 2. Convert ball position to polar coordinates in x-z plane
+		let ballAngle = Math.atan2(this.pos.z, this.pos.x);
+		let ballRadius = Math.sqrt(this.pos.x * this.pos.x + this.pos.z * this.pos.z);
+		
+		// 3. Calculate angular difference between ball and paddle center
+		let angleDiff = ballAngle - paddleAngle;
+		
+		// Normalize angle difference to [-PI, PI]
+		while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+		while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+		
+		// 4. Check if ball is within paddle's angular range (with ball radius tolerance)
+		// Account for ball size: approximate angular width of ball at given radius
+		let ballAngularWidth = Math.asin(Math.min(1.0, this.radius / paddleRadius));
+		let effectiveHalfArc = paddleHalfArc + ballAngularWidth;
+		
+		if (Math.abs(angleDiff) > effectiveHalfArc) {
+			return; // Ball is outside angular range
+		}
+		
+		// 5. Check radial distance from paddle path (only check inner surface)
+		// Ball must be inside the paddle radius to collide
+		if (ballRadius < paddleRadius) {
+			let radialDist = paddleRadius - ballRadius;
+			let collisionDist = this.radius + paddleTubeRadius;
+			
+			if (radialDist < collisionDist) {
+				// Collision detected on inner (concave) surface!
+				
+				// Calculate collision normal (pointing outward from center)
+				let nx = Math.cos(ballAngle);
+				let nz = Math.sin(ballAngle);
+				
+				// Push ball out toward center (away from paddle) more aggressively
+				let penetration = collisionDist - radialDist;
+				this.pos.x -= nx * penetration * 1.1; // Extra push to prevent tunneling
+				this.pos.z -= nz * penetration * 1.1;
+				
+				// Update ball radius after position correction
+				ballRadius = Math.sqrt(this.pos.x * this.pos.x + this.pos.z * this.pos.z);
+				
+				// Reflect velocity along normal (only if moving toward the paddle)
+				let velDotNormal = this.vel.x * nx + this.vel.z * nz;
+				if (velDotNormal > 0) {
+					// Ball is moving outward (toward paddle), reflect it
+					this.vel.x -= 2 * velDotNormal * nx * this.restitution;
+					this.vel.z -= 2 * velDotNormal * nz * this.restitution;
+				}
+			}
+		}
+	}
+	
 	updateColor() {
 		// Calculate total speed
 		let speed = this.vel.length();
@@ -758,118 +309,26 @@ function initScene() {
 	nextBallId = 0; // Reset ball ID counter
 	Balls = [];	
 	for (var i = 0; i < numBalls; i++) {
-		let radius = Math.random() * 0.1 + 0.1;
-		//let radius = 0.07;
+		//let radius = Math.random() * 0.1 + 0.1;
+		let radius = 0.5;
 		
 		// Spawn balls randomly within circular boundary
 		let angle = Math.random() * Math.PI * 2;
 		let r = Math.sqrt(Math.random()) * (0.3 * worldRadius - radius - 0.5); // sqrt for uniform distribution
 		let pos = new THREE.Vector3(
-			r * Math.cos(angle),
-			Math.random() * worldSizeY + radius,
-			r * Math.sin(angle)
-		);
-		let speed = 2.0
+			0,
+			worldSizeY * 0.4,
+			0);
+		let speed = 10.0
 		let vel = new THREE.Vector3(
 			(-0.5 + Math.random()) * speed, 
-			(-0.5 + Math.random()) * speed, 
+			0, 
 			(-0.5 + Math.random()) * speed);
 		
 		// Initial color will be updated based on velocity (gray for now)
 		let color = new THREE.Color(0x808080);
 		Balls.push(new BALL(pos, vel, radius, color));
-	}		
-	
-	// Create an attractor in the center of the world
-	Attractor = [];
-	/*Attractor.push(new ATTRACTOR(new THREE.Vector3(
-		-3, 0.25 * worldSizeY, 0.0), 
-		0.3,
-		100.0,
-		0xff0000));
-	Attractor.push(new ATTRACTOR(new THREE.Vector3(
-		3.0, 0.25 * worldSizeY, 0.0), 
-		0.3,
-		-100.0,
-		0x0000ff));
-	// White cue ball - fixed hemisphere at floor center
-	Attractor.push(new ATTRACTOR(new THREE.Vector3(
-		0.0, 0.0, 0.0), 
-		0.5,
-		0.0,
-		0xff00aa,
-		false, // noDamping
-		true,  // isHemisphere
-		true)); // fixed
-	Attractor.push(new ATTRACTOR(new THREE.Vector3(
-		worldRadius, 0.0, 0.0),  // Start on edge at (4, 0, 0)
-		0.5,
-		0.0,
-		0xff00aa,
-		false, // noDamping
-		true,  // isHemisphere
-		true,  // fixed
-		true)); // edgeOnly*/
-
-
-
-
-	/*Attractor.push(new ATTRACTOR(new THREE.Vector3(
-		0.0, 0.15 * worldSizeY, 3.0), 
-		0.0,
-		0xffff00,
-		true)); // Yellow bouncing ball with no damping
-		// Give it an initial velocity
-		Attractor[3].vel.set(1.2, 0, 2);*/
-
-	// Create fountain attractors
-	FountainAttractor = [];
-	
-	// Helper function to get random position within circular world
-	function getRandomPosInCircle() {
-		let angle = Math.random() * Math.PI * 2;
-		let radius = Math.random() * worldRadius * 0.7; // Keep within 70% of radius for safety
-		return new THREE.Vector3(
-			Math.cos(angle) * radius,
-			0,
-			Math.sin(angle) * radius
-		);
 	}
-	
-	// Create 3 random fountain attractors within the world
-	FountainAttractor.push(new FOUNTAINATTRACTOR(
-		getRandomPosInCircle(),
-		2.0,  // Min interval (seconds)
-		5.0,  // Max interval
-		0,  // Min height (15% of world height)
-		worldSizeY,  // Max height (100% of world height)
-		100.0,  // Attraction strength
-		0.2,   // Radius
-		0x00ffff  // Cyan color
-	));
-	
-	FountainAttractor.push(new FOUNTAINATTRACTOR(
-		getRandomPosInCircle(),
-		5.0,
-		10.0,
-		0,  // Min height
-		worldSizeY,   // Max height
-		250.0,
-		0.2,
-		0xff8800  // Orange color
-	));
-	
-	FountainAttractor.push(new FOUNTAINATTRACTOR(
-		getRandomPosInCircle(),
-		1.0,
-		4.0,
-		0,  // Min height
-		worldSizeY * 0.33,  // Max height
-		100.0,
-		0.2,
-		0xff00ff  // Magenta color
-	));
-
 }
 	
 // ------------------------------------------
@@ -880,43 +339,113 @@ function initThreeScene() {
 	// ambient light
 	gThreeScene.add( new THREE.AmbientLight( 0x505050 ) );	
 
-	// spotligt
-	var spotLight = new THREE.SpotLight( 0xffffff );
-	spotLight.angle = Math.PI / 8;
-	spotLight.penumbra = 0.0;
-	spotLight.position.set(10, 10, 5);
-	spotLight.castShadow = true;
-	spotLight.shadow.camera.near = 1;
-	spotLight.shadow.camera.far = 20;
-	spotLight.shadow.mapSize.width = 1024;
-	spotLight.shadow.mapSize.height = 1024;
-	gThreeScene.add( spotLight );
-	
-	// Visual cone for spotlight
+	// spotligt 1 -------------------------------------------------
+	var spotLight1 = new THREE.SpotLight( 0x80FFFF ); // Light cyan
+	spotLight1.angle = Math.PI / 8;
+	spotLight1.penumbra = 0.0;
+	spotLight1.position.set(10, 8, 5);
+	spotLight1.castShadow = true;
+	spotLight1.shadow.camera.near = 1;
+	spotLight1.shadow.camera.far = 50;
+	spotLight1.shadow.mapSize.width = 1024;
+	spotLight1.shadow.mapSize.height = 1024;
+	gThreeScene.add( spotLight1 );
+
+	// Spotlight 2 -------------------------------------------------
+	var spotLight2 = new THREE.SpotLight( 0xFF80FF ); // Light magenta
+	spotLight2.angle = Math.PI / 8;
+	spotLight2.penumbra = 0.0;
+	spotLight2.position.set(-10, 8, 5);
+	spotLight2.castShadow = true;
+	spotLight2.shadow.camera.near = 1;
+	spotLight2.shadow.camera.far = 50;
+	spotLight2.shadow.mapSize.width = 1024;
+	spotLight2.shadow.mapSize.height = 1024;
+	gThreeScene.add( spotLight2 );
+
+	// Spotlight 3 -------------------------------------------------
+	var spotLight3 = new THREE.SpotLight( 0xFFFF80 ); // Light yellow
+	spotLight3.angle = Math.PI / 8;
+	spotLight3.penumbra = 0.0;
+	spotLight3.position.set(0, 8, -10);
+	spotLight3.castShadow = true;
+	spotLight3.shadow.camera.near = 1;
+	spotLight3.shadow.camera.far = 50;
+	spotLight3.shadow.mapSize.width = 1024;
+	spotLight3.shadow.mapSize.height = 1024;
+	gThreeScene.add( spotLight3 );
+
+	// Visual cone for Spotlight 1
 	var coneHeight = 1;
-	var coneRadius = Math.tan(spotLight.angle) * coneHeight;
+	var coneRadius = Math.tan(spotLight1.angle) * coneHeight;
 	var coneGeometry = new THREE.ConeGeometry( coneRadius, coneHeight, 32, 1, true );
 	var coneMaterial = new THREE.MeshBasicMaterial({ 
-		color: 0xffffff, 
+		color: 0x80FFFF, // Light cyan
 		transparent: false,
 		side: THREE.DoubleSide
 	});
-	var coneMesh = new THREE.Mesh( coneGeometry, coneMaterial );
-	coneMesh.position.copy(spotLight.position);
-	
+	var coneMesh1 = new THREE.Mesh( coneGeometry, coneMaterial );
+	coneMesh1.position.copy(spotLight1.position);
+
 	// Point cone toward origin (wide end points in light direction)
-	var targetPos = new THREE.Vector3(0, 0, 0);
-	var direction = new THREE.Vector3().subVectors(targetPos, spotLight.position).normalize();
+	var targetPos1 = new THREE.Vector3(0, 0, 0);
+	var direction1 = new THREE.Vector3().subVectors(targetPos1, spotLight1.position).normalize();
 	// Flip direction so pointed end points back toward light source
 	var up = new THREE.Vector3(0, -1, 0); // Negative Y makes wide end point forward
-	var axis = new THREE.Vector3().crossVectors(up, direction).normalize();
-	var angle = Math.acos(up.dot(direction));
-	coneMesh.quaternion.setFromAxisAngle(axis, angle);
-	
+	var axis = new THREE.Vector3().crossVectors(up, direction1).normalize();
+	var angle = Math.acos(up.dot(direction1));
+	coneMesh1.quaternion.setFromAxisAngle(axis, angle);
 	// Offset cone so narrow end is at light position
-	coneMesh.translateY(coneHeight / 2);
-	
-	gThreeScene.add( coneMesh );
+	coneMesh1.translateY(coneHeight / 2);
+	gThreeScene.add( coneMesh1 );
+
+	// Visual cone for spotlight2
+	var coneHeight = 1;
+	var coneRadius = Math.tan(spotLight2.angle) * coneHeight;
+	var coneGeometry = new THREE.ConeGeometry( coneRadius, coneHeight, 32, 1, true );
+	var coneMaterial = new THREE.MeshBasicMaterial({ 
+		color: 0xFF80FF, // Light magenta
+		transparent: false,
+		side: THREE.DoubleSide
+	});
+	var coneMesh2 = new THREE.Mesh( coneGeometry, coneMaterial );
+	coneMesh2.position.copy(spotLight2.position);
+
+	// Point cone toward origin (wide end points in light direction)
+	var targetPos2 = new THREE.Vector3(0, 0, 0);
+	var direction2 = new THREE.Vector3().subVectors(targetPos2, spotLight2.position).normalize();
+	// Flip direction so pointed end points back toward light source
+	var up = new THREE.Vector3(0, -1, 0); // Negative Y makes wide end point forward
+	var axis = new THREE.Vector3().crossVectors(up, direction2).normalize();
+	var angle = Math.acos(up.dot(direction2));
+	coneMesh2.quaternion.setFromAxisAngle(axis, angle);
+	// Offset cone so narrow end is at light position
+	coneMesh2.translateY(coneHeight / 2);
+	gThreeScene.add( coneMesh2 );
+
+	// Visual cone for spotlight3
+	var coneHeight = 1;
+	var coneRadius = Math.tan(spotLight3.angle) * coneHeight;
+	var coneGeometry = new THREE.ConeGeometry( coneRadius, coneHeight, 32, 1, true );
+	var coneMaterial = new THREE.MeshBasicMaterial({ 
+		color: 0xFFFF80, // Light yellow
+		transparent: false,
+		side: THREE.DoubleSide
+	});
+	var coneMesh3 = new THREE.Mesh( coneGeometry, coneMaterial );
+	coneMesh3.position.copy(spotLight3.position);
+
+	// Point cone toward origin (wide end points in light direction)
+	var targetPos3 = new THREE.Vector3(0, 0, 0);
+	var direction3 = new THREE.Vector3().subVectors(targetPos3, spotLight3.position).normalize();
+	// Flip direction so pointed end points back toward light source
+	var up = new THREE.Vector3(0, -1, 0); // Negative Y makes wide end point forward
+	var axis = new THREE.Vector3().crossVectors(up, direction3).normalize();
+	var angle = Math.acos(up.dot(direction3));
+	coneMesh3.quaternion.setFromAxisAngle(axis, angle);
+	// Offset cone so narrow end is at light position
+	coneMesh3.translateY(coneHeight / 2);
+	gThreeScene.add( coneMesh3 );
 
 	// overhead light
 	var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
@@ -967,11 +496,11 @@ function initThreeScene() {
 	ground.receiveShadow = true;
 	gThreeScene.add( ground );*/
 	
-	/*// Create circular grid
+	// Create circular grid
 	var gridGeometry = new THREE.BufferGeometry();
 	var vertices = [];
 	
-	// Draw concentric circles
+	/*// Draw concentric circles
 	var numCircles = Math.floor(worldRadius / 0.25);
 	var segmentsPerCircle = 64;
 	for (let c = 1; c <= numCircles; c++) {
@@ -982,13 +511,14 @@ function initThreeScene() {
 			vertices.push(r * Math.cos(angle1), 0, r * Math.sin(angle1));
 			vertices.push(r * Math.cos(angle2), 0, r * Math.sin(angle2));
 		}
-	}
+	}*/
 	
 	// Draw radial lines
 	var numRadialLines = 64;
+	var innerRadius = worldRadius * 0.2; // Start lines 20% from center
 	for (let i = 0; i < numRadialLines; i++) {
 		let angle = (i / numRadialLines) * Math.PI * 2;
-		vertices.push(0, 0, 0);
+		vertices.push(innerRadius * Math.cos(angle), 0, innerRadius * Math.sin(angle));
 		vertices.push(worldRadius * Math.cos(angle), 0, worldRadius * Math.sin(angle));
 	}
 	
@@ -996,7 +526,21 @@ function initThreeScene() {
 	var gridMaterial = new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 1.0 });
 	var gridHelper = new THREE.LineSegments(gridGeometry, gridMaterial);
 	gridHelper.position.set(0, 0.002, 0);
-	gThreeScene.add(gridHelper);*/
+	gThreeScene.add(gridHelper);
+
+	// Add circle at inner radius where radial lines stop
+	var circleSegments = 64;
+	var circleVertices = [];
+	for (let i = 0; i <= circleSegments; i++) {
+		let angle = (i / circleSegments) * Math.PI * 2;
+		circleVertices.push(innerRadius * Math.cos(angle), 0, innerRadius * Math.sin(angle));
+	}
+	var circleGeometry = new THREE.BufferGeometry();
+	circleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(circleVertices, 3));
+	var circleMaterial = new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 1.0 });
+	var circleHelper = new THREE.LineLoop(circleGeometry, circleMaterial);
+	circleHelper.position.set(0, 0.002, 0);
+	gThreeScene.add(circleHelper);
 
 	// create round floor plane
 	var floorGeometry = new THREE.CircleGeometry(worldRadius, 64);
@@ -1007,7 +551,7 @@ function initThreeScene() {
 	floorMesh.receiveShadow = true;
 	gThreeScene.add(floorMesh);
 
-	// create round ceiling plane
+	// round ceiling plane  -------------------------------------------------
 	var ceilingGeometry = new THREE.CircleGeometry(worldRadius, 64);
 	var ceilingMaterial = new THREE.MeshPhongMaterial({ color:0xa2d2e3, side:THREE.DoubleSide, transparent:true, opacity:0.2});
 	var ceilingMesh = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
@@ -1015,8 +559,50 @@ function initThreeScene() {
 	ceilingMesh.position.set(0, worldSizeY, 0);
 	ceilingMesh.receiveShadow = true;
 	gThreeScene.add(ceilingMesh);
+
+	// thin black ring on floor and ceiling for paddle travel   -------------------------------------------------
+	var paddleRingGeometry = new THREE.RingGeometry(worldRadius * 0.79, worldRadius * 0.81, 64);
+	var paddleRingMaterial = new THREE.MeshBasicMaterial({ color:0x000000, side:THREE.DoubleSide });
+	var paddleRingFloorMesh = new THREE.Mesh(paddleRingGeometry, paddleRingMaterial);
+	paddleRingFloorMesh.rotation.x = -Math.PI / 2;
+	paddleRingFloorMesh.position.set(0, 0.02, 0);
+	gThreeScene.add(paddleRingFloorMesh);
+
+	var paddleRingCeilingMesh = new THREE.Mesh(paddleRingGeometry, paddleRingMaterial);
+	paddleRingCeilingMesh.rotation.x = -Math.PI / 2;
+	paddleRingCeilingMesh.position.set(0, worldSizeY - 0.02, 0);
+	gThreeScene.add(paddleRingCeilingMesh);
+
+	// paddle  -------------------------------------------------
+		// radius
+		// tube
+		// radialSegments
+		// tubularSegments
+		// arc
+		// thetaStart
+		// thetaLength
+	var paddleGeometry = new THREE.TorusGeometry(
+		worldRadius * 0.8, 
+		0.02, 
+		12, 
+		48, 
+		Math.PI / 9,
+		0,
+		2 * Math.PI);
+	var paddleMaterial = new THREE.MeshPhongMaterial(
+		{ color:0xe96620, 
+		side:THREE.DoubleSide,
+		transparent:true,
+		opacity:0.6 });
+	paddleMesh = new THREE.Mesh(paddleGeometry, paddleMaterial);
+	paddleMesh.rotation.x = Math.PI / 2;
+	paddleMesh.position.set(0, worldSizeY / 2, 0);
+	paddleMesh.scale.set(1, 1, 25 * worldSizeY); // Stretch vertically to create arc paddle
+	paddleMesh.castShadow = true;
+	paddleMesh.receiveShadow = true;
+	gThreeScene.add(paddleMesh);
 	
-	// cylinder boundary wall
+	// cylinder boundary wall  -------------------------------------------------
 	var wallHeight = worldSizeY;
 	var wallGeometry = new THREE.CylinderGeometry(worldRadius, worldRadius, wallHeight, 64, 1, true);
 	var wallMaterial = new THREE.MeshPhongMaterial({ color:0xa2d2e3, side:THREE.BackSide, transparent:true});
@@ -1068,6 +654,7 @@ function initThreeScene() {
 	
 	// Keyboard events
 	window.addEventListener( 'keydown', onKeyDown, false );
+	window.addEventListener( 'keyup', onKeyUp, false );
 	
 	// Create 2D overlay canvas for UI button
 	buttonCanvas = document.createElement('canvas');
@@ -1084,13 +671,9 @@ function initThreeScene() {
 	buttonWidth = 70;
 	buttonHeight = 25;
 	
-	// Repulsion button position (bottom)
-	repulsionButtonX = window.innerWidth - buttonWidth - 10;
-	repulsionButtonY = window.innerHeight - buttonHeight - 10;
-	
-	// Gravity button position (above repulsion button)
+	// Gravity button position 
 	gravityButtonX = window.innerWidth - buttonWidth - 10;
-	gravityButtonY = repulsionButtonY - buttonHeight - 5;
+	gravityButtonY = window.innerHeight - buttonHeight - 10;
 	
 	// Add click handler for buttons
 	container.addEventListener('click', onButtonClick, false);
@@ -1244,6 +827,22 @@ function onKeyDown( evt ) {
 		console.log(`Camera.position.set(${Camera.position.x.toFixed(1)}, ${Camera.position.y.toFixed(1)}, ${Camera.position.z.toFixed(1)});`);
 		console.log(`CameraControl.target.set(${CameraControl.target.x.toFixed(1)}, ${CameraControl.target.y.toFixed(1)}, ${CameraControl.target.z.toFixed(1)});`);
 	}
+	// Track arrow key states for smooth rotation
+	else if (evt.key === 'ArrowLeft') {
+		leftArrowPressed = true;
+	}
+	else if (evt.key === 'ArrowRight') {
+		rightArrowPressed = true;
+	}
+}
+
+function onKeyUp( evt ) {
+	if (evt.key === 'ArrowLeft') {
+		leftArrowPressed = false;
+	}
+	else if (evt.key === 'ArrowRight') {
+		rightArrowPressed = false;
+	}
 }
 				
 function onWindowResize() {
@@ -1256,10 +855,8 @@ function onWindowResize() {
 	if (buttonCanvas) {
 		buttonCanvas.width = window.innerWidth;
 		buttonCanvas.height = window.innerHeight;
-		repulsionButtonX = window.innerWidth - buttonWidth - 10;
-		repulsionButtonY = window.innerHeight - buttonHeight - 10;
 		gravityButtonX = window.innerWidth - buttonWidth - 10;
-		gravityButtonY = repulsionButtonY - buttonHeight - 5;
+		gravityButtonY = window.innerHeight - buttonHeight - 10;
 		drawButton();
 	}
 }
@@ -1289,38 +886,8 @@ function simulate() {
 			const pairKey = id1 < id2 ? `${id1}-${id2}` : `${id2}-${id1}`;
 			if (!checkedPairs.has(pairKey)) {
 				checkedPairs.add(pairKey);
-				// Apply repulsion force only once per pair
-				Balls[i].applyRepulsion(other);
 				Balls[i].handleCollision(other);
 			}
-		}
-		
-		for (let k = 0; k < Attractor.length; k++) {
-			Attractor[k].applyTo(Balls[i]);
-			Attractor[k].handleCollisionWithBall(Balls[i]);
-		}
-		
-		// Apply fountain attractors
-		for (let k = 0; k < FountainAttractor.length; k++) {
-			FountainAttractor[k].applyTo(Balls[i]);
-			//FountainAttractor[k].handleCollisionWithBall(Balls[i]);
-		}
-	}
-	
-	// Simulate attractors (cue balls)
-	for (let k = 0; k < Attractor.length; k++) {
-		Attractor[k].simulate();
-	}
-	
-	// Simulate fountain attractors
-	for (let k = 0; k < FountainAttractor.length; k++) {
-		FountainAttractor[k].simulate();
-	}
-	
-	// Handle attractor-to-attractor collisions
-	for (let i = 0; i < Attractor.length; i++) {
-		for (let j = i + 1; j < Attractor.length; j++) {
-			Attractor[i].handleCollisionWithAttractor(Attractor[j]);
 		}
 	}
 }
@@ -1340,19 +907,6 @@ function drawButton() {
 	buttonCtx.textBaseline = 'middle';
 	const gravityText = gravityEnabled ? 'Gravity: ON' : 'Gravity: OFF';
 	buttonCtx.fillText(gravityText, gravityButtonX + buttonWidth / 2, gravityButtonY + buttonHeight / 2);
-	
-	// Repulsion button
-	buttonCtx.fillStyle = repulsionEnabled ? '#4CAF50' : '#f44336';
-	buttonCtx.fillRect(repulsionButtonX, repulsionButtonY, buttonWidth, buttonHeight);
-	buttonCtx.strokeStyle = '#ffffff';
-	buttonCtx.lineWidth = 2;
-	buttonCtx.strokeRect(repulsionButtonX, repulsionButtonY, buttonWidth, buttonHeight);
-	buttonCtx.fillStyle = '#ffffff';
-	buttonCtx.font = 'bold 8px Arial';
-	buttonCtx.textAlign = 'center';
-	buttonCtx.textBaseline = 'middle';
-	const repulsionText = repulsionEnabled ? 'Repulsion: ON' : 'Repulsion: OFF';
-	buttonCtx.fillText(repulsionText, repulsionButtonX + buttonWidth / 2, repulsionButtonY + buttonHeight / 2);
 }
 
 function onButtonClick(event) {
@@ -1366,12 +920,6 @@ function onButtonClick(event) {
 		gravityEnabled = !gravityEnabled;
 		drawButton();
 	}
-	// Check repulsion button
-	else if (x >= repulsionButtonX && x <= repulsionButtonX + buttonWidth &&
-	         y >= repulsionButtonY && y <= repulsionButtonY + buttonHeight) {
-		repulsionEnabled = !repulsionEnabled;
-		drawButton();
-	}
 }
 
 // ------------------------------------------
@@ -1382,6 +930,17 @@ function render() {
 // make browser to call us repeatedly -----------------------------------
 function update() {
 	stats.begin();
+	
+	// Update paddle rotation based on key states
+	if (leftArrowPressed) {
+		paddleAngle += paddleRotationSpeed * DeltaT;
+		paddleMesh.rotation.z = paddleAngle;
+	}
+	if (rightArrowPressed) {
+		paddleAngle -= paddleRotationSpeed * DeltaT;
+		paddleMesh.rotation.z = paddleAngle;
+	}
+	
 	simulate();
 	render();
 	CameraControl.update();	
