@@ -67,6 +67,11 @@ var dragStartMouseX = 0;
 var dragStartMouseY = 0;
 var dragStartValue = 0;
 
+// Shock wave system
+var shockWaves = []; // Array of active shock waves
+var shockWaveMeshPool = []; // Pool of reusable shock wave meshes
+var maxShockWaves = 50; // Maximum number of concurrent shock waves
+
 // Instanced rendering for performance
 var ballInstancedMesh = null;
 var ballMatrix = new THREE.Matrix4();
@@ -282,6 +287,14 @@ class MORTAR {
 			Balls[i].vel.copy(dir);
 		}
 		
+		// Create shock wave at explosion center
+		if (shockWaveMeshPool.length > 0) {
+			const mesh = shockWaveMeshPool.pop();
+			const shockWave = new ShockWave(this.clusterCenter);
+			shockWave.mesh = mesh;
+			shockWaves.push(shockWave);
+		}
+		
 		// Update instance colors on GPU
 		ballInstancedMesh.instanceColor.needsUpdate = true;
 	}
@@ -382,6 +395,50 @@ class BALL {
 	}
 }
 
+// Shock Wave Class -------------------------------------------
+class ShockWave {
+	constructor(position) {
+		this.position = position.clone();
+		this.age = 0;
+		this.lifetime = 0.1; // 0.15 seconds - very quick flash
+		this.startRadius = 0.0;
+		this.maxRadius = 1.5; // Maximum expansion radius
+		this.active = true;
+		this.mesh = null; // Will be assigned from pool
+	}
+	
+	update(deltaTime) {
+		if (!this.active) return;
+		
+		this.age += deltaTime;
+		
+		if (this.age >= this.lifetime) {
+			this.active = false;
+			if (this.mesh) {
+				this.mesh.visible = false;
+			}
+			return;
+		}
+		
+		// Calculate expansion progress (0 to 1)
+		const progress = this.age / this.lifetime;
+		
+		// Expand radius (very fast flash-like expansion)
+		const radius = this.startRadius + (this.maxRadius - this.startRadius) * Math.pow(progress, 0.3);
+		
+		// Fade opacity (start at 0.85, fade to 0 - bright flash)
+		const opacity = 0.65 * (1.0 - progress);
+		
+		// Update mesh
+		if (this.mesh) {
+			this.mesh.position.copy(this.position);
+			this.mesh.scale.setScalar(radius);
+			this.mesh.material.opacity = opacity;
+			this.mesh.visible = true;
+		}
+	}
+}
+
 // Spatial Hash Grid for efficient collision detection -------------------------------------------
 // Optimized with integer hashing instead of string keys
 class SpatialHashGrid {
@@ -454,8 +511,6 @@ function initScene() {
 	const ballMaterial = new THREE.MeshBasicMaterial();
 	ballInstancedMesh = new THREE.InstancedMesh(ballGeometry, ballMaterial, numBalls);
 	ballInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-	ballInstancedMesh.castShadow = false;
-	ballInstancedMesh.receiveShadow = false;
 	
 	// Force instance color support
 	if (!ballInstancedMesh.instanceColor) {
@@ -471,6 +526,22 @@ function initScene() {
 	}
 	
 	gThreeScene.add(ballInstancedMesh);
+	
+	// Create shock wave mesh pool
+	const shockWaveGeometry = new THREE.SphereGeometry(1, 32, 32); // Unit sphere, will be scaled
+	const shockWaveMaterial = new THREE.MeshBasicMaterial({
+		color: 0xffffff,
+		transparent: true,
+		opacity: 1.0,
+		side: THREE.FrontSide
+	});
+	
+	for (let i = 0; i < maxShockWaves; i++) {
+		const mesh = new THREE.Mesh(shockWaveGeometry, shockWaveMaterial.clone());
+		mesh.visible = false;
+		gThreeScene.add(mesh);
+		shockWaveMeshPool.push(mesh);
+	}
 	
 	// Create 5x5 grid of mortars with different colors
 	nextBallId = 0;
@@ -817,7 +888,7 @@ function initThreeScene() {
 
 	// Camera	
 	Camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-	Camera.position.set(-15.8, 5.6, 26.3);
+	Camera.position.set(-21.4, 10.2, 31.6);
 	Camera.updateMatrixWorld();	
 	gThreeScene.add(Camera);
 
@@ -825,7 +896,7 @@ function initThreeScene() {
 	CameraControl = new THREE.OrbitControls(Camera, gRenderer.domElement);
 	CameraControl.zoomSpeed = 2.0;
 	CameraControl.panSpeed = 0.4;
-	CameraControl.target.set(0, 11.5, 0);
+	CameraControl.target.set(0, 16.3, 0);
 	CameraControl.enabled = true; // Enabled by default (Manual mode)
 	
 	// Calculate initial camera angle from current position relative to target
@@ -1087,6 +1158,19 @@ function simulate() {
 	// Update all mortars
 	for (let i = 0; i < Mortars.length; i++) {
 		Mortars[i].update(DeltaT);
+	}
+	
+	// Update shock waves
+	for (let i = shockWaves.length - 1; i >= 0; i--) {
+		shockWaves[i].update(DeltaT);
+		
+		// Remove and recycle inactive shock waves
+		if (!shockWaves[i].active) {
+			const shockWave = shockWaves.splice(i, 1)[0];
+			if (shockWave.mesh) {
+				shockWaveMeshPool.push(shockWave.mesh);
+			}
+		}
 	}
 	
 	// Simulate ball physics without collisions (firework particles pass through each other)
@@ -1507,8 +1591,6 @@ function drawMenus() {
 function onMenuClick(evt) {
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
 	
-	console.log('Menu click at', evt.clientX, evt.clientY, 'mainMenuVisible:', mainMenuVisible);
-	
 	// Check ellipsis click (toggle main menu) - simple large top-left corner hitbox
 	if (evt.clientX < 0.15 * cScale && evt.clientY < 0.15 * cScale) {
 		mainMenuVisible = !mainMenuVisible;
@@ -1517,7 +1599,6 @@ function onMenuClick(evt) {
 			cameraMenuVisible = false;
 		}
 		needsMenuRedraw = true;
-		console.log('Toggled main menu to:', mainMenuVisible);
 		evt.stopPropagation();
 		return true; // Menu click handled
 	}
@@ -1546,7 +1627,6 @@ function onMenuClick(evt) {
 			gRunning = !gRunning;
 			autoLaunchEnabled = gRunning;
 			needsMenuRedraw = true;
-			console.log('Play/Pause clicked! gRunning:', gRunning);
 			evt.stopPropagation();
 			return true; // Menu click handled
 		}
@@ -1557,7 +1637,6 @@ function onMenuClick(evt) {
 			evt.clientY >= itemY2 && evt.clientY <= itemY2 + itemHeight) {
 			cameraMenuVisible = !cameraMenuVisible;
 			needsMenuRedraw = true;
-			console.log('Camera button clicked! cameraMenuVisible:', cameraMenuVisible);
 			evt.stopPropagation();
 			return true; // Menu click handled
 		}
@@ -1589,7 +1668,6 @@ function onMenuClick(evt) {
 		if (dx * dx + dy * dy < closeIconRadius * closeIconRadius) {
 			cameraMenuVisible = false;
 			needsMenuRedraw = true;
-			console.log('Camera menu closed');
 			evt.stopPropagation();
 			return true; // Menu click handled
 		}
@@ -1606,7 +1684,6 @@ function onMenuClick(evt) {
 			if (rdx * rdx + rdy * rdy < (radioButtonSize * 2) * (radioButtonSize * 2)) {
 				gCameraMode = i;
 				needsMenuRedraw = true;
-				console.log('Camera mode changed to:', i);
 				// OrbitControls stay enabled in all modes for manual position adjustment
 				CameraControl.enabled = true;
 				evt.stopPropagation();
@@ -1623,7 +1700,6 @@ function onMenuClick(evt) {
 			dragStartMouseY = evt.clientY;
 			dragStartValue = gCameraFOV;
 			if (CameraControl) CameraControl.enabled = false;
-			console.log('FOV knob drag started, value:', gCameraFOV);
 			return true; // Knob click handled
 		}
 		
@@ -1635,7 +1711,6 @@ function onMenuClick(evt) {
 			dragStartMouseY = evt.clientY;
 			dragStartValue = gCameraRotationSpeed;
 			if (CameraControl) CameraControl.enabled = false;
-			console.log('Orbit speed knob drag started, value:', gCameraRotationSpeed);
 			return true; // Knob click handled
 		}
 	}
