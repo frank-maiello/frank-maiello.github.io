@@ -11,9 +11,9 @@ const Gravity = -0.5;
 const worldRadius = 50; // Circular boundary radius
 const worldSizeY = 20;
 
-const particlesPerMortar = 2000; // Particles per mortar
+const particlesPerMortar = 3000; // Particles per mortar
 const sparkPoolSize = 3000; // Extra particles for spark trails
-const numBalls = 50000 + sparkPoolSize; // 25 mortars × 2000 + spark pool
+const numBalls = 75000 + sparkPoolSize; // 25 mortars × 2000 + spark pool
 const mortarAltitude = 0.05; // Start just above ground level
 const explosionSpeed = 4.0; // Velocity magnitude for GO button explosion
 const mortarSpacing = 3.0; // Space between mortar tubes in grid
@@ -77,37 +77,17 @@ class MORTAR {
 	}
 	
 	createParticles() {
-		const ballRadius = 0.01;
-		const maxAttempts = 50;
-		
+		const ballRadius = 0.02;
 		for (let i = 0; i < this.particleCount; i++) {
 			let pos = null;
-			let overlapping = true;
-			let attempts = 0;
-			
-			while (overlapping && attempts < maxAttempts) {
-				attempts++;
-				let theta = Math.random() * Math.PI * 2;
-				let phi = Math.acos(2 * Math.random() - 1);
-				let r = Math.cbrt(Math.random()) * (3 * ballRadius);
-				pos = new THREE.Vector3(
-					this.position.x + r * Math.sin(phi) * Math.cos(theta),
-					mortarAltitude + r * Math.cos(phi),
-					this.position.z + r * Math.sin(phi) * Math.sin(theta)
-				);
-				
-				overlapping = false;
-				for (let j = this.startIndex; j < this.startIndex + i; j++) {
-					if (Balls[j]) {
-						let dist = pos.distanceTo(Balls[j].pos);
-						if (dist < ballRadius * 2) {
-							overlapping = true;
-							break;
-						}
-					}
-				}
-			}
-			
+			let theta = Math.random() * Math.PI * 2;
+			let phi = Math.acos(2 * Math.random() - 1);
+			let r = Math.cbrt(Math.random()) * (3 * ballRadius);
+			pos = new THREE.Vector3(
+				this.position.x + r * Math.sin(phi) * Math.cos(theta),
+				mortarAltitude + r * Math.cos(phi),
+				this.position.z + r * Math.sin(phi) * Math.sin(theta)
+			);
 			let vel = new THREE.Vector3(0, 0, 0);
 			let ball = new BALL(pos, vel, ballRadius, this.particleColor.clone());
 			ball.mortarId = Mortars.length; // Track which mortar this belongs to
@@ -120,11 +100,11 @@ class MORTAR {
 	launch() {
 		if (!this.isReadyToLaunch()) return; // Not ready yet
 		
-		// Randomize launch speed (7.0 to 11.0 m/s)
-		let launchVelocity = 7.0 + Math.random() * 4.0;
+		// Randomize launch speed (10.0 to 15.0 m/s)
+		let launchVelocity = 20.0 + Math.random() * 10.0;
 		
 		// Reset and launch all this mortar's particles
-		const ballRadius = 0.01;
+		const ballRadius = 0.02;
 		for (let i = this.startIndex; i < this.startIndex + this.particleCount; i++) {
 			if (Balls[i]) {
 				// Reset position to tight cluster at mortar location
@@ -246,7 +226,7 @@ class MORTAR {
 		if (count > 0) {
 			this.clusterCenter.divideScalar(count);
 		}
-		
+		let blastSpeed = 1 + Math.random() * 1;
 		for (let i = this.startIndex; i < this.startIndex + this.particleCount; i++) {
 			if (!Balls[i]) continue;
 			
@@ -254,8 +234,9 @@ class MORTAR {
 			Balls[i].hasExploded = true;
 			Balls[i].age = 0;
 			Balls[i].brightness = 1.0;
-			Balls[i].speedMultiplier = 0.7 + Math.random() * 0.6;
-			Balls[i].lifetime = 2.0 + Math.random() * 2.0;
+			//Balls[i].speedMultiplier = 0.7 + Math.random() * 0.6;
+			Balls[i].speedMultiplier = 2.0 + (-0.5 + Math.random()) * 0.2;
+			Balls[i].lifetime = blastSpeed + Math.random() * 2.0;
 			
 			// NOW set to mortar's color for explosion
 			Balls[i].baseColor = this.particleColor.clone();
@@ -301,7 +282,8 @@ class BALL {
 		this.isSpark = false; // Track if this is a trail spark (not main firework particle)
 		
 		// Add variability to speed and lifetime (firework embers burn out over time)
-		this.speedMultiplier = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
+		//this.speedMultiplier = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
+		this.speedMultiplier = 1.0;
 		this.lifetime = 2.0 + Math.random() * 2.0; // 2.0 to 4.0 seconds - time until particle fades out
 		
 	}
@@ -476,7 +458,7 @@ function initScene() {
 		ballInstancedMesh.material.dispose();
 	}
 	
-	const ballRadius = 0.01;
+	const ballRadius = 0.02;
 	const ballGeometry = new THREE.SphereGeometry(ballRadius, 16, 16);
 	const ballMaterial = new THREE.MeshBasicMaterial();
 	ballInstancedMesh = new THREE.InstancedMesh(ballGeometry, ballMaterial, numBalls);
@@ -563,7 +545,7 @@ function initScene() {
 	ballInstancedMesh.instanceColor.needsUpdate = true;
 	
 	// Set initial random launch time
-	nextLaunchTime = 1.0 + Math.random() * 2.0; // 1-3 seconds
+	nextLaunchTime = 0;
 	timeSinceLastLaunch = 0;
 
 }
@@ -934,7 +916,7 @@ function simulate() {
 			}
 			
 			// Set next launch time (1 to 3 seconds)
-			nextLaunchTime = 1.0 + Math.random() * 2.0;
+			nextLaunchTime = 0;
 			timeSinceLastLaunch = 0;
 		}
 	}
