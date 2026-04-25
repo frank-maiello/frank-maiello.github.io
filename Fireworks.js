@@ -17,7 +17,7 @@ const numBalls = 75000 + sparkPoolSize; // 25 mortars × 2000 + spark pool
 const mortarAltitude = 0.05; // Start just above ground level
 const explosionSpeed = 4.0; // Velocity magnitude for GO button explosion
 const mortarSpacing = 3.0; // Space between mortar tubes in grid
-const sparkLifetime = 0.3; // Sparks fade very quickly
+const sparkLifetime = 0.25; // Sparks fade very quickly
 const sparksPerFrame = 5; // Number of sparks spawned per mortar per frame
 
 var gThreeScene;
@@ -33,11 +33,6 @@ var autoLaunchEnabled = true; // Auto-launch mortars at random intervals
 var nextLaunchTime = 0; // Time until next mortar launch
 var timeSinceLastLaunch = 0; // Time elapsed since last launch
 var sparkPool = []; // Pool of available spark particle indices
-var nextSparkIndex = 50000; // Start spark indices after mortar particles
-var buttonCanvas;
-var buttonCtx;
-var buttonWidth, buttonHeight;
-var goButtonX, goButtonY;
 var clusterCenter = new THREE.Vector3(); // Center of initial ball cluster
 var stats;
 
@@ -273,7 +268,6 @@ class BALL {
 		this.color = color;
 		this.baseColor = color.clone(); // Store base color for brightness calculations
 		this.mass = 4.0 * Math.PI / 3.0 * radius * radius * radius;
-		this.restitution = 0.90;
 		this.grabbed = false;
 		this.brightness = 1.0; // Starts at full brightness
 		this.active = true; // Track if particle is active
@@ -286,36 +280,6 @@ class BALL {
 		this.speedMultiplier = 1.0;
 		this.lifetime = 2.0 + Math.random() * 2.0; // 2.0 to 4.0 seconds - time until particle fades out
 		
-	}
-	handleCollision(other) {
-		let dir = new THREE.Vector3();
-		dir.subVectors(other.pos, this.pos);
-		let d = dir.length();
-
-		let minDist = this.radius + other.radius;
-		if (d >= minDist)
-			return;
-
-		dir.multiplyScalar(1.0 / d);
-		let corr = (minDist - d) / 2.0;
-		this.pos.addScaledVector(dir, -corr);
-		other.pos.addScaledVector(dir, corr);
-
-		let v1 = this.vel.dot(dir);
-		let v2 = other.vel.dot(dir);
-
-		let m1 = this.mass;
-		let m2 = other.mass;
-		
-		// Use reduced restitution to dampen collisions and prevent feedback loops
-		let effectiveRestitution = this.restitution * 0.7;
-
-		let newV1 = (m1 * v1 + m2 * v2 - m2 * (v1 - v2) * effectiveRestitution) / (m1 + m2);
-		let newV2 = (m1 * v1 + m2 * v2 - m1 * (v2 - v1) * effectiveRestitution) / (m1 + m2);
-
-		this.vel.addScaledVector(dir, newV1 - v1);
-		other.vel.addScaledVector(dir, newV2 - v2);					
-
 	}
 	simulate(){
 		if (this.grabbed || !this.active)
@@ -330,35 +294,31 @@ class BALL {
 		}
 		this.pos.addScaledVector(this.vel, DeltaT);
 
-		// Only check floor boundary (no walls or ceiling)
-		if (this.pos.y < this.radius) {
-			this.pos.y = this.radius; 
-			this.vel.y = -this.restitution * this.vel.y;
-		}
-		
 		// Limit maximum speed
 		let speed = this.vel.length();
-		
-		// Always update color with brightness (even during mortar flight)
-		this.updateColorWithBrightness();
 		
 		// Age particles after explosion OR if it's a spark
 		if (this.hasExploded || this.isSpark) {
 			this.age += DeltaT;
-			// Brightness fades from 1.0 to 0.3 (still somewhat bright when extinguishing)
-			// Sparks fade to 0 (completely disappear)
-			let minBrightness = this.isSpark ? 0 : 0.3;
-			this.brightness = Math.max(minBrightness, 1.0 - (this.age / this.lifetime));
 			
-			// Return spark to pool when it fades out
+			// Remove sparks immediately when they exceed lifetime
 			if (this.isSpark && this.age >= this.lifetime) {
 				this.active = false;
 				sparkPool.push(this.instanceId);
 				// Scale to zero to hide it
 				ballMatrix.makeScale(0, 0, 0);
 				ballInstancedMesh.setMatrixAt(this.instanceId, ballMatrix);
+				return; // Skip rendering this frame
 			}
+			
+			// Brightness fades from 1.0 to 0.5 (still somewhat bright when extinguishing)
+			// Sparks fade to 0 (completely disappear)
+			let minBrightness = this.isSpark ? 0 : 0.5;
+			this.brightness = Math.max(minBrightness, 1.0 - (this.age / this.lifetime));
 		}
+		
+		// Always update color with brightness (even during mortar flight)
+		this.updateColorWithBrightness();
 		
 		// Update instance matrix for rendering
 		if (ballInstancedMesh && this.instanceId < numBalls) {
@@ -516,7 +476,8 @@ function initScene() {
 	
 	// Initialize spark pool (indices after mortar particles)
 	sparkPool = [];
-	for (let i = 50000; i < numBalls; i++) {
+	const mortarParticleCount = Mortars.length * particlesPerMortar;
+	for (let i = mortarParticleCount; i < numBalls; i++) {
 		sparkPool.push(i);
 		// Create dummy spark particles (will be configured when spawned)
 		let pos = new THREE.Vector3(0, -100, 0); // Hide off-screen
@@ -559,13 +520,13 @@ function initThreeScene() {
 	gThreeScene.add( new THREE.AmbientLight( 0x505050 ) );	
 
 	// spotligt
-	var spotLight = new THREE.SpotLight( 0xffffff );
-	spotLight.angle = Math.PI / 8;
-	spotLight.penumbra = 0.0;
-	spotLight.position.set(10, 10, 5);
+	var spotLight = new THREE.SpotLight( 0x999999 );
+	spotLight.angle = Math.PI / 12;
+	spotLight.penumbra = 0.1;
+	spotLight.position.set(30, 50, 40);
 	spotLight.castShadow = true;
 	spotLight.shadow.camera.near = 1;
-	spotLight.shadow.camera.far = 20;
+	spotLight.shadow.camera.far = 60;
 	spotLight.shadow.mapSize.width = 1024;
 	spotLight.shadow.mapSize.height = 1024;
 	gThreeScene.add( spotLight );
@@ -691,7 +652,7 @@ function initThreeScene() {
 
 	// Camera	
 	Camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.1, 1000);
-	Camera.position.set(-4.6, 2.1, 8.8);
+	Camera.position.set(-15.8, 5.6, 26.3);
 	Camera.updateMatrixWorld();	
 	gThreeScene.add(Camera);
 
@@ -699,7 +660,7 @@ function initThreeScene() {
 	CameraControl = new THREE.OrbitControls(Camera, gRenderer.domElement);
 	CameraControl.zoomSpeed = 2.0;
 	CameraControl.panSpeed = 0.4;
-	CameraControl.target.set(-0.0, 3.6, -0.1);
+	CameraControl.target.set(-0.1, 11.5, -0.2);
 	CameraControl.enabled = true; // Enable OrbitControls
 
 	// Grabber
@@ -710,30 +671,6 @@ function initThreeScene() {
 	
 	// Keyboard events
 	window.addEventListener( 'keydown', onKeyDown, false );
-	
-	// Create 2D overlay canvas for UI button
-	buttonCanvas = document.createElement('canvas');
-	buttonCanvas.width = window.innerWidth;
-	buttonCanvas.height = window.innerHeight;
-	buttonCanvas.style.position = 'absolute';
-	buttonCanvas.style.top = '0';
-	buttonCanvas.style.left = '0';
-	buttonCanvas.style.pointerEvents = 'none';
-	container.appendChild(buttonCanvas);
-	buttonCtx = buttonCanvas.getContext('2d');
-	
-	// Button dimensions
-	buttonWidth = 70;
-	buttonHeight = 25;
-	
-	// LAUNCH button position (bottom right)
-	goButtonX = window.innerWidth - buttonWidth - 10;
-	goButtonY = window.innerHeight - buttonHeight - 10;
-	
-	// Add click handler for buttons
-	container.addEventListener('click', onButtonClick, false);
-	
-	drawButton();
 }
 
 // Grabber -----------------------------------------------------------
@@ -890,15 +827,6 @@ function onWindowResize() {
 	Camera.updateProjectionMatrix();
 	gRenderer.setSize( window.innerWidth, window.innerHeight );
 	gRenderTarget.setSize(window.innerWidth, window.innerHeight);
-	
-	// Resize button canvas
-	if (buttonCanvas) {
-		buttonCanvas.width = window.innerWidth;
-		buttonCanvas.height = window.innerHeight;
-		goButtonX = window.innerWidth - buttonWidth - 10;
-		goButtonY = window.innerHeight - buttonHeight - 10;
-		drawButton();
-	}
 }
 
 // ------------------------------------------------------------------
@@ -947,44 +875,6 @@ function simulate() {
 		if (ballInstancedMesh.instanceColor) {
 			ballInstancedMesh.instanceColor.needsUpdate = true;
 		}
-	}
-}
-
-function drawButton() {
-	buttonCtx.clearRect(0, 0, buttonCanvas.width, buttonCanvas.height);
-	
-	// LAUNCH button
-	buttonCtx.fillStyle = '#ff8800';
-	buttonCtx.fillRect(goButtonX, goButtonY, buttonWidth, buttonHeight);
-	buttonCtx.strokeStyle = '#ffffff';
-	buttonCtx.lineWidth = 2;
-	buttonCtx.strokeRect(goButtonX, goButtonY, buttonWidth, buttonHeight);
-	buttonCtx.fillStyle = '#ffffff';
-	buttonCtx.font = 'bold 12px Arial';
-	buttonCtx.textAlign = 'center';
-	buttonCtx.textBaseline = 'middle';
-	buttonCtx.fillText('LAUNCH', goButtonX + buttonWidth / 2, goButtonY + buttonHeight / 2);
-}
-
-function onButtonClick(event) {
-	const rect = buttonCanvas.getBoundingClientRect();
-	const x = event.clientX - rect.left;
-	const y = event.clientY - rect.top;
-	
-	// Check LAUNCH button
-	if (x >= goButtonX && x <= goButtonX + buttonWidth &&
-	    y >= goButtonY && y <= goButtonY + buttonHeight) {
-		launchRandomMortar();
-	}
-}
-
-// Launch a random mortar manually
-function launchRandomMortar() {
-	// Pick a random mortar that's ready to launch (all particles gone)
-	let availableMortars = Mortars.filter(m => m.isReadyToLaunch());
-	if (availableMortars.length > 0) {
-		let randomMortar = availableMortars[Math.floor(Math.random() * availableMortars.length)];
-		randomMortar.launch();
 	}
 }
 
