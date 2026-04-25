@@ -7,7 +7,7 @@
 // Blank 3D Space -------------------------------------------
 
 const DeltaT = 1.0 / 60.0;
-const Gravity = -0.5;
+const Gravity = -1.5;
 const worldRadius = 50; // Circular boundary radius
 const worldSizeY = 20;
 
@@ -16,8 +16,8 @@ const sparkPoolSize = 3000; // Extra particles for spark trails
 const numBalls = 75000 + sparkPoolSize; // 25 mortars × 2000 + spark pool
 const mortarAltitude = 0.05; // Start just above ground level
 const explosionSpeed = 4.0; // Velocity magnitude for GO button explosion
-const mortarSpacing = 3.0; // Space between mortar tubes in grid
-const sparkLifetime = 0.25; // Sparks fade very quickly
+const mortarSpacing = 2.0; // Space between mortar tubes in grid
+const sparkLifetime = 0.30; // Sparks fade very quickly
 const sparksPerFrame = 5; // Number of sparks spawned per mortar per frame
 
 var gThreeScene;
@@ -35,6 +35,37 @@ var timeSinceLastLaunch = 0; // Time elapsed since last launch
 var sparkPool = []; // Pool of available spark particle indices
 var clusterCenter = new THREE.Vector3(); // Center of initial ball cluster
 var stats;
+
+// Camera control variables
+var gCameraMode = 2; // 0=Auto Orbit CW, 1=Auto Orbit CCW, 2=Manual Orbit
+var gCameraAngle = 0;
+var gCameraRotationSpeed = 3.0;
+var gCameraFOV = 57;
+var gRunning = true; // Simulation running state
+
+// Menu system variables
+var gOverlayCanvas = null;
+var gOverlayCtx = null;
+var mainMenuVisible = false;
+var mainMenuOpacity = 0;
+var mainMenuXOffset = -1.0; // Start off screen
+var mainMenuFadeSpeed = 3.0;
+var mainMenuAnimSpeed = 4.0;
+var cameraMenuVisible = false;
+var cameraMenuOpacity = 0;
+var cameraMenuFadeSpeed = 3.0;
+var cameraMenuX = 0.15;
+var cameraMenuY = 0.1;
+var needsMenuRedraw = true; // Flag to optimize canvas clearing
+
+// Knob drag state
+var draggingFOVKnob = false;
+var draggingOrbitSpeedKnob = false;
+var fovKnobInfo = { x: 0, y: 0, radius: 0 };
+var orbitSpeedKnobInfo = { x: 0, y: 0, radius: 0 };
+var dragStartMouseX = 0;
+var dragStartMouseY = 0;
+var dragStartValue = 0;
 
 // Instanced rendering for performance
 var ballInstancedMesh = null;
@@ -96,7 +127,7 @@ class MORTAR {
 		if (!this.isReadyToLaunch()) return; // Not ready yet
 		
 		// Randomize launch speed (10.0 to 15.0 m/s)
-		let launchVelocity = 20.0 + Math.random() * 10.0;
+		let launchVelocity = 30.0 + Math.random() * 10.0;
 		
 		// Reset and launch all this mortar's particles
 		const ballRadius = 0.02;
@@ -129,8 +160,8 @@ class MORTAR {
 			}
 		}
 		
-		// Set random detonation time (0.7 to 1.3 seconds)
-		this.detonationTime = 0.7 + Math.random() * 0.6;
+		// Set random detonation time (0.9 to 1.5 seconds)
+		this.detonationTime = 0.9 + Math.random() * 0.6;
 		this.flightTime = 0;
 		this.inFlight = true;
 		this.hasExploded = false;
@@ -276,8 +307,8 @@ class BALL {
 		this.isSpark = false; // Track if this is a trail spark (not main firework particle)
 		
 		// Add variability to speed and lifetime (firework embers burn out over time)
-		//this.speedMultiplier = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
-		this.speedMultiplier = 1.0;
+		this.speedMultiplier = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
+		//this.speedMultiplier = 1.0;
 		this.lifetime = 2.0 + Math.random() * 2.0; // 2.0 to 4.0 seconds - time until particle fades out
 		
 	}
@@ -458,20 +489,38 @@ function initScene() {
 		new THREE.Color(0xffffff)  // White
 	];
 	
+	// Create mortars in concentric rings: 1 center + 8 in ring 1 + 16 in ring 2
 	let mortarIndex = 0;
-	for (let row = -2; row <= 2; row++) {
-		for (let col = -2; col <= 2; col++) {
-			let position = new THREE.Vector3(
-				col * mortarSpacing,
-				0,
-				row * mortarSpacing
-			);
-			let color = mortarColors[mortarIndex % mortarColors.length];
-			let startIndex = mortarIndex * particlesPerMortar;
-			let mortar = new MORTAR(position, color, startIndex, particlesPerMortar);
-			Mortars.push(mortar);
-			mortarIndex++;
-		}
+	let mortarPositions = [];
+	
+	// Center mortar
+	mortarPositions.push(new THREE.Vector3(0, 0, 0));
+	
+	// First ring: 8 mortars
+	let ring1Radius = mortarSpacing * 2.0;
+	for (let i = 0; i < 8; i++) {
+		let angle = (i / 8) * Math.PI * 2;
+		let x = Math.cos(angle) * ring1Radius;
+		let z = Math.sin(angle) * ring1Radius;
+		mortarPositions.push(new THREE.Vector3(x, 0, z));
+	}
+	
+	// Second ring: 16 mortars
+	let ring2Radius = mortarSpacing * 4.0;
+	for (let i = 0; i < 16; i++) {
+		let angle = (i / 16) * Math.PI * 2;
+		let x = Math.cos(angle) * ring2Radius;
+		let z = Math.sin(angle) * ring2Radius;
+		mortarPositions.push(new THREE.Vector3(x, 0, z));
+	}
+	
+	// Create mortars at each position
+	for (let i = 0; i < mortarPositions.length; i++) {
+		let color = mortarColors[mortarIndex % mortarColors.length];
+		let startIndex = mortarIndex * particlesPerMortar;
+		let mortar = new MORTAR(mortarPositions[i], color, startIndex, particlesPerMortar);
+		Mortars.push(mortar);
+		mortarIndex++;
 	}
 	
 	// Initialize spark pool (indices after mortar particles)
@@ -523,10 +572,10 @@ function initThreeScene() {
 	var spotLight = new THREE.SpotLight( 0x999999 );
 	spotLight.angle = Math.PI / 12;
 	spotLight.penumbra = 0.1;
-	spotLight.position.set(30, 50, 40);
+	spotLight.position.set(30, 60, 40);
 	spotLight.castShadow = true;
-	spotLight.shadow.camera.near = 1;
-	spotLight.shadow.camera.far = 60;
+	spotLight.shadow.camera.near = 70;
+	spotLight.shadow.camera.far = 90;
 	spotLight.shadow.mapSize.width = 1024;
 	spotLight.shadow.mapSize.height = 1024;
 	gThreeScene.add( spotLight );
@@ -585,7 +634,7 @@ function initThreeScene() {
 	
 	// Create radial gradient from center (blue) to edge (black)
 	var gradient = ctx.createRadialGradient(256, 256, 0, 256, 256, 256);
-	gradient.addColorStop(0, '#0066ff');  // Blue at center
+	gradient.addColorStop(0, '#0d418e');  // Blue at center
 	gradient.addColorStop(1, '#000000');  // Black at edge
 	
 	// Fill canvas with gradient
@@ -604,30 +653,146 @@ function initThreeScene() {
 	floorMesh.receiveShadow = true;
 	gThreeScene.add(floorMesh);
 	
-	// Create 3x3 grid of mortar tubes (vertical cylinders on ground)
-	var tubeHeight = 0.4;
-	var tubeRadius = 0.08;
-	var tubeGeometry = new THREE.CylinderGeometry(tubeRadius, tubeRadius, tubeHeight, 32);
-	var tubeMaterial = new THREE.MeshStandardMaterial({
-		color: 0x2a2a2a,  // Dark gray/black
-		metalness: 0.7,
-		roughness: 0.4,
-		emissive: 0x0a0a0a,
-		emissiveIntensity: 0.1
+	// Create mortar tubes in concentric rings (vertical cylinders on ground)
+	var tubeHeight = 0.7;
+	var tubeInnerRadius = 0.09;
+	var tubeWallThickness = 0.02;
+	var tubeOuterRadius = tubeInnerRadius + tubeWallThickness;
+	
+	// Inner tube (hollow, open-ended)
+	var innerTubeGeometry = new THREE.CylinderGeometry(tubeInnerRadius, tubeInnerRadius, tubeHeight, 8, 1, true);
+	// Outer tube (hollow, open-ended)
+	var outerTubeGeometry = new THREE.CylinderGeometry(tubeOuterRadius, tubeOuterRadius, tubeHeight, 16, 1, true);
+	// Top ring cap (connects inner and outer tube at top)
+	var topCapGeometry = new THREE.RingGeometry(tubeInnerRadius, tubeOuterRadius, 32);
+	
+	// Inner tube material (back side - shows outer surface)
+	var innerTubeMaterial = new THREE.MeshBasicMaterial({
+		color: 0x1a1a1a,  
+		side: THREE.BackSide
 	});
 	
-	for (let row = -2; row <= 2; row++) {
-		for (let col = -2; col <= 2; col++) {
-			var tubeMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
-			tubeMesh.position.set(
-				col * mortarSpacing,
-				tubeHeight / 2,
-				row * mortarSpacing
-			);
-			tubeMesh.castShadow = true;
-			tubeMesh.receiveShadow = true;
-			gThreeScene.add(tubeMesh);
-		}
+	// Outer tube material (front side - shows inner surface)
+	var outerTubeMaterial = new THREE.MeshPhongMaterial({
+		color: 0xf72027,  
+		side: THREE.FrontSide
+	});
+	
+	// Top cap material 
+	var topCapMaterial = new THREE.MeshPhongMaterial({
+		color: 0xf72027,  
+		side: THREE.FrontSide
+	});
+	
+	// Square base geometry (thin box)
+	var baseSize = 0.35;
+	var baseHeight = 0.08;
+	var baseGeometry = new THREE.BoxGeometry(baseSize, baseHeight, baseSize);
+	var baseMaterial = new THREE.MeshPhongMaterial({
+		color: 0xf79a20,  // Darker gray/black
+	});
+	
+	// Center tube with base
+	// Inner tube
+	var innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial);
+	innerTubeMesh.position.set(0, tubeHeight / 2, 0);
+	innerTubeMesh.castShadow = true;
+	innerTubeMesh.receiveShadow = true;
+	gThreeScene.add(innerTubeMesh);
+	
+	// Outer tube
+	var outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
+	outerTubeMesh.position.set(0, tubeHeight / 2, 0);
+	outerTubeMesh.castShadow = true;
+	outerTubeMesh.receiveShadow = true;
+	gThreeScene.add(outerTubeMesh);
+	
+	// Top cap
+	var topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
+	topCapMesh.position.set(0, tubeHeight, 0);
+	topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+	topCapMesh.castShadow = true;
+	topCapMesh.receiveShadow = true;
+	gThreeScene.add(topCapMesh);
+	
+	var baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+	baseMesh.position.set(0, baseHeight / 2, 0);
+	baseMesh.castShadow = true;
+	baseMesh.receiveShadow = true;
+	gThreeScene.add(baseMesh);
+	
+	// First ring: 8 tubes
+	let ring1Radius = mortarSpacing * 2.0;
+	for (let i = 0; i < 8; i++) {
+		let angle = (i / 8) * Math.PI * 2;
+		let x = Math.cos(angle) * ring1Radius;
+		let z = Math.sin(angle) * ring1Radius;
+		
+		// Inner tube
+		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial);
+		innerTubeMesh.position.set(x, tubeHeight / 2, z);
+		innerTubeMesh.castShadow = true;
+		innerTubeMesh.receiveShadow = true;
+		gThreeScene.add(innerTubeMesh);
+		
+		// Outer tube
+		outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
+		outerTubeMesh.position.set(x, tubeHeight / 2, z);
+		outerTubeMesh.castShadow = true;
+		outerTubeMesh.receiveShadow = true;
+		gThreeScene.add(outerTubeMesh);
+		
+		// Top cap
+		topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
+		topCapMesh.position.set(x, tubeHeight, z);
+		topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+		topCapMesh.castShadow = true;
+		topCapMesh.receiveShadow = true;
+		gThreeScene.add(topCapMesh);
+		
+		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+		baseMesh.position.set(x, baseHeight / 2, z);
+		baseMesh.rotation.y = angle; // Rotate to face radially
+		baseMesh.castShadow = true;
+		baseMesh.receiveShadow = true;
+		gThreeScene.add(baseMesh);
+	}
+	
+	// Second ring: 16 tubes
+	let ring2Radius = mortarSpacing * 4.0;
+	for (let i = 0; i < 16; i++) {
+		let angle = (i / 16) * Math.PI * 2;
+		let x = Math.cos(angle) * ring2Radius;
+		let z = Math.sin(angle) * ring2Radius;
+		
+		// Inner tube
+		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial);
+		innerTubeMesh.position.set(x, tubeHeight / 2, z);
+		innerTubeMesh.castShadow = true;
+		innerTubeMesh.receiveShadow = true;
+		gThreeScene.add(innerTubeMesh);
+		
+		// Outer tube
+		outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
+		outerTubeMesh.position.set(x, tubeHeight / 2, z);
+		outerTubeMesh.castShadow = true;
+		outerTubeMesh.receiveShadow = true;
+		gThreeScene.add(outerTubeMesh);
+		
+		// Top cap
+		topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
+		topCapMesh.position.set(x, tubeHeight, z);
+		topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+		topCapMesh.castShadow = true;
+		topCapMesh.receiveShadow = true;
+		gThreeScene.add(topCapMesh);
+		
+		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+		baseMesh.position.set(x, baseHeight / 2, z);
+		baseMesh.rotation.y = angle; // Rotate to face radially
+		baseMesh.castShadow = true;
+		baseMesh.receiveShadow = true;
+		gThreeScene.add(baseMesh);
 	}
 	
 	// gRenderer
@@ -651,7 +816,7 @@ function initThreeScene() {
 		{ minFilter: THREE.LinearFilter, magFilter: THREE.NearestFilter, format: THREE.RGBAFormat } );
 
 	// Camera	
-	Camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.1, 1000);
+	Camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 	Camera.position.set(-15.8, 5.6, 26.3);
 	Camera.updateMatrixWorld();	
 	gThreeScene.add(Camera);
@@ -660,8 +825,13 @@ function initThreeScene() {
 	CameraControl = new THREE.OrbitControls(Camera, gRenderer.domElement);
 	CameraControl.zoomSpeed = 2.0;
 	CameraControl.panSpeed = 0.4;
-	CameraControl.target.set(-0.1, 11.5, -0.2);
-	CameraControl.enabled = true; // Enable OrbitControls
+	CameraControl.target.set(0, 11.5, 0);
+	CameraControl.enabled = true; // Enabled by default (Manual mode)
+	
+	// Calculate initial camera angle from current position relative to target
+	const dx = Camera.position.x - CameraControl.target.x;
+	const dz = Camera.position.z - CameraControl.target.z;
+	gCameraAngle = Math.atan2(dz, dx);
 
 	// Grabber
 	gGrabber = new Grabber();
@@ -671,6 +841,21 @@ function initThreeScene() {
 	
 	// Keyboard events
 	window.addEventListener( 'keydown', onKeyDown, false );
+	
+	// Create 2D overlay canvas for menus
+	gOverlayCanvas = document.createElement('canvas');
+	gOverlayCanvas.id = 'overlay-canvas'; // Give it an ID
+	gOverlayCanvas.width = window.innerWidth;
+	gOverlayCanvas.height = window.innerHeight;
+	gOverlayCanvas.style.position = 'absolute';
+	gOverlayCanvas.style.top = '0';
+	gOverlayCanvas.style.left = '0';
+	gOverlayCanvas.style.width = window.innerWidth + 'px'; // Explicit pixel width (not %)
+	gOverlayCanvas.style.height = window.innerHeight + 'px'; // Explicit pixel height (not %)
+	gOverlayCanvas.style.zIndex = '1000'; // Ensure it's on top
+	gOverlayCanvas.style.pointerEvents = 'none'; // Don't block interaction with 3D scene
+	container.appendChild(gOverlayCanvas);
+	gOverlayCtx = gOverlayCanvas.getContext('2d');
 }
 
 // Grabber -----------------------------------------------------------
@@ -794,6 +979,10 @@ class Grabber {
 function onPointer( evt ) {
 	event.preventDefault();
 	if (evt.type == "pointerdown") {
+		// Check for menu clicks first
+		const menuHandled = onMenuClick(evt);
+		if (menuHandled) return; // Don't process further if menu consumed the click
+		
 		gGrabber.start(evt.clientX, evt.clientY);
 		gMouseDown = true;
 		if (gGrabber.physicsObject) {
@@ -801,15 +990,53 @@ function onPointer( evt ) {
 			CameraControl.enabled = false;
 		}
 	}
-	else if (evt.type == "pointermove" && gMouseDown) {
+	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob)) {
+		// Handle knob dragging with linear drag method (like boids3D.js)
+		if (draggingFOVKnob) {
+			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+			const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+			const dragDelta = deltaX + deltaY;
+			
+			const dragSensitivity = 0.1;
+			const normalizedDelta = dragDelta / dragSensitivity;
+			const rangeSize = 170 - 3; // FOV range: 3 to 170
+			let newValue = dragStartValue - normalizedDelta * rangeSize; // Reversed
+			newValue = Math.max(3, Math.min(170, newValue));
+			
+			gCameraFOV = newValue;
+			needsMenuRedraw = true;
+			return;
+		}
+		
+		if (draggingOrbitSpeedKnob) {
+			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+			const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+			const dragDelta = deltaX + deltaY;
+			
+			const dragSensitivity = 0.1;
+			const normalizedDelta = dragDelta / dragSensitivity;
+			const rangeSize = 25.0 - 0.5; // Orbit speed range: 0.5 to 25.0
+			let newValue = dragStartValue + normalizedDelta * rangeSize; // Not reversed
+			newValue = Math.max(0.5, Math.min(25.0, newValue));
+			
+			gCameraRotationSpeed = newValue;
+			needsMenuRedraw = true;
+			return;
+		}
+		
 		gGrabber.move(evt.clientX, evt.clientY);
 	}
 	else if (evt.type == "pointerup") {
+		draggingFOVKnob = false;
+		draggingOrbitSpeedKnob = false;
+		
 		if (gGrabber.physicsObject) {
 			gGrabber.end();
 			CameraControl.reset();
 		}
 		gMouseDown = false;
+		
+		// OrbitControls always enabled for position adjustment
 		CameraControl.enabled = true;
 	}
 }
@@ -827,6 +1054,14 @@ function onWindowResize() {
 	Camera.updateProjectionMatrix();
 	gRenderer.setSize( window.innerWidth, window.innerHeight );
 	gRenderTarget.setSize(window.innerWidth, window.innerHeight);
+	
+	// Resize overlay canvas
+	if (gOverlayCanvas) {
+		gOverlayCanvas.width = window.innerWidth;
+		gOverlayCanvas.height = window.innerHeight;
+		gOverlayCanvas.style.width = window.innerWidth + 'px';
+		gOverlayCanvas.style.height = window.innerHeight + 'px';
+	}
 }
 
 // ------------------------------------------------------------------
@@ -878,6 +1113,536 @@ function simulate() {
 	}
 }
 
+// Menu Drawing Functions -----------------------------------------------------------
+function drawMainMenu() {
+	const ctx = gOverlayCtx;
+	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+	const menuScale = cScale; // Use same scale as ellipsis
+	const ellipsisWorldX = 0.05;
+	const ellipsisWorldY = 0.05;
+	const ellipsisX = ellipsisWorldX * cScale;
+	const ellipsisY = ellipsisWorldY * cScale;
+	const dotRadius = 0.006 * cScale;
+	const dotSpacing = 0.016 * cScale;
+	
+	// Always draw three dots for ellipsis
+	const ellipsisOpacity = mainMenuVisible ? 1.0 : 0.8;
+	ctx.fillStyle = `hsla(210, 60%, 80%, ${ellipsisOpacity})`;
+	for (let i = 0; i < 3; i++) {
+		ctx.beginPath();
+		ctx.arc(ellipsisX + i * dotSpacing, ellipsisY, dotRadius, 0, 2 * Math.PI);
+		ctx.fill();
+	}
+	
+	if (mainMenuOpacity <= 0) return;
+	
+	// Menu dimensions
+	const itemHeight = 0.12 * menuScale;
+	const itemWidth = 0.15 * menuScale;
+	const padding = 0.02 * menuScale;
+	const menuHeight = itemHeight * 2 + (padding * 3); // Two items: play/pause and camera
+	const menuWidth = itemWidth + (padding * 2);
+	
+	const menuBaseY = ellipsisY + 0.08 * menuScale;
+	const menuBaseX = ellipsisX - padding;
+	const menuX = menuBaseX + mainMenuXOffset * menuScale; // Slide from left
+	const menuY = menuBaseY;
+	
+	ctx.save();
+	ctx.globalAlpha = mainMenuOpacity;
+	
+	// Draw menu background
+	const cornerRadius = 0.02 * menuScale;
+	ctx.beginPath();
+	ctx.roundRect(menuX, menuY, menuWidth, menuHeight, cornerRadius);
+	const menuGradient = ctx.createLinearGradient(menuX, menuY, menuX, menuY + menuHeight);
+	menuGradient.addColorStop(0, 'rgba(26, 26, 26, 0.9)');
+	menuGradient.addColorStop(1, 'rgba(51, 51, 51, 0.9)');
+	ctx.fillStyle = menuGradient;
+	ctx.fill();
+	
+	// Draw Run/Pause menu item
+	const itemX = menuX + padding;
+	const itemY = menuY + padding;
+	const iconSize = 0.06 * menuScale;
+	
+	ctx.beginPath();
+	ctx.roundRect(itemX, itemY, itemWidth, itemHeight, cornerRadius * 0.5);
+	ctx.fillStyle = gRunning ? 'rgba(100, 220, 100, 0.3)' : 'rgba(252, 43, 43, 0.3)';
+	ctx.fill();
+	
+	// Draw play/pause icon
+	const iconX = itemX + itemWidth / 2;
+	const iconY = itemY + itemHeight / 2;
+	const iconColor = 'rgba(230, 230, 230, 1.0)';
+	ctx.fillStyle = iconColor;
+	
+	ctx.save();
+	ctx.translate(iconX, iconY);
+	
+	if (!gRunning) {
+		// Draw pause icon (two bars)
+		const barWidth = iconSize * 0.2;
+		const barHeight = iconSize * 0.7;
+		const barSpacing = iconSize * 0.25;
+		ctx.fillRect(-barSpacing - barWidth / 2, -barHeight / 2, barWidth, barHeight);
+		ctx.fillRect(barSpacing - barWidth / 2, -barHeight / 2, barWidth, barHeight);
+	} else {
+		// Draw play icon (triangle)
+		const triSize = iconSize * 1.0;
+		ctx.beginPath();
+		ctx.moveTo(-triSize * 0.3, -triSize * 0.5);
+		ctx.lineTo(-triSize * 0.3, triSize * 0.5);
+		ctx.lineTo(triSize * 0.5, 0);
+		ctx.closePath();
+		ctx.fill();
+	}
+	
+	ctx.restore();
+	
+	// Draw Camera menu item
+	const itemY2 = itemY + itemHeight + padding;
+	ctx.beginPath();
+	ctx.roundRect(itemX, itemY2, itemWidth, itemHeight, cornerRadius * 0.5);
+	
+	// Background color varies by camera mode
+	const cameraBackgroundColors = [
+		'hsla(60, 30%, 30%, 0.80)',   // Mode 0: Rotate CW
+		'hsla(80, 30%, 30%, 0.80)',   // Mode 1: Rotate CCW
+		'hsla(100, 30%, 30%, 0.80)'   // Mode 2: Manual
+	];
+	ctx.fillStyle = cameraBackgroundColors[gCameraMode];
+	ctx.fill();
+	
+	// Draw camera icon (movie camera)
+	const icon2X = itemX + 0.5 * itemWidth;
+	const icon2Y = itemY2 + 0.6 * itemHeight;
+	const camSize = iconSize * 1.6;
+	
+	ctx.save();
+	ctx.translate(icon2X, icon2Y);
+	ctx.fillStyle = `hsla(0, 0%, 40%, 1.0)`;
+	ctx.strokeStyle = `hsla(0, 0%, 60%, 1.0)`;
+	ctx.lineWidth = camSize * 0.06;
+	ctx.lineCap = 'round';
+	ctx.lineJoin = 'round';
+
+	// Triangular lens on right side
+	const lensOffsetY = -camSize * 0.0;
+	ctx.beginPath();
+	ctx.moveTo(camSize * 0.45, lensOffsetY - camSize * 0.13);
+	ctx.lineTo(-camSize * 0.10, lensOffsetY + camSize * 0.05);
+	ctx.lineTo(camSize * 0.45, lensOffsetY + camSize * 0.23);
+	ctx.closePath();
+	ctx.fill();
+	ctx.stroke();
+	
+	// Camera body (rectangle)
+	ctx.beginPath();
+	ctx.rect(-camSize * 0.5, -camSize * 0.12, camSize * 0.6, camSize * 0.35);
+	ctx.fill();
+	ctx.stroke();
+	
+	// Film reels on top
+	const leftReelX = -camSize * 0.4;
+	const leftReelY = -camSize * 0.3;
+	const leftReelRadius = camSize * 0.16;
+	
+	const rightReelX = -camSize * 0.02;
+	const rightReelY = -camSize * 0.36;
+	const rightReelRadius = camSize * 0.22;
+	
+	// Left reel
+	ctx.beginPath();
+	ctx.arc(leftReelX, leftReelY, leftReelRadius, 0, 2 * Math.PI);
+	ctx.fillStyle = `rgba(100, 100, 100, 1.0)`;
+	ctx.fill();
+	ctx.stroke();
+	
+	// Draw static dots on left reel
+	const leftReelDots = 4;
+	const leftReelDotRadius = leftReelRadius * 0.7;
+	const leftReelDotSize = camSize * 0.03;
+	ctx.fillStyle = `rgba(26, 26, 26, 1.0)`;
+	for (let i = 0; i < leftReelDots; i++) {
+		const angle = (i * 2 * Math.PI / leftReelDots);
+		const dotX = leftReelX + Math.cos(angle) * leftReelDotRadius;
+		const dotY = leftReelY + Math.sin(angle) * leftReelDotRadius;
+		ctx.beginPath();
+		ctx.arc(dotX, dotY, leftReelDotSize, 0, 2 * Math.PI);
+		ctx.fill();
+	}
+	
+	// Right reel
+	ctx.fillStyle = `rgba(96, 96, 96, 1.0)`;
+	ctx.beginPath();
+	ctx.arc(rightReelX, rightReelY, rightReelRadius, 0, 2 * Math.PI);
+	ctx.fill();
+	ctx.stroke();
+	
+	// Draw static dots on right reel
+	const rightReelDots = 5;
+	const rightReelDotRadius = rightReelRadius * 0.7;
+	const rightReelDotSize = camSize * 0.04;
+	ctx.fillStyle = `rgba(26, 26, 26, 1.0)`;
+	for (let i = 0; i < rightReelDots; i++) {
+		const angle = (i * 2 * Math.PI / rightReelDots);
+		const dotX = rightReelX + Math.cos(angle) * rightReelDotRadius;
+		const dotY = rightReelY + Math.sin(angle) * rightReelDotRadius;
+		ctx.beginPath();
+		ctx.arc(dotX, dotY, rightReelDotSize, 0, 2 * Math.PI);
+		ctx.fill();
+	}
+	
+	ctx.restore();
+	ctx.restore();
+}
+
+function drawCameraMenu() {
+	if (cameraMenuOpacity <= 0) return;
+	
+	const ctx = gOverlayCtx;
+	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+	const menuScale = cScale; // Use same scale as main menu
+	const knobRadius = 0.1 * menuScale;
+	const padding = 0.17 * menuScale;
+	const radioButtonSize = 0.04 * menuScale;
+	const radioButtonSpacing = 0.095 * menuScale; // Increased for more vertical spacing
+	const horizontalKnobSpacing = knobRadius * 2.5; // Increased for more horizontal spacing
+	const menuWidth = knobRadius * 3.7; // Fixed width
+	const radioSectionHeight = 3 * radioButtonSpacing + 0.004 * menuScale; // Adjusted to keep height same
+	const menuHeight = radioSectionHeight + knobRadius * 2.24;
+	
+	// Position menu
+	const menuOriginX = cameraMenuX * window.innerWidth;
+	const menuOriginY = cameraMenuY * window.innerHeight;
+	
+	ctx.save();
+	ctx.translate(menuOriginX, menuOriginY);
+	ctx.globalAlpha = cameraMenuOpacity;
+	
+	// Draw menu background
+	const cornerRadius = 8;
+	ctx.beginPath();
+	ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+	const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+	menuGradient.addColorStop(0, 'rgba(60, 60, 70, 0.9)');
+	menuGradient.addColorStop(1, 'rgba(30, 30, 40, 0.9)');
+	ctx.fillStyle = menuGradient;
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(130, 140, 180, 0.9)';
+	ctx.lineWidth = 1.5;
+	ctx.stroke();
+	
+	// Draw title
+	ctx.fillStyle = 'rgba(200, 200, 210, 1.0)';
+	ctx.font = `bold ${0.05 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.fillText('CAMERA', menuWidth / 2, -padding + 0.06 * menuScale);
+	
+	// Draw close button
+	const closeIconRadius = 0.1 * menuScale * 0.25;
+	const closeIconX = -padding + closeIconRadius + 0.02 * menuScale;
+	const closeIconY = -padding + closeIconRadius + 0.02 * menuScale;
+	ctx.beginPath();
+	ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+	ctx.fillStyle = 'rgba(180, 40, 40, 1.0)';
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
+	ctx.lineWidth = 2;
+	const xSize = closeIconRadius * 0.4;
+	ctx.beginPath();
+	ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+	ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+	ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+	ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+	ctx.stroke();
+	
+	// Draw radio buttons for camera modes
+	const cameraModeNames = [
+		'Auto Orbit Cam CCW',
+		'Auto Orbit Cam CW',
+		'Manual Orbit Cam'
+	];
+	
+	const radioStartY = 0;
+	
+	for (let i = 0; i < cameraModeNames.length; i++) {
+		const radioY = radioStartY + i * radioButtonSpacing;
+		const radioX = -0.02 * menuScale;
+		
+		// Draw radio button circle
+		ctx.beginPath();
+		ctx.arc(radioX, radioY, radioButtonSize, 0, 2 * Math.PI);
+		ctx.strokeStyle = 'rgba(150, 150, 160, 1.0)';
+		ctx.fillStyle = 'rgba(40, 40, 50, 0.8)';
+		ctx.lineWidth = 2;
+		ctx.stroke();
+		ctx.fill();
+		
+		// Fill if selected
+		if (gCameraMode === i) {
+			ctx.beginPath();
+			ctx.arc(radioX, radioY, radioButtonSize * 0.6, 0, 2 * Math.PI);
+			ctx.fillStyle = 'rgba(255, 180, 80, 1.0)';
+			ctx.fill();
+		}
+		
+		// Draw label
+		ctx.font = `${0.037 * menuScale}px verdana`;
+		ctx.textAlign = 'left';
+		ctx.textBaseline = 'middle';
+		ctx.fillStyle = 'rgba(10, 10, 10, 1.0)';
+		ctx.fillText(cameraModeNames[i], radioX + radioButtonSize + 0.03 * menuScale + 1, 1 + radioY);
+		ctx.fillStyle = `rgba(${gCameraMode === i ? 240 : 200}, ${gCameraMode === i ? 240 : 200}, ${gCameraMode === i ? 240 : 240}, 1.0)`;
+		ctx.fillText(cameraModeNames[i], radioX + radioButtonSize + 0.03 * menuScale, radioY);
+	}
+	
+	// Draw Focal Length and Orbit Speed knobs at bottom (2 knobs side by side, centered)
+	const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+	const orbitSpeedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+	const knobY = radioSectionHeight + knobRadius * 0.8;
+	
+	// FOV Knob
+	drawKnob(ctx, fovKnobX, knobY, knobRadius, gCameraFOV, 3, 170, true, 'Focal Length', 210);
+	
+	// Orbit Speed Knob
+	drawKnob(ctx, orbitSpeedKnobX, knobY, knobRadius, gCameraRotationSpeed, 0.5, 25.0, false, 'Orbit Speed', 280);
+	
+	// Update knob positions for mouse interaction
+	updateKnobPositions();
+	
+	ctx.restore();
+}
+
+function drawKnob(ctx, x, y, radius, value, min, max, reversed, label, hue) {
+	// Draw knob background
+	ctx.beginPath();
+	ctx.arc(x, y, radius * 1.05, 0, 2 * Math.PI);
+	ctx.fillStyle = 'rgba(20, 20, 30, 0.9)';
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(150, 150, 160, 1.0)';
+	ctx.lineWidth = 1;
+	ctx.stroke();
+	
+	// Calculate knob angle
+	let normalized = (value - min) / (max - min);
+	if (reversed) normalized = 1 - normalized;
+	const fullMeterSweep = 1.6 * Math.PI;
+	const meterStart = 0.5 * Math.PI + 0.5 * (2 * Math.PI - fullMeterSweep);
+	const pointerAngle = meterStart + fullMeterSweep * normalized;
+	
+	// Draw meter arc
+	ctx.strokeStyle = `hsla(${hue}, 60%, 60%, 1.0)`;
+	ctx.beginPath();
+	ctx.arc(x, y, radius * 0.85, meterStart, pointerAngle);
+	ctx.lineWidth = 4;
+	ctx.stroke();
+	
+	// Draw needle
+	const pointerLength = radius * 0.6;
+	const pointerEndX = x + Math.cos(pointerAngle) * pointerLength;
+	const pointerEndY = y + Math.sin(pointerAngle) * pointerLength;
+	ctx.beginPath();
+	ctx.moveTo(x, y);
+	ctx.lineTo(pointerEndX, pointerEndY);
+	ctx.strokeStyle = 'rgba(200, 200, 210, 1.0)';
+	ctx.lineWidth = 2;
+	ctx.stroke();
+	
+	// Draw value
+	ctx.font = `${0.3 * radius}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.fillStyle = `hsla(${hue}, 60%, 70%, 1.0)`;
+	
+	if (label === 'Focal Length') {
+		const focalLength = 24 / (2 * Math.tan(value * Math.PI / 360));
+		ctx.fillText(focalLength.toFixed(0) + 'mm', x, y + 0.6 * radius);
+	} else {
+		ctx.fillText(value.toFixed(1), x, y + 0.6 * radius);
+	}
+	
+	// Draw label
+	ctx.font = `${0.35 * radius}px verdana`;
+	ctx.fillStyle = 'rgba(220, 220, 230, 1.0)';
+	ctx.fillText(label, x, y + 1.35 * radius);
+}
+
+function updateKnobPositions() {
+	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+	const menuScale = cScale; // Use same scale as main menu
+	const knobRadius = 0.1 * menuScale;
+	const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
+	const radioSectionHeight = 3 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu
+	const menuOriginX = cameraMenuX * window.innerWidth;
+	const menuOriginY = cameraMenuY * window.innerHeight;
+	const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
+	const menuWidth = knobRadius * 3.7; // Matches drawCameraMenu
+	const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+	const orbitSpeedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+	const knobY = radioSectionHeight + knobRadius * 0.8;
+	
+	fovKnobInfo = { x: menuOriginX + fovKnobX, y: menuOriginY + knobY, radius: knobRadius };
+	orbitSpeedKnobInfo = { x: menuOriginX + orbitSpeedKnobX, y: menuOriginY + knobY, radius: knobRadius };
+}
+
+function drawMenus() {
+	if (!gOverlayCtx) return;
+	
+	// Always clear and redraw if menus are visible or animating
+	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0);
+	if (!needsMenuRedraw && !isAnimating) return;
+	
+	// Clear overlay
+	gOverlayCtx.clearRect(0, 0, gOverlayCanvas.width, gOverlayCanvas.height);
+	
+	// Draw menus
+	drawMainMenu();
+	drawCameraMenu();
+	
+	needsMenuRedraw = false;
+}
+
+function onMenuClick(evt) {
+	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+	
+	console.log('Menu click at', evt.clientX, evt.clientY, 'mainMenuVisible:', mainMenuVisible);
+	
+	// Check ellipsis click (toggle main menu) - simple large top-left corner hitbox
+	if (evt.clientX < 0.15 * cScale && evt.clientY < 0.15 * cScale) {
+		mainMenuVisible = !mainMenuVisible;
+		// Close camera menu when main menu is closed
+		if (!mainMenuVisible) {
+			cameraMenuVisible = false;
+		}
+		needsMenuRedraw = true;
+		console.log('Toggled main menu to:', mainMenuVisible);
+		evt.stopPropagation();
+		return true; // Menu click handled
+	}
+	
+	// Check main menu clicks
+	if (mainMenuVisible && mainMenuOpacity > 0.5) {
+		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+		const menuScale = cScale; // Use same scale as main menu
+		const ellipsisWorldX = 0.05;
+		const ellipsisWorldY = 0.05;
+		const ellipsisX = ellipsisWorldX * cScale;
+		const ellipsisY = ellipsisWorldY * cScale;
+		const itemHeight = 0.12 * menuScale;
+		const itemWidth = 0.15 * menuScale;
+		const padding = 0.02 * menuScale;
+		const menuBaseY = ellipsisY + 0.08 * menuScale;
+		const menuBaseX = ellipsisX - padding;
+		const menuX = menuBaseX + mainMenuXOffset * menuScale;
+		const menuY = menuBaseY;
+		const itemX = menuX + padding;
+		const itemY = menuY + padding;
+		
+		// Check Run/Pause button
+		if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+			evt.clientY >= itemY && evt.clientY <= itemY + itemHeight) {
+			gRunning = !gRunning;
+			autoLaunchEnabled = gRunning;
+			needsMenuRedraw = true;
+			console.log('Play/Pause clicked! gRunning:', gRunning);
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+		
+		// Check Camera button
+		const itemY2 = itemY + itemHeight + padding;
+		if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+			evt.clientY >= itemY2 && evt.clientY <= itemY2 + itemHeight) {
+			cameraMenuVisible = !cameraMenuVisible;
+			needsMenuRedraw = true;
+			console.log('Camera button clicked! cameraMenuVisible:', cameraMenuVisible);
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+	}
+	
+	// Check camera menu clicks
+	if (cameraMenuVisible && cameraMenuOpacity > 0.5) {
+		// Update knob positions first so they're correct for hit detection
+		updateKnobPositions();
+		
+		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+		const menuScale = cScale; // Use same scale as main menu
+		const menuOriginX = cameraMenuX * window.innerWidth;
+		const menuOriginY = cameraMenuY * window.innerHeight;
+		const padding = 0.17 * menuScale;
+		const knobRadius = 0.1 * menuScale;
+		const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
+		const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
+		const menuWidth = knobRadius * 3.7; // Matches drawCameraMenu
+		const radioSectionHeight = 3 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu
+		const menuHeight = radioSectionHeight + knobRadius * 2.24; // Matches drawCameraMenu
+		
+		// Check close button
+		const closeIconRadius = 0.1 * menuScale * 0.25;
+		const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
+		const closeIconY = menuOriginY - padding + closeIconRadius + 0.02 * menuScale;
+		const dx = evt.clientX - closeIconX;
+		const dy = evt.clientY - closeIconY;
+		if (dx * dx + dy * dy < closeIconRadius * closeIconRadius) {
+			cameraMenuVisible = false;
+			needsMenuRedraw = true;
+			console.log('Camera menu closed');
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+		
+		// Check radio buttons
+		const radioStartY = 0;
+		const radioX = menuOriginX - 0.02 * menuScale;
+		const radioButtonSize = 0.04 * menuScale;
+		
+		for (let i = 0; i < 3; i++) {
+			const radioY = menuOriginY + radioStartY + i * radioButtonSpacing;
+			const rdx = evt.clientX - radioX;
+			const rdy = evt.clientY - radioY;
+			if (rdx * rdx + rdy * rdy < (radioButtonSize * 2) * (radioButtonSize * 2)) {
+				gCameraMode = i;
+				needsMenuRedraw = true;
+				console.log('Camera mode changed to:', i);
+				// OrbitControls stay enabled in all modes for manual position adjustment
+				CameraControl.enabled = true;
+				evt.stopPropagation();
+				return true; // Menu click handled
+			}
+		}
+		
+		// Check if clicking on knobs (set dragging flag and return true)
+		const fovDx = evt.clientX - fovKnobInfo.x;
+		const fovDy = evt.clientY - fovKnobInfo.y;
+		if (fovDx * fovDx + fovDy * fovDy < fovKnobInfo.radius * fovKnobInfo.radius * 1.2) {
+			draggingFOVKnob = true;
+			dragStartMouseX = evt.clientX;
+			dragStartMouseY = evt.clientY;
+			dragStartValue = gCameraFOV;
+			if (CameraControl) CameraControl.enabled = false;
+			console.log('FOV knob drag started, value:', gCameraFOV);
+			return true; // Knob click handled
+		}
+		
+		const orbitDx = evt.clientX - orbitSpeedKnobInfo.x;
+		const orbitDy = evt.clientY - orbitSpeedKnobInfo.y;
+		if (orbitDx * orbitDx + orbitDy * orbitDy < orbitSpeedKnobInfo.radius * orbitSpeedKnobInfo.radius * 1.2) {
+			draggingOrbitSpeedKnob = true;
+			dragStartMouseX = evt.clientX;
+			dragStartMouseY = evt.clientY;
+			dragStartValue = gCameraRotationSpeed;
+			if (CameraControl) CameraControl.enabled = false;
+			console.log('Orbit speed knob drag started, value:', gCameraRotationSpeed);
+			return true; // Knob click handled
+		}
+	}
+	
+	return false; // Click not on any menu element
+}
+
 // ------------------------------------------
 function render() {
 	gRenderer.render(gThreeScene, Camera);
@@ -886,10 +1651,61 @@ function render() {
 // make browser to call us repeatedly -----------------------------------
 function update() {
 	stats.begin();
+	
+	// Update camera rotation for auto modes (rotate around OrbitControls target)
+	if (gCameraMode === 0 || gCameraMode === 1) {
+		// Get current camera position relative to target
+		const target = CameraControl.target;
+		const dx = Camera.position.x - target.x;
+		const dy = Camera.position.y - target.y;
+		const dz = Camera.position.z - target.z;
+		const radius = Math.sqrt(dx * dx + dz * dz); // Horizontal radius
+		
+		// Calculate rotation angle
+		const angleChange = gCameraRotationSpeed * DeltaT * 0.1;
+		gCameraAngle += (gCameraMode === 0) ? -angleChange : angleChange;
+		
+		// Apply rotation around target (maintaining height)
+		Camera.position.x = target.x + Math.cos(gCameraAngle) * radius;
+		Camera.position.z = target.z + Math.sin(gCameraAngle) * radius;
+		Camera.lookAt(target);
+	}
+	
+	// Update camera FOV
+	Camera.fov = gCameraFOV;
+	Camera.updateProjectionMatrix();
+	
+	// Update menu animations
+	if (mainMenuVisible) {
+		const oldOpacity = mainMenuOpacity;
+		const oldOffset = mainMenuXOffset;
+		mainMenuOpacity = Math.min(1, mainMenuOpacity + mainMenuFadeSpeed * DeltaT);
+		mainMenuXOffset = Math.min(0, mainMenuXOffset + mainMenuAnimSpeed * DeltaT);
+		if (oldOpacity !== mainMenuOpacity || oldOffset !== mainMenuXOffset) needsMenuRedraw = true;
+	} else {
+		const oldOpacity = mainMenuOpacity;
+		const oldOffset = mainMenuXOffset;
+		mainMenuOpacity = Math.max(0, mainMenuOpacity - mainMenuFadeSpeed * DeltaT);
+		mainMenuXOffset = Math.max(-1.0, mainMenuXOffset - mainMenuAnimSpeed * DeltaT);
+		if (oldOpacity !== mainMenuOpacity || oldOffset !== mainMenuXOffset) needsMenuRedraw = true;
+	}
+	
+	if (cameraMenuVisible) {
+		const oldOpacity = cameraMenuOpacity;
+		cameraMenuOpacity = Math.min(0.9, cameraMenuOpacity + cameraMenuFadeSpeed * DeltaT);
+		if (oldOpacity !== cameraMenuOpacity) needsMenuRedraw = true;
+	} else {
+		const oldOpacity = cameraMenuOpacity;
+		cameraMenuOpacity = Math.max(0, cameraMenuOpacity - cameraMenuFadeSpeed * DeltaT);
+		if (oldOpacity !== cameraMenuOpacity) needsMenuRedraw = true;
+	}
+	
 	simulate();
 	render();
-	CameraControl.update();	
-	gGrabber.increaseTime(DeltaT);			
+	drawMenus(); // Draw menus on overlay canvas
+	
+	// Update OrbitControls in all modes
+	CameraControl.update();
 	stats.end();
 	requestAnimationFrame(update);
 }
