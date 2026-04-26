@@ -8,7 +8,7 @@
 
 const DeltaT = 1.0 / 60.0;
 const Gravity = -1.5;
-const worldRadius = 50; // Circular boundary radius
+const worldRadius = 200; // Circular boundary radius
 const worldSizeY = 20;
 
 const particlesPerMortar = 3000; // Particles per mortar
@@ -16,7 +16,7 @@ const sparkPoolSize = 3000; // Extra particles for spark trails
 const numBalls = 75000 + sparkPoolSize; // 25 mortars × 2000 + spark pool
 const mortarAltitude = 0.05; // Start just above ground level
 const explosionSpeed = 4.0; // Velocity magnitude for GO button explosion
-const mortarSpacing = 2.0; // Space between mortar tubes in grid
+const mortarSpacing = 1.5; // Space between mortar tubes in grid
 const sparkLifetime = 0.30; // Sparks fade very quickly
 const sparksPerFrame = 5; // Number of sparks spawned per mortar per frame
 
@@ -507,7 +507,7 @@ function initScene() {
 	}
 	
 	const ballRadius = 0.02;
-	const ballGeometry = new THREE.SphereGeometry(ballRadius, 16, 16);
+	const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
 	const ballMaterial = new THREE.MeshBasicMaterial();
 	ballInstancedMesh = new THREE.InstancedMesh(ballGeometry, ballMaterial, numBalls);
 	ballInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -528,7 +528,7 @@ function initScene() {
 	gThreeScene.add(ballInstancedMesh);
 	
 	// Create shock wave mesh pool
-	const shockWaveGeometry = new THREE.SphereGeometry(1, 32, 32); // Unit sphere, will be scaled
+	const shockWaveGeometry = new THREE.SphereGeometry(1, 16, 16); // Unit sphere, will be scaled
 	const shockWaveMaterial = new THREE.MeshBasicMaterial({
 		color: 0xffffff,
 		transparent: true,
@@ -641,8 +641,9 @@ function initThreeScene() {
 		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonView.gltf',
 		function(gltf) {
 			cityscapeModelTemplate = gltf.scene;
-			cityscapeModelTemplate.position.set(-25, -1, 10);
+			cityscapeModelTemplate.position.set(-25, -0.1, -10);
 			cityscapeModelTemplate.scale.set(0.5, 0.5, 0.5);
+
 			gThreeScene.add(cityscapeModelTemplate);
 			console.log('cityscape model loaded successfully');
 		},
@@ -655,13 +656,27 @@ function initThreeScene() {
 	);
 	
 	// ambient light
-	gThreeScene.add( new THREE.AmbientLight( 0x505050 ) );	
+	gThreeScene.add( new THREE.AmbientLight( 0x101010 ) );	
+
+	// directional light to simulate moonlight
+	var dirLight = new THREE.DirectionalLight( 0x999999, 0.5 );
+	dirLight.position.set( -30, 50, -30 );
+	dirLight.castShadow = true;
+	dirLight.shadow.camera.near = 1;
+	dirLight.shadow.camera.far = worldSizeY + 5;
+	dirLight.shadow.camera.right = worldRadius;
+	dirLight.shadow.camera.left = -worldRadius;
+	dirLight.shadow.camera.top	= worldRadius;
+	dirLight.shadow.camera.bottom = -worldRadius;
+	dirLight.shadow.mapSize.width = 1024;
+	dirLight.shadow.mapSize.height = 1024;
+	gThreeScene.add( dirLight );
 
 	// spotligt
 	var spotLight = new THREE.SpotLight( 0x999999 );
 	spotLight.angle = Math.PI / 16;
 	spotLight.penumbra = 0.1;
-	spotLight.position.set(30, 60, -50);
+	spotLight.position.set(30, 80, -50);
 	spotLight.castShadow = true;
 	spotLight.shadow.camera.near = 70;
 	spotLight.shadow.camera.far = 90;
@@ -712,23 +727,23 @@ function initThreeScene() {
 	gThreeScene.add( dirLight );
 
 	
-	/*// create round floor plane with radial gradient (blue to black)
+	// create round floor plane with radial gradient (blue to black)
 	var floorGeometry = new THREE.CircleGeometry(worldRadius, 64);
 	
 	// Create canvas for radial gradient texture
 	var canvas = document.createElement('canvas');
-	canvas.width = 512;
-	canvas.height = 512;
+	canvas.width = 1024;
+	canvas.height = 1024;
 	var ctx = canvas.getContext('2d');
 	
 	// Create radial gradient from center (blue) to edge (black)
-	var gradient = ctx.createRadialGradient(256, 256, 0, 256, 256, 256);
-	gradient.addColorStop(0, '#0d418e');  // Blue at center
+	var gradient = ctx.createRadialGradient(512, 512, 0, 512, 512, 512);
+	gradient.addColorStop(0, '#282828');  // Blue at center
 	gradient.addColorStop(1, '#000000');  // Black at edge
 	
 	// Fill canvas with gradient
 	ctx.fillStyle = gradient;
-	ctx.fillRect(0, 0, 512, 512);
+	ctx.fillRect(0, 0, 1024, 1024);
 	
 	// Create texture from canvas
 	var floorTexture = new THREE.CanvasTexture(canvas);
@@ -738,9 +753,9 @@ function initThreeScene() {
 	});
 	var floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
 	floorMesh.rotation.x = -Math.PI / 2;
-	floorMesh.position.set(0, 0, 0);
+	floorMesh.position.set(0, -1, 0);
 	floorMesh.receiveShadow = true;
-	gThreeScene.add(floorMesh);*/
+	gThreeScene.add(floorMesh);
 	
 	// Create mortar tubes in concentric rings (vertical cylinders on ground)
 	var tubeHeight = 0.7;
@@ -906,7 +921,7 @@ function initThreeScene() {
 
 	// Camera	
 	Camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-	Camera.position.set(-21.4, 10.2, 31.6);
+	Camera.position.set(-19.3, 19.2, -8.7);
 	Camera.updateMatrixWorld();	
 	gThreeScene.add(Camera);
 
@@ -914,7 +929,7 @@ function initThreeScene() {
 	CameraControl = new THREE.OrbitControls(Camera, gRenderer.domElement);
 	CameraControl.zoomSpeed = 2.0;
 	CameraControl.panSpeed = 0.4;
-	CameraControl.target.set(0, 16.3, 0);
+	CameraControl.target.set(0.1, 20.2, -0.9);
 	CameraControl.enabled = true; // Enabled by default (Manual mode)
 	
 	// Calculate initial camera angle from current position relative to target
