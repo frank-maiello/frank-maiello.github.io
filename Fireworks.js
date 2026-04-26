@@ -635,15 +635,33 @@ function initScene() {
 function initThreeScene() {
 	gThreeScene = new THREE.Scene();
 	gThreeScene.background = new THREE.Color(0x000000);
+
+	var cityscapeLoader = new THREE.GLTFLoader();
+	cityscapeLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonView.gltf',
+		function(gltf) {
+			cityscapeModelTemplate = gltf.scene;
+			cityscapeModelTemplate.position.set(-25, -1, 10);
+			cityscapeModelTemplate.scale.set(0.5, 0.5, 0.5);
+			gThreeScene.add(cityscapeModelTemplate);
+			console.log('cityscape model loaded successfully');
+		},
+		function(xhr) {
+			console.log('cityscape model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading cityscape model:', error);
+		}
+	);
 	
 	// ambient light
 	gThreeScene.add( new THREE.AmbientLight( 0x505050 ) );	
 
 	// spotligt
 	var spotLight = new THREE.SpotLight( 0x999999 );
-	spotLight.angle = Math.PI / 12;
+	spotLight.angle = Math.PI / 16;
 	spotLight.penumbra = 0.1;
-	spotLight.position.set(30, 60, 40);
+	spotLight.position.set(30, 60, -50);
 	spotLight.castShadow = true;
 	spotLight.shadow.camera.near = 70;
 	spotLight.shadow.camera.far = 90;
@@ -694,7 +712,7 @@ function initThreeScene() {
 	gThreeScene.add( dirLight );
 
 	
-	// create round floor plane with radial gradient (blue to black)
+	/*// create round floor plane with radial gradient (blue to black)
 	var floorGeometry = new THREE.CircleGeometry(worldRadius, 64);
 	
 	// Create canvas for radial gradient texture
@@ -722,7 +740,7 @@ function initThreeScene() {
 	floorMesh.rotation.x = -Math.PI / 2;
 	floorMesh.position.set(0, 0, 0);
 	floorMesh.receiveShadow = true;
-	gThreeScene.add(floorMesh);
+	gThreeScene.add(floorMesh);*/
 	
 	// Create mortar tubes in concentric rings (vertical cylinders on ground)
 	var tubeHeight = 0.7;
