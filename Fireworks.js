@@ -77,6 +77,26 @@ var ballInstancedMesh = null;
 var ballMatrix = new THREE.Matrix4();
 var ballColor = new THREE.Color();
 
+// Zeppelin animation variables
+var zeppelinModelTemplate = null;
+var propellerPort = null;
+var propellerStarboard = null;
+var zeppelinAngle = 0; // Current angle on oval path
+var zeppelinSpeed = 0.01; // Radians per second
+var ovalRadiusX = 30; // Horizontal radius of oval
+var ovalRadiusZ = 70; // Depth radius of oval
+var zeppelinHeight = 20; // Flight altitude
+var zeppelinCenterX = 0; // Center of oval path (fireworks launch point)
+var zeppelinCenterZ = 0; // Center of oval path
+var propellerRotationSpeed = 10.0; // Negative rotation speed for x-axis
+
+// Explosion light
+var explosionLight = null;
+var explosionLightIntensity = 0.0; // Current intensity (dim by default)
+var explosionLightDimIntensity = 0.0; // Dim baseline intensity
+var explosionLightBrightIntensity = 0.8; // Bright flash intensity
+var explosionLightFadeSpeed = 30.0; // How fast it fades back to dim
+
 // Mortar Class -------------------------------------------
 class MORTAR {
 	constructor(position, particleColor, startIndex, particleCount) {
@@ -293,6 +313,12 @@ class MORTAR {
 			const shockWave = new ShockWave(this.clusterCenter);
 			shockWave.mesh = mesh;
 			shockWaves.push(shockWave);
+		}
+		
+		// Flash the explosion light
+		if (explosionLight) {
+			explosionLightIntensity = explosionLightBrightIntensity;
+			explosionLight.intensity = explosionLightIntensity;
 		}
 		
 		// Update instance colors on GPU
@@ -560,29 +586,32 @@ function initScene() {
 		new THREE.Color(0xffffff)  // White
 	];
 	
-	// Create mortars in concentric rings: 1 center + 8 in ring 1 + 16 in ring 2
+	// Create mortars in elliptical rings to fit on narrow barge deck: 1 center + 8 in ring 1 + 16 in ring 2
 	let mortarIndex = 0;
 	let mortarPositions = [];
 	
-	// Center mortar
-	mortarPositions.push(new THREE.Vector3(0, 0, 0));
+	// Barge deck height and ellipse dimensions
+	const deckHeight = 0.95; // Height of barge deck
+	const ellipseRadiusX = 1.1; // Narrow width (cross-deck)
+	const ellipseRadiusZ = 3.0; // Long length (along deck)
 	
-	// First ring: 8 mortars
-	let ring1Radius = mortarSpacing * 2.0;
+	// Center mortar
+	mortarPositions.push(new THREE.Vector3(0, deckHeight, 0));
+	
+	// First elliptical ring: 8 mortars
 	for (let i = 0; i < 8; i++) {
 		let angle = (i / 8) * Math.PI * 2;
-		let x = Math.cos(angle) * ring1Radius;
-		let z = Math.sin(angle) * ring1Radius;
-		mortarPositions.push(new THREE.Vector3(x, 0, z));
+		let x = Math.cos(angle) * ellipseRadiusX;
+		let z = Math.sin(angle) * ellipseRadiusZ;
+		mortarPositions.push(new THREE.Vector3(x, deckHeight, z));
 	}
 	
-	// Second ring: 16 mortars
-	let ring2Radius = mortarSpacing * 4.0;
+	// Second elliptical ring: 16 mortars
 	for (let i = 0; i < 16; i++) {
 		let angle = (i / 16) * Math.PI * 2;
-		let x = Math.cos(angle) * ring2Radius;
-		let z = Math.sin(angle) * ring2Radius;
-		mortarPositions.push(new THREE.Vector3(x, 0, z));
+		let x = Math.cos(angle) * ellipseRadiusX * 1.8;
+		let z = Math.sin(angle) * ellipseRadiusZ * 1.8;
+		mortarPositions.push(new THREE.Vector3(x, deckHeight, z));
 	}
 	
 	// Create mortars at each position
@@ -636,13 +665,32 @@ function initThreeScene() {
 	gThreeScene = new THREE.Scene();
 	gThreeScene.background = new THREE.Color(0x000000);
 
+	// LOAD CITY --------------------------------------
 	var cityscapeLoader = new THREE.GLTFLoader();
 	cityscapeLoader.load(
 		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonView.gltf',
 		function(gltf) {
 			cityscapeModelTemplate = gltf.scene;
-			cityscapeModelTemplate.position.set(-25, -0.1, -10);
+			cityscapeModelTemplate.position.set(-20, -0.1, -35);
 			cityscapeModelTemplate.scale.set(0.5, 0.5, 0.5);
+
+			// Enable shadow casting and receiving on all meshes in the model
+			cityscapeModelTemplate.traverse(function(child) {
+				if (child.isMesh) {
+					child.castShadow = true;
+					child.receiveShadow = true;
+					// Set materials to FrontSide only
+					if (child.material) {
+						if (Array.isArray(child.material)) {
+							child.material.forEach(function(mat) {
+								mat.side = THREE.FrontSide;
+							});
+						} else {
+							child.material.side = THREE.FrontSide;
+						}
+					}
+				}
+			});
 
 			gThreeScene.add(cityscapeModelTemplate);
 			console.log('cityscape model loaded successfully');
@@ -654,14 +702,96 @@ function initThreeScene() {
 			console.error('Error loading cityscape model:', error);
 		}
 	);
+
+	// LOAD BARGE --------------------------------------
+	var bargeLoader = new THREE.GLTFLoader();
+	bargeLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/riverBarge.gltf',
+		function(gltf) {
+			bargeModelTemplate = gltf.scene;
+			bargeModelTemplate.position.set(0, 0, 0);
+			bargeModelTemplate.rotation.y = 0.5 * Math.PI; // Rotate to face city
+			bargeModelTemplate.scale.set(0.4, 0.4, 0.4);
+			bargeModelTemplate.castShadow = true;
+			bargeModelTemplate.receiveShadow = true;
+			 // Set materials to FrontSide only
+			bargeModelTemplate.traverse(function(child) {
+				if (child.isMesh) {
+					child.castShadow = true;
+					child.receiveShadow = true;
+					if (child.material) {
+						if (Array.isArray(child.material)) {
+							child.material.forEach(function(mat) {
+								mat.side = THREE.DoubleSide;
+							});
+						} else {
+							child.material.side = THREE.DoubleSide;
+						}
+					}
+				}
+			});
+		
+			gThreeScene.add(bargeModelTemplate);
+			console.log('barge model loaded successfully');
+		},
+		function(xhr) {
+			console.log('barge model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading barge model:', error);
+		}
+	);
+
+
+	// LOAD ZEPPELIN --------------------------------------
+	var zeppelinLoader = new THREE.GLTFLoader();
+	zeppelinLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Zeppelin.gltf',
+		function(gltf) {
+			zeppelinModelTemplate = gltf.scene;
+			zeppelinModelTemplate.position.set(10, 20, 40);
+			zeppelinModelTemplate.scale.set(0.5, 0.5, 0.5);
+			
+			// Find propeller objects in the model hierarchy
+			zeppelinModelTemplate.traverse(function(child) {
+				if (child.name === 'propellerPort') {
+					propellerPort = child;
+					console.log('Found propellerPort');
+				}
+				if (child.name === 'propellerStarboard') {
+					propellerStarboard = child;
+					console.log('Found propellerStarboard');
+				}
+			});
+
+			gThreeScene.add(zeppelinModelTemplate);
+			console.log('zeppelin model loaded successfully');
+		},
+		function(xhr) {
+			console.log('zeppelin model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading zeppelin model:', error);
+		}
+	);
 	
 	// ambient light
-	gThreeScene.add( new THREE.AmbientLight( 0x101010 ) );	
+	gThreeScene.add( new THREE.AmbientLight( 0x202020 ) );	
+
+	// Explosion point light at center of fireworks
+	explosionLight = new THREE.PointLight( 0xffaa66, explosionLightDimIntensity, 200 );
+	explosionLight.position.set( 0, 20, 0 ); // Center above barge where fireworks explode
+	explosionLight.castShadow = true;
+	explosionLight.shadow.camera.near = 0.1;
+	explosionLight.shadow.camera.far = 200;
+	explosionLight.shadow.mapSize.width = 1024;
+	explosionLight.shadow.mapSize.height = 1024;
+	gThreeScene.add( explosionLight );
 
 	// directional light to simulate moonlight
 	var dirLight = new THREE.DirectionalLight( 0x999999, 0.5 );
 	dirLight.position.set( -30, 50, -30 );
-	dirLight.castShadow = true;
+	dirLight.castShadow = false; // Disable to avoid shadow conflicts with spotlight
 	dirLight.shadow.camera.near = 1;
 	dirLight.shadow.camera.far = worldSizeY + 5;
 	dirLight.shadow.camera.right = worldRadius;
@@ -672,17 +802,23 @@ function initThreeScene() {
 	dirLight.shadow.mapSize.height = 1024;
 	gThreeScene.add( dirLight );
 
+	
 	// spotligt
-	var spotLight = new THREE.SpotLight( 0x999999 );
+	var spotLight = new THREE.SpotLight( 0xffffff, 2.0 ); // Increased intensity
 	spotLight.angle = Math.PI / 16;
 	spotLight.penumbra = 0.1;
+	spotLight.distance = 200;
 	spotLight.position.set(30, 80, -50);
+	spotLight.target.position.set(2, 0, -4); // Point at barge
 	spotLight.castShadow = true;
-	spotLight.shadow.camera.near = 70;
-	spotLight.shadow.camera.far = 90;
-	spotLight.shadow.mapSize.width = 1024;
-	spotLight.shadow.mapSize.height = 1024;
+	spotLight.shadow.camera.near = 10;
+	spotLight.shadow.camera.far = 150;
+	spotLight.shadow.camera.fov = 80; // Much wider field of view for shadow camera
+	spotLight.shadow.mapSize.width = 2048;
+	spotLight.shadow.mapSize.height = 2048;
+	spotLight.shadow.bias = -0.0005; // Adjusted bias
 	gThreeScene.add( spotLight );
+	gThreeScene.add( spotLight.target );
 	
 	// Visual cone for spotlight
 	var coneHeight = 1;
@@ -727,8 +863,8 @@ function initThreeScene() {
 	gThreeScene.add( dirLight );
 
 	
-	// create round floor plane with radial gradient (blue to black)
-	var floorGeometry = new THREE.CircleGeometry(worldRadius, 64);
+	// create round floor plane with radial gradient
+	var floorGeometry = new THREE.CircleGeometry(2 * worldRadius, 64);
 	
 	// Create canvas for radial gradient texture
 	var canvas = document.createElement('canvas');
@@ -757,10 +893,10 @@ function initThreeScene() {
 	floorMesh.receiveShadow = true;
 	gThreeScene.add(floorMesh);
 	
-	// Create mortar tubes in concentric rings (vertical cylinders on ground)
-	var tubeHeight = 0.7;
-	var tubeInnerRadius = 0.09;
-	var tubeWallThickness = 0.02;
+	// Create mortar tubes in concentric rings 
+	var tubeHeight = 0.6;
+	var tubeInnerRadius = 0.07;
+	var tubeWallThickness = 0.015;
 	var tubeOuterRadius = tubeInnerRadius + tubeWallThickness;
 	
 	// Inner tube (hollow, open-ended)
@@ -776,123 +912,133 @@ function initThreeScene() {
 		side: THREE.BackSide
 	});
 	
-	// Outer tube material (front side - shows inner surface)
+	// Load texture for outer tube
+	var textureLoader = new THREE.TextureLoader();
+	var redStripeTexture = textureLoader.load('https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/redStripe.jpg');
+	redStripeTexture.wrapS = THREE.RepeatWrapping;
+	redStripeTexture.wrapT = THREE.RepeatWrapping;
+	
+	// Outer tube material (front side - shows outer surface with texture)
 	var outerTubeMaterial = new THREE.MeshPhongMaterial({
-		color: 0xf72027,  
+		map: redStripeTexture,
 		side: THREE.FrontSide
 	});
 	
 	// Top cap material 
 	var topCapMaterial = new THREE.MeshPhongMaterial({
-		color: 0xf72027,  
+		color: 0x666666,
 		side: THREE.FrontSide
 	});
 	
 	// Square base geometry (thin box)
-	var baseSize = 0.35;
+	var baseSize = 0.3;
 	var baseHeight = 0.08;
 	var baseGeometry = new THREE.BoxGeometry(baseSize, baseHeight, baseSize);
 	var baseMaterial = new THREE.MeshPhongMaterial({
-		color: 0xf79a20,  // Darker gray/black
+		color: 0x803500,  // Darker gray/black
 	});
+	
+	// Barge deck height and ellipse dimensions (matching MORTAR positions)
+	const deckHeight = 0.95;
+	const ellipseRadiusX = 1.1;
+	const ellipseRadiusZ = 3.0;
 	
 	// Center tube with base
 	// Inner tube
 	var innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial);
-	innerTubeMesh.position.set(0, tubeHeight / 2, 0);
+	innerTubeMesh.position.set(0, deckHeight + tubeHeight / 2, 0);
 	innerTubeMesh.castShadow = true;
 	innerTubeMesh.receiveShadow = true;
 	gThreeScene.add(innerTubeMesh);
 	
 	// Outer tube
 	var outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-	outerTubeMesh.position.set(0, tubeHeight / 2, 0);
+	outerTubeMesh.position.set(0, deckHeight + tubeHeight / 2, 0);
 	outerTubeMesh.castShadow = true;
 	outerTubeMesh.receiveShadow = true;
 	gThreeScene.add(outerTubeMesh);
 	
 	// Top cap
 	var topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-	topCapMesh.position.set(0, tubeHeight, 0);
+	topCapMesh.position.set(0, deckHeight + tubeHeight, 0);
 	topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
 	topCapMesh.castShadow = true;
 	topCapMesh.receiveShadow = true;
 	gThreeScene.add(topCapMesh);
 	
+	// base
 	var baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-	baseMesh.position.set(0, baseHeight / 2, 0);
+	baseMesh.position.set(0, deckHeight + baseHeight / 2, 0);
 	baseMesh.castShadow = true;
 	baseMesh.receiveShadow = true;
 	gThreeScene.add(baseMesh);
 	
-	// First ring: 8 tubes
-	let ring1Radius = mortarSpacing * 2.0;
+	// First elliptical ring: 8 tubes
 	for (let i = 0; i < 8; i++) {
 		let angle = (i / 8) * Math.PI * 2;
-		let x = Math.cos(angle) * ring1Radius;
-		let z = Math.sin(angle) * ring1Radius;
+		let x = Math.cos(angle) * ellipseRadiusX;
+		let z = Math.sin(angle) * ellipseRadiusZ;
 		
 		// Inner tube
 		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial);
-		innerTubeMesh.position.set(x, tubeHeight / 2, z);
+		innerTubeMesh.position.set(x, deckHeight + tubeHeight / 2, z);
 		innerTubeMesh.castShadow = true;
 		innerTubeMesh.receiveShadow = true;
 		gThreeScene.add(innerTubeMesh);
 		
 		// Outer tube
 		outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-		outerTubeMesh.position.set(x, tubeHeight / 2, z);
+		outerTubeMesh.position.set(x, deckHeight + tubeHeight / 2, z);
 		outerTubeMesh.castShadow = true;
 		outerTubeMesh.receiveShadow = true;
 		gThreeScene.add(outerTubeMesh);
 		
 		// Top cap
 		topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-		topCapMesh.position.set(x, tubeHeight, z);
+		topCapMesh.position.set(x, deckHeight + tubeHeight, z);
 		topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
 		topCapMesh.castShadow = true;
 		topCapMesh.receiveShadow = true;
 		gThreeScene.add(topCapMesh);
 		
 		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-		baseMesh.position.set(x, baseHeight / 2, z);
+		baseMesh.position.set(x, deckHeight + baseHeight / 2, z);
 		baseMesh.rotation.y = angle; // Rotate to face radially
 		baseMesh.castShadow = true;
 		baseMesh.receiveShadow = true;
 		gThreeScene.add(baseMesh);
 	}
 	
-	// Second ring: 16 tubes
-	let ring2Radius = mortarSpacing * 4.0;
+	// Second elliptical ring: 16 tubes
 	for (let i = 0; i < 16; i++) {
 		let angle = (i / 16) * Math.PI * 2;
-		let x = Math.cos(angle) * ring2Radius;
-		let z = Math.sin(angle) * ring2Radius;
+		let x = Math.cos(angle) * ellipseRadiusX * 1.8;
+		let z = Math.sin(angle) * ellipseRadiusZ * 1.8;
 		
 		// Inner tube
 		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial);
-		innerTubeMesh.position.set(x, tubeHeight / 2, z);
+		innerTubeMesh.position.set(x, deckHeight + tubeHeight / 2, z);
 		innerTubeMesh.castShadow = true;
 		innerTubeMesh.receiveShadow = true;
 		gThreeScene.add(innerTubeMesh);
 		
 		// Outer tube
 		outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-		outerTubeMesh.position.set(x, tubeHeight / 2, z);
+		outerTubeMesh.position.set(x, deckHeight + tubeHeight / 2, z);
 		outerTubeMesh.castShadow = true;
 		outerTubeMesh.receiveShadow = true;
 		gThreeScene.add(outerTubeMesh);
 		
 		// Top cap
 		topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-		topCapMesh.position.set(x, tubeHeight, z);
+		topCapMesh.position.set(x, deckHeight + tubeHeight, z);
 		topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
 		topCapMesh.castShadow = true;
 		topCapMesh.receiveShadow = true;
 		gThreeScene.add(topCapMesh);
 		
 		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-		baseMesh.position.set(x, baseHeight / 2, z);
+		baseMesh.position.set(x, deckHeight + baseHeight / 2, z);
 		baseMesh.rotation.y = angle; // Rotate to face radially
 		baseMesh.castShadow = true;
 		baseMesh.receiveShadow = true;
@@ -921,7 +1067,7 @@ function initThreeScene() {
 
 	// Camera	
 	Camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-	Camera.position.set(-19.3, 19.2, -8.7);
+	Camera.position.set(-24.2, 11.5, 8.4);
 	Camera.updateMatrixWorld();	
 	gThreeScene.add(Camera);
 
@@ -929,7 +1075,7 @@ function initThreeScene() {
 	CameraControl = new THREE.OrbitControls(Camera, gRenderer.domElement);
 	CameraControl.zoomSpeed = 2.0;
 	CameraControl.panSpeed = 0.4;
-	CameraControl.target.set(0.1, 20.2, -0.9);
+	CameraControl.target.set(7.0, 13.8, 3.7);
 	CameraControl.enabled = true; // Enabled by default (Manual mode)
 	
 	// Calculate initial camera angle from current position relative to target
@@ -1227,6 +1373,41 @@ function simulate() {
 		if (ballInstancedMesh.instanceColor) {
 			ballInstancedMesh.instanceColor.needsUpdate = true;
 		}
+	}
+	
+	// Animate zeppelin flying in oval course
+	if (zeppelinModelTemplate) {
+		// Update angle along oval path
+		zeppelinAngle += zeppelinSpeed * DeltaT;
+		
+		// Calculate position on oval path (centered at fireworks launch point)
+		var x = zeppelinCenterX + Math.cos(zeppelinAngle) * ovalRadiusX;
+		var z = zeppelinCenterZ + Math.sin(zeppelinAngle) * ovalRadiusZ;
+		
+		// Update zeppelin position
+		zeppelinModelTemplate.position.set(x, zeppelinHeight, z);
+		
+		// Calculate direction of movement (tangent to oval)
+		var dx = -Math.sin(zeppelinAngle) * ovalRadiusX;
+		var dz = Math.cos(zeppelinAngle) * ovalRadiusZ;
+		
+		// Orient zeppelin to face direction of travel (subtract 90 degrees to correct orientation)
+		zeppelinModelTemplate.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
+	}
+	
+	// Rotate propellers
+	if (propellerPort) {
+		propellerPort.rotation.x += propellerRotationSpeed * DeltaT;
+	}
+	if (propellerStarboard) {
+		propellerStarboard.rotation.x += propellerRotationSpeed * DeltaT;
+	}
+	
+	// Fade explosion light back to dim
+	if (explosionLight && explosionLightIntensity > explosionLightDimIntensity) {
+		explosionLightIntensity -= explosionLightFadeSpeed * DeltaT;
+		explosionLightIntensity = Math.max(explosionLightDimIntensity, explosionLightIntensity);
+		explosionLight.intensity = explosionLightIntensity;
 	}
 }
 
