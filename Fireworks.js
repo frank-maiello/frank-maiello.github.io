@@ -7,7 +7,7 @@
 // Blank 3D Space -------------------------------------------
 
 const DeltaT = 1.0 / 60.0;
-const Gravity = -1.5;
+const Gravity = -1.7;
 const worldRadius = 200; // Circular boundary radius
 const worldSizeY = 20;
 
@@ -29,19 +29,39 @@ var gGrabber;
 var gMouseDown;
 var gravityEnabled = true; // Always enabled
 var Mortars = []; // Array of all mortar instances
-var autoLaunchEnabled = true; // Auto-launch mortars at random intervals
+var autoLaunchEnabled = false; // Auto-launch mortars at random intervals - starts disabled
 var nextLaunchTime = 0; // Time until next mortar launch
 var timeSinceLastLaunch = 0; // Time elapsed since last launch
 var sparkPool = []; // Pool of available spark particle indices
 var clusterCenter = new THREE.Vector3(); // Center of initial ball cluster
 var stats;
 
+// Tube flash system
+var tubeMaterials = []; // Array of inner tube materials for each mortar
+var tubeFlashTimers = []; // Array of flash timers (0 = no flash, > 0 = flashing)
+var tubeFlashDuration = 0.25; // Duration of tube flash in seconds
+var tubeNormalColor = 0x1a1a1a; // Dark interior color
+var tubeFlashColor = 0xffffff; // White flash color
+
 // Camera control variables
 var gCameraMode = 2; // 0=Auto Orbit CW, 1=Auto Orbit CCW, 2=Manual Orbit
 var gCameraAngle = 0;
 var gCameraRotationSpeed = 3.0;
 var gCameraFOV = 57;
-var gRunning = true; // Simulation running state
+var gRunning = false; // Simulation running state - starts paused
+var startupTimer = 3.0; // Start paused for 3 seconds
+
+// Loading screen variables
+var loadingScreen = null;
+var loadingProgress = 0;
+var totalResources = 5; // barge, zeppelin, cityscape, helicopter, texture
+var loadedResources = 0;
+var minLoadTime = 2.0; // Minimum 2 seconds for loading screen
+var loadTimeElapsed = 0;
+var loadingComplete = false;
+var fadeOutStarted = false;
+var fadeOutProgress = 0;
+var fadeOutDuration = 1.0; // 1 second fade
 
 // Menu system variables
 var gOverlayCanvas = null;
@@ -81,6 +101,7 @@ var ballColor = new THREE.Color();
 var zeppelinModelTemplate = null;
 var propellerPort = null;
 var propellerStarboard = null;
+var mainRotor = null;
 var zeppelinAngle = 0; // Current angle on oval path
 var zeppelinSpeed = 0.01; // Radians per second
 var ovalRadiusX = 30; // Horizontal radius of oval
@@ -89,21 +110,23 @@ var zeppelinHeight = 20; // Flight altitude
 var zeppelinCenterX = 0; // Center of oval path (fireworks launch point)
 var zeppelinCenterZ = 0; // Center of oval path
 var propellerRotationSpeed = 10.0; // Negative rotation speed for x-axis
+var rotorRotationSpeed = 12.0;
 
 // Explosion light
 var explosionLight = null;
 var explosionLightIntensity = 0.0; // Current intensity (dim by default)
 var explosionLightDimIntensity = 0.0; // Dim baseline intensity
-var explosionLightBrightIntensity = 0.8; // Bright flash intensity
-var explosionLightFadeSpeed = 30.0; // How fast it fades back to dim
+var explosionLightBrightIntensity = 0.6; // Bright flash intensity
+var explosionLightFadeSpeed = 20.0; // How fast it fades back to dim
 
 // Mortar Class -------------------------------------------
 class MORTAR {
-	constructor(position, particleColor, startIndex, particleCount) {
+	constructor(position, particleColor, startIndex, particleCount, tubeIndex) {
 		this.position = position.clone();
 		this.particleColor = particleColor; // Base color for particles
 		this.startIndex = startIndex; // Starting index in global Balls array
 		this.particleCount = particleCount; // Number of particles this mortar uses
+		this.tubeIndex = tubeIndex; // Index of this mortar's tube for flash effect
 		this.inFlight = false;
 		this.detonationTime = 0;
 		this.flightTime = 0;
@@ -190,6 +213,16 @@ class MORTAR {
 		this.flightTime = 0;
 		this.inFlight = true;
 		this.hasExploded = false;
+		
+		// Trigger tube flash effect
+		if (tubeFlashTimers[this.tubeIndex] !== undefined) {
+			tubeFlashTimers[this.tubeIndex] = tubeFlashDuration;
+			if (tubeMaterials[this.tubeIndex]) {
+				tubeMaterials[this.tubeIndex].color.setHex(tubeFlashColor);
+				tubeMaterials[this.tubeIndex].emissive.setHex(tubeFlashColor);
+				tubeMaterials[this.tubeIndex].emissiveIntensity = 0.8;
+			}
+		}
 		
 		// Update instance mesh
 		ballInstancedMesh.instanceMatrix.needsUpdate = true;
@@ -523,6 +556,22 @@ class SpatialHashGrid {
 
 var spatialGrid = new SpatialHashGrid(0.5); // Cell size based on typical ball radius
 
+// Loading progress update function
+function updateLoadingProgress() {
+	loadedResources++;
+	loadingProgress = (loadedResources / totalResources) * 100;
+	const progressBarFill = document.getElementById('progress-bar-fill');
+	if (progressBarFill) {
+		progressBarFill.style.width = loadingProgress + '%';
+	}
+	console.log('Loading progress: ' + loadingProgress.toFixed(0) + '%');
+	
+	// Check if all resources loaded
+	if (loadedResources >= totalResources) {
+		loadingComplete = true;
+	}
+}
+
 // ------------------------------------------------------------------
 function initScene() {	
 	// Create instanced mesh for all balls (single draw call)
@@ -618,9 +667,11 @@ function initScene() {
 	for (let i = 0; i < mortarPositions.length; i++) {
 		let color = mortarColors[mortarIndex % mortarColors.length];
 		let startIndex = mortarIndex * particlesPerMortar;
-		let mortar = new MORTAR(mortarPositions[i], color, startIndex, particlesPerMortar);
+		let mortar = new MORTAR(mortarPositions[i], color, startIndex, particlesPerMortar, i);
 		Mortars.push(mortar);
 		mortarIndex++;
+		// Initialize tube flash timer
+		tubeFlashTimers.push(0);
 	}
 	
 	// Initialize spark pool (indices after mortar particles)
@@ -694,12 +745,57 @@ function initThreeScene() {
 
 			gThreeScene.add(cityscapeModelTemplate);
 			console.log('cityscape model loaded successfully');
+			updateLoadingProgress();
 		},
 		function(xhr) {
 			console.log('cityscape model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
 		},
 		function(error) {
 			console.error('Error loading cityscape model:', error);
+		}
+	);
+
+	// LOAD HELICOPTER --------------------------------------
+	var helicopterLoader = new THREE.GLTFLoader();
+	helicopterLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/rescueHelicopter.gltf',
+		function(gltf) {
+			helicopterModelTemplate = gltf.scene;
+			helicopterModelTemplate.position.set(20, 40, -30);
+			helicopterModelTemplate.rotation.y = 0.8 * Math.PI; // Rotate to face the fireworks
+			helicopterModelTemplate.scale.set(0.5, 0.5, 0.5);
+
+			// Enable shadow casting and receiving on all meshes in the model
+			helicopterModelTemplate.traverse(function(child) {
+				if (child.name === 'mainRotor') {
+					mainRotor = child;
+					console.log('Found mainRotor');
+				}
+				if (child.isMesh) {
+					child.castShadow = true;
+					child.receiveShadow = true;
+					// Set materials to FrontSide only
+					if (child.material) {
+						if (Array.isArray(child.material)) {
+							child.material.forEach(function(mat) {
+								mat.side = THREE.FrontSide;
+							});
+						} else {
+							child.material.side = THREE.FrontSide;
+						}
+					}
+				}
+			});
+
+			gThreeScene.add(helicopterModelTemplate);
+			console.log('helicopter model loaded successfully');
+			updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('helicopter model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading helicopter model:', error);
 		}
 	);
 
@@ -710,7 +806,7 @@ function initThreeScene() {
 		function(gltf) {
 			bargeModelTemplate = gltf.scene;
 			bargeModelTemplate.position.set(0, 0, 0);
-			bargeModelTemplate.rotation.y = 0.5 * Math.PI; // Rotate to face city
+			bargeModelTemplate.rotation.y = -0.5 * Math.PI; 
 			bargeModelTemplate.scale.set(0.4, 0.4, 0.4);
 			bargeModelTemplate.castShadow = true;
 			bargeModelTemplate.receiveShadow = true;
@@ -727,12 +823,27 @@ function initThreeScene() {
 						} else {
 							child.material.side = THREE.DoubleSide;
 						}
+						
 					}
+				}
+				
+				// Add point lights to cabin light objects
+				if (child.name === 'cabinLight1' || child.name === 'cabinLight2') {
+					var cabinLight = new THREE.PointLight(0xffaa44, 1.5, 10); // Warm orange-yellow, intensity 1.5, distance 10
+					//ffaa44
+					cabinLight.castShadow = true;
+					cabinLight.shadow.camera.near = 0.1;
+					cabinLight.shadow.camera.far = 10;
+					cabinLight.shadow.mapSize.width = 512;
+					cabinLight.shadow.mapSize.height = 512;
+					child.add(cabinLight); // Attach light to the object so it moves with it
+					console.log('Added point light to ' + child.name);
 				}
 			});
 		
 			gThreeScene.add(bargeModelTemplate);
 			console.log('barge model loaded successfully');
+			updateLoadingProgress();
 		},
 		function(xhr) {
 			console.log('barge model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
@@ -750,7 +861,7 @@ function initThreeScene() {
 		function(gltf) {
 			zeppelinModelTemplate = gltf.scene;
 			zeppelinModelTemplate.position.set(10, 20, 40);
-			zeppelinModelTemplate.scale.set(0.5, 0.5, 0.5);
+			zeppelinModelTemplate.scale.set(1.0, 1.0, 1.0);
 			
 			// Find propeller objects in the model hierarchy
 			zeppelinModelTemplate.traverse(function(child) {
@@ -762,10 +873,12 @@ function initThreeScene() {
 					propellerStarboard = child;
 					console.log('Found propellerStarboard');
 				}
+				
 			});
 
 			gThreeScene.add(zeppelinModelTemplate);
 			console.log('zeppelin model loaded successfully');
+			updateLoadingProgress();
 		},
 		function(xhr) {
 			console.log('zeppelin model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
@@ -802,18 +915,17 @@ function initThreeScene() {
 	dirLight.shadow.mapSize.height = 1024;
 	gThreeScene.add( dirLight );
 
-	
 	// spotligt
-	var spotLight = new THREE.SpotLight( 0xffffff, 2.0 ); // Increased intensity
+	var spotLight = new THREE.SpotLight( 0xffffff, 1.0 ); // Increased intensity
 	spotLight.angle = Math.PI / 16;
 	spotLight.penumbra = 0.1;
 	spotLight.distance = 200;
 	spotLight.position.set(30, 80, -50);
 	spotLight.target.position.set(2, 0, -4); // Point at barge
 	spotLight.castShadow = true;
-	spotLight.shadow.camera.near = 10;
-	spotLight.shadow.camera.far = 150;
-	spotLight.shadow.camera.fov = 80; // Much wider field of view for shadow camera
+	spotLight.shadow.camera.near = 40;
+	spotLight.shadow.camera.far = 70;
+	spotLight.shadow.camera.fov = 20; // Much wider field of view for shadow camera
 	spotLight.shadow.mapSize.width = 2048;
 	spotLight.shadow.mapSize.height = 2048;
 	spotLight.shadow.bias = -0.0005; // Adjusted bias
@@ -905,16 +1017,25 @@ function initThreeScene() {
 	var outerTubeGeometry = new THREE.CylinderGeometry(tubeOuterRadius, tubeOuterRadius, tubeHeight, 16, 1, true);
 	// Top ring cap (connects inner and outer tube at top)
 	var topCapGeometry = new THREE.RingGeometry(tubeInnerRadius, tubeOuterRadius, 32);
+	// Bottom cap (disc to close bottom of tube) - slightly larger than inner radius
+	var bottomCapGeometry = new THREE.CircleGeometry(tubeInnerRadius * 1.2, 32);
 	
-	// Inner tube material (back side - shows outer surface)
-	var innerTubeMaterial = new THREE.MeshBasicMaterial({
-		color: 0x1a1a1a,  
-		side: THREE.BackSide
-	});
+	// Inner tube material template (we'll create unique materials for each tube)
+	var createInnerTubeMaterial = function() {
+		return new THREE.MeshPhongMaterial({
+			color: tubeNormalColor,
+			emissive: new THREE.Color(0x000000),
+			emissiveIntensity: 0,
+			side: THREE.BackSide
+		});
+	};
 	
 	// Load texture for outer tube
 	var textureLoader = new THREE.TextureLoader();
-	var redStripeTexture = textureLoader.load('https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/redStripe.jpg');
+	var redStripeTexture = textureLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/redStripe.jpg',
+		function() { updateLoadingProgress(); } // onLoad
+	);
 	redStripeTexture.wrapS = THREE.RepeatWrapping;
 	redStripeTexture.wrapT = THREE.RepeatWrapping;
 	
@@ -928,6 +1049,12 @@ function initThreeScene() {
 	var topCapMaterial = new THREE.MeshPhongMaterial({
 		color: 0x666666,
 		side: THREE.FrontSide
+	});
+	
+	// Bottom cap material 
+	var bottomCapMaterial = new THREE.MeshPhongMaterial({
+		color: 0x000000,
+		side: THREE.DoubleSide
 	});
 	
 	// Square base geometry (thin box)
@@ -945,7 +1072,9 @@ function initThreeScene() {
 	
 	// Center tube with base
 	// Inner tube
-	var innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial);
+	var innerTubeMaterial0 = createInnerTubeMaterial();
+	tubeMaterials.push(innerTubeMaterial0);
+	var innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial0);
 	innerTubeMesh.position.set(0, deckHeight + tubeHeight / 2, 0);
 	innerTubeMesh.castShadow = true;
 	innerTubeMesh.receiveShadow = true;
@@ -966,6 +1095,13 @@ function initThreeScene() {
 	topCapMesh.receiveShadow = true;
 	gThreeScene.add(topCapMesh);
 	
+	// Bottom cap
+	var bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
+	bottomCapMesh.position.set(0, deckHeight + tubeHeight * 0.2, 0); // 20% up from tube bottom
+	bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
+	bottomCapMesh.receiveShadow = true;
+	gThreeScene.add(bottomCapMesh);
+	
 	// base
 	var baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
 	baseMesh.position.set(0, deckHeight + baseHeight / 2, 0);
@@ -979,8 +1115,10 @@ function initThreeScene() {
 		let x = Math.cos(angle) * ellipseRadiusX;
 		let z = Math.sin(angle) * ellipseRadiusZ;
 		
-		// Inner tube
-		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial);
+		// Inner tube (create unique material for flash effect)
+		let innerTubeMat = createInnerTubeMaterial();
+		tubeMaterials.push(innerTubeMat);
+		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMat);
 		innerTubeMesh.position.set(x, deckHeight + tubeHeight / 2, z);
 		innerTubeMesh.castShadow = true;
 		innerTubeMesh.receiveShadow = true;
@@ -1000,6 +1138,13 @@ function initThreeScene() {
 		topCapMesh.castShadow = true;
 		topCapMesh.receiveShadow = true;
 		gThreeScene.add(topCapMesh);
+		
+		// Bottom cap
+		bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
+		bottomCapMesh.position.set(x, deckHeight + tubeHeight * 0.2, z); // 20% up from tube bottom
+		bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
+		bottomCapMesh.receiveShadow = true;
+		gThreeScene.add(bottomCapMesh);
 		
 		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
 		baseMesh.position.set(x, deckHeight + baseHeight / 2, z);
@@ -1015,8 +1160,10 @@ function initThreeScene() {
 		let x = Math.cos(angle) * ellipseRadiusX * 1.8;
 		let z = Math.sin(angle) * ellipseRadiusZ * 1.8;
 		
-		// Inner tube
-		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial);
+		// Inner tube (create unique material for flash effect)
+		let innerTubeMat = createInnerTubeMaterial();
+		tubeMaterials.push(innerTubeMat);
+		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMat);
 		innerTubeMesh.position.set(x, deckHeight + tubeHeight / 2, z);
 		innerTubeMesh.castShadow = true;
 		innerTubeMesh.receiveShadow = true;
@@ -1036,6 +1183,13 @@ function initThreeScene() {
 		topCapMesh.castShadow = true;
 		topCapMesh.receiveShadow = true;
 		gThreeScene.add(topCapMesh);
+		
+		// Bottom cap
+		bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
+		bottomCapMesh.position.set(x, deckHeight + tubeHeight * 0.2, z); // 20% up from tube bottom
+		bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
+		bottomCapMesh.receiveShadow = true;
+		gThreeScene.add(bottomCapMesh);
 		
 		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
 		baseMesh.position.set(x, deckHeight + baseHeight / 2, z);
@@ -1106,6 +1260,43 @@ function initThreeScene() {
 	gOverlayCanvas.style.pointerEvents = 'none'; // Don't block interaction with 3D scene
 	container.appendChild(gOverlayCanvas);
 	gOverlayCtx = gOverlayCanvas.getContext('2d');
+	
+	// Create loading screen overlay
+	loadingScreen = document.createElement('div');
+	loadingScreen.style.position = 'absolute';
+	loadingScreen.style.top = '0';
+	loadingScreen.style.left = '0';
+	loadingScreen.style.width = '100%';
+	loadingScreen.style.height = '100%';
+	loadingScreen.style.backgroundColor = '#000000';
+	loadingScreen.style.zIndex = '2000'; // Above everything
+	loadingScreen.style.display = 'flex';
+	loadingScreen.style.flexDirection = 'column';
+	loadingScreen.style.justifyContent = 'center';
+	loadingScreen.style.alignItems = 'center';
+	loadingScreen.style.opacity = '1';
+	loadingScreen.style.transition = 'opacity 1s ease-out';
+	
+	// Progress bar container
+	const progressContainer = document.createElement('div');
+	progressContainer.style.width = '300px';
+	progressContainer.style.height = '20px';
+	progressContainer.style.border = '2px solid #ffffff';
+	progressContainer.style.borderRadius = '10px';
+	progressContainer.style.overflow = 'hidden';
+	progressContainer.style.backgroundColor = '#222222';
+	
+	// Progress bar fill
+	const progressBar = document.createElement('div');
+	progressBar.id = 'progress-bar-fill';
+	progressBar.style.width = '0%';
+	progressBar.style.height = '100%';
+	progressBar.style.backgroundColor = '#4488ff';
+	progressBar.style.transition = 'width 0.3s ease-out';
+	
+	progressContainer.appendChild(progressBar);
+	loadingScreen.appendChild(progressContainer);
+	container.appendChild(loadingScreen);
 }
 
 // Grabber -----------------------------------------------------------
@@ -1316,6 +1507,24 @@ function onWindowResize() {
 
 // ------------------------------------------------------------------
 function simulate() {	
+	// Skip physics simulation if paused (but still animate zeppelin and propellers below)
+	if (!gRunning) {
+		// Animate zeppelin and propellers even when paused
+		if (zeppelinModelTemplate) {
+			zeppelinAngle += zeppelinSpeed * DeltaT;
+			var x = zeppelinCenterX + Math.cos(zeppelinAngle) * ovalRadiusX;
+			var z = zeppelinCenterZ + Math.sin(zeppelinAngle) * ovalRadiusZ;
+			zeppelinModelTemplate.position.set(x, zeppelinHeight, z);
+			var dx = -Math.sin(zeppelinAngle) * ovalRadiusX;
+			var dz = Math.cos(zeppelinAngle) * ovalRadiusZ;
+			zeppelinModelTemplate.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
+		}
+		if (propellerPort) propellerPort.rotation.x += propellerRotationSpeed * DeltaT;
+		if (propellerStarboard) propellerStarboard.rotation.x += propellerRotationSpeed * DeltaT;
+		if (mainRotor) mainRotor.rotation.z += rotorRotationSpeed * DeltaT;
+		return; // Skip firework physics when paused
+	}
+	
 	// Auto-launch mortars at random intervals
 	if (autoLaunchEnabled) {
 		timeSinceLastLaunch += DeltaT;
@@ -1402,12 +1611,38 @@ function simulate() {
 	if (propellerStarboard) {
 		propellerStarboard.rotation.x += propellerRotationSpeed * DeltaT;
 	}
+	if (mainRotor) {
+		mainRotor.rotation.z += rotorRotationSpeed * DeltaT;
+	}
 	
 	// Fade explosion light back to dim
 	if (explosionLight && explosionLightIntensity > explosionLightDimIntensity) {
 		explosionLightIntensity -= explosionLightFadeSpeed * DeltaT;
 		explosionLightIntensity = Math.max(explosionLightDimIntensity, explosionLightIntensity);
 		explosionLight.intensity = explosionLightIntensity;
+	}
+	
+	// Fade tube flashes back to normal
+	for (let i = 0; i < tubeFlashTimers.length; i++) {
+		if (tubeFlashTimers[i] > 0) {
+			tubeFlashTimers[i] -= DeltaT;
+			if (tubeFlashTimers[i] <= 0) {
+				// Flash complete, return to normal color
+				tubeFlashTimers[i] = 0;
+				if (tubeMaterials[i]) {
+					tubeMaterials[i].color.setHex(tubeNormalColor);
+					tubeMaterials[i].emissive.setHex(0x000000);
+					tubeMaterials[i].emissiveIntensity = 0;
+				}
+			} else {
+				// Fade from white to black
+				let t = tubeFlashTimers[i] / tubeFlashDuration; // 1.0 at start, 0.0 at end
+				if (tubeMaterials[i]) {
+					let flashAmount = t * t; // Quadratic fade for more punch
+					tubeMaterials[i].emissiveIntensity = flashAmount * 0.8;
+				}
+			}
+		}
 	}
 }
 
@@ -1940,6 +2175,37 @@ function render() {
 // make browser to call us repeatedly -----------------------------------
 function update() {
 	stats.begin();
+	
+	// Handle startup delay - unpause after 3 seconds
+	if (startupTimer > 0) {
+		startupTimer -= DeltaT;
+		if (startupTimer <= 0) {
+			startupTimer = 0;
+			gRunning = true;
+			autoLaunchEnabled = true;
+			needsMenuRedraw = true;
+		}
+	}
+	
+	// Handle loading screen fade
+	if (loadingScreen && loadingScreen.parentNode) {
+		loadTimeElapsed += DeltaT;
+		
+		// Start fade out if: min time elapsed AND all resources loaded
+		if (!fadeOutStarted && loadTimeElapsed >= minLoadTime && loadingComplete) {
+			fadeOutStarted = true;
+			loadingScreen.style.opacity = '0';
+		}
+		
+		// Track fade progress and remove when complete
+		if (fadeOutStarted) {
+			fadeOutProgress += DeltaT;
+			if (fadeOutProgress >= fadeOutDuration) {
+				loadingScreen.parentNode.removeChild(loadingScreen);
+				loadingScreen = null;
+			}
+		}
+	}
 	
 	// Update camera rotation for auto modes (rotate around OrbitControls target)
 	if (gCameraMode === 0 || gCameraMode === 1) {
