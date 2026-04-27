@@ -43,6 +43,13 @@ var tubeFlashDuration = 0.25; // Duration of tube flash in seconds
 var tubeNormalColor = 0x1a1a1a; // Dark interior color
 var tubeFlashColor = 0xffffff; // White flash color
 
+// Explosion flash variables
+var explosionLight = null;
+var explosionLightIntensity = 0.0; // Current intensity (dim by default)
+var explosionLightDimIntensity = 0.0; // Dim baseline intensity
+var explosionLightBrightIntensity = 0.6; // Bright flash intensity
+var explosionLightFadeSpeed = 20.0; // How fast it fades back to dim
+
 // Camera control variables
 var gCameraMode = 2; // 0=Auto Orbit CW, 1=Auto Orbit CCW, 2=Manual Orbit
 var gCameraAngle = 0;
@@ -54,7 +61,7 @@ var startupTimer = 3.0; // Start paused for 3 seconds
 // Loading screen variables
 var loadingScreen = null;
 var loadingProgress = 0;
-var totalResources = 5; // barge, zeppelin, cityscape, helicopter, texture
+var totalResources = 6; // barge, zeppelin, cityscape south, cityscape north, helicopter, texture
 var loadedResources = 0;
 var minLoadTime = 2.0; // Minimum 2 seconds for loading screen
 var loadTimeElapsed = 0;
@@ -101,7 +108,7 @@ var ballColor = new THREE.Color();
 var zeppelinModelTemplate = null;
 var propellerPort = null;
 var propellerStarboard = null;
-var mainRotor = null;
+var zeppelinLight = null;
 var zeppelinAngle = 0; // Current angle on oval path
 var zeppelinSpeed = 0.01; // Radians per second
 var ovalRadiusX = 30; // Horizontal radius of oval
@@ -110,14 +117,13 @@ var zeppelinHeight = 20; // Flight altitude
 var zeppelinCenterX = 0; // Center of oval path (fireworks launch point)
 var zeppelinCenterZ = 0; // Center of oval path
 var propellerRotationSpeed = 10.0; // Negative rotation speed for x-axis
-var rotorRotationSpeed = 12.0;
 
-// Explosion light
-var explosionLight = null;
-var explosionLightIntensity = 0.0; // Current intensity (dim by default)
-var explosionLightDimIntensity = 0.0; // Dim baseline intensity
-var explosionLightBrightIntensity = 0.6; // Bright flash intensity
-var explosionLightFadeSpeed = 20.0; // How fast it fades back to dim
+// Helicopter animation variables
+var helicopterModelTemplate = null;
+var helicopter2ModelTemplate = null;
+var mainRotor = null;
+var mainRotor2 = null;
+var rotorRotationSpeed = 12.0;
 
 // Mortar Class -------------------------------------------
 class MORTAR {
@@ -459,9 +465,9 @@ class ShockWave {
 	constructor(position) {
 		this.position = position.clone();
 		this.age = 0;
-		this.lifetime = 0.1; // 0.15 seconds - very quick flash
+		this.lifetime = 0.05; // 
 		this.startRadius = 0.0;
-		this.maxRadius = 1.5; // Maximum expansion radius
+		this.maxRadius = 2.0; // Maximum expansion radius
 		this.active = true;
 		this.mesh = null; // Will be assigned from pool
 	}
@@ -485,8 +491,8 @@ class ShockWave {
 		// Expand radius (very fast flash-like expansion)
 		const radius = this.startRadius + (this.maxRadius - this.startRadius) * Math.pow(progress, 0.3);
 		
-		// Fade opacity (start at 0.85, fade to 0 - bright flash)
-		const opacity = 0.65 * (1.0 - progress);
+		// Fade opacity (start at 0.5, fade to 0)
+		const opacity = 0.6 - (0.5 * progress);
 		
 		// Update mesh
 		if (this.mesh) {
@@ -583,7 +589,10 @@ function initScene() {
 	
 	const ballRadius = 0.02;
 	const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
-	const ballMaterial = new THREE.MeshBasicMaterial();
+	const ballMaterial = new THREE.MeshBasicMaterial({
+			
+			side: THREE.FrontSide
+	});
 	ballInstancedMesh = new THREE.InstancedMesh(ballGeometry, ballMaterial, numBalls);
 	ballInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 	
@@ -716,7 +725,7 @@ function initThreeScene() {
 	gThreeScene = new THREE.Scene();
 	gThreeScene.background = new THREE.Color(0x000000);
 
-	// LOAD CITY --------------------------------------
+	// LOAD DOWNTOWN --------------------------------------
 	var cityscapeLoader = new THREE.GLTFLoader();
 	cityscapeLoader.load(
 		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonView.gltf',
@@ -725,8 +734,99 @@ function initThreeScene() {
 			cityscapeModelTemplate.position.set(-20, -0.1, -35);
 			cityscapeModelTemplate.scale.set(0.5, 0.5, 0.5);
 
+		// Enable shadow casting and receiving on all meshes in the model
+		// Replace all materials with uniform 70% gray MeshPhongMaterial
+		var uniformCityscapeMaterial = new THREE.MeshPhongMaterial({
+			color: 0x666666, // 40% gray
+			side: THREE.FrontSide
+		});
+		
+		// Special material for water objects
+		var waterMaterial = new THREE.MeshStandardMaterial({
+			color: 0x090b14, // #090b14 dark blue
+			roughness: 0.5,
+			side: THREE.FrontSide
+		});
+		
+		cityscapeModelTemplate.traverse(function(child) {
+			if (child.isMesh) {
+				child.castShadow = true;
+				child.receiveShadow = true;
+				// Check if this is a water object
+				if (child.name.toLowerCase().includes('water')) {
+					child.material = waterMaterial;
+				} else {
+					// Replace material with uniform gray
+					child.material = uniformCityscapeMaterial;
+				}
+			}
+		});
+
+			gThreeScene.add(cityscapeModelTemplate);
+			console.log('cityscape model loaded successfully');
+			updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('cityscape model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading cityscape model:', error);
+		}
+	);
+
+	// LOAD MIDTOWN --------------------------------------
+	var cityscapeNorthLoader = new THREE.GLTFLoader();
+	cityscapeNorthLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonViewNorth.gltf',
+		function(gltf) {
+			cityscapeNorthModelTemplate = gltf.scene;
+			cityscapeNorthModelTemplate.position.set(31.75, -0.1, -146.5);
+			cityscapeNorthModelTemplate.scale.set(0.5, 0.5, 0.5);
+
 			// Enable shadow casting and receiving on all meshes in the model
-			cityscapeModelTemplate.traverse(function(child) {
+		// Replace all materials with uniform 70% gray MeshPhongMaterial
+		var uniformCityscapeMaterialNorth = new THREE.MeshPhongMaterial({
+			color: 0x666666, // 40% gray
+			side: THREE.FrontSide
+		});
+		
+		cityscapeNorthModelTemplate.traverse(function(child) {
+			if (child.isMesh) {
+				child.castShadow = true;
+				child.receiveShadow = true;
+				// Check if this is a water object
+				if (child.name.toLowerCase().includes('water')) {
+					child.material = waterMaterialNorth;
+				} else {
+					// Replace material with uniform gray
+					child.material = uniformCityscapeMaterialNorth;
+				}
+			}
+		});
+
+			gThreeScene.add(cityscapeNorthModelTemplate);
+			console.log('cityscape north model loaded successfully');
+			updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('cityscape north model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading cityscape north model:', error);
+		}
+	);
+
+	// LOAD STATUE --------------------------------------
+	var statueLoader = new THREE.GLTFLoader();
+	statueLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/SoLwithBase.gltf',
+		function(gltf) {
+			statueModelTemplate = gltf.scene;
+			statueModelTemplate.position.set(-20, -0.1, -35);
+			statueModelTemplate.scale.set(0.5, 0.5, 0.5);
+
+			// Enable shadow casting and receiving on all meshes in the model
+			statueModelTemplate.traverse(function(child) {
 				if (child.isMesh) {
 					child.castShadow = true;
 					child.receiveShadow = true;
@@ -743,8 +843,8 @@ function initThreeScene() {
 				}
 			});
 
-			gThreeScene.add(cityscapeModelTemplate);
-			console.log('cityscape model loaded successfully');
+			gThreeScene.add(statueModelTemplate);
+			console.log('statue model loaded successfully');
 			updateLoadingProgress();
 		},
 		function(xhr) {
@@ -789,6 +889,24 @@ function initThreeScene() {
 
 			gThreeScene.add(helicopterModelTemplate);
 			console.log('helicopter model loaded successfully');
+			
+			// Create second helicopter (clone)
+			helicopter2ModelTemplate = helicopterModelTemplate.clone();
+			helicopter2ModelTemplate.position.set(30.8, 82, -52.5); // Different position
+			helicopter2ModelTemplate.rotation.y = 0.15 * Math.PI; // Different rotation
+			helicopter2ModelTemplate.scale.set(0.5, 0.5, 0.5);
+			
+			// Find mainRotor on second helicopter
+			helicopter2ModelTemplate.traverse(function(child) {
+				if (child.name === 'mainRotor') {
+					mainRotor2 = child;
+					console.log('Found mainRotor2 on second helicopter');
+				}
+			});
+			
+			gThreeScene.add(helicopter2ModelTemplate);
+			console.log('second helicopter added');
+			
 			updateLoadingProgress();
 		},
 		function(xhr) {
@@ -873,6 +991,20 @@ function initThreeScene() {
 					propellerStarboard = child;
 					console.log('Found propellerStarboard');
 				}
+				if (child.name === 'zeppelinLight') {
+					zeppelinLight = child;
+					console.log('Found zeppelinLight');
+					
+					// Create and attach point light
+					var zeppelinPointLight = new THREE.PointLight(0xffcc88, 1.0, 15);
+					zeppelinPointLight.castShadow = true;
+					zeppelinPointLight.shadow.camera.near = 0.1;
+					zeppelinPointLight.shadow.camera.far = 15;
+					zeppelinPointLight.shadow.mapSize.width = 512;
+					zeppelinPointLight.shadow.mapSize.height = 512;
+					child.add(zeppelinPointLight);
+					console.log('Added point light to zeppelinLight');
+				}
 				
 			});
 
@@ -889,17 +1021,28 @@ function initThreeScene() {
 	);
 	
 	// ambient light
-	gThreeScene.add( new THREE.AmbientLight( 0x202020 ) );	
+	gThreeScene.add( new THREE.AmbientLight( 0x101010 ) );	
 
-	// Explosion point light at center of fireworks
-	explosionLight = new THREE.PointLight( 0xffaa66, explosionLightDimIntensity, 200 );
-	explosionLight.position.set( 0, 20, 0 ); // Center above barge where fireworks explode
-	explosionLight.castShadow = true;
-	explosionLight.shadow.camera.near = 0.1;
-	explosionLight.shadow.camera.far = 200;
-	explosionLight.shadow.mapSize.width = 1024;
-	explosionLight.shadow.mapSize.height = 1024;
-	gThreeScene.add( explosionLight );
+	// hemispheric light to simulate sky glow
+	var hemiLight = new THREE.HemisphereLight( 
+		0x969a9f, 
+		0x39332b, 
+		0.6 ); 
+	gThreeScene.add( hemiLight );
+
+	// overhead light
+	var dirLight = new THREE.DirectionalLight( 0x55505a, 1.0 );
+	dirLight.position.set( 0, 10, 0 );
+	dirLight.castShadow = false;
+	dirLight.shadow.camera.near = 1;
+	dirLight.shadow.camera.far = worldSizeY + 5;
+	dirLight.shadow.camera.right = worldRadius;
+	dirLight.shadow.camera.left = -worldRadius;
+	dirLight.shadow.camera.top	= worldRadius;
+	dirLight.shadow.camera.bottom = -worldRadius;
+	dirLight.shadow.mapSize.width = 1024;
+	dirLight.shadow.mapSize.height = 1024;
+	gThreeScene.add( dirLight );
 
 	// directional light to simulate moonlight
 	var dirLight = new THREE.DirectionalLight( 0x999999, 0.5 );
@@ -933,7 +1076,7 @@ function initThreeScene() {
 	gThreeScene.add( spotLight.target );
 	
 	// Visual cone for spotlight
-	var coneHeight = 1;
+	var coneHeight = 2;
 	var coneRadius = Math.tan(spotLight.angle) * coneHeight;
 	var coneGeometry = new THREE.ConeGeometry( coneRadius, coneHeight, 32, 1, true );
 	var coneMaterial = new THREE.MeshBasicMaterial({ 
@@ -958,23 +1101,16 @@ function initThreeScene() {
 	
 	gThreeScene.add( coneMesh );
 
-	// overhead light
-	var dirLight = new THREE.DirectionalLight( 0x55505a, 1 );
-	dirLight.position.set( 0, 10, 0 );
-	dirLight.castShadow = false;
-	dirLight.shadow.camera.near = 1;
-	dirLight.shadow.camera.far = worldSizeY + 5;
+	// Explosion point light at center of fireworks
+	explosionLight = new THREE.PointLight( 0xffaa66, explosionLightDimIntensity, 200 );
+	explosionLight.position.set( 0, 20, 0 ); // Center above barge where fireworks explode
+	explosionLight.castShadow = true;
+	explosionLight.shadow.camera.near = 0.1;
+	explosionLight.shadow.camera.far = 200;
+	explosionLight.shadow.mapSize.width = 1024;
+	explosionLight.shadow.mapSize.height = 1024;
+	gThreeScene.add( explosionLight );
 
-	dirLight.shadow.camera.right = worldRadius;
-	dirLight.shadow.camera.left = -worldRadius;
-	dirLight.shadow.camera.top	= worldRadius;
-	dirLight.shadow.camera.bottom = -worldRadius;
-
-	dirLight.shadow.mapSize.width = 1024;
-	dirLight.shadow.mapSize.height = 1024;
-	gThreeScene.add( dirLight );
-
-	
 	// create round floor plane with radial gradient
 	var floorGeometry = new THREE.CircleGeometry(2 * worldRadius, 64);
 	
@@ -984,9 +1120,10 @@ function initThreeScene() {
 	canvas.height = 1024;
 	var ctx = canvas.getContext('2d');
 	
-	// Create radial gradient from center (blue) to edge (black)
+	// Create radial gradient from center to edge
 	var gradient = ctx.createRadialGradient(512, 512, 0, 512, 512, 512);
-	gradient.addColorStop(0, '#282828');  // Blue at center
+	//gradient.addColorStop(0, '#282828');  
+	gradient.addColorStop(0, '#262626');  
 	gradient.addColorStop(1, '#000000');  // Black at edge
 	
 	// Fill canvas with gradient
@@ -1219,8 +1356,9 @@ function initThreeScene() {
 	gRenderTarget = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight, 
 		{ minFilter: THREE.LinearFilter, magFilter: THREE.NearestFilter, format: THREE.RGBAFormat } );
 
-	// Camera	
+	// Camera --------------------------------------------	
 	Camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+	Camera.far = 3000;
 	Camera.position.set(-24.2, 11.5, 8.4);
 	Camera.updateMatrixWorld();	
 	gThreeScene.add(Camera);
@@ -1522,6 +1660,7 @@ function simulate() {
 		if (propellerPort) propellerPort.rotation.x += propellerRotationSpeed * DeltaT;
 		if (propellerStarboard) propellerStarboard.rotation.x += propellerRotationSpeed * DeltaT;
 		if (mainRotor) mainRotor.rotation.z += rotorRotationSpeed * DeltaT;
+		if (mainRotor2) mainRotor2.rotation.z += rotorRotationSpeed * DeltaT;
 		return; // Skip firework physics when paused
 	}
 	
@@ -1613,6 +1752,9 @@ function simulate() {
 	}
 	if (mainRotor) {
 		mainRotor.rotation.z += rotorRotationSpeed * DeltaT;
+	}
+	if (mainRotor2) {
+		mainRotor2.rotation.z += rotorRotationSpeed * DeltaT;
 	}
 	
 	// Fade explosion light back to dim
