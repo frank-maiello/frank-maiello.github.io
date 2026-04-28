@@ -16,11 +16,13 @@ const Gravity = -1.7;
 const worldRadius = 200; // Circular boundary radius
 const worldSizeY = 20;
 
+const ballRadius = 0.03;
 const particlesPerMortar = 3000; // Particles per mortar
 const sparkPoolSize = 3000; // Extra particles for spark trails
 const numBalls = 75000 + sparkPoolSize; // 25 mortars × 2000 + spark pool
+const mortarRadius = 0.03; // Initial cluster radius for mortar shell particles	
 const mortarAltitude = 0.05; // Start just above ground level
-const explosionSpeed = 4.0; // Velocity magnitude for GO button explosion
+
 const mortarSpacing = 1.5; // Space between mortar tubes in grid
 const sparkLifetime = 0.30; // Sparks fade very quickly
 const sparksPerFrame = 5; // Number of sparks spawned per mortar per frame
@@ -134,7 +136,7 @@ var helicopterSpotlight = null;
 var spotlightCone = null;
 var spotlightTarget = new THREE.Vector3(0, 0, 0); // Target position on barge
 var helicopterCabCameraOffset = new THREE.Vector3(0.3, 0.7, -1.8); // Center seat, forward position (local to helicopter)
-var helicopterCabCameraDebugSphere = null;
+var helicopterCameraGhostSphere = null;
 var helicopterAngle = Math.PI; // Start opposite to zeppelin (counterclockwise)
 var helicopterSpeed = 0.03; // Slightly faster than zeppelin
 var helicopterOvalRadiusX = 50; // Larger oval than zeppelin
@@ -160,7 +162,6 @@ class MORTAR {
 		// Create particles for this mortar
 		this.createParticles();
 	}
-	
 	// Check if all particles from this mortar are gone
 	isReadyToLaunch() {
 		if (this.inFlight) return false; // Already in flight
@@ -173,14 +174,12 @@ class MORTAR {
 		}
 		return true; // All clear, ready to launch
 	}
-	
 	createParticles() {
-		const ballRadius = 0.02;
 		for (let i = 0; i < this.particleCount; i++) {
 			let pos = null;
 			let theta = Math.random() * Math.PI * 2;
 			let phi = Math.acos(2 * Math.random() - 1);
-			let r = Math.cbrt(Math.random()) * (3 * ballRadius);
+			let r = Math.cbrt(Math.random()) * mortarRadius; // Cube root for uniform distribution in sphere
 			pos = new THREE.Vector3(
 				this.position.x + r * Math.sin(phi) * Math.cos(theta),
 				mortarAltitude + r * Math.cos(phi),
@@ -194,7 +193,6 @@ class MORTAR {
 			Balls[this.startIndex + i] = ball;
 		}
 	}
-	
 	launch() {
 		if (!this.isReadyToLaunch()) return; // Not ready yet
 		
@@ -202,13 +200,12 @@ class MORTAR {
 		let launchVelocity = 30.0 + Math.random() * 10.0;
 		
 		// Reset and launch all this mortar's particles
-		const ballRadius = 0.02;
 		for (let i = this.startIndex; i < this.startIndex + this.particleCount; i++) {
 			if (Balls[i]) {
 				// Reset position to tight cluster at mortar location
 				let theta = Math.random() * Math.PI * 2;
 				let phi = Math.acos(2 * Math.random() - 1);
-				let r = Math.cbrt(Math.random()) * (3 * ballRadius);
+				let r = Math.cbrt(Math.random()) * mortarRadius; 
 				Balls[i].pos.set(
 					this.position.x + r * Math.sin(phi) * Math.cos(theta),
 					mortarAltitude + r * Math.cos(phi),
@@ -238,7 +235,7 @@ class MORTAR {
 		this.inFlight = true;
 		this.hasExploded = false;
 		
-		// Trigger tube flash effect
+		// Trigger mortar tube flash effect
 		if (tubeFlashTimers[this.tubeIndex] !== undefined) {
 			tubeFlashTimers[this.tubeIndex] = tubeFlashDuration;
 			if (tubeMaterials[this.tubeIndex]) {
@@ -252,7 +249,6 @@ class MORTAR {
 		ballInstancedMesh.instanceMatrix.needsUpdate = true;
 		ballInstancedMesh.instanceColor.needsUpdate = true;
 	}
-	
 	update(deltaTime) {
 		if (!this.inFlight || this.hasExploded) return;
 		
@@ -262,12 +258,13 @@ class MORTAR {
 		this.spawnSparks();
 		
 		if (this.flightTime >= this.detonationTime) {
-			this.explode();
+			//var explosionSpeed = 4.0; // Velocity magnitude 
+			var explosionSpeed = 2 + Math.random() * 4.0;
+			this.explode(explosionSpeed);
 			this.hasExploded = true;
 			this.inFlight = false;
 		}
 	}
-	
 	spawnSparks() {
 		// Calculate current cluster center for spark spawning
 		let center = new THREE.Vector3(0, 0, 0);
@@ -321,7 +318,7 @@ class MORTAR {
 		ballInstancedMesh.instanceColor.needsUpdate = true;
 	}
 	
-	explode() {
+	explode(explosionSpeed) {
 		// Recalculate cluster center from current positions
 		this.clusterCenter.set(0, 0, 0);
 		let count = 0;
@@ -342,8 +339,9 @@ class MORTAR {
 			Balls[i].hasExploded = true;
 			Balls[i].age = 0;
 			Balls[i].brightness = 1.0;
+			//Balls[i].speedMultiplier = 2;
 			//Balls[i].speedMultiplier = 0.7 + Math.random() * 0.6;
-			Balls[i].speedMultiplier = 2.0 + (-0.5 + Math.random()) * 0.2;
+			Balls[i].speedMultiplier = 2.0 + (-0.5 + Math.random()) * 0.1;
 			Balls[i].lifetime = blastSpeed + Math.random() * 2.0;
 			
 			// NOW set to mortar's color for explosion
@@ -605,7 +603,6 @@ function initScene() {
 		ballInstancedMesh.material.dispose();
 	}
 	
-	const ballRadius = 0.02;
 	const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
 	const ballMaterial = new THREE.MeshBasicMaterial({
 			
@@ -649,6 +646,19 @@ function initScene() {
 	nextBallId = 0;
 	Balls = new Array(numBalls); // Pre-allocate array
 	Mortars = [];
+
+	/*const mortarColors = [
+		new THREE.Color(0xff8080), // Red
+		new THREE.Color(0xffbf80), // Orange
+		new THREE.Color(0x80ff80), // Green
+		new THREE.Color(0x80c3ff), // Blue
+		new THREE.Color(0xff80ff), // Magenta
+		new THREE.Color(0xffff80), // Yellow
+		new THREE.Color(0x80ffff), // Cyan
+		new THREE.Color(0xffcccc), // Pink
+		new THREE.Color(0xffffff)  // White
+	];*/
+	
 	
 	const mortarColors = [
 		new THREE.Color(0xff8800), // Orange
@@ -970,13 +980,13 @@ function initThreeScene() {
 				console.log('Helicopter spotlight created and attached');
 			}
 			
-			// Create debug sphere for helicopter cab camera position
-			var debugSphereGeometry = new THREE.SphereGeometry(0.3, 16, 16);
-			var debugSphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: false });
-			helicopterCabCameraDebugSphere = new THREE.Mesh(debugSphereGeometry, debugSphereMaterial);
-			helicopterCabCameraDebugSphere.position.copy(helicopterCabCameraOffset);
-			helicopterCabCameraDebugSphere.visible = false; // Hidden but used for positioning
-			helicopterModelTemplate.add(helicopterCabCameraDebugSphere);
+			// Create ghost 'debug' sphere for helicopter cab camera position
+			var ghostSphereGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+			var ghostSphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: false });
+			helicopterCameraGhostSphere = new THREE.Mesh(ghostSphereGeometry, ghostSphereMaterial);
+			helicopterCameraGhostSphere.position.copy(helicopterCabCameraOffset);
+			helicopterCameraGhostSphere.visible = false; // Hidden but used for positioning
+			helicopterModelTemplate.add(helicopterCameraGhostSphere);
 			
 			gThreeScene.add(helicopterModelTemplate);
 			console.log('helicopter model loaded successfully');
@@ -1002,25 +1012,25 @@ function initThreeScene() {
 			bargeModelTemplate.scale.set(0.4, 0.4, 0.4);
 			bargeModelTemplate.castShadow = true;
 			bargeModelTemplate.receiveShadow = true;
-			 // Set materials to FrontSide only
-			bargeModelTemplate.traverse(function(child) {
-				if (child.isMesh) {
-					child.castShadow = true;
-					child.receiveShadow = true;
-					if (child.material) {
-						if (Array.isArray(child.material)) {
-							child.material.forEach(function(mat) {
-								mat.side = THREE.DoubleSide;
-							});
-						} else {
-							child.material.side = THREE.DoubleSide;
-						}
-						
-					}
+			
+			var bargeMaterial = new THREE.MeshPhongMaterial({
+			color: 0x4d4d4d, // Light gray
+			side: THREE.DoubleSide
+		});
+
+		// Set materials to DoubleSide to prevent shadow issues with thin geometry
+		bargeModelTemplate.traverse(function(child) {
+			if (child.isMesh) {
+				// Don't override material for noSmokingSign - keep its original texture/material
+				if (child.name !== 'noSmokingSign') {
+					child.material = bargeMaterial;
 				}
-				
-				// Add point lights to cabin light objects
-				if (child.name === 'cabinLight1') {
+				child.castShadow = true;
+				child.receiveShadow = true;
+			}
+			
+			// Add point lights to cabin light objects
+			if (child.name === 'cabinLight1') {
 					var cabinLight = new THREE.PointLight(0xffaa44, 1.5, 10); // Warm orange-yellow, intensity 1.5, distance 10
 					//ffaa44
 					cabinLight.castShadow = true;
@@ -2503,8 +2513,8 @@ function update() {
 	} else if (gCameraMode === 3 && helicopterModelTemplate) {
 		// Helicopter cab camera - position camera at right-hand seat viewer position
 		var cabCameraWorldPos = new THREE.Vector3();
-		if (helicopterCabCameraDebugSphere) {
-			helicopterCabCameraDebugSphere.getWorldPosition(cabCameraWorldPos);
+		if (helicopterCameraGhostSphere) {
+			helicopterCameraGhostSphere.getWorldPosition(cabCameraWorldPos);
 			Camera.position.copy(cabCameraWorldPos);
 			
 			// Look toward the firework display (barge at origin)
