@@ -1,4 +1,4 @@
-// Fireworks 3D
+// 3D Fireworks
 // copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com
 
 // "Those who would give up essential Liberty, 
@@ -19,10 +19,9 @@ const worldSizeY = 20;
 const ballRadius = 0.03;
 const particlesPerMortar = 3000; // Particles per mortar
 const sparkPoolSize = 3000; // Extra particles for spark trails
-const numBalls = 75000 + sparkPoolSize; // 25 mortars × 2000 + spark pool
+const numBalls = 75000 + sparkPoolSize; // 25 mortars × 3000 + spark pool
 const mortarRadius = 0.03; // Initial cluster radius for mortar shell particles	
 const mortarAltitude = 0.05; // Start just above ground level
-
 const mortarSpacing = 1.5; // Space between mortar tubes in grid
 const sparkLifetime = 0.30; // Sparks fade very quickly
 const sparksPerFrame = 5; // Number of sparks spawned per mortar per frame
@@ -197,7 +196,7 @@ class MORTAR {
 		if (!this.isReadyToLaunch()) return; // Not ready yet
 		
 		// Randomize launch speed (10.0 to 15.0 m/s)
-		let launchVelocity = 30.0 + Math.random() * 10.0;
+		let launchVelocity = 30.0 + Math.random() * 20.0;
 		
 		// Reset and launch all this mortar's particles
 		for (let i = this.startIndex; i < this.startIndex + this.particleCount; i++) {
@@ -258,9 +257,7 @@ class MORTAR {
 		this.spawnSparks();
 		
 		if (this.flightTime >= this.detonationTime) {
-			//var explosionSpeed = 4.0; // Velocity magnitude 
-			var explosionSpeed = 2 + Math.random() * 4.0;
-			this.explode(explosionSpeed);
+			this.explode();
 			this.hasExploded = true;
 			this.inFlight = false;
 		}
@@ -318,7 +315,7 @@ class MORTAR {
 		ballInstancedMesh.instanceColor.needsUpdate = true;
 	}
 	
-	explode(explosionSpeed) {
+	explode() {
 		// Recalculate cluster center from current positions
 		this.clusterCenter.set(0, 0, 0);
 		let count = 0;
@@ -332,6 +329,8 @@ class MORTAR {
 			this.clusterCenter.divideScalar(count);
 		}
 		let blastSpeed = 1 + Math.random() * 1;
+		//var explosionSpeed = 4.0; // Velocity magnitude 
+		var explosionSpeed = 1 + Math.random() * 5.0;
 		for (let i = this.startIndex; i < this.startIndex + this.particleCount; i++) {
 			if (!Balls[i]) continue;
 			
@@ -356,7 +355,6 @@ class MORTAR {
 				Math.cos(phi),
 				Math.sin(phi) * Math.sin(theta)
 			);
-			
 			dir.normalize();
 			dir.multiplyScalar(explosionSpeed * Balls[i].speedMultiplier);
 			Balls[i].vel.copy(dir);
