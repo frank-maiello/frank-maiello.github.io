@@ -155,11 +155,11 @@
       },
       "children": [
         8,
+        19,
         20,
         21,
         22,
-        23,
-        24
+        23
       ]
     },
     {
@@ -169,50 +169,24 @@
       },
       "children": [
         9,
+        11,
         12,
         13,
         14,
         15,
         16,
         17,
-        18,
-        19
+        18
       ]
     },
     {
       "name": "rotateGimbalZ",
       "children": [
-        10,
-        11
+        10
       ]
     },
     {
       "name": "spotlightBase",
-      "extras": {
-        "name": "breech"
-      },
-      "mesh": 6
-    },
-    {
-      "matrix": [
-        0.1,
-        0,
-        0,
-        0,
-        0,
-        100,
-        0,
-        0,
-        0,
-        0,
-        0.1,
-        0,
-        0,
-        0,
-        1.7206022835347607e-16,
-        1
-      ],
-      "name": "spotlightPointer",
       "extras": {
         "name": "breech"
       },
@@ -2034,6 +2008,11 @@
           "texCoord": 0
         }
       },
+      "emissiveFactor": [
+        0.1878207722902346,
+        0.1878207722902346,
+        0.1878207722902346
+      ],
       "doubleSided": true,
       "name": "Mat_maverick.011_ec1351.bmp",
       "extensions": {
