@@ -120,10 +120,23 @@ var propellerRotationSpeed = 10.0; // Negative rotation speed for x-axis
 
 // Helicopter animation variables
 var helicopterModelTemplate = null;
-var helicopter2ModelTemplate = null;
 var mainRotor = null;
-var mainRotor2 = null;
 var rotorRotationSpeed = 12.0;
+var spotlightBase = null;
+var rotateGimbalY = null;
+var rotateGimbalZ = null;
+var helicopterSpotlight = null;
+var spotlightCone = null;
+var spotlightTarget = new THREE.Vector3(0, 0, 0); // Target position on barge
+var helicopterCabCameraOffset = new THREE.Vector3(0.3, 0.7, -1.8); // Center seat, forward position (local to helicopter)
+var helicopterCabCameraDebugSphere = null;
+var helicopterAngle = Math.PI; // Start opposite to zeppelin (counterclockwise)
+var helicopterSpeed = 0.03; // Slightly faster than zeppelin
+var helicopterOvalRadiusX = 50; // Larger oval than zeppelin
+var helicopterOvalRadiusZ = 120;
+var helicopterHeight = 45; // Higher altitude than zeppelin
+var helicopterCenterX = 0;
+var helicopterCenterZ = 0;
 
 // Mortar Class -------------------------------------------
 class MORTAR {
@@ -743,8 +756,8 @@ function initThreeScene() {
 		
 		// Special material for water objects
 		var waterMaterial = new THREE.MeshStandardMaterial({
-			color: 0x090b14, // #090b14 dark blue
-			roughness: 0.5,
+			color: 0x05060c, // #05060c dark blue
+			roughness: 0.7,
 			side: THREE.FrontSide
 		});
 		
@@ -858,11 +871,13 @@ function initThreeScene() {
 	// LOAD HELICOPTER --------------------------------------
 	var helicopterLoader = new THREE.GLTFLoader();
 	helicopterLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/rescueHelicopter.gltf',
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/searchlightHelicopter.gltf',
 		function(gltf) {
 			helicopterModelTemplate = gltf.scene;
-			helicopterModelTemplate.position.set(20, 40, -30);
-			helicopterModelTemplate.rotation.y = 0.8 * Math.PI; // Rotate to face the fireworks
+			// Initial position will be set by animation loop
+			var x = helicopterCenterX + Math.cos(helicopterAngle) * helicopterOvalRadiusX;
+			var z = helicopterCenterZ + Math.sin(helicopterAngle) * helicopterOvalRadiusZ;
+			helicopterModelTemplate.position.set(x, helicopterHeight, z);
 			helicopterModelTemplate.scale.set(0.5, 0.5, 0.5);
 
 			// Enable shadow casting and receiving on all meshes in the model
@@ -870,6 +885,18 @@ function initThreeScene() {
 				if (child.name === 'mainRotor') {
 					mainRotor = child;
 					console.log('Found mainRotor');
+				}
+				if (child.name === 'spotlightBase') {
+					spotlightBase = child;
+					console.log('Found spotlightBase');
+				}
+				if (child.name === 'rotateGimbalY') {
+					rotateGimbalY = child;
+					console.log('Found rotateGimbalY');
+				}
+				if (child.name === 'rotateGimbalZ') {
+					rotateGimbalZ = child;
+					console.log('Found rotateGimbalZ');
 				}
 				if (child.isMesh) {
 					child.castShadow = true;
@@ -886,26 +913,68 @@ function initThreeScene() {
 					}
 				}
 			});
-
+			
+			// Create and attach spotlight to spotlightBase
+			if (spotlightBase) {
+				helicopterSpotlight = new THREE.SpotLight(0xffffff, 2.0);
+				helicopterSpotlight.angle = Math.PI / 32;
+				helicopterSpotlight.penumbra = 0.2;
+				helicopterSpotlight.distance = 200;
+				helicopterSpotlight.castShadow = true;
+				helicopterSpotlight.shadow.camera.near = 40;
+				helicopterSpotlight.shadow.camera.far = 70;
+				helicopterSpotlight.shadow.camera.fov = 20;
+				helicopterSpotlight.shadow.mapSize.width = 2048;
+				helicopterSpotlight.shadow.mapSize.height = 2048;
+				helicopterSpotlight.shadow.bias = -0.0005;
+				
+				// Attach spotlight to spotlightBase (points downward in local space)
+				spotlightBase.add(helicopterSpotlight);
+				gThreeScene.add(helicopterSpotlight.target);
+				helicopterSpotlight.target.position.copy(spotlightTarget);
+				
+				// Create physical cone to represent the spotlight beam
+				var coneLength = 500; 
+				var coneRadius = Math.tan(helicopterSpotlight.angle) * coneLength;
+				var coneGeometry = new THREE.ConeGeometry(coneRadius, coneLength, 32, 1, true);
+				
+				// Create gradient texture for fade effect
+				var canvas = document.createElement('canvas');
+				canvas.width = 1;
+				canvas.height = 256;
+				var ctx = canvas.getContext('2d');
+				var gradient = ctx.createLinearGradient(0, 0, 0, 256);
+				gradient.addColorStop(0, 'rgba(255, 255, 255, 0.05)'); // More opaque at narrow end
+				gradient.addColorStop(1, 'rgba(255, 255, 255, 0.0)'); // Transparent at wide end
+				ctx.fillStyle = gradient;
+				ctx.fillRect(0, 0, 1, 256);
+				var gradientTexture = new THREE.CanvasTexture(canvas);
+				
+				var coneMaterial = new THREE.MeshBasicMaterial({ 
+					map: gradientTexture,
+					transparent: true,
+					side: THREE.DoubleSide,
+				depthWrite: false,
+				opacity: 1.0
+			});
+			spotlightCone = new THREE.Mesh(coneGeometry, coneMaterial);
+				spotlightCone.position.y = -coneLength / 2;
+				
+				spotlightBase.add(spotlightCone);
+				
+				console.log('Helicopter spotlight created and attached');
+			}
+			
+			// Create debug sphere for helicopter cab camera position
+			var debugSphereGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+			var debugSphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: false });
+			helicopterCabCameraDebugSphere = new THREE.Mesh(debugSphereGeometry, debugSphereMaterial);
+			helicopterCabCameraDebugSphere.position.copy(helicopterCabCameraOffset);
+			helicopterCabCameraDebugSphere.visible = false; // Hidden but used for positioning
+			helicopterModelTemplate.add(helicopterCabCameraDebugSphere);
+			
 			gThreeScene.add(helicopterModelTemplate);
 			console.log('helicopter model loaded successfully');
-			
-			// Create second helicopter (clone)
-			helicopter2ModelTemplate = helicopterModelTemplate.clone();
-			helicopter2ModelTemplate.position.set(30.8, 82, -52.5); // Different position
-			helicopter2ModelTemplate.rotation.y = 0.15 * Math.PI; // Different rotation
-			helicopter2ModelTemplate.scale.set(0.5, 0.5, 0.5);
-			
-			// Find mainRotor on second helicopter
-			helicopter2ModelTemplate.traverse(function(child) {
-				if (child.name === 'mainRotor') {
-					mainRotor2 = child;
-					console.log('Found mainRotor2 on second helicopter');
-				}
-			});
-			
-			gThreeScene.add(helicopter2ModelTemplate);
-			console.log('second helicopter added');
 			
 			updateLoadingProgress();
 		},
@@ -946,7 +1015,7 @@ function initThreeScene() {
 				}
 				
 				// Add point lights to cabin light objects
-				if (child.name === 'cabinLight1' || child.name === 'cabinLight2') {
+				if (child.name === 'cabinLight1') {
 					var cabinLight = new THREE.PointLight(0xffaa44, 1.5, 10); // Warm orange-yellow, intensity 1.5, distance 10
 					//ffaa44
 					cabinLight.castShadow = true;
@@ -1058,48 +1127,8 @@ function initThreeScene() {
 	dirLight.shadow.mapSize.height = 1024;
 	gThreeScene.add( dirLight );
 
-	// spotligt
-	var spotLight = new THREE.SpotLight( 0xffffff, 1.0 ); // Increased intensity
-	spotLight.angle = Math.PI / 16;
-	spotLight.penumbra = 0.1;
-	spotLight.distance = 200;
-	spotLight.position.set(30, 80, -50);
-	spotLight.target.position.set(2, 0, -4); // Point at barge
-	spotLight.castShadow = true;
-	spotLight.shadow.camera.near = 40;
-	spotLight.shadow.camera.far = 70;
-	spotLight.shadow.camera.fov = 20; // Much wider field of view for shadow camera
-	spotLight.shadow.mapSize.width = 2048;
-	spotLight.shadow.mapSize.height = 2048;
-	spotLight.shadow.bias = -0.0005; // Adjusted bias
-	gThreeScene.add( spotLight );
-	gThreeScene.add( spotLight.target );
-	
-	// Visual cone for spotlight
-	var coneHeight = 2;
-	var coneRadius = Math.tan(spotLight.angle) * coneHeight;
-	var coneGeometry = new THREE.ConeGeometry( coneRadius, coneHeight, 32, 1, true );
-	var coneMaterial = new THREE.MeshBasicMaterial({ 
-		color: 0xffffff, 
-		transparent: false,
-		side: THREE.DoubleSide
-	});
-	var coneMesh = new THREE.Mesh( coneGeometry, coneMaterial );
-	coneMesh.position.copy(spotLight.position);
-	
-	// Point cone toward origin (wide end points in light direction)
-	var targetPos = new THREE.Vector3(0, 0, 0);
-	var direction = new THREE.Vector3().subVectors(targetPos, spotLight.position).normalize();
-	// Flip direction so pointed end points back toward light source
-	var up = new THREE.Vector3(0, -1, 0); // Negative Y makes wide end point forward
-	var axis = new THREE.Vector3().crossVectors(up, direction).normalize();
-	var angle = Math.acos(up.dot(direction));
-	coneMesh.quaternion.setFromAxisAngle(axis, angle);
-	
-	// Offset cone so narrow end is at light position
-	coneMesh.translateY(coneHeight / 2);
-	
-	gThreeScene.add( coneMesh );
+	// OLD SPOTLIGHT CODE - Now using helicopter-mounted spotlight with gimbal
+	// The spotlight is created and attached in the helicopter loader above
 
 	// Explosion point light at center of fireworks
 	explosionLight = new THREE.PointLight( 0xffaa66, explosionLightDimIntensity, 200 );
@@ -1123,7 +1152,7 @@ function initThreeScene() {
 	// Create radial gradient from center to edge
 	var gradient = ctx.createRadialGradient(512, 512, 0, 512, 512, 512);
 	//gradient.addColorStop(0, '#282828');  
-	gradient.addColorStop(0, '#262626');  
+	gradient.addColorStop(0, '#1b1a1a');  
 	gradient.addColorStop(1, '#000000');  // Black at edge
 	
 	// Fill canvas with gradient
@@ -1195,11 +1224,11 @@ function initThreeScene() {
 	});
 	
 	// Square base geometry (thin box)
-	var baseSize = 0.3;
-	var baseHeight = 0.08;
-	var baseGeometry = new THREE.BoxGeometry(baseSize, baseHeight, baseSize);
+	var baseSize = 0.2;
+	var baseHeight = 0.10;
+	var baseGeometry = new THREE.CylinderGeometry(baseSize, baseSize, baseHeight, 32, 1, false);
 	var baseMaterial = new THREE.MeshPhongMaterial({
-		color: 0x803500,  // Darker gray/black
+		color: 0x1e283f,  
 	});
 	
 	// Barge deck height and ellipse dimensions (matching MORTAR positions)
@@ -1660,7 +1689,56 @@ function simulate() {
 		if (propellerPort) propellerPort.rotation.x += propellerRotationSpeed * DeltaT;
 		if (propellerStarboard) propellerStarboard.rotation.x += propellerRotationSpeed * DeltaT;
 		if (mainRotor) mainRotor.rotation.z += rotorRotationSpeed * DeltaT;
-		if (mainRotor2) mainRotor2.rotation.z += rotorRotationSpeed * DeltaT;
+		
+		// Animate helicopter flight path even when paused
+		if (helicopterModelTemplate) {
+			helicopterAngle += helicopterSpeed * DeltaT;
+			var x = helicopterCenterX + Math.cos(helicopterAngle) * helicopterOvalRadiusX;
+			var z = helicopterCenterZ + Math.sin(helicopterAngle) * helicopterOvalRadiusZ;
+			helicopterModelTemplate.position.set(x, helicopterHeight, z);
+			
+			// Calculate direction of movement (tangent to oval)
+			var dx = -Math.sin(helicopterAngle) * helicopterOvalRadiusX;
+			var dz = Math.cos(helicopterAngle) * helicopterOvalRadiusZ;
+			
+			// Orient helicopter to face direction of travel
+			var headingAngle = Math.atan2(dx, dz) + Math.PI; // Add 180° to correct orientation
+			helicopterModelTemplate.rotation.y = headingAngle;
+			
+			// Calculate bank angle based on turn rate (derivative of heading)
+			// Positive turn rate = turning left = bank left (negative roll)
+			var turnRate = helicopterSpeed; // Angular velocity
+			var bankAngle = Math.sin(helicopterAngle) * 0.15; // Bank into turns, max ~8.6 degrees
+			helicopterModelTemplate.rotation.z = bankAngle;
+			
+			// Nose-down pitch for forward flight
+			helicopterModelTemplate.rotation.x = -0.1; // ~5.7 degrees nose-down
+		}
+		
+		// Update helicopter spotlight gimbal even when paused
+		if (helicopterSpotlight && rotateGimbalY && rotateGimbalZ && spotlightBase) {
+			helicopterSpotlight.target.position.copy(spotlightTarget);
+			var spotlightWorldPos = new THREE.Vector3();
+			spotlightBase.getWorldPosition(spotlightWorldPos);
+			var toTarget = new THREE.Vector3().subVectors(spotlightTarget, spotlightWorldPos).normalize();
+			
+			// Calculate yaw in rotateGimbalY's parent coordinate space
+			var gimbalYParent = rotateGimbalY.parent;
+			var gimbalYParentInverse = new THREE.Matrix4().copy(gimbalYParent.matrixWorld).invert();
+			var dirInGimbalYParent = toTarget.clone().transformDirection(gimbalYParentInverse).normalize();
+			var yawAngle = Math.atan2(dirInGimbalYParent.x, dirInGimbalYParent.z) + Math.PI / 2;
+			rotateGimbalY.rotation.y = yawAngle;
+			
+			// Update gimbalY's world matrix before calculating pitch
+			rotateGimbalY.updateMatrixWorld(true);
+			
+			// Calculate pitch in rotateGimbalZ's parent coordinate space (which is rotateGimbalY)
+			var gimbalZParentInverse = new THREE.Matrix4().copy(rotateGimbalY.matrixWorld).invert();
+			var dirInGimbalZParent = toTarget.clone().transformDirection(gimbalZParentInverse).normalize();
+			var pitchAngle = Math.atan2(dirInGimbalZParent.x, -dirInGimbalZParent.y);
+			rotateGimbalZ.rotation.z = pitchAngle;
+		}
+		
 		return; // Skip firework physics when paused
 	}
 	
@@ -1753,8 +1831,57 @@ function simulate() {
 	if (mainRotor) {
 		mainRotor.rotation.z += rotorRotationSpeed * DeltaT;
 	}
-	if (mainRotor2) {
-		mainRotor2.rotation.z += rotorRotationSpeed * DeltaT;
+	
+	// Animate helicopter flight path
+	if (helicopterModelTemplate) {
+		helicopterAngle += helicopterSpeed * DeltaT;
+		var x = helicopterCenterX + Math.cos(helicopterAngle) * helicopterOvalRadiusX;
+		var z = helicopterCenterZ + Math.sin(helicopterAngle) * helicopterOvalRadiusZ;
+		helicopterModelTemplate.position.set(x, helicopterHeight, z);
+		
+		// Calculate direction of movement (tangent to oval)
+		var dx = -Math.sin(helicopterAngle) * helicopterOvalRadiusX;
+		var dz = Math.cos(helicopterAngle) * helicopterOvalRadiusZ;
+		
+		// Orient helicopter to face direction of travel
+		var headingAngle = Math.atan2(dx, dz) + Math.PI; // Add 180° to correct orientation
+		helicopterModelTemplate.rotation.y = headingAngle;
+		
+		// Bank into turns based on position on oval
+		var bankAngle = Math.sin(helicopterAngle) * 0.15; // Max ~8.6 degrees
+		helicopterModelTemplate.rotation.z = bankAngle;
+		
+		// Nose-down pitch for forward flight
+		helicopterModelTemplate.rotation.x = -0.1; // ~5.7 degrees nose-down
+	}
+	
+	// Update helicopter spotlight gimbal to aim at target
+	if (helicopterSpotlight && rotateGimbalY && rotateGimbalZ && spotlightBase) {
+		// Update spotlight target position
+		helicopterSpotlight.target.position.copy(spotlightTarget);
+		
+		// Get spotlight base world position
+		var spotlightWorldPos = new THREE.Vector3();
+		spotlightBase.getWorldPosition(spotlightWorldPos);
+		
+		// Calculate direction from spotlight to target in world space
+		var toTarget = new THREE.Vector3().subVectors(spotlightTarget, spotlightWorldPos).normalize();
+		
+		// Calculate yaw in rotateGimbalY's parent coordinate space
+		var gimbalYParent = rotateGimbalY.parent;
+		var gimbalYParentInverse = new THREE.Matrix4().copy(gimbalYParent.matrixWorld).invert();
+		var dirInGimbalYParent = toTarget.clone().transformDirection(gimbalYParentInverse).normalize();
+		var yawAngle = Math.atan2(dirInGimbalYParent.x, dirInGimbalYParent.z) + Math.PI / 2;
+		rotateGimbalY.rotation.y = yawAngle;
+		
+		// Update gimbalY's world matrix before calculating pitch
+		rotateGimbalY.updateMatrixWorld(true);
+		
+		// Calculate pitch in rotateGimbalZ's parent coordinate space (which is rotateGimbalY)
+		var gimbalZParentInverse = new THREE.Matrix4().copy(rotateGimbalY.matrixWorld).invert();
+		var dirInGimbalZParent = toTarget.clone().transformDirection(gimbalZParentInverse).normalize();
+		var pitchAngle = Math.atan2(dirInGimbalZParent.x, -dirInGimbalZParent.y);
+		rotateGimbalZ.rotation.z = pitchAngle;
 	}
 	
 	// Fade explosion light back to dim
@@ -1884,7 +2011,8 @@ function drawMainMenu() {
 	const cameraBackgroundColors = [
 		'hsla(60, 30%, 30%, 0.80)',   // Mode 0: Rotate CW
 		'hsla(80, 30%, 30%, 0.80)',   // Mode 1: Rotate CCW
-		'hsla(100, 30%, 30%, 0.80)'   // Mode 2: Manual
+		'hsla(100, 30%, 30%, 0.80)',  // Mode 2: Manual
+		'hsla(120, 30%, 30%, 0.80)'   // Mode 3: Helicopter Cab
 	];
 	ctx.fillStyle = cameraBackgroundColors[gCameraMode];
 	ctx.fill();
@@ -1985,7 +2113,7 @@ function drawCameraMenu() {
 	const radioButtonSpacing = 0.095 * menuScale; // Increased for more vertical spacing
 	const horizontalKnobSpacing = knobRadius * 2.5; // Increased for more horizontal spacing
 	const menuWidth = knobRadius * 3.7; // Fixed width
-	const radioSectionHeight = 3 * radioButtonSpacing + 0.004 * menuScale; // Adjusted to keep height same
+	const radioSectionHeight = 4 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 4 camera modes
 	const menuHeight = radioSectionHeight + knobRadius * 2.24;
 	
 	// Position menu
@@ -2037,7 +2165,8 @@ function drawCameraMenu() {
 	const cameraModeNames = [
 		'Auto Orbit Cam CCW',
 		'Auto Orbit Cam CW',
-		'Manual Orbit Cam'
+		'Manual Orbit Cam',
+		'Copter Cam'
 	];
 	
 	const radioStartY = 0;
@@ -2149,7 +2278,7 @@ function updateKnobPositions() {
 	const menuScale = cScale; // Use same scale as main menu
 	const knobRadius = 0.1 * menuScale;
 	const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
-	const radioSectionHeight = 3 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu
+	const radioSectionHeight = 4 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu
 	const menuOriginX = cameraMenuX * window.innerWidth;
 	const menuOriginY = cameraMenuY * window.innerHeight;
 	const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
@@ -2247,7 +2376,7 @@ function onMenuClick(evt) {
 		const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
 		const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
 		const menuWidth = knobRadius * 3.7; // Matches drawCameraMenu
-		const radioSectionHeight = 3 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu
+		const radioSectionHeight = 4 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu
 		const menuHeight = radioSectionHeight + knobRadius * 2.24; // Matches drawCameraMenu
 		
 		// Check close button
@@ -2268,7 +2397,7 @@ function onMenuClick(evt) {
 		const radioX = menuOriginX - 0.02 * menuScale;
 		const radioButtonSize = 0.04 * menuScale;
 		
-		for (let i = 0; i < 3; i++) {
+		for (let i = 0; i < 4; i++) {
 			const radioY = menuOriginY + radioStartY + i * radioButtonSpacing;
 			const rdx = evt.clientX - radioX;
 			const rdy = evt.clientY - radioY;
@@ -2366,6 +2495,26 @@ function update() {
 		Camera.position.x = target.x + Math.cos(gCameraAngle) * radius;
 		Camera.position.z = target.z + Math.sin(gCameraAngle) * radius;
 		Camera.lookAt(target);
+	} else if (gCameraMode === 3 && helicopterModelTemplate) {
+		// Helicopter cab camera - position camera at right-hand seat viewer position
+		var cabCameraWorldPos = new THREE.Vector3();
+		if (helicopterCabCameraDebugSphere) {
+			helicopterCabCameraDebugSphere.getWorldPosition(cabCameraWorldPos);
+			Camera.position.copy(cabCameraWorldPos);
+			
+			// Look toward the firework display (barge at origin)
+			var lookTarget = new THREE.Vector3(0, 0, 0);
+			Camera.lookAt(lookTarget);
+		}
+	}
+	
+	// Adjust spotlight cone opacity based on camera mode (very faint in cab view)
+	if (spotlightCone) {
+		if (gCameraMode === 3) {
+			spotlightCone.material.opacity = 0.08; // Very faint in helicopter cab view
+		} else {
+			spotlightCone.material.opacity = 1.0; // Normal visibility in other views
+		}
 	}
 	
 	// Update camera FOV
