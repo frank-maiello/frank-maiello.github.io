@@ -99,9 +99,16 @@ var cameraMenuFadeSpeed = 3.0;
 var simulationMenuVisible = false;
 var simulationMenuOpacity = 0;
 var simulationMenuFadeSpeed = 3.0;
+var instructionsMenuVisible = false;
+var instructionsMenuOpacity = 0;
+var instructionsMenuFadeSpeed = 3.0;
 var submenuX = 0.15; // Shared position for all submenus
 var submenuY = 0.1; // Shared position for all submenus
 var needsMenuRedraw = true; // Flag to optimize canvas clearing
+
+// Instructions image
+var mouseControlsImage = null;
+var mouseControlsImageLoaded = false;
 
 // Knob drag state
 var draggingFOVKnob = false;
@@ -813,6 +820,18 @@ function initScene() {
 	// Set initial random launch time
 	nextLaunchTime = 0;
 	timeSinceLastLaunch = 0;
+	
+	// Load instructions image
+	mouseControlsImage = new Image();
+	mouseControlsImage.onload = function() {
+		mouseControlsImageLoaded = true;
+		needsMenuRedraw = true;
+	};
+	mouseControlsImage.onerror = function() {
+		console.error("Failed to load instructions image");
+		mouseControlsImageLoaded = false;
+	};
+	mouseControlsImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/cameraMouseControls.png';
 
 }
 	
@@ -2307,7 +2326,7 @@ function drawMainMenu() {
 	const itemHeight = 0.12 * menuScale;
 	const itemWidth = 0.15 * menuScale;
 	const padding = 0.02 * menuScale;
-	const menuHeight = itemHeight * 3 + (padding * 4); // Three items: play/pause, camera, and simulation
+	const menuHeight = itemHeight * 4 + (padding * 5); // Four items: play/pause, camera, simulation, and instructions
 	const menuWidth = itemWidth + (padding * 2);
 	
 	const menuBaseY = ellipsisY + 0.08 * menuScale;
@@ -2505,6 +2524,44 @@ function drawMainMenu() {
 	ctx.beginPath();
 	ctx.arc(0, 0, gearRadius3 * 0.3, 0, 2 * Math.PI);
 	ctx.stroke();
+	ctx.restore();
+	
+	// Draw Instructions menu item
+	const itemY4 = itemY3 + itemHeight + padding;
+	ctx.beginPath();
+	ctx.roundRect(itemX, itemY4, itemWidth, itemHeight, cornerRadius * 0.5);
+	ctx.fillStyle = instructionsMenuVisible ? 'rgba(255, 204, 0, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+	ctx.fill();
+	
+	// Draw question mark icon
+	const icon4X = itemX + itemWidth / 2;
+	const icon4Y = itemY4 + 0.42 * itemHeight;
+	const icon4Color = instructionsMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+	ctx.strokeStyle = icon4Color;
+	ctx.fillStyle = icon4Color;
+	ctx.lineWidth = 2.5;
+	ctx.lineCap = 'round';
+	
+	ctx.save();
+	ctx.translate(icon4X, icon4Y);
+	
+	// Draw question mark
+	const qmSize = iconSize;
+	ctx.beginPath();
+	// Top curve of question mark
+	ctx.arc(0, -qmSize * 0.1, qmSize * 0.4, -Math.PI, 0);
+	// line going across
+	ctx.lineTo(qmSize * 0.4, qmSize * 0.2);
+	// Stem going down
+	ctx.lineTo(0, qmSize * 0.2);
+	ctx.lineTo(0, qmSize * 0.4);
+	ctx.stroke();
+	
+	// Dot at bottom
+	ctx.beginPath();
+	ctx.arc(0, qmSize * 0.6, qmSize * 0.08, 0, 2 * Math.PI);
+	ctx.fill();
+	
 	ctx.restore();
 	
 	ctx.restore();
@@ -2836,6 +2893,97 @@ function drawSimulationMenu() {
 	ctx.restore();
 }
 
+function drawInstructionsMenu() {
+	if (instructionsMenuOpacity <= 0) return;
+	
+	const ctx = gOverlayCtx;
+	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+	const menuScale = cScale;
+	const knobRadius = 0.1 * menuScale;
+	const padding = 0.17 * menuScale;
+	
+	// Use same fixed width as camera and simulation menus
+	const menuWidth = knobRadius * 3;
+	
+	// Menu height stays fixed
+	let menuHeight = menuWidth;
+	let imageWidth = menuWidth;
+	let imageHeight = menuWidth;
+	let imageX = 0;
+	let imageY = 0;
+	
+	if (mouseControlsImageLoaded && mouseControlsImage) {
+		const imgAspect = mouseControlsImage.width / mouseControlsImage.height;
+		imageWidth = menuWidth * 1.6;
+		imageHeight = imageWidth / imgAspect;
+		// Calculate original menu height
+		const originalMenuHeight = menuWidth / imgAspect;
+		// Center image horizontally, position down a bit vertically based on original height
+		imageX = (menuWidth - imageWidth) / 2;
+		imageY = (originalMenuHeight - imageHeight) / 2 + 0.1 * menuScale;
+		// Make menu taller than the calculated height
+		menuHeight = originalMenuHeight + 0.15 * menuScale;
+	}
+	
+	// Position menu (shared position with all submenus)
+	const menuOriginX = submenuX * window.innerWidth;
+	const menuOriginY = submenuY * window.innerHeight;
+	
+	ctx.save();
+	ctx.translate(menuOriginX, menuOriginY);
+	ctx.globalAlpha = instructionsMenuOpacity;
+	
+	// Draw menu background
+	const cornerRadius = 8;
+	ctx.beginPath();
+	ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+	const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+	menuGradient.addColorStop(0, 'rgba(70, 60, 40, 0.95)');
+	menuGradient.addColorStop(1, 'rgba(40, 30, 20, 0.95)');
+	ctx.fillStyle = menuGradient;
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(180, 140, 100, 0.9)';
+	ctx.lineWidth = 1.5;
+	ctx.stroke();
+	
+	// Draw title
+	ctx.fillStyle = 'rgba(220, 210, 180, 1.0)';
+	ctx.font = `bold ${0.05 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.fillText('MOUSE', menuWidth / 2, -padding + 0.06 * menuScale);
+	
+	// Draw close button
+	const closeIconRadius = 0.1 * menuScale * 0.25;
+	const closeIconX = -padding + closeIconRadius + 0.02 * menuScale;
+	const closeIconY = -padding + closeIconRadius + 0.02 * menuScale;
+	ctx.beginPath();
+	ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+	ctx.fillStyle = 'rgba(180, 40, 40, 1.0)';
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
+	ctx.lineWidth = 2;
+	const xSize = closeIconRadius * 0.4;
+	ctx.beginPath();
+	ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+	ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+	ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+	ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+	ctx.stroke();
+	
+	// Draw image or loading message
+	if (mouseControlsImageLoaded && mouseControlsImage) {
+		ctx.drawImage(mouseControlsImage, imageX, imageY, imageWidth, imageHeight);
+	} else {
+		ctx.fillStyle = 'rgba(200, 190, 170, 1.0)';
+		ctx.font = `${0.04 * menuScale}px verdana`;
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.fillText('Loading instructions...', menuWidth / 2, menuHeight / 2);
+	}
+	
+	ctx.restore();
+}
+
 function updateSimulationKnobPositions() {
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
 	const menuScale = cScale;
@@ -2883,7 +3031,7 @@ function drawMenus() {
 	if (!gOverlayCtx) return;
 	
 	// Always clear and redraw if menus are visible or animating
-	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0) || (simulationMenuOpacity > 0);
+	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0) || (simulationMenuOpacity > 0) || (instructionsMenuOpacity > 0);
 	if (!needsMenuRedraw && !isAnimating) return;
 	
 	// Clear overlay
@@ -2893,6 +3041,7 @@ function drawMenus() {
 	drawMainMenu();
 	drawCameraMenu();
 	drawSimulationMenu();
+	drawInstructionsMenu();
 	
 	needsMenuRedraw = false;
 }
@@ -2907,6 +3056,7 @@ function onMenuClick(evt) {
 		if (!mainMenuVisible) {
 			cameraMenuVisible = false;
 			simulationMenuVisible = false;
+			instructionsMenuVisible = false;
 		}
 		needsMenuRedraw = true;
 		evt.stopPropagation();
@@ -2949,6 +3099,7 @@ function onMenuClick(evt) {
 			// Close other submenus
 			if (cameraMenuVisible) {
 				simulationMenuVisible = false;
+				instructionsMenuVisible = false;
 			}
 			needsMenuRedraw = true;
 			evt.stopPropagation();
@@ -2963,6 +3114,22 @@ function onMenuClick(evt) {
 			// Close other submenus
 			if (simulationMenuVisible) {
 				cameraMenuVisible = false;
+				instructionsMenuVisible = false;
+			}
+			needsMenuRedraw = true;
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+		
+		// Check Instructions button
+		const itemY4 = itemY3 + itemHeight + padding;
+		if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+			evt.clientY >= itemY4 && evt.clientY <= itemY4 + itemHeight) {
+			instructionsMenuVisible = !instructionsMenuVisible;
+			// Close other submenus
+			if (instructionsMenuVisible) {
+				cameraMenuVisible = false;
+				simulationMenuVisible = false;
 			}
 			needsMenuRedraw = true;
 			evt.stopPropagation();
@@ -3165,6 +3332,28 @@ function onMenuClick(evt) {
 		}
 	}
 	
+	// Check instructions menu clicks
+	if (instructionsMenuVisible && instructionsMenuOpacity > 0.5) {
+		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+		const menuScale = cScale;
+		const padding = 0.17 * menuScale;
+		const menuOriginX = submenuX * window.innerWidth;
+		const menuOriginY = submenuY * window.innerHeight;
+		
+		// Check close button
+		const closeIconRadius = 0.1 * menuScale * 0.25;
+		const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
+		const closeIconY = menuOriginY - padding + closeIconRadius + 0.02 * menuScale;
+		const cdx = evt.clientX - closeIconX;
+		const cdy = evt.clientY - closeIconY;
+		if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius * 2.0) {
+			instructionsMenuVisible = false;
+			needsMenuRedraw = true;
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+	}
+	
 	return false; // Click not on any menu element
 }
 
@@ -3319,6 +3508,16 @@ function update() {
 		const oldOpacity = simulationMenuOpacity;
 		simulationMenuOpacity = Math.max(0, simulationMenuOpacity - simulationMenuFadeSpeed * DeltaT);
 		if (oldOpacity !== simulationMenuOpacity) needsMenuRedraw = true;
+	}
+	
+	if (instructionsMenuVisible) {
+		const oldOpacity = instructionsMenuOpacity;
+		instructionsMenuOpacity = Math.min(0.9, instructionsMenuOpacity + instructionsMenuFadeSpeed * DeltaT);
+		if (oldOpacity !== instructionsMenuOpacity) needsMenuRedraw = true;
+	} else {
+		const oldOpacity = instructionsMenuOpacity;
+		instructionsMenuOpacity = Math.max(0, instructionsMenuOpacity - instructionsMenuFadeSpeed * DeltaT);
+		if (oldOpacity !== instructionsMenuOpacity) needsMenuRedraw = true;
 	}
 	
 	simulate();
