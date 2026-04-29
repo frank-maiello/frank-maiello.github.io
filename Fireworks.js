@@ -15,7 +15,7 @@ var Gravity = -1.7; // Controllable gravity strength
 const worldRadius = 200; // Circular boundary radius
 const worldSizeY = 20;
 
-const ballRadius = 0.03;
+var ballRadius = 0.03;
 const particlesPerMortar = 3000; // Particles per mortar
 const sparkPoolSize = 3000; // Extra particles for spark trails
 const numBalls = 75000 + sparkPoolSize; // 25 mortars × 3000 + spark pool
@@ -25,7 +25,7 @@ var maxExplosionSize = 5.0; // Base velocity magnitude for explosion particles (
 const explosionUniformity = 0.3; // Higher values = more random explosion patterns, lower values = more uniform spheres
 var minLaunchVelocity = 30.0; // Controllable launch velocity
 const lauchVelocityRange = 20.0;
-var mortarTubeAngle = 0.0; // Angle in degrees for mortar tube tilt away from center (0-45)
+var mortarTubeAngle = 10.0; // Angle in degrees for mortar tube tilt away from center (0-45)
 const mortarSpacing = 1.5; // Space between mortar tubes in grid
 const sparkLifetime = 0.30; // Sparks fade very quickly
 const sparksPerFrame = 5; // Number of sparks spawned per mortar per frame
@@ -70,6 +70,9 @@ var gCameraFOV = 57;
 var gRunning = false; // Simulation running state - starts paused
 var startupTimer = 3.0; // Start paused for 3 seconds
 
+// Ball material variables
+var gBallMaterialMode = 0; // 0=Basic, 1=Plastic, 2=Metallic, 3=Normal
+
 // Loading screen variables
 var loadingScreen = null;
 var loadingProgress = 0;
@@ -107,11 +110,13 @@ var draggingExplosionSizeKnob = false;
 var draggingLaunchVelocityKnob = false;
 var draggingMortarAngleKnob = false;
 var draggingGravityKnob = false;
+var draggingBallRadiusKnob = false;
 var fovKnobInfo = { x: 0, y: 0, radius: 0 };
 var explosionSizeKnobInfo = { x: 0, y: 0, radius: 0 };
 var launchVelocityKnobInfo = { x: 0, y: 0, radius: 0 };
 var mortarAngleKnobInfo = { x: 0, y: 0, radius: 0 };
 var gravityKnobInfo = { x: 0, y: 0, radius: 0 };
+var ballRadiusKnobInfo = { x: 0, y: 0, radius: 0 };
 var orbitSpeedKnobInfo = { x: 0, y: 0, radius: 0 };
 var dragStartMouseX = 0;
 var dragStartMouseY = 0;
@@ -155,9 +160,9 @@ var helicopterCabCameraOffset = new THREE.Vector3(0.3, 0.7, -1.8); // Center sea
 var helicopterCameraGhostSphere = null;
 var helicopterAngle = Math.PI; // Start opposite to zeppelin (counterclockwise)
 var helicopterSpeed = 0.03; // Slightly faster than zeppelin
-var helicopterOvalRadiusX = 50; // Larger oval than zeppelin
+var helicopterOvalRadiusX = 47; // Larger oval than zeppelin
 var helicopterOvalRadiusZ = 120;
-var helicopterHeight = 45; // Higher altitude than zeppelin
+var helicopterHeight = 50; // Higher altitude than zeppelin
 var helicopterCenterX = 0;
 var helicopterCenterZ = 0;
 var helicopterInteriorMeshes = []; // Store all helicopter mesh references for darkening
@@ -655,10 +660,35 @@ function initScene() {
 	}
 	
 	const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
-	const ballMaterial = new THREE.MeshBasicMaterial({
-			
+	
+	// Material type for balls (based on gBallMaterialMode)
+	var ballMaterial;
+	if (gBallMaterialMode === 0) {
+		// Basic
+		ballMaterial = new THREE.MeshBasicMaterial({
 			side: THREE.FrontSide
-	});
+		});
+	} else if (gBallMaterialMode === 1) {
+		// Plastic
+		ballMaterial = new THREE.MeshPhongMaterial({
+			roughness: 0.5,
+			metalness: 0.0,
+			side: THREE.FrontSide
+		});
+	} else if (gBallMaterialMode === 2) {
+		// Metallic
+		ballMaterial = new THREE.MeshStandardMaterial({
+			roughness: 0.5,
+			metalness: 0.5,
+			side: THREE.FrontSide
+		});
+	} else if (gBallMaterialMode === 3) {
+		// Normal
+		ballMaterial = new THREE.MeshNormalMaterial({
+			side: THREE.FrontSide
+		});
+	}
+
 	ballInstancedMesh = new THREE.InstancedMesh(ballGeometry, ballMaterial, numBalls);
 	ballInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 	
@@ -786,6 +816,97 @@ function initScene() {
 
 }
 	
+// ------------------------------------------
+// Update ball geometry when radius changes
+function updateBallGeometry() {
+	if (!ballInstancedMesh || !gThreeScene) return;
+	
+	// Store current instance matrix and colors
+	const oldMatrix = ballInstancedMesh.instanceMatrix.clone();
+	const oldColor = ballInstancedMesh.instanceColor ? ballInstancedMesh.instanceColor.clone() : null;
+	
+	// Remove old mesh
+	gThreeScene.remove(ballInstancedMesh);
+	ballInstancedMesh.geometry.dispose();
+	
+	// Create new geometry with updated radius
+	const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
+	
+	// Reuse the same material
+	const ballMaterial = ballInstancedMesh.material;
+	
+	// Create new instanced mesh
+	ballInstancedMesh = new THREE.InstancedMesh(ballGeometry, ballMaterial, numBalls);
+	ballInstancedMesh.instanceMatrix = oldMatrix;
+	ballInstancedMesh.instanceMatrix.needsUpdate = true;
+	
+	// Restore instance colors
+	if (oldColor) {
+		ballInstancedMesh.instanceColor = oldColor;
+		ballInstancedMesh.instanceColor.needsUpdate = true;
+	}
+	
+	gThreeScene.add(ballInstancedMesh);
+}
+
+// ------------------------------------------
+// Change ball material
+function changeBallMaterial(materialMode) {
+	if (!ballInstancedMesh || !gThreeScene) return;
+	
+	// Store current instance matrix and colors
+	const oldMatrix = ballInstancedMesh.instanceMatrix.clone();
+	const oldColor = ballInstancedMesh.instanceColor ? ballInstancedMesh.instanceColor.clone() : null;
+	const oldGeometry = ballInstancedMesh.geometry;
+	
+	// Dispose old material
+	ballInstancedMesh.material.dispose();
+	
+	// Create new material based on mode
+	let ballMaterial;
+	if (materialMode === 0) {
+		// Basic
+		ballMaterial = new THREE.MeshBasicMaterial({
+			side: THREE.FrontSide
+		});
+	} else if (materialMode === 1) {
+		// Plastic
+		ballMaterial = new THREE.MeshPhongMaterial({
+			roughness: 0.5,
+			metalness: 0.0,
+			side: THREE.FrontSide
+		});
+	} else if (materialMode === 2) {
+		// Metallic
+		ballMaterial = new THREE.MeshStandardMaterial({
+			roughness: 0.5,
+			metalness: 0.5,
+			side: THREE.FrontSide
+		});
+	} else if (materialMode === 3) {
+		// Normal
+		ballMaterial = new THREE.MeshNormalMaterial({
+			side: THREE.FrontSide
+		});
+	}
+	
+	// Remove old mesh
+	gThreeScene.remove(ballInstancedMesh);
+	
+	// Create new instanced mesh with new material
+	ballInstancedMesh = new THREE.InstancedMesh(oldGeometry, ballMaterial, numBalls);
+	ballInstancedMesh.instanceMatrix = oldMatrix;
+	ballInstancedMesh.instanceMatrix.needsUpdate = true;
+	
+	// Restore instance colors (not used by Normal material, but keep for others)
+	if (oldColor) {
+		ballInstancedMesh.instanceColor = oldColor;
+		ballInstancedMesh.instanceColor.needsUpdate = true;
+	}
+	
+	gThreeScene.add(ballInstancedMesh);
+}
+
 // ------------------------------------------
 function initThreeScene() {
 	gThreeScene = new THREE.Scene();
@@ -1753,7 +1874,7 @@ function onPointer( evt ) {
 			CameraControl.enabled = false;
 		}
 	}
-	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob)) {
+	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob || draggingBallRadiusKnob)) {
 		// Handle knob dragging with linear drag method (like boids3D.js)
 		if (draggingFOVKnob) {
 			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
@@ -1851,6 +1972,23 @@ function onPointer( evt ) {
 			return;
 		}
 		
+		if (draggingBallRadiusKnob) {
+			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+			const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+			const dragDelta = deltaX + deltaY;
+			
+			const dragSensitivity = 0.1;
+			const normalizedDelta = dragDelta / dragSensitivity;
+			const rangeSize = 0.10 - 0.01;
+			let newValue = dragStartValue + normalizedDelta * rangeSize;
+			newValue = Math.max(0.01, Math.min(0.10, newValue));
+			
+			ballRadius = newValue;
+			updateBallGeometry(); // Update the visual geometry
+			needsMenuRedraw = true;
+			return;
+		}
+		
 		gGrabber.move(evt.clientX, evt.clientY);
 	}
 	else if (evt.type == "pointerup") {
@@ -1860,6 +1998,7 @@ function onPointer( evt ) {
 		draggingLaunchVelocityKnob = false;
 		draggingMortarAngleKnob = false;
 		draggingGravityKnob = false;
+		draggingBallRadiusKnob = false;
 		
 		if (gGrabber.physicsObject) {
 			gGrabber.end();
@@ -2535,6 +2674,8 @@ function drawKnob(ctx, x, y, radius, value, min, max, reversed, label, hue) {
 		ctx.fillText(focalLength.toFixed(0) + 'mm', x, y + 0.6 * radius);
 	} else if (label === 'Tube Angle') {
 		ctx.fillText(value.toFixed(1) + '°', x, y + 0.6 * radius);
+	} else if (label === 'Particle Size') {
+		ctx.fillText(value.toFixed(2), x, y + 0.6 * radius);
 	} else {
 		ctx.fillText(value.toFixed(1), x, y + 0.6 * radius);
 	}
@@ -2553,10 +2694,17 @@ function drawSimulationMenu() {
 	const menuScale = cScale;
 	const knobRadius = 0.1 * menuScale;
 	const padding = 0.17 * menuScale;
+	const radioButtonSize = 0.04 * menuScale;
+	const radioButtonSpacing = 0.095 * menuScale;
 	const horizontalKnobSpacing = knobRadius * 2.5;
 	const verticalKnobSpacing = knobRadius * 2.8;
 	const menuWidth = knobRadius * 3;
-	const menuHeight = verticalKnobSpacing * 1 + knobRadius * 1.2; // Two rows of knobs
+	// Calculate menu height: knobs section + spacing + radio buttons section
+	const knobY1 = knobRadius * 0.8;
+	const knobY3 = knobY1 + 2 * verticalKnobSpacing;
+	const radioStartY = knobY3 + knobRadius * 3.0;
+	const radioSectionHeight = 2.0 * radioButtonSpacing;
+	const menuHeight = radioStartY + radioSectionHeight;
 	
 	// Position menu (shared position with all submenus)
 	const menuOriginX = submenuX * window.innerWidth;
@@ -2603,28 +2751,84 @@ function drawSimulationMenu() {
 	ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
 	ctx.stroke();
 	
-	// Draw three knobs
+	// Draw five knobs (at top)
 	// Row 1: Explosion Size and Launch Velocity (side by side)
 	const explosionKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
 	const launchVelocityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
-	const knobY1 = knobRadius * 0.8;
+	// knobY1 already declared above for menu height calculation
 	
 	// Row 2: Mortar Angle and Gravity (side by side)
 	const mortarAngleKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
 	const gravityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
 	const knobY2 = knobY1 + verticalKnobSpacing;
 	
+	// Row 3: Ball Radius (centered)
+	const ballRadiusKnobX = menuWidth / 2;
+	// knobY3 already declared above for menu height calculation
+	
 	// Explosion Size Knob
-	drawKnob(ctx, explosionKnobX, knobY1, knobRadius, maxExplosionSize, 1.0, 15.0, false, 'Max Size', 30);
+	drawKnob(ctx, explosionKnobX, knobY1, knobRadius, maxExplosionSize, 1.0, 15.0, false, 'Max Blast', 30);
 	
 	// Launch Velocity Knob
-	drawKnob(ctx, launchVelocityKnobX, knobY1, knobRadius, minLaunchVelocity, 15.0, 60.0, false, 'Launch Speed', 120);
+	drawKnob(ctx, launchVelocityKnobX, knobY1, knobRadius, minLaunchVelocity, 15.0, 60.0, false, 'Mortar Vel', 120);
 	
 	// Mortar Angle Knob
 	drawKnob(ctx, mortarAngleKnobX, knobY2, knobRadius, mortarTubeAngle, 0.0, 45.0, false, 'Spread', 180);
 	
 	// Gravity Knob
 	drawKnob(ctx, gravityKnobX, knobY2, knobRadius, Math.abs(Gravity), 0.5, 5.0, false, 'Gravity', 280);
+	
+	// Ball Radius Knob
+	drawKnob(ctx, ballRadiusKnobX, knobY3, knobRadius, ballRadius, 0.01, 0.10, false, 'Particle Size', 90);
+	
+	// Draw radio buttons for ball material (at bottom)
+	const materialModeNames = [
+		'Basic',
+		'Plastic',
+		'Metallic',
+		'Normal'
+	];
+	
+	// Position radio buttons below the third knob with its label
+	// radioStartY already declared above for menu height calculation
+	
+	// Draw "Material" heading
+	ctx.fillStyle = 'rgba(200, 210, 200, 1.0)';
+	ctx.font = `bold ${0.042 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.fillText('Material', menuWidth / 2, radioStartY - radioButtonSpacing * 0.9);
+	
+	for (let i = 0; i < materialModeNames.length; i++) {
+		const radioY = radioStartY + i * radioButtonSpacing;
+		const radioX = 0.065 * menuScale;
+		
+		// Draw radio button circle
+		ctx.beginPath();
+		ctx.arc(radioX, radioY, radioButtonSize, 0, 2 * Math.PI);
+		ctx.strokeStyle = 'rgba(150, 150, 160, 1.0)';
+		ctx.fillStyle = 'rgba(40, 40, 50, 0.8)';
+		ctx.lineWidth = 2;
+		ctx.stroke();
+		ctx.fill();
+		
+		// Fill if selected
+		if (gBallMaterialMode === i) {
+			ctx.beginPath();
+			ctx.arc(radioX, radioY, radioButtonSize * 0.6, 0, 2 * Math.PI);
+			ctx.fillStyle = 'rgba(130, 140, 200, 1.0)';
+			ctx.fill();
+		}
+		
+		// Draw label
+		ctx.font = `${0.037 * menuScale}px verdana`;
+		ctx.textAlign = 'left';
+		ctx.textBaseline = 'middle';
+		ctx.fillStyle = 'rgba(10, 10, 10, 1.0)';
+		ctx.fillText(materialModeNames[i], radioX + radioButtonSize + 0.03 * menuScale + 1, 1 + radioY);
+		ctx.fillStyle = `rgba(${gBallMaterialMode === i ? 240 : 200}, ${gBallMaterialMode === i ? 240 : 200}, ${gBallMaterialMode === i ? 240 : 240}, 1.0)`;
+		ctx.fillText(materialModeNames[i], radioX + radioButtonSize + 0.03 * menuScale, radioY);
+	}
 	
 	// Update knob positions for mouse interaction
 	updateSimulationKnobPositions();
@@ -2645,13 +2849,16 @@ function updateSimulationKnobPositions() {
 	const launchVelocityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
 	const mortarAngleKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
 	const gravityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+	const ballRadiusKnobX = menuWidth / 2;
 	const knobY1 = knobRadius * 0.8;
 	const knobY2 = knobY1 + verticalKnobSpacing;
+	const knobY3 = knobY2 + verticalKnobSpacing;
 	
 	explosionSizeKnobInfo = { x: menuOriginX + explosionKnobX, y: menuOriginY + knobY1, radius: knobRadius };
 	launchVelocityKnobInfo = { x: menuOriginX + launchVelocityKnobX, y: menuOriginY + knobY1, radius: knobRadius };
 	mortarAngleKnobInfo = { x: menuOriginX + mortarAngleKnobX, y: menuOriginY + knobY2, radius: knobRadius };
 	gravityKnobInfo = { x: menuOriginX + gravityKnobX, y: menuOriginY + knobY2, radius: knobRadius };
+	ballRadiusKnobInfo = { x: menuOriginX + ballRadiusKnobX, y: menuOriginY + knobY3, radius: knobRadius };
 }
 
 function updateKnobPositions() {
@@ -2874,6 +3081,29 @@ function onMenuClick(evt) {
 			return true; // Menu click handled
 		}
 		
+		// Check radio buttons for ball material (at bottom)
+		const radioButtonSize = 0.04 * menuScale;
+		const radioButtonSpacing = 0.095 * menuScale;
+		// verticalKnobSpacing already declared above
+		const knobY1 = knobRadius * 0.8;
+		const knobY2 = knobY1 + verticalKnobSpacing;
+		const knobY3 = knobY2 + verticalKnobSpacing;
+		const radioStartY = knobY3 + knobRadius * 3.0;
+		const radioX = menuOriginX + 0.065 * menuScale;
+		
+		for (let i = 0; i < 4; i++) {
+			const radioY = menuOriginY + radioStartY + i * radioButtonSpacing;
+			const rdx = evt.clientX - radioX;
+			const rdy = evt.clientY - radioY;
+			if (rdx * rdx + rdy * rdy < (radioButtonSize * 2) * (radioButtonSize * 2)) {
+				gBallMaterialMode = i;
+				changeBallMaterial(i);
+				needsMenuRedraw = true;
+				evt.stopPropagation();
+				return true; // Menu click handled
+			}
+		}
+		
 		// Check if clicking on explosion size knob
 		const explosionDx = evt.clientX - explosionSizeKnobInfo.x;
 		const explosionDy = evt.clientY - explosionSizeKnobInfo.y;
@@ -2918,6 +3148,18 @@ function onMenuClick(evt) {
 			dragStartMouseX = evt.clientX;
 			dragStartMouseY = evt.clientY;
 			dragStartValue = Math.abs(Gravity);
+			if (CameraControl) CameraControl.enabled = false;
+			return true; // Knob click handled
+		}
+		
+		// Check if clicking on ball radius knob
+		const ballRadiusDx = evt.clientX - ballRadiusKnobInfo.x;
+		const ballRadiusDy = evt.clientY - ballRadiusKnobInfo.y;
+		if (ballRadiusDx * ballRadiusDx + ballRadiusDy * ballRadiusDy < ballRadiusKnobInfo.radius * ballRadiusKnobInfo.radius * 1.2) {
+			draggingBallRadiusKnob = true;
+			dragStartMouseX = evt.clientX;
+			dragStartMouseY = evt.clientY;
+			dragStartValue = ballRadius;
 			if (CameraControl) CameraControl.enabled = false;
 			return true; // Knob click handled
 		}
