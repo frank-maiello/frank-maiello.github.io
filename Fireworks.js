@@ -1,4 +1,4 @@
-// 3D Fireworks
+// Fireworks on the Hudson 
 // copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com
 
 // "Those who would give up essential Liberty, 
@@ -9,10 +9,9 @@
 // Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-// Blank 3D Space -------------------------------------------
 
 const DeltaT = 1.0 / 60.0;
-const Gravity = -1.7;
+var Gravity = -1.7; // Controllable gravity strength
 const worldRadius = 200; // Circular boundary radius
 const worldSizeY = 20;
 
@@ -21,7 +20,12 @@ const particlesPerMortar = 3000; // Particles per mortar
 const sparkPoolSize = 3000; // Extra particles for spark trails
 const numBalls = 75000 + sparkPoolSize; // 25 mortars × 3000 + spark pool
 const mortarRadius = 0.03; // Initial cluster radius for mortar shell particles	
-const mortarAltitude = 0.05; // Start just above ground level
+const mortarAltitude = 1.5; // Start just above ground level
+var maxExplosionSize = 5.0; // Base velocity magnitude for explosion particles (controllable)
+const explosionUniformity = 0.3; // Higher values = more random explosion patterns, lower values = more uniform spheres
+var minLaunchVelocity = 30.0; // Controllable launch velocity
+const lauchVelocityRange = 20.0;
+var mortarTubeAngle = 0.0; // Angle in degrees for mortar tube tilt away from center (0-45)
 const mortarSpacing = 1.5; // Space between mortar tubes in grid
 const sparkLifetime = 0.30; // Sparks fade very quickly
 const sparksPerFrame = 5; // Number of sparks spawned per mortar per frame
@@ -45,6 +49,8 @@ var stats;
 // Tube flash system
 var tubeMaterials = []; // Array of inner tube materials for each mortar
 var tubeFlashTimers = []; // Array of flash timers (0 = no flash, > 0 = flashing)
+var tubeGroups = []; // Array of THREE.Group objects for each mortar tube
+var tubePositions = []; // Array of {x, z} positions for each tube (for calculating tilt direction)
 var tubeFlashDuration = 0.25; // Duration of tube flash in seconds
 var tubeNormalColor = 0x1a1a1a; // Dark interior color
 var tubeFlashColor = 0xffffff; // White flash color
@@ -59,7 +65,7 @@ var explosionLightFadeSpeed = 20.0; // How fast it fades back to dim
 // Camera control variables
 var gCameraMode = 2; // 0=Auto Orbit CW, 1=Auto Orbit CCW, 2=Manual Orbit
 var gCameraAngle = 0;
-var gCameraRotationSpeed = 3.0;
+var gCameraRotationSpeed = 1.0;
 var gCameraFOV = 57;
 var gRunning = false; // Simulation running state - starts paused
 var startupTimer = 3.0; // Start paused for 3 seconds
@@ -87,14 +93,25 @@ var mainMenuAnimSpeed = 4.0;
 var cameraMenuVisible = false;
 var cameraMenuOpacity = 0;
 var cameraMenuFadeSpeed = 3.0;
-var cameraMenuX = 0.15;
-var cameraMenuY = 0.1;
+var simulationMenuVisible = false;
+var simulationMenuOpacity = 0;
+var simulationMenuFadeSpeed = 3.0;
+var submenuX = 0.15; // Shared position for all submenus
+var submenuY = 0.1; // Shared position for all submenus
 var needsMenuRedraw = true; // Flag to optimize canvas clearing
 
 // Knob drag state
 var draggingFOVKnob = false;
 var draggingOrbitSpeedKnob = false;
+var draggingExplosionSizeKnob = false;
+var draggingLaunchVelocityKnob = false;
+var draggingMortarAngleKnob = false;
+var draggingGravityKnob = false;
 var fovKnobInfo = { x: 0, y: 0, radius: 0 };
+var explosionSizeKnobInfo = { x: 0, y: 0, radius: 0 };
+var launchVelocityKnobInfo = { x: 0, y: 0, radius: 0 };
+var mortarAngleKnobInfo = { x: 0, y: 0, radius: 0 };
+var gravityKnobInfo = { x: 0, y: 0, radius: 0 };
 var orbitSpeedKnobInfo = { x: 0, y: 0, radius: 0 };
 var dragStartMouseX = 0;
 var dragStartMouseY = 0;
@@ -115,11 +132,11 @@ var zeppelinModelTemplate = null;
 var propellerPort = null;
 var propellerStarboard = null;
 var zeppelinLight = null;
-var zeppelinAngle = 0; // Current angle on oval path
+var zeppelinAngle = 1.7 * Math.PI; // Current angle on oval path
 var zeppelinSpeed = 0.01; // Radians per second
 var ovalRadiusX = 30; // Horizontal radius of oval
 var ovalRadiusZ = 70; // Depth radius of oval
-var zeppelinHeight = 20; // Flight altitude
+var zeppelinHeight = 24; // Flight altitude
 var zeppelinCenterX = 0; // Center of oval path (fireworks launch point)
 var zeppelinCenterZ = 0; // Center of oval path
 var propellerRotationSpeed = 10.0; // Negative rotation speed for x-axis
@@ -143,6 +160,9 @@ var helicopterOvalRadiusZ = 120;
 var helicopterHeight = 45; // Higher altitude than zeppelin
 var helicopterCenterX = 0;
 var helicopterCenterZ = 0;
+var helicopterInteriorMeshes = []; // Store all helicopter mesh references for darkening
+var helicopterInteriorOriginalMaterials = []; // Store original materials for restoration
+var helicopterCabinLight = null; // Red point light for cabin
 
 // Mortar Class -------------------------------------------
 class MORTAR {
@@ -196,7 +216,37 @@ class MORTAR {
 		if (!this.isReadyToLaunch()) return; // Not ready yet
 		
 		// Randomize launch speed (10.0 to 15.0 m/s)
-		let launchVelocity = 30.0 + Math.random() * 20.0;
+		let launchVelocity = minLaunchVelocity + Math.random() * lauchVelocityRange;
+		
+		// Calculate launch direction based on mortar tube angle
+		// Base direction is straight up (0, 1, 0)
+		// Tilt away from center based on mortarTubeAngle
+		let launchDir = new THREE.Vector3(0, 1, 0);
+		
+		if (mortarTubeAngle > 0) {
+			// Calculate direction from center to this mortar's position
+			let fromCenter = new THREE.Vector2(this.position.x, this.position.z);
+			let distFromCenter = fromCenter.length();
+			
+			if (distFromCenter > 0.01) { // Only tilt if not at center
+				fromCenter.normalize();
+				
+				// Convert angle from degrees to radians
+				let angleRad = mortarTubeAngle * Math.PI / 180.0;
+				
+				// Calculate horizontal component (away from center)
+				let horizontalComponent = Math.sin(angleRad);
+				let verticalComponent = Math.cos(angleRad);
+				
+				// Set launch direction: tilted away from center
+				launchDir.set(
+					fromCenter.x * horizontalComponent,
+					verticalComponent,
+					fromCenter.y * horizontalComponent
+				);
+				launchDir.normalize();
+			}
+		}
 		
 		// Reset and launch all this mortar's particles
 		for (let i = this.startIndex; i < this.startIndex + this.particleCount; i++) {
@@ -211,8 +261,8 @@ class MORTAR {
 					this.position.z + r * Math.sin(phi) * Math.sin(theta)
 				);
 				
-				// Set upward velocity
-				Balls[i].vel.set(0, launchVelocity, 0);
+				// Set velocity based on launch direction and speed
+				Balls[i].vel.copy(launchDir).multiplyScalar(launchVelocity);
 				Balls[i].active = true;
 				Balls[i].hasExploded = false;
 				Balls[i].age = 0;
@@ -328,9 +378,9 @@ class MORTAR {
 		if (count > 0) {
 			this.clusterCenter.divideScalar(count);
 		}
+
 		let blastSpeed = 1 + Math.random() * 1;
-		//var explosionSpeed = 4.0; // Velocity magnitude 
-		var explosionSpeed = 1 + Math.random() * 5.0;
+		var explosionSize = 1 + Math.random() * maxExplosionSize; // Base velocity magnitude for explosion particles
 		for (let i = this.startIndex; i < this.startIndex + this.particleCount; i++) {
 			if (!Balls[i]) continue;
 			
@@ -355,6 +405,9 @@ class MORTAR {
 				Math.cos(phi),
 				Math.sin(phi) * Math.sin(theta)
 			);
+			
+			var explosionSpeed = explosionSize + Math.random() * explosionUniformity; // Velocity magnitude with some randomness
+			
 			dir.normalize();
 			dir.multiplyScalar(explosionSpeed * Balls[i].speedMultiplier);
 			Balls[i].vel.copy(dir);
@@ -645,19 +698,6 @@ function initScene() {
 	Balls = new Array(numBalls); // Pre-allocate array
 	Mortars = [];
 
-	/*const mortarColors = [
-		new THREE.Color(0xff8080), // Red
-		new THREE.Color(0xffbf80), // Orange
-		new THREE.Color(0x80ff80), // Green
-		new THREE.Color(0x80c3ff), // Blue
-		new THREE.Color(0xff80ff), // Magenta
-		new THREE.Color(0xffff80), // Yellow
-		new THREE.Color(0x80ffff), // Cyan
-		new THREE.Color(0xffcccc), // Pink
-		new THREE.Color(0xffffff)  // White
-	];*/
-	
-	
 	const mortarColors = [
 		new THREE.Color(0xff8800), // Orange
 		new THREE.Color(0xff0000), // Red
@@ -675,7 +715,7 @@ function initScene() {
 	let mortarPositions = [];
 	
 	// Barge deck height and ellipse dimensions
-	const deckHeight = 0.95; // Height of barge deck
+	const deckHeight = 1.0; // Height of barge deck
 	const ellipseRadiusX = 1.1; // Narrow width (cross-deck)
 	const ellipseRadiusZ = 3.0; // Long length (along deck)
 	
@@ -778,12 +818,15 @@ function initThreeScene() {
 			if (child.isMesh) {
 				child.castShadow = true;
 				child.receiveShadow = true;
-				// Check if this is a water object
-				if (child.name.toLowerCase().includes('water')) {
-					child.material = waterMaterial;
-				} else {
-					// Replace material with uniform gray
-					child.material = uniformCityscapeMaterial;
+				// Don't override material for warningLight - keep its original material
+				if (child.name !== 'warningLight') {
+					// Check if this is a water object
+					if (child.name.toLowerCase().includes('water')) {
+						child.material = waterMaterial;
+					} else {
+						// Replace material with uniform gray
+						child.material = uniformCityscapeMaterial;
+					}
 				}
 			}
 		});
@@ -820,12 +863,15 @@ function initThreeScene() {
 			if (child.isMesh) {
 				child.castShadow = true;
 				child.receiveShadow = true;
-				// Check if this is a water object
-				if (child.name.toLowerCase().includes('water')) {
-					child.material = waterMaterialNorth;
-				} else {
-					// Replace material with uniform gray
-					child.material = uniformCityscapeMaterialNorth;
+				// Don't override material for warningLight - keep its original material
+				if (child.name !== 'warningLight') {
+					// Check if this is a water object
+					if (child.name.toLowerCase().includes('water')) {
+						child.material = waterMaterialNorth;
+					} else {
+						// Replace material with uniform gray
+						child.material = uniformCityscapeMaterialNorth;
+					}
 				}
 			}
 		});
@@ -914,6 +960,11 @@ function initThreeScene() {
 				if (child.isMesh) {
 					child.castShadow = true;
 					child.receiveShadow = true;
+					
+				// Store all helicopter meshes for darkening in cab view
+				helicopterInteriorMeshes.push(child);
+				helicopterInteriorOriginalMaterials.push(child.material.clone());
+					
 					// Set materials to FrontSide only
 					if (child.material) {
 						if (Array.isArray(child.material)) {
@@ -967,10 +1018,10 @@ function initThreeScene() {
 					map: gradientTexture,
 					transparent: true,
 					side: THREE.DoubleSide,
-				depthWrite: false,
-				opacity: 1.0
-			});
-			spotlightCone = new THREE.Mesh(coneGeometry, coneMaterial);
+					depthWrite: false,
+					opacity: 1.0
+				});
+				spotlightCone = new THREE.Mesh(coneGeometry, coneMaterial);
 				spotlightCone.position.y = -coneLength / 2;
 				
 				spotlightBase.add(spotlightCone);
@@ -985,6 +1036,13 @@ function initThreeScene() {
 			helicopterCameraGhostSphere.position.copy(helicopterCabCameraOffset);
 			helicopterCameraGhostSphere.visible = false; // Hidden but used for positioning
 			helicopterModelTemplate.add(helicopterCameraGhostSphere);
+			
+			// Create red cabin light (initially off)
+			helicopterCabinLight = new THREE.PointLight(0xff0000, 0, 5); // Red light, intensity 0 (off), distance 5
+			helicopterCabinLight.position.copy(helicopterCabCameraOffset); // Position at camera location
+			helicopterCabinLight.position.y += 0.5; // Slightly above camera
+			helicopterModelTemplate.add(helicopterCabinLight);
+			console.log('Helicopter cabin light created');
 			
 			gThreeScene.add(helicopterModelTemplate);
 			console.log('helicopter model loaded successfully');
@@ -1012,7 +1070,8 @@ function initThreeScene() {
 			bargeModelTemplate.receiveShadow = true;
 			
 			var bargeMaterial = new THREE.MeshPhongMaterial({
-			color: 0x4d4d4d, // Light gray
+			//color: 0x4d4d4d, // Light gray
+			color: 0x3b2f2b,
 			side: THREE.DoubleSide
 		});
 
@@ -1060,7 +1119,7 @@ function initThreeScene() {
 		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Zeppelin.gltf',
 		function(gltf) {
 			zeppelinModelTemplate = gltf.scene;
-			zeppelinModelTemplate.position.set(10, 20, 40);
+			zeppelinModelTemplate.position.set(0, 0, 0);
 			zeppelinModelTemplate.scale.set(1.0, 1.0, 1.0);
 			
 			// Find propeller objects in the model hierarchy
@@ -1236,57 +1295,78 @@ function initThreeScene() {
 		side: THREE.DoubleSide
 	});
 	
-	// Square base geometry (thin box)
+	// Round base geometry (thin box)
 	var baseSize = 0.2;
-	var baseHeight = 0.10;
+	var baseHeight = 0.05;
 	var baseGeometry = new THREE.CylinderGeometry(baseSize, baseSize, baseHeight, 32, 1, false);
 	var baseMaterial = new THREE.MeshPhongMaterial({
-		color: 0x1e283f,  
+		color: 0x262626,  
+	});
+	
+	// Hemisphere pivot geometry (sits on top of base)
+	var hemisphereRadius = baseSize * 0.9; // Slightly smaller than base
+	var hemisphereGeometry = new THREE.SphereGeometry(hemisphereRadius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+	var hemisphereMaterial = new THREE.MeshPhongMaterial({
+		color: 0x444444,
 	});
 	
 	// Barge deck height and ellipse dimensions (matching MORTAR positions)
-	const deckHeight = 0.95;
+	const deckHeight = 1.0;
 	const ellipseRadiusX = 1.1;
 	const ellipseRadiusZ = 3.0;
 	
-	// Center tube with base
+	// Center tube with base (create as group for dynamic rotation)
+	var tubeGroup = new THREE.Group();
+	tubeGroup.position.set(0, deckHeight, 0);
+	
 	// Inner tube
 	var innerTubeMaterial0 = createInnerTubeMaterial();
 	tubeMaterials.push(innerTubeMaterial0);
 	var innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial0);
-	innerTubeMesh.position.set(0, deckHeight + tubeHeight / 2, 0);
+	innerTubeMesh.position.set(0, tubeHeight / 2, 0);
 	innerTubeMesh.castShadow = true;
 	innerTubeMesh.receiveShadow = true;
-	gThreeScene.add(innerTubeMesh);
+	tubeGroup.add(innerTubeMesh);
 	
 	// Outer tube
 	var outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-	outerTubeMesh.position.set(0, deckHeight + tubeHeight / 2, 0);
+	outerTubeMesh.position.set(0, tubeHeight / 2, 0);
 	outerTubeMesh.castShadow = true;
 	outerTubeMesh.receiveShadow = true;
-	gThreeScene.add(outerTubeMesh);
+	tubeGroup.add(outerTubeMesh);
 	
 	// Top cap
 	var topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-	topCapMesh.position.set(0, deckHeight + tubeHeight, 0);
+	topCapMesh.position.set(0, tubeHeight, 0);
 	topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
 	topCapMesh.castShadow = true;
 	topCapMesh.receiveShadow = true;
-	gThreeScene.add(topCapMesh);
+	tubeGroup.add(topCapMesh);
 	
 	// Bottom cap
 	var bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
-	bottomCapMesh.position.set(0, deckHeight + tubeHeight * 0.2, 0); // 20% up from tube bottom
+	bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
 	bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
 	bottomCapMesh.receiveShadow = true;
-	gThreeScene.add(bottomCapMesh);
+	tubeGroup.add(bottomCapMesh);
 	
-	// base
+	gThreeScene.add(tubeGroup);
+	tubeGroups.push(tubeGroup);
+	tubePositions.push({x: 0, z: 0});
+	
+	// Base (fixed, doesn't rotate with tube)
 	var baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
 	baseMesh.position.set(0, deckHeight + baseHeight / 2, 0);
 	baseMesh.castShadow = true;
 	baseMesh.receiveShadow = true;
 	gThreeScene.add(baseMesh);
+	
+	// Hemisphere pivot (fixed, doesn't rotate with tube)
+	var hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
+	hemisphereMesh.position.set(0, deckHeight + baseHeight, 0);
+	hemisphereMesh.castShadow = true;
+	hemisphereMesh.receiveShadow = true;
+	gThreeScene.add(hemisphereMesh);
 	
 	// First elliptical ring: 8 tubes
 	for (let i = 0; i < 8; i++) {
@@ -1294,43 +1374,57 @@ function initThreeScene() {
 		let x = Math.cos(angle) * ellipseRadiusX;
 		let z = Math.sin(angle) * ellipseRadiusZ;
 		
+		tubeGroup = new THREE.Group();
+		tubeGroup.position.set(x, deckHeight, z);
+		
 		// Inner tube (create unique material for flash effect)
 		let innerTubeMat = createInnerTubeMaterial();
 		tubeMaterials.push(innerTubeMat);
 		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMat);
-		innerTubeMesh.position.set(x, deckHeight + tubeHeight / 2, z);
+		innerTubeMesh.position.set(0, tubeHeight / 2, 0);
 		innerTubeMesh.castShadow = true;
 		innerTubeMesh.receiveShadow = true;
-		gThreeScene.add(innerTubeMesh);
+		tubeGroup.add(innerTubeMesh);
 		
 		// Outer tube
 		outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-		outerTubeMesh.position.set(x, deckHeight + tubeHeight / 2, z);
+		outerTubeMesh.position.set(0, tubeHeight / 2, 0);
 		outerTubeMesh.castShadow = true;
 		outerTubeMesh.receiveShadow = true;
-		gThreeScene.add(outerTubeMesh);
+		tubeGroup.add(outerTubeMesh);
 		
 		// Top cap
 		topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-		topCapMesh.position.set(x, deckHeight + tubeHeight, z);
+		topCapMesh.position.set(0, tubeHeight, 0);
 		topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
 		topCapMesh.castShadow = true;
 		topCapMesh.receiveShadow = true;
-		gThreeScene.add(topCapMesh);
+		tubeGroup.add(topCapMesh);
 		
 		// Bottom cap
 		bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
-		bottomCapMesh.position.set(x, deckHeight + tubeHeight * 0.2, z); // 20% up from tube bottom
+		bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
 		bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
 		bottomCapMesh.receiveShadow = true;
-		gThreeScene.add(bottomCapMesh);
+		tubeGroup.add(bottomCapMesh);
 		
+		gThreeScene.add(tubeGroup);
+		tubeGroups.push(tubeGroup);
+		tubePositions.push({x: x, z: z});
+		
+		// Base (fixed, doesn't rotate with tube)
 		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
 		baseMesh.position.set(x, deckHeight + baseHeight / 2, z);
-		baseMesh.rotation.y = angle; // Rotate to face radially
 		baseMesh.castShadow = true;
 		baseMesh.receiveShadow = true;
 		gThreeScene.add(baseMesh);
+		
+		// Hemisphere pivot (fixed, doesn't rotate with tube)
+		hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
+		hemisphereMesh.position.set(x, deckHeight + baseHeight, z);
+		hemisphereMesh.castShadow = true;
+		hemisphereMesh.receiveShadow = true;
+		gThreeScene.add(hemisphereMesh);
 	}
 	
 	// Second elliptical ring: 16 tubes
@@ -1339,43 +1433,57 @@ function initThreeScene() {
 		let x = Math.cos(angle) * ellipseRadiusX * 1.8;
 		let z = Math.sin(angle) * ellipseRadiusZ * 1.8;
 		
+		tubeGroup = new THREE.Group();
+		tubeGroup.position.set(x, deckHeight, z);
+		
 		// Inner tube (create unique material for flash effect)
 		let innerTubeMat = createInnerTubeMaterial();
 		tubeMaterials.push(innerTubeMat);
 		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMat);
-		innerTubeMesh.position.set(x, deckHeight + tubeHeight / 2, z);
+		innerTubeMesh.position.set(0, tubeHeight / 2, 0);
 		innerTubeMesh.castShadow = true;
 		innerTubeMesh.receiveShadow = true;
-		gThreeScene.add(innerTubeMesh);
+		tubeGroup.add(innerTubeMesh);
 		
 		// Outer tube
 		outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-		outerTubeMesh.position.set(x, deckHeight + tubeHeight / 2, z);
+		outerTubeMesh.position.set(0, tubeHeight / 2, 0);
 		outerTubeMesh.castShadow = true;
 		outerTubeMesh.receiveShadow = true;
-		gThreeScene.add(outerTubeMesh);
+		tubeGroup.add(outerTubeMesh);
 		
 		// Top cap
 		topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-		topCapMesh.position.set(x, deckHeight + tubeHeight, z);
+		topCapMesh.position.set(0, tubeHeight, 0);
 		topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
 		topCapMesh.castShadow = true;
 		topCapMesh.receiveShadow = true;
-		gThreeScene.add(topCapMesh);
+		tubeGroup.add(topCapMesh);
 		
 		// Bottom cap
 		bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
-		bottomCapMesh.position.set(x, deckHeight + tubeHeight * 0.2, z); // 20% up from tube bottom
+		bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
 		bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
 		bottomCapMesh.receiveShadow = true;
-		gThreeScene.add(bottomCapMesh);
+		tubeGroup.add(bottomCapMesh);
 		
+		gThreeScene.add(tubeGroup);
+		tubeGroups.push(tubeGroup);
+		tubePositions.push({x: x, z: z});
+		
+		// Base (fixed, doesn't rotate with tube)
 		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
 		baseMesh.position.set(x, deckHeight + baseHeight / 2, z);
-		baseMesh.rotation.y = angle; // Rotate to face radially
 		baseMesh.castShadow = true;
 		baseMesh.receiveShadow = true;
 		gThreeScene.add(baseMesh);
+		
+		// Hemisphere pivot (fixed, doesn't rotate with tube)
+		hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
+		hemisphereMesh.position.set(x, deckHeight + baseHeight, z);
+		hemisphereMesh.castShadow = true;
+		hemisphereMesh.receiveShadow = true;
+		gThreeScene.add(hemisphereMesh);
 	}
 	
 	// gRenderer
@@ -1401,7 +1509,7 @@ function initThreeScene() {
 	// Camera --------------------------------------------	
 	Camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 	Camera.far = 3000;
-	Camera.position.set(-24.2, 11.5, 8.4);
+	Camera.position.set(-28.9, 13.4, 15.2);
 	Camera.updateMatrixWorld();	
 	gThreeScene.add(Camera);
 
@@ -1409,13 +1517,16 @@ function initThreeScene() {
 	CameraControl = new THREE.OrbitControls(Camera, gRenderer.domElement);
 	CameraControl.zoomSpeed = 2.0;
 	CameraControl.panSpeed = 0.4;
-	CameraControl.target.set(7.0, 13.8, 3.7);
+	CameraControl.target.set(0.0, 16.1, 0.0);
 	CameraControl.enabled = true; // Enabled by default (Manual mode)
 	
 	// Calculate initial camera angle from current position relative to target
 	const dx = Camera.position.x - CameraControl.target.x;
 	const dz = Camera.position.z - CameraControl.target.z;
 	gCameraAngle = Math.atan2(dz, dx);
+	
+	// Update tube angles initially
+	updateTubeAngles();
 
 	// Grabber
 	gGrabber = new Grabber();
@@ -1477,6 +1588,37 @@ function initThreeScene() {
 	progressContainer.appendChild(progressBar);
 	loadingScreen.appendChild(progressContainer);
 	container.appendChild(loadingScreen);
+}
+
+// Update mortar tube angles based on mortarTubeAngle variable
+function updateTubeAngles() {
+	for (let i = 0; i < tubeGroups.length; i++) {
+		const tubeGroup = tubeGroups[i];
+		const pos = tubePositions[i];
+		
+		// Center tube stays vertical
+		if (pos.x === 0 && pos.z === 0) {
+			tubeGroup.rotation.set(0, 0, 0);
+			continue;
+		}
+		
+		// Calculate direction away from center
+		const distance = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
+		const dirX = pos.x / distance;
+		const dirZ = pos.z / distance;
+		
+		// Calculate angle in XZ plane (azimuth) - this is the direction to tilt toward
+		const azimuthAngle = Math.atan2(dirX, dirZ);
+		
+		// Convert mortarTubeAngle from degrees to radians
+		const tiltAngle = mortarTubeAngle * (Math.PI / 180);
+		
+		// Set rotation order to ZYX so we can tilt then rotate
+		tubeGroup.rotation.order = 'ZYX';
+		
+		// Apply rotation: Tilt outward (X), then rotate to face direction (Y)
+		tubeGroup.rotation.set(tiltAngle, azimuthAngle, 0);
+	}
 }
 
 // Grabber -----------------------------------------------------------
@@ -1611,7 +1753,7 @@ function onPointer( evt ) {
 			CameraControl.enabled = false;
 		}
 	}
-	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob)) {
+	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob)) {
 		// Handle knob dragging with linear drag method (like boids3D.js)
 		if (draggingFOVKnob) {
 			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
@@ -1636,11 +1778,75 @@ function onPointer( evt ) {
 			
 			const dragSensitivity = 0.1;
 			const normalizedDelta = dragDelta / dragSensitivity;
-			const rangeSize = 25.0 - 0.5; // Orbit speed range: 0.5 to 25.0
+			const rangeSize = 10.0 - 0.1; // Orbit speed range: 0.1 to 10.0
 			let newValue = dragStartValue + normalizedDelta * rangeSize; // Not reversed
-			newValue = Math.max(0.5, Math.min(25.0, newValue));
+			newValue = Math.max(0.1, Math.min(10.0, newValue));
 			
 			gCameraRotationSpeed = newValue;
+			needsMenuRedraw = true;
+			return;
+		}
+		
+		if (draggingExplosionSizeKnob) {
+			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+			const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+			const dragDelta = deltaX + deltaY;
+			
+			const dragSensitivity = 0.1;
+			const normalizedDelta = dragDelta / dragSensitivity;
+			const rangeSize = 15.0 - 1.0;
+			let newValue = dragStartValue + normalizedDelta * rangeSize;
+			newValue = Math.max(1.0, Math.min(15.0, newValue));
+			
+			maxExplosionSize = newValue;
+			needsMenuRedraw = true;
+			return;
+		}
+		
+		if (draggingLaunchVelocityKnob) {
+			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+			const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+			const dragDelta = deltaX + deltaY;
+			
+			const dragSensitivity = 0.1;
+			const normalizedDelta = dragDelta / dragSensitivity;
+			const rangeSize = 60.0 - 15.0;
+			let newValue = dragStartValue + normalizedDelta * rangeSize;
+			newValue = Math.max(15.0, Math.min(60.0, newValue));
+			
+			minLaunchVelocity = newValue;
+			needsMenuRedraw = true;
+			return;
+		}
+		
+		if (draggingMortarAngleKnob) {
+			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+			const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+			const dragDelta = deltaX + deltaY;
+			
+			const dragSensitivity = 0.1;
+			const normalizedDelta = dragDelta / dragSensitivity;
+			const rangeSize = 45.0 - 0.0;
+			let newValue = dragStartValue + normalizedDelta * rangeSize;
+			newValue = Math.max(0.0, Math.min(45.0, newValue));
+			
+			mortarTubeAngle = newValue;
+			needsMenuRedraw = true;
+			return;
+		}
+		
+		if (draggingGravityKnob) {
+			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+			const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+			const dragDelta = deltaX + deltaY;
+			
+			const dragSensitivity = 0.1;
+			const normalizedDelta = dragDelta / dragSensitivity;
+			const rangeSize = 5.0 - 0.5;
+			let newValue = dragStartValue + normalizedDelta * rangeSize;
+			newValue = Math.max(0.5, Math.min(5.0, newValue));
+			
+			Gravity = -newValue; // Keep gravity negative
 			needsMenuRedraw = true;
 			return;
 		}
@@ -1650,6 +1856,10 @@ function onPointer( evt ) {
 	else if (evt.type == "pointerup") {
 		draggingFOVKnob = false;
 		draggingOrbitSpeedKnob = false;
+		draggingExplosionSizeKnob = false;
+		draggingLaunchVelocityKnob = false;
+		draggingMortarAngleKnob = false;
+		draggingGravityKnob = false;
 		
 		if (gGrabber.physicsObject) {
 			gGrabber.end();
@@ -1687,6 +1897,9 @@ function onWindowResize() {
 
 // ------------------------------------------------------------------
 function simulate() {	
+	// Update tube angles based on current mortarTubeAngle setting
+	updateTubeAngles();
+	
 	// Skip physics simulation if paused (but still animate zeppelin and propellers below)
 	if (!gRunning) {
 		// Animate zeppelin and propellers even when paused
@@ -1955,7 +2168,7 @@ function drawMainMenu() {
 	const itemHeight = 0.12 * menuScale;
 	const itemWidth = 0.15 * menuScale;
 	const padding = 0.02 * menuScale;
-	const menuHeight = itemHeight * 2 + (padding * 3); // Two items: play/pause and camera
+	const menuHeight = itemHeight * 3 + (padding * 4); // Three items: play/pause, camera, and simulation
 	const menuWidth = itemWidth + (padding * 2);
 	
 	const menuBaseY = ellipsisY + 0.08 * menuScale;
@@ -2020,14 +2233,8 @@ function drawMainMenu() {
 	ctx.beginPath();
 	ctx.roundRect(itemX, itemY2, itemWidth, itemHeight, cornerRadius * 0.5);
 	
-	// Background color varies by camera mode
-	const cameraBackgroundColors = [
-		'hsla(60, 30%, 30%, 0.80)',   // Mode 0: Rotate CW
-		'hsla(80, 30%, 30%, 0.80)',   // Mode 1: Rotate CCW
-		'hsla(100, 30%, 30%, 0.80)',  // Mode 2: Manual
-		'hsla(120, 30%, 30%, 0.80)'   // Mode 3: Helicopter Cab
-	];
-	ctx.fillStyle = cameraBackgroundColors[gCameraMode];
+	// Background color - dull orange when visible, gray when not
+	ctx.fillStyle = cameraMenuVisible ? 'rgba(180, 110, 60, 0.3)' : 'rgba(38, 38, 38, 0.8)';
 	ctx.fill();
 	
 	// Draw camera icon (movie camera)
@@ -2035,10 +2242,13 @@ function drawMainMenu() {
 	const icon2Y = itemY2 + 0.6 * itemHeight;
 	const camSize = iconSize * 1.6;
 	
+	// Icon color - gray when menu is not visible
+	const icon2Color = cameraMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+	
 	ctx.save();
 	ctx.translate(icon2X, icon2Y);
-	ctx.fillStyle = `hsla(0, 0%, 40%, 1.0)`;
-	ctx.strokeStyle = `hsla(0, 0%, 60%, 1.0)`;
+	ctx.fillStyle = cameraMenuVisible ? `hsla(0, 0%, 40%, 1.0)` : `hsla(0, 0%, 30%, 1.0)`;
+	ctx.strokeStyle = cameraMenuVisible ? `hsla(0, 0%, 60%, 1.0)` : `hsla(0, 0%, 30%, 1.0)`;
 	ctx.lineWidth = camSize * 0.06;
 	ctx.lineCap = 'round';
 	ctx.lineJoin = 'round';
@@ -2111,6 +2321,53 @@ function drawMainMenu() {
 	}
 	
 	ctx.restore();
+	
+	// Draw Simulation menu item
+	const itemY3 = itemY2 + itemHeight + padding;
+	ctx.beginPath();
+	ctx.roundRect(itemX, itemY3, itemWidth, itemHeight, cornerRadius * 0.5);
+	ctx.fillStyle = simulationMenuVisible ? 'rgba(100, 150, 220, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+	ctx.fill();
+	
+	// Draw gear icon
+	const icon3X = itemX + itemWidth / 2;
+	const icon3Y = itemY3 + itemHeight / 2;
+	const icon3Color = simulationMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+	ctx.strokeStyle = icon3Color;
+	ctx.fillStyle = icon3Color;
+	ctx.lineWidth = 2;
+	ctx.lineCap = 'round';
+	
+	// Draw gear icon
+	const gearRadius3 = iconSize * 0.6;
+	ctx.save();
+	ctx.translate(icon3X, icon3Y);
+	ctx.beginPath();
+	for (let i = 0; i < 8; i++) {
+		const angle = (i / 8) * Math.PI * 2;
+		const outerR = gearRadius3;
+		const innerR = gearRadius3 * 0.7;
+		const x1 = Math.cos(angle - 0.1) * innerR;
+		const y1 = Math.sin(angle - 0.1) * innerR;
+		const x2 = Math.cos(angle - 0.1) * outerR;
+		const y2 = Math.sin(angle - 0.1) * outerR;
+		const x3 = Math.cos(angle + 0.1) * outerR;
+		const y3 = Math.sin(angle + 0.1) * outerR;
+		const x4 = Math.cos(angle + 0.1) * innerR;
+		const y4 = Math.sin(angle + 0.1) * innerR;
+		if (i === 0) ctx.moveTo(x1, y1);
+		ctx.lineTo(x1, y1);
+		ctx.lineTo(x2, y2);
+		ctx.lineTo(x3, y3);
+		ctx.lineTo(x4, y4);
+	}
+	ctx.closePath();
+	ctx.stroke();
+	ctx.beginPath();
+	ctx.arc(0, 0, gearRadius3 * 0.3, 0, 2 * Math.PI);
+	ctx.stroke();
+	ctx.restore();
+	
 	ctx.restore();
 }
 
@@ -2125,28 +2382,28 @@ function drawCameraMenu() {
 	const radioButtonSize = 0.04 * menuScale;
 	const radioButtonSpacing = 0.095 * menuScale; // Increased for more vertical spacing
 	const horizontalKnobSpacing = knobRadius * 2.5; // Increased for more horizontal spacing
-	const menuWidth = knobRadius * 3.7; // Fixed width
+	const menuWidth = knobRadius * 3; // Fixed width
 	const radioSectionHeight = 4 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 4 camera modes
-	const menuHeight = radioSectionHeight + knobRadius * 2.24;
+	const menuHeight = radioSectionHeight + knobRadius * 1.2;
 	
-	// Position menu
-	const menuOriginX = cameraMenuX * window.innerWidth;
-	const menuOriginY = cameraMenuY * window.innerHeight;
+	// Position menu (shared position with all submenus)
+	const menuOriginX = submenuX * window.innerWidth;
+	const menuOriginY = submenuY * window.innerHeight;
 	
 	ctx.save();
 	ctx.translate(menuOriginX, menuOriginY);
 	ctx.globalAlpha = cameraMenuOpacity;
 	
-	// Draw menu background
+	// Draw menu background (dull orange to match camera icon color)
 	const cornerRadius = 8;
 	ctx.beginPath();
 	ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
 	const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-	menuGradient.addColorStop(0, 'rgba(60, 60, 70, 0.9)');
-	menuGradient.addColorStop(1, 'rgba(30, 30, 40, 0.9)');
+	menuGradient.addColorStop(0, 'rgba(80, 60, 40, 0.9)');
+	menuGradient.addColorStop(1, 'rgba(50, 35, 25, 0.9)');
 	ctx.fillStyle = menuGradient;
 	ctx.fill();
-	ctx.strokeStyle = 'rgba(130, 140, 180, 0.9)';
+	ctx.strokeStyle = 'rgba(180, 120, 80, 0.9)';
 	ctx.lineWidth = 1.5;
 	ctx.stroke();
 	
@@ -2179,14 +2436,14 @@ function drawCameraMenu() {
 		'Auto Orbit Cam CCW',
 		'Auto Orbit Cam CW',
 		'Manual Orbit Cam',
-		'Copter Cam'
+		'Helicopter Cam'
 	];
 	
 	const radioStartY = 0;
 	
 	for (let i = 0; i < cameraModeNames.length; i++) {
 		const radioY = radioStartY + i * radioButtonSpacing;
-		const radioX = -0.02 * menuScale;
+		const radioX = -0.05 * menuScale;
 		
 		// Draw radio button circle
 		ctx.beginPath();
@@ -2224,7 +2481,7 @@ function drawCameraMenu() {
 	drawKnob(ctx, fovKnobX, knobY, knobRadius, gCameraFOV, 3, 170, true, 'Focal Length', 210);
 	
 	// Orbit Speed Knob
-	drawKnob(ctx, orbitSpeedKnobX, knobY, knobRadius, gCameraRotationSpeed, 0.5, 25.0, false, 'Orbit Speed', 280);
+	drawKnob(ctx, orbitSpeedKnobX, knobY, knobRadius, gCameraRotationSpeed, 0.1, 10.0, false, 'Orbit Speed', 280);
 	
 	// Update knob positions for mouse interaction
 	updateKnobPositions();
@@ -2276,6 +2533,8 @@ function drawKnob(ctx, x, y, radius, value, min, max, reversed, label, hue) {
 	if (label === 'Focal Length') {
 		const focalLength = 24 / (2 * Math.tan(value * Math.PI / 360));
 		ctx.fillText(focalLength.toFixed(0) + 'mm', x, y + 0.6 * radius);
+	} else if (label === 'Tube Angle') {
+		ctx.fillText(value.toFixed(1) + '°', x, y + 0.6 * radius);
 	} else {
 		ctx.fillText(value.toFixed(1), x, y + 0.6 * radius);
 	}
@@ -2286,14 +2545,123 @@ function drawKnob(ctx, x, y, radius, value, min, max, reversed, label, hue) {
 	ctx.fillText(label, x, y + 1.35 * radius);
 }
 
+function drawSimulationMenu() {
+	if (simulationMenuOpacity <= 0) return;
+	
+	const ctx = gOverlayCtx;
+	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+	const menuScale = cScale;
+	const knobRadius = 0.1 * menuScale;
+	const padding = 0.17 * menuScale;
+	const horizontalKnobSpacing = knobRadius * 2.5;
+	const verticalKnobSpacing = knobRadius * 2.8;
+	const menuWidth = knobRadius * 3;
+	const menuHeight = verticalKnobSpacing * 1 + knobRadius * 1.2; // Two rows of knobs
+	
+	// Position menu (shared position with all submenus)
+	const menuOriginX = submenuX * window.innerWidth;
+	const menuOriginY = submenuY * window.innerHeight;
+	
+	ctx.save();
+	ctx.translate(menuOriginX, menuOriginY);
+	ctx.globalAlpha = simulationMenuOpacity;
+	
+	// Draw menu background (blue to match simulation icon color)
+	const cornerRadius = 8;
+	ctx.beginPath();
+	ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+	const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+	menuGradient.addColorStop(0, 'rgba(60, 60, 70, 0.9)');
+	menuGradient.addColorStop(1, 'rgba(30, 30, 40, 0.9)');
+	ctx.fillStyle = menuGradient;
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(130, 140, 180, 0.9)';
+	ctx.lineWidth = 1.5;
+	ctx.stroke();
+	
+	// Draw title
+	ctx.fillStyle = 'rgba(200, 210, 200, 1.0)';
+	ctx.font = `bold ${0.05 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.fillText('SIMULATION', menuWidth / 2, -padding + 0.06 * menuScale);
+	
+	// Draw close button
+	const closeIconRadius = 0.1 * menuScale * 0.25;
+	const closeIconX = -padding + closeIconRadius + 0.02 * menuScale;
+	const closeIconY = -padding + closeIconRadius + 0.02 * menuScale;
+	ctx.beginPath();
+	ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+	ctx.fillStyle = 'rgba(180, 40, 40, 1.0)';
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
+	ctx.lineWidth = 2;
+	const xSize = closeIconRadius * 0.4;
+	ctx.beginPath();
+	ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+	ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+	ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+	ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+	ctx.stroke();
+	
+	// Draw three knobs
+	// Row 1: Explosion Size and Launch Velocity (side by side)
+	const explosionKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+	const launchVelocityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+	const knobY1 = knobRadius * 0.8;
+	
+	// Row 2: Mortar Angle and Gravity (side by side)
+	const mortarAngleKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+	const gravityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+	const knobY2 = knobY1 + verticalKnobSpacing;
+	
+	// Explosion Size Knob
+	drawKnob(ctx, explosionKnobX, knobY1, knobRadius, maxExplosionSize, 1.0, 15.0, false, 'Max Size', 30);
+	
+	// Launch Velocity Knob
+	drawKnob(ctx, launchVelocityKnobX, knobY1, knobRadius, minLaunchVelocity, 15.0, 60.0, false, 'Launch Speed', 120);
+	
+	// Mortar Angle Knob
+	drawKnob(ctx, mortarAngleKnobX, knobY2, knobRadius, mortarTubeAngle, 0.0, 45.0, false, 'Spread', 180);
+	
+	// Gravity Knob
+	drawKnob(ctx, gravityKnobX, knobY2, knobRadius, Math.abs(Gravity), 0.5, 5.0, false, 'Gravity', 280);
+	
+	// Update knob positions for mouse interaction
+	updateSimulationKnobPositions();
+	
+	ctx.restore();
+}
+
+function updateSimulationKnobPositions() {
+	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+	const menuScale = cScale;
+	const knobRadius = 0.1 * menuScale;
+	const menuOriginX = submenuX * window.innerWidth;
+	const menuOriginY = submenuY * window.innerHeight;
+	const horizontalKnobSpacing = knobRadius * 2.5;
+	const verticalKnobSpacing = knobRadius * 2.8;
+	const menuWidth = knobRadius * 3;
+	const explosionKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+	const launchVelocityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+	const mortarAngleKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+	const gravityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+	const knobY1 = knobRadius * 0.8;
+	const knobY2 = knobY1 + verticalKnobSpacing;
+	
+	explosionSizeKnobInfo = { x: menuOriginX + explosionKnobX, y: menuOriginY + knobY1, radius: knobRadius };
+	launchVelocityKnobInfo = { x: menuOriginX + launchVelocityKnobX, y: menuOriginY + knobY1, radius: knobRadius };
+	mortarAngleKnobInfo = { x: menuOriginX + mortarAngleKnobX, y: menuOriginY + knobY2, radius: knobRadius };
+	gravityKnobInfo = { x: menuOriginX + gravityKnobX, y: menuOriginY + knobY2, radius: knobRadius };
+}
+
 function updateKnobPositions() {
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
 	const menuScale = cScale; // Use same scale as main menu
 	const knobRadius = 0.1 * menuScale;
 	const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
 	const radioSectionHeight = 4 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu
-	const menuOriginX = cameraMenuX * window.innerWidth;
-	const menuOriginY = cameraMenuY * window.innerHeight;
+	const menuOriginX = submenuX * window.innerWidth;
+	const menuOriginY = submenuY * window.innerHeight;
 	const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
 	const menuWidth = knobRadius * 3.7; // Matches drawCameraMenu
 	const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
@@ -2308,7 +2676,7 @@ function drawMenus() {
 	if (!gOverlayCtx) return;
 	
 	// Always clear and redraw if menus are visible or animating
-	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0);
+	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0) || (simulationMenuOpacity > 0);
 	if (!needsMenuRedraw && !isAnimating) return;
 	
 	// Clear overlay
@@ -2317,6 +2685,7 @@ function drawMenus() {
 	// Draw menus
 	drawMainMenu();
 	drawCameraMenu();
+	drawSimulationMenu();
 	
 	needsMenuRedraw = false;
 }
@@ -2327,9 +2696,10 @@ function onMenuClick(evt) {
 	// Check ellipsis click (toggle main menu) - simple large top-left corner hitbox
 	if (evt.clientX < 0.15 * cScale && evt.clientY < 0.15 * cScale) {
 		mainMenuVisible = !mainMenuVisible;
-		// Close camera menu when main menu is closed
+		// Close all submenus when main menu is closed
 		if (!mainMenuVisible) {
 			cameraMenuVisible = false;
+			simulationMenuVisible = false;
 		}
 		needsMenuRedraw = true;
 		evt.stopPropagation();
@@ -2369,6 +2739,24 @@ function onMenuClick(evt) {
 		if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
 			evt.clientY >= itemY2 && evt.clientY <= itemY2 + itemHeight) {
 			cameraMenuVisible = !cameraMenuVisible;
+			// Close other submenus
+			if (cameraMenuVisible) {
+				simulationMenuVisible = false;
+			}
+			needsMenuRedraw = true;
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+		
+		// Check Simulation button
+		const itemY3 = itemY2 + itemHeight + padding;
+		if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+			evt.clientY >= itemY3 && evt.clientY <= itemY3 + itemHeight) {
+			simulationMenuVisible = !simulationMenuVisible;
+			// Close other submenus
+			if (simulationMenuVisible) {
+				cameraMenuVisible = false;
+			}
 			needsMenuRedraw = true;
 			evt.stopPropagation();
 			return true; // Menu click handled
@@ -2382,8 +2770,8 @@ function onMenuClick(evt) {
 		
 		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
 		const menuScale = cScale; // Use same scale as main menu
-		const menuOriginX = cameraMenuX * window.innerWidth;
-		const menuOriginY = cameraMenuY * window.innerHeight;
+		const menuOriginX = submenuX * window.innerWidth;
+		const menuOriginY = submenuY * window.innerHeight;
 		const padding = 0.17 * menuScale;
 		const knobRadius = 0.1 * menuScale;
 		const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
@@ -2407,7 +2795,7 @@ function onMenuClick(evt) {
 		
 		// Check radio buttons
 		const radioStartY = 0;
-		const radioX = menuOriginX - 0.02 * menuScale;
+		const radioX = menuOriginX - 0.05 * menuScale
 		const radioButtonSize = 0.04 * menuScale;
 		
 		for (let i = 0; i < 4; i++) {
@@ -2416,6 +2804,16 @@ function onMenuClick(evt) {
 			const rdy = evt.clientY - radioY;
 			if (rdx * rdx + rdy * rdy < (radioButtonSize * 2) * (radioButtonSize * 2)) {
 				gCameraMode = i;
+				
+				// When entering auto orbit mode, update gCameraAngle to current camera position
+				// so the camera starts orbiting from its current position instead of jumping
+				if (i === 0 || i === 1) {
+					const target = CameraControl.target;
+					const dx = Camera.position.x - target.x;
+					const dz = Camera.position.z - target.z;
+					gCameraAngle = Math.atan2(dz, dx);
+				}
+				
 				needsMenuRedraw = true;
 				// OrbitControls stay enabled in all modes for manual position adjustment
 				CameraControl.enabled = true;
@@ -2443,6 +2841,83 @@ function onMenuClick(evt) {
 			dragStartMouseX = evt.clientX;
 			dragStartMouseY = evt.clientY;
 			dragStartValue = gCameraRotationSpeed;
+			if (CameraControl) CameraControl.enabled = false;
+			return true; // Knob click handled
+		}
+	}
+	
+	// Check simulation menu clicks
+	if (simulationMenuVisible && simulationMenuOpacity > 0.5) {
+		// Update knob positions first so they're correct for hit detection
+		updateSimulationKnobPositions();
+		
+		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+		const menuScale = cScale;
+		const menuOriginX = submenuX * window.innerWidth;
+		const menuOriginY = submenuY * window.innerHeight;
+		const padding = 0.17 * menuScale;
+		const knobRadius = 0.1 * menuScale;
+		const verticalKnobSpacing = knobRadius * 2.8;
+		const menuWidth = knobRadius * 3;
+		const menuHeight = verticalKnobSpacing * 2 + knobRadius * 1.2;
+		
+		// Check close button
+		const closeIconRadius = 0.1 * menuScale * 0.25;
+		const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
+		const closeIconY = menuOriginY - padding + closeIconRadius + 0.02 * menuScale;
+		const dx = evt.clientX - closeIconX;
+		const dy = evt.clientY - closeIconY;
+		if (dx * dx + dy * dy < closeIconRadius * closeIconRadius) {
+			simulationMenuVisible = false;
+			needsMenuRedraw = true;
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+		
+		// Check if clicking on explosion size knob
+		const explosionDx = evt.clientX - explosionSizeKnobInfo.x;
+		const explosionDy = evt.clientY - explosionSizeKnobInfo.y;
+		if (explosionDx * explosionDx + explosionDy * explosionDy < explosionSizeKnobInfo.radius * explosionSizeKnobInfo.radius * 1.2) {
+			draggingExplosionSizeKnob = true;
+			dragStartMouseX = evt.clientX;
+			dragStartMouseY = evt.clientY;
+			dragStartValue = maxExplosionSize;
+			if (CameraControl) CameraControl.enabled = false;
+			return true; // Knob click handled
+		}
+		
+		// Check if clicking on launch velocity knob
+		const launchVelDx = evt.clientX - launchVelocityKnobInfo.x;
+		const launchVelDy = evt.clientY - launchVelocityKnobInfo.y;
+		if (launchVelDx * launchVelDx + launchVelDy * launchVelDy < launchVelocityKnobInfo.radius * launchVelocityKnobInfo.radius * 1.2) {
+			draggingLaunchVelocityKnob = true;
+			dragStartMouseX = evt.clientX;
+			dragStartMouseY = evt.clientY;
+			dragStartValue = minLaunchVelocity;
+			if (CameraControl) CameraControl.enabled = false;
+			return true; // Knob click handled
+		}
+		
+		// Check if clicking on mortar angle knob
+		const angleDx = evt.clientX - mortarAngleKnobInfo.x;
+		const angleDy = evt.clientY - mortarAngleKnobInfo.y;
+		if (angleDx * angleDx + angleDy * angleDy < mortarAngleKnobInfo.radius * mortarAngleKnobInfo.radius * 1.2) {
+			draggingMortarAngleKnob = true;
+			dragStartMouseX = evt.clientX;
+			dragStartMouseY = evt.clientY;
+			dragStartValue = mortarTubeAngle;
+			if (CameraControl) CameraControl.enabled = false;
+			return true; // Knob click handled
+		}
+		
+		// Check if clicking on gravity knob
+		const gravityDx = evt.clientX - gravityKnobInfo.x;
+		const gravityDy = evt.clientY - gravityKnobInfo.y;
+		if (gravityDx * gravityDx + gravityDy * gravityDy < gravityKnobInfo.radius * gravityKnobInfo.radius * 1.2) {
+			draggingGravityKnob = true;
+			dragStartMouseX = evt.clientX;
+			dragStartMouseY = evt.clientY;
+			dragStartValue = Math.abs(Gravity);
 			if (CameraControl) CameraControl.enabled = false;
 			return true; // Knob click handled
 		}
@@ -2516,7 +2991,7 @@ function update() {
 			Camera.position.copy(cabCameraWorldPos);
 			
 			// Look toward the firework display (barge at origin)
-			var lookTarget = new THREE.Vector3(0, 0, 0);
+			var lookTarget = new THREE.Vector3(0, 20, 0);
 			Camera.lookAt(lookTarget);
 		}
 	}
@@ -2527,6 +3002,41 @@ function update() {
 			spotlightCone.material.opacity = 0.08; // Very faint in helicopter cab view
 		} else {
 			spotlightCone.material.opacity = 1.0; // Normal visibility in other views
+		}
+	}
+	
+	// Adjust helicopter interior lighting and materials for cab view
+	if (gCameraMode === 3) {
+		// In cab view: darken interior and activate red cabin light
+		for (let i = 0; i < helicopterInteriorMeshes.length; i++) {
+			let mesh = helicopterInteriorMeshes[i];
+			if (mesh.material) {
+				// Create darker version of material
+				if (!mesh.material.userData.isDarkened) {
+					let darkerMaterial = mesh.material.clone();
+					if (darkerMaterial.color) {
+						darkerMaterial.color.multiplyScalar(0.15); // 15% brightness
+					}
+					mesh.material = darkerMaterial;
+					mesh.material.userData.isDarkened = true;
+				}
+			}
+		}
+		// Turn on red cabin light
+		if (helicopterCabinLight) {
+			helicopterCabinLight.intensity = 0.6;
+		}
+	} else {
+		// Not in cab view: restore original interior materials and turn off cabin light
+		for (let i = 0; i < helicopterInteriorMeshes.length; i++) {
+			let mesh = helicopterInteriorMeshes[i];
+			if (mesh.material && mesh.material.userData.isDarkened) {
+				mesh.material = helicopterInteriorOriginalMaterials[i];
+			}
+		}
+		// Turn off red cabin light
+		if (helicopterCabinLight) {
+			helicopterCabinLight.intensity = 0;
 		}
 	}
 	
@@ -2557,6 +3067,16 @@ function update() {
 		const oldOpacity = cameraMenuOpacity;
 		cameraMenuOpacity = Math.max(0, cameraMenuOpacity - cameraMenuFadeSpeed * DeltaT);
 		if (oldOpacity !== cameraMenuOpacity) needsMenuRedraw = true;
+	}
+	
+	if (simulationMenuVisible) {
+		const oldOpacity = simulationMenuOpacity;
+		simulationMenuOpacity = Math.min(0.9, simulationMenuOpacity + simulationMenuFadeSpeed * DeltaT);
+		if (oldOpacity !== simulationMenuOpacity) needsMenuRedraw = true;
+	} else {
+		const oldOpacity = simulationMenuOpacity;
+		simulationMenuOpacity = Math.max(0, simulationMenuOpacity - simulationMenuFadeSpeed * DeltaT);
+		if (oldOpacity !== simulationMenuOpacity) needsMenuRedraw = true;
 	}
 	
 	simulate();
