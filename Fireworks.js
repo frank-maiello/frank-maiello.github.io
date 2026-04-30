@@ -147,6 +147,19 @@ var zeppelinLight = null;
 var zeppelinCamPoint = null;
 var zeppelinAngle = 1.7 * Math.PI; // Current angle on oval path
 var zeppelinSpeed = 0.01; // Radians per second
+
+// Sailboat variables
+var sailboatModelTemplate = null;
+var sailboatCamPoint = null;
+var sailboatAngle = 0.5 * Math.PI; // Current angle on oval path (start at different position)
+var sailboatSpeed = 0.015; // Radians per second (medium speed)
+var sailboatOvalRadiusX = 15; // Smaller horizontal radius than helicopter/zeppelin
+var sailboatOvalRadiusZ = 35; // Smaller depth radius
+var sailboatHeight = -0.2; // Water level
+var sailboatCenterX = 0; // Center of oval path (fireworks launch point)
+var sailboatCenterZ = 0; // Center of oval path
+var sailboatPivotOffset = -5.0; // Offset forward from path position to make rear act as pivot
+
 var ovalRadiusX = 30; // Horizontal radius of oval
 var ovalRadiusZ = 70; // Depth radius of oval
 var zeppelinHeight = 24; // Flight altitude
@@ -1206,9 +1219,8 @@ function initThreeScene() {
 		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Sailboat1.gltf',
 		function(gltf) {
 			sailboatModelTemplate = gltf.scene;
-			sailboatModelTemplate.position.set(-20, -0.2, 50);
+			// Position and rotation now handled by animation code
 			sailboatModelTemplate.scale.set(0.15, 0.15, 0.15);
-			sailboatModelTemplate.rotation.y = 0.7 * Math.PI; // Rotate to face the fireworks
 
 			// Enable shadow casting and receiving on all meshes in the model
 			sailboatModelTemplate.traverse(function(child) {
@@ -1216,9 +1228,13 @@ function initThreeScene() {
 					child.castShadow = true;
 					child.receiveShadow = true;
 				}
+				if (child.name === 'sailboatCamPoint') {
+					sailboatCamPoint = child;
+					console.log('Found sailboatCamPoint');
+				}
 			});
 
-			gThreeScene.add(sailboatModelTemplate);
+			//gThreeScene.add(sailboatModelTemplate);
 			console.log('sailboat model loaded successfully');
 			updateLoadingProgress();
 		},
@@ -2111,6 +2127,26 @@ function simulate() {
 		if (propellerStarboard) propellerStarboard.rotation.x += propellerRotationSpeed * DeltaT;
 		if (mainRotor) mainRotor.rotation.z += rotorRotationSpeed * DeltaT;
 		
+		// Animate sailboat sailing path even when paused
+		if (sailboatModelTemplate) {
+			sailboatAngle += sailboatSpeed * DeltaT;
+			var x = sailboatCenterX + Math.cos(sailboatAngle) * sailboatOvalRadiusX;
+			var z = sailboatCenterZ + Math.sin(sailboatAngle) * sailboatOvalRadiusZ;
+			
+			// Calculate direction of movement (tangent to oval)
+			var dx = -Math.sin(sailboatAngle) * sailboatOvalRadiusX;
+			var dz = Math.cos(sailboatAngle) * sailboatOvalRadiusZ;
+			
+			// Orient sailboat to face direction of travel
+			var headingAngle = Math.atan2(dx, dz) - Math.PI / 2;
+			sailboatModelTemplate.rotation.y = headingAngle;
+			
+			// Offset position forward along heading so rear of boat follows the path
+			var offsetX = x + Math.sin(headingAngle) * sailboatPivotOffset;
+			var offsetZ = z + Math.cos(headingAngle) * sailboatPivotOffset;
+			sailboatModelTemplate.position.set(offsetX, sailboatHeight, offsetZ);
+		}
+		
 		// Animate helicopter flight path even when paused
 		if (helicopterModelTemplate) {
 			helicopterAngle += helicopterSpeed * DeltaT;
@@ -2274,6 +2310,26 @@ function simulate() {
 		
 		// Nose-down pitch for forward flight
 		helicopterModelTemplate.rotation.x = -0.1; // ~5.7 degrees nose-down
+	}
+	
+	// Animate sailboat sailing path
+	if (sailboatModelTemplate) {
+		sailboatAngle += sailboatSpeed * DeltaT;
+		var x = sailboatCenterX + Math.cos(sailboatAngle) * sailboatOvalRadiusX;
+		var z = sailboatCenterZ + Math.sin(sailboatAngle) * sailboatOvalRadiusZ;
+		
+		// Calculate direction of movement (tangent to oval)
+		var dx = -Math.sin(sailboatAngle) * sailboatOvalRadiusX;
+		var dz = Math.cos(sailboatAngle) * sailboatOvalRadiusZ;
+		
+		// Orient sailboat to face direction of travel
+		var headingAngle = Math.atan2(dx, dz) - Math.PI / 2;
+		sailboatModelTemplate.rotation.y = headingAngle;
+		
+		// Offset position forward along heading so rear of boat follows the path
+		var offsetX = x + Math.sin(headingAngle) * sailboatPivotOffset;
+		var offsetZ = z + Math.cos(headingAngle) * sailboatPivotOffset;
+		sailboatModelTemplate.position.set(offsetX, sailboatHeight, offsetZ);
 	}
 	
 	// Update helicopter spotlight gimbal to aim at target
@@ -2616,8 +2672,8 @@ function drawCameraMenu() {
 	const radioButtonSpacing = 0.095 * menuScale; // Increased for more vertical spacing
 	const horizontalKnobSpacing = knobRadius * 2.5; // Increased for more horizontal spacing
 	const menuWidth = knobRadius * 3; // Fixed width
-	const radioSectionHeight = 5 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 5 camera modes
-	const menuHeight = radioSectionHeight + knobRadius * 1.2;
+	const radioSectionHeight = 6 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 6 camera modes
+	const menuHeight = radioSectionHeight + knobRadius * 2.2;
 	
 	// Position menu (shared position with all submenus)
 	const menuOriginX = submenuX * window.innerWidth;
@@ -2670,7 +2726,8 @@ function drawCameraMenu() {
 		'Auto Orbit Cam CW',
 		'Manual Orbit Cam',
 		'Helicopter Cam',
-		'Zeppelin Cam'
+		'Zeppelin Cam',
+		'Sailboat Cam'
 	];
 	
 	const radioStartY = 0;
@@ -2709,7 +2766,7 @@ function drawCameraMenu() {
 	// Draw Focal Length and Orbit Speed knobs at bottom (2 knobs side by side, centered)
 	const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
 	const orbitSpeedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
-	const knobY = radioSectionHeight + knobRadius * 0.8;
+	const knobY = radioSectionHeight + knobRadius * 1.8;
 	
 	// FOV Knob
 	drawKnob(ctx, fovKnobX, knobY, knobRadius, gCameraFOV, 3, 170, true, 'Focal Length', 210);
@@ -3052,14 +3109,14 @@ function updateKnobPositions() {
 	const menuScale = cScale; // Use same scale as main menu
 	const knobRadius = 0.1 * menuScale;
 	const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
-	const radioSectionHeight = 5 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (5 camera modes)
+	const radioSectionHeight = 6 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (6 camera modes)
 	const menuOriginX = submenuX * window.innerWidth;
 	const menuOriginY = submenuY * window.innerHeight;
 	const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
 	const menuWidth = knobRadius * 3.7; // Matches drawCameraMenu
 	const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
 	const orbitSpeedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
-	const knobY = radioSectionHeight + knobRadius * 0.8;
+	const knobY = radioSectionHeight + knobRadius * 1.8;
 	
 	fovKnobInfo = { x: menuOriginX + fovKnobX, y: menuOriginY + knobY, radius: knobRadius };
 	orbitSpeedKnobInfo = { x: menuOriginX + orbitSpeedKnobX, y: menuOriginY + knobY, radius: knobRadius };
@@ -3189,8 +3246,8 @@ function onMenuClick(evt) {
 		const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
 		const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
 		const menuWidth = knobRadius * 3.7; // Matches drawCameraMenu
-		const radioSectionHeight = 5 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (5 camera modes)
-		const menuHeight = radioSectionHeight + knobRadius * 2.24; // Matches drawCameraMenu
+		const radioSectionHeight = 6 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (6 camera modes)
+		const menuHeight = radioSectionHeight + knobRadius * 3.24; // Matches drawCameraMenu
 		
 		// Check close button
 		const closeIconRadius = 0.1 * menuScale * 0.25;
@@ -3210,7 +3267,7 @@ function onMenuClick(evt) {
 		const radioX = menuOriginX - 0.05 * menuScale
 		const radioButtonSize = 0.04 * menuScale;
 		
-		for (let i = 0; i < 5; i++) {
+		for (let i = 0; i < 6; i++) {
 			const radioY = menuOriginY + radioStartY + i * radioButtonSpacing;
 			const rdx = evt.clientX - radioX;
 			const rdy = evt.clientY - radioY;
@@ -3469,6 +3526,17 @@ function update() {
 		if (zeppelinCamPoint) {
 			zeppelinCamPoint.getWorldPosition(zeppelinCameraWorldPos);
 			Camera.position.copy(zeppelinCameraWorldPos);
+			
+			// Look toward the firework display (barge at origin)
+			var lookTarget = new THREE.Vector3(0, 20, 0);
+			Camera.lookAt(lookTarget);
+		}
+	} else if (gCameraMode === 5 && sailboatModelTemplate) {
+		// Sailboat camera - position camera at sailboatCamPoint
+		var sailboatCameraWorldPos = new THREE.Vector3();
+		if (sailboatCamPoint) {
+			sailboatCamPoint.getWorldPosition(sailboatCameraWorldPos);
+			Camera.position.copy(sailboatCameraWorldPos);
 			
 			// Look toward the firework display (barge at origin)
 			var lookTarget = new THREE.Vector3(0, 20, 0);
