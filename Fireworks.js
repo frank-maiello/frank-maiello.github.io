@@ -63,7 +63,7 @@ var explosionLightBrightIntensity = 0.6; // Bright flash intensity
 var explosionLightFadeSpeed = 20.0; // How fast it fades back to dim
 
 // Camera control variables
-var gCameraMode = 2; // 0=Auto Orbit CW, 1=Auto Orbit CCW, 2=Manual Orbit
+var gCameraMode = 2; // 0=Auto Orbit CCW, 1=Auto Orbit CW, 2=Manual Orbit, 3=Helicopter Cam, 4=Zeppelin Cam
 var gCameraAngle = 0;
 var gCameraRotationSpeed = 1.0;
 var gCameraFOV = 57;
@@ -144,6 +144,7 @@ var zeppelinModelTemplate = null;
 var propellerPort = null;
 var propellerStarboard = null;
 var zeppelinLight = null;
+var zeppelinCamPoint = null;
 var zeppelinAngle = 1.7 * Math.PI; // Current angle on oval path
 var zeppelinSpeed = 0.01; // Radians per second
 var ovalRadiusX = 30; // Horizontal radius of oval
@@ -1067,6 +1068,8 @@ function initThreeScene() {
 		}
 	);
 
+	
+
 	// LOAD HELICOPTER --------------------------------------
 	var helicopterLoader = new THREE.GLTFLoader();
 	helicopterLoader.load(
@@ -1197,6 +1200,36 @@ function initThreeScene() {
 		}
 	);
 
+	// LOAD SAILBOAT --------------------------------------
+	var sailboatLoader = new THREE.GLTFLoader();
+	sailboatLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Sailboat1.gltf',
+		function(gltf) {
+			sailboatModelTemplate = gltf.scene;
+			sailboatModelTemplate.position.set(-20, -0.2, 50);
+			sailboatModelTemplate.scale.set(0.15, 0.15, 0.15);
+			sailboatModelTemplate.rotation.y = 0.7 * Math.PI; // Rotate to face the fireworks
+
+			// Enable shadow casting and receiving on all meshes in the model
+			sailboatModelTemplate.traverse(function(child) {
+				if (child.isMesh) {
+					child.castShadow = true;
+					child.receiveShadow = true;
+				}
+			});
+
+			gThreeScene.add(sailboatModelTemplate);
+			console.log('sailboat model loaded successfully');
+			updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('sailboat model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading sailboat model:', error);
+		}
+	);
+
 	// LOAD BARGE --------------------------------------
 	var bargeLoader = new THREE.GLTFLoader();
 	bargeLoader.load(
@@ -1285,6 +1318,10 @@ function initThreeScene() {
 					zeppelinPointLight.shadow.mapSize.height = 512;
 					child.add(zeppelinPointLight);
 					console.log('Added point light to zeppelinLight');
+				}
+				if (child.name === 'zeppelinCamPoint') {
+					zeppelinCamPoint = child;
+					console.log('Found zeppelinCamPoint');
 				}
 				
 			});
@@ -2579,7 +2616,7 @@ function drawCameraMenu() {
 	const radioButtonSpacing = 0.095 * menuScale; // Increased for more vertical spacing
 	const horizontalKnobSpacing = knobRadius * 2.5; // Increased for more horizontal spacing
 	const menuWidth = knobRadius * 3; // Fixed width
-	const radioSectionHeight = 4 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 4 camera modes
+	const radioSectionHeight = 5 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 5 camera modes
 	const menuHeight = radioSectionHeight + knobRadius * 1.2;
 	
 	// Position menu (shared position with all submenus)
@@ -2632,7 +2669,8 @@ function drawCameraMenu() {
 		'Auto Orbit Cam CCW',
 		'Auto Orbit Cam CW',
 		'Manual Orbit Cam',
-		'Helicopter Cam'
+		'Helicopter Cam',
+		'Zeppelin Cam'
 	];
 	
 	const radioStartY = 0;
@@ -3014,7 +3052,7 @@ function updateKnobPositions() {
 	const menuScale = cScale; // Use same scale as main menu
 	const knobRadius = 0.1 * menuScale;
 	const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
-	const radioSectionHeight = 4 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu
+	const radioSectionHeight = 5 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (5 camera modes)
 	const menuOriginX = submenuX * window.innerWidth;
 	const menuOriginY = submenuY * window.innerHeight;
 	const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
@@ -3151,7 +3189,7 @@ function onMenuClick(evt) {
 		const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
 		const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
 		const menuWidth = knobRadius * 3.7; // Matches drawCameraMenu
-		const radioSectionHeight = 4 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu
+		const radioSectionHeight = 5 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (5 camera modes)
 		const menuHeight = radioSectionHeight + knobRadius * 2.24; // Matches drawCameraMenu
 		
 		// Check close button
@@ -3172,7 +3210,7 @@ function onMenuClick(evt) {
 		const radioX = menuOriginX - 0.05 * menuScale
 		const radioButtonSize = 0.04 * menuScale;
 		
-		for (let i = 0; i < 4; i++) {
+		for (let i = 0; i < 5; i++) {
 			const radioY = menuOriginY + radioStartY + i * radioButtonSpacing;
 			const rdx = evt.clientX - radioX;
 			const rdy = evt.clientY - radioY;
@@ -3420,6 +3458,17 @@ function update() {
 		if (helicopterCameraGhostSphere) {
 			helicopterCameraGhostSphere.getWorldPosition(cabCameraWorldPos);
 			Camera.position.copy(cabCameraWorldPos);
+			
+			// Look toward the firework display (barge at origin)
+			var lookTarget = new THREE.Vector3(0, 20, 0);
+			Camera.lookAt(lookTarget);
+		}
+	} else if (gCameraMode === 4 && zeppelinModelTemplate) {
+		// Zeppelin camera - position camera at zeppelinCamPoint
+		var zeppelinCameraWorldPos = new THREE.Vector3();
+		if (zeppelinCamPoint) {
+			zeppelinCamPoint.getWorldPosition(zeppelinCameraWorldPos);
+			Camera.position.copy(zeppelinCameraWorldPos);
 			
 			// Look toward the firework display (barge at origin)
 			var lookTarget = new THREE.Vector3(0, 20, 0);
