@@ -1219,8 +1219,18 @@ function initThreeScene() {
 		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Sailboat1.gltf',
 		function(gltf) {
 			sailboatModelTemplate = gltf.scene;
-			// Position and rotation now handled by animation code
 			sailboatModelTemplate.scale.set(0.08, 0.08, 0.08);
+			
+			// Set initial position before animation starts
+			var initialX = sailboatCenterX + Math.cos(sailboatAngle) * sailboatOvalRadiusX;
+			var initialZ = sailboatCenterZ + Math.sin(sailboatAngle) * sailboatOvalRadiusZ;
+			var initialDx = -Math.sin(sailboatAngle) * sailboatOvalRadiusX;
+			var initialDz = Math.cos(sailboatAngle) * sailboatOvalRadiusZ;
+			var initialHeading = Math.atan2(initialDx, initialDz) - Math.PI / 2;
+			var initialOffsetX = initialX + Math.sin(initialHeading) * sailboatPivotOffset;
+			var initialOffsetZ = initialZ + Math.cos(initialHeading) * sailboatPivotOffset;
+			sailboatModelTemplate.position.set(initialOffsetX, sailboatHeight, initialOffsetZ);
+			sailboatModelTemplate.rotation.y = initialHeading;
 
 			// Enable shadow casting and receiving on all meshes in the model
 			sailboatModelTemplate.traverse(function(child) {
