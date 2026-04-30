@@ -971,7 +971,7 @@
         0,
         1
       ],
-      "name": "Plane",
+      "name": "sailFore",
       "extras": {
         "name": "Plane"
       },
@@ -1121,7 +1121,7 @@
         0,
         1
       ],
-      "name": "Plane001",
+      "name": "sailAft",
       "extras": {
         "name": "Plane.001"
       },
