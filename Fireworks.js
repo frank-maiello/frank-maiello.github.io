@@ -63,7 +63,7 @@ var explosionLightBrightIntensity = 0.6; // Bright flash intensity
 var explosionLightFadeSpeed = 20.0; // How fast it fades back to dim
 
 // Camera control variables
-var gCameraMode = 2; // 0=Auto Orbit CCW, 1=Auto Orbit CW, 2=Manual Orbit, 3=Helicopter Cam, 4=Zeppelin Cam
+var gCameraMode = 0; // 0=Manual Orbit, 1=Auto Orbit CCW, 2=Auto Orbit CW, 3=Helicopter Cam, 4=Zeppelin Cam, 5=Sailboat Cam
 var gCameraAngle = 0;
 var gCameraRotationSpeed = 1.0;
 var gCameraFOV = 57;
@@ -152,7 +152,7 @@ var zeppelinSpeed = 0.01; // Radians per second
 var sailboatModelTemplate = null;
 var sailboatCamPoint = null;
 var sailboatAngle = 0.5 * Math.PI; // Current angle on oval path (start at different position)
-var sailboatSpeed = 0.015; // Radians per second (medium speed)
+var sailboatSpeed = 0.007; // Radians per second (medium speed)
 var sailboatOvalRadiusX = 15; // Smaller horizontal radius than helicopter/zeppelin
 var sailboatOvalRadiusZ = 35; // Smaller depth radius
 var sailboatHeight = -0.2; // Water level
@@ -1220,13 +1220,29 @@ function initThreeScene() {
 		function(gltf) {
 			sailboatModelTemplate = gltf.scene;
 			// Position and rotation now handled by animation code
-			sailboatModelTemplate.scale.set(0.15, 0.15, 0.15);
+			sailboatModelTemplate.scale.set(0.08, 0.08, 0.08);
 
 			// Enable shadow casting and receiving on all meshes in the model
 			sailboatModelTemplate.traverse(function(child) {
 				if (child.isMesh) {
 					child.castShadow = true;
 					child.receiveShadow = true;
+					
+					// Replace material with MeshPhongMaterial
+					if (child.material) {
+						var oldMaterial = child.material;
+						var materialConfig = {
+							color: oldMaterial.color || 0xb3b3b3
+						};
+						
+						// Make sails double-sided so they're visible from both sides
+						if (child.name === 'sailFore' || child.name === 'sailAft') {
+							materialConfig.side = THREE.DoubleSide;
+						}
+						
+						var newMaterial = new THREE.MeshPhongMaterial(materialConfig);
+						child.material = newMaterial;
+					}
 				}
 				if (child.name === 'sailboatCamPoint') {
 					sailboatCamPoint = child;
@@ -1234,7 +1250,7 @@ function initThreeScene() {
 				}
 			});
 
-			//gThreeScene.add(sailboatModelTemplate);
+			gThreeScene.add(sailboatModelTemplate);
 			console.log('sailboat model loaded successfully');
 			updateLoadingProgress();
 		},
@@ -2673,7 +2689,7 @@ function drawCameraMenu() {
 	const horizontalKnobSpacing = knobRadius * 2.5; // Increased for more horizontal spacing
 	const menuWidth = knobRadius * 3; // Fixed width
 	const radioSectionHeight = 6 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 6 camera modes
-	const menuHeight = radioSectionHeight + knobRadius * 2.2;
+	const menuHeight = radioSectionHeight + knobRadius * 1.7;
 	
 	// Position menu (shared position with all submenus)
 	const menuOriginX = submenuX * window.innerWidth;
@@ -2722,9 +2738,9 @@ function drawCameraMenu() {
 	
 	// Draw radio buttons for camera modes
 	const cameraModeNames = [
+		'Manual Orbit Cam',
 		'Auto Orbit Cam CCW',
 		'Auto Orbit Cam CW',
-		'Manual Orbit Cam',
 		'Helicopter Cam',
 		'Zeppelin Cam',
 		'Sailboat Cam'
@@ -2766,7 +2782,7 @@ function drawCameraMenu() {
 	// Draw Focal Length and Orbit Speed knobs at bottom (2 knobs side by side, centered)
 	const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
 	const orbitSpeedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
-	const knobY = radioSectionHeight + knobRadius * 1.8;
+	const knobY = radioSectionHeight + knobRadius * 1.3;
 	
 	// FOV Knob
 	drawKnob(ctx, fovKnobX, knobY, knobRadius, gCameraFOV, 3, 170, true, 'Focal Length', 210);
@@ -3116,7 +3132,7 @@ function updateKnobPositions() {
 	const menuWidth = knobRadius * 3.7; // Matches drawCameraMenu
 	const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
 	const orbitSpeedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
-	const knobY = radioSectionHeight + knobRadius * 1.8;
+	const knobY = radioSectionHeight + knobRadius * 1.3;
 	
 	fovKnobInfo = { x: menuOriginX + fovKnobX, y: menuOriginY + knobY, radius: knobRadius };
 	orbitSpeedKnobInfo = { x: menuOriginX + orbitSpeedKnobX, y: menuOriginY + knobY, radius: knobRadius };
@@ -3247,7 +3263,7 @@ function onMenuClick(evt) {
 		const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
 		const menuWidth = knobRadius * 3.7; // Matches drawCameraMenu
 		const radioSectionHeight = 6 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (6 camera modes)
-		const menuHeight = radioSectionHeight + knobRadius * 3.24; // Matches drawCameraMenu
+		const menuHeight = radioSectionHeight + knobRadius * 2.74; // Matches drawCameraMenu
 		
 		// Check close button
 		const closeIconRadius = 0.1 * menuScale * 0.25;
@@ -3276,7 +3292,7 @@ function onMenuClick(evt) {
 				
 				// When entering auto orbit mode, update gCameraAngle to current camera position
 				// so the camera starts orbiting from its current position instead of jumping
-				if (i === 0 || i === 1) {
+				if (i === 1 || i === 2) {
 					const target = CameraControl.target;
 					const dx = Camera.position.x - target.x;
 					const dz = Camera.position.z - target.z;
@@ -3493,7 +3509,7 @@ function update() {
 	}
 	
 	// Update camera rotation for auto modes (rotate around OrbitControls target)
-	if (gCameraMode === 0 || gCameraMode === 1) {
+	if (gCameraMode === 1 || gCameraMode === 2) {
 		// Get current camera position relative to target
 		const target = CameraControl.target;
 		const dx = Camera.position.x - target.x;
@@ -3503,7 +3519,7 @@ function update() {
 		
 		// Calculate rotation angle
 		const angleChange = gCameraRotationSpeed * DeltaT * 0.1;
-		gCameraAngle += (gCameraMode === 0) ? -angleChange : angleChange;
+		gCameraAngle += (gCameraMode === 1) ? -angleChange : angleChange;
 		
 		// Apply rotation around target (maintaining height)
 		Camera.position.x = target.x + Math.cos(gCameraAngle) * radius;
