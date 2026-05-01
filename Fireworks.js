@@ -110,6 +110,15 @@ var needsMenuRedraw = true; // Flag to optimize canvas clearing
 var mouseControlsImage = null;
 var mouseControlsImageLoaded = false;
 
+// Camera help
+var cameraHelpVisible = false;
+var manualOrbitImage = null;
+var autoOrbitImage = null;
+var vehicleImage = null;
+var manualOrbitImageLoaded = false;
+var autoOrbitImageLoaded = false;
+var vehicleImageLoaded = false;
+
 // Knob drag state
 var draggingFOVKnob = false;
 var draggingOrbitSpeedKnob = false;
@@ -118,6 +127,7 @@ var draggingLaunchVelocityKnob = false;
 var draggingMortarAngleKnob = false;
 var draggingGravityKnob = false;
 var draggingBallRadiusKnob = false;
+var draggingCamera = false; // For fixed camera pan/tilt dragging
 var fovKnobInfo = { x: 0, y: 0, radius: 0 };
 var explosionSizeKnobInfo = { x: 0, y: 0, radius: 0 };
 var launchVelocityKnobInfo = { x: 0, y: 0, radius: 0 };
@@ -128,6 +138,10 @@ var orbitSpeedKnobInfo = { x: 0, y: 0, radius: 0 };
 var dragStartMouseX = 0;
 var dragStartMouseY = 0;
 var dragStartValue = 0;
+
+// Fixed camera pan/tilt (for helicopter, zeppelin, sailboat cams)
+var cameraPan = 0; // Horizontal rotation (yaw) in radians
+var cameraTilt = 0; // Vertical rotation (pitch) in radians
 
 // Shock wave system
 var shockWaves = []; // Array of active shock waves
@@ -155,7 +169,7 @@ var sailboatAngle = 0.5 * Math.PI; // Current angle on oval path (start at diffe
 var sailboatSpeed = 0.007; // Radians per second (medium speed)
 var sailboatOvalRadiusX = 15; // Smaller horizontal radius than helicopter/zeppelin
 var sailboatOvalRadiusZ = 35; // Smaller depth radius
-var sailboatHeight = -0.2; // Water level
+var sailboatHeight = -0.1; // Water level
 var sailboatCenterX = 0; // Center of oval path (fireworks launch point)
 var sailboatCenterZ = 0; // Center of oval path
 var sailboatPivotOffset = -5.0; // Offset forward from path position to make rear act as pivot
@@ -845,7 +859,41 @@ function initScene() {
 		console.error("Failed to load instructions image");
 		mouseControlsImageLoaded = false;
 	};
-	mouseControlsImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/cameraMouseControls.png';
+	mouseControlsImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/manualOrbitMouseControls.png';
+	
+	// Load camera help images
+	manualOrbitImage = new Image();
+	manualOrbitImage.onload = function() {
+		manualOrbitImageLoaded = true;
+		needsMenuRedraw = true;
+	};
+	manualOrbitImage.onerror = function() {
+		console.error("Failed to load manual orbit image");
+		manualOrbitImageLoaded = false;
+	};
+	manualOrbitImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/manualOrbitMouseControls.png';
+	
+	autoOrbitImage = new Image();
+	autoOrbitImage.onload = function() {
+		autoOrbitImageLoaded = true;
+		needsMenuRedraw = true;
+	};
+	autoOrbitImage.onerror = function() {
+		console.error("Failed to load auto orbit image");
+		autoOrbitImageLoaded = false;
+	};
+	autoOrbitImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/autoOrbitMouseControls.png';
+	
+	vehicleImage = new Image();
+	vehicleImage.onload = function() {
+		vehicleImageLoaded = true;
+		needsMenuRedraw = true;
+	};
+	vehicleImage.onerror = function() {
+		console.error("Failed to load vehicle image");
+		vehicleImageLoaded = false;
+	};
+	vehicleImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/vehicleMouseControls.png';
 
 }
 	
@@ -1246,9 +1294,11 @@ function initThreeScene() {
 						};
 						
 						// Make sails double-sided so they're visible from both sides
-						if (child.name === 'sailFore' || child.name === 'sailAft') {
+						if (child.name === 'foreSail' || child.name === 'aftSail') {
 							materialConfig.side = THREE.DoubleSide;
+							materialConfig.color = 0xbe1414; // red sails
 						}
+
 						
 						var newMaterial = new THREE.MeshPhongMaterial(materialConfig);
 						child.material = newMaterial;
@@ -1756,6 +1806,9 @@ function initThreeScene() {
 	// Keyboard events
 	window.addEventListener( 'keydown', onKeyDown, false );
 	
+	// Wheel event for zooming in fixed camera modes
+	window.addEventListener( 'wheel', onWheel, false );
+	
 	// Create 2D overlay canvas for menus
 	gOverlayCanvas = document.createElement('canvas');
 	gOverlayCanvas.id = 'overlay-canvas'; // Give it an ID
@@ -1965,6 +2018,15 @@ function onPointer( evt ) {
 		const menuHandled = onMenuClick(evt);
 		if (menuHandled) return; // Don't process further if menu consumed the click
 		
+		// In fixed camera modes (helicopter, zeppelin, sailboat), start camera pan/tilt dragging
+		if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5) {
+			draggingCamera = true;
+			dragStartMouseX = evt.clientX;
+			dragStartMouseY = evt.clientY;
+			gMouseDown = true;
+			return;
+		}
+		
 		gGrabber.start(evt.clientX, evt.clientY);
 		gMouseDown = true;
 		if (gGrabber.physicsObject) {
@@ -1972,7 +2034,26 @@ function onPointer( evt ) {
 			CameraControl.enabled = false;
 		}
 	}
-	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob || draggingBallRadiusKnob)) {
+	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob || draggingBallRadiusKnob || draggingCamera)) {
+		// Handle camera pan/tilt dragging in fixed camera modes
+		if (draggingCamera) {
+			const deltaX = evt.clientX - dragStartMouseX;
+			const deltaY = evt.clientY - dragStartMouseY;
+			
+			// Update pan (horizontal) and tilt (vertical)
+			const sensitivity = 0.003; // Adjust for desired drag speed
+			cameraPan -= deltaX * sensitivity; // Negative for natural drag direction
+			cameraTilt += deltaY * sensitivity; // Positive for natural drag direction
+			
+			// Clamp tilt to prevent flipping upside down
+			const maxTilt = Math.PI / 2 - 0.1; // Slightly less than 90 degrees
+			cameraTilt = Math.max(-maxTilt, Math.min(maxTilt, cameraTilt));
+			
+			dragStartMouseX = evt.clientX;
+			dragStartMouseY = evt.clientY;
+			return;
+		}
+		
 		// Handle knob dragging with linear drag method (like boids3D.js)
 		if (draggingFOVKnob) {
 			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
@@ -2097,6 +2178,7 @@ function onPointer( evt ) {
 		draggingMortarAngleKnob = false;
 		draggingGravityKnob = false;
 		draggingBallRadiusKnob = false;
+		draggingCamera = false;
 		
 		if (gGrabber.physicsObject) {
 			gGrabber.end();
@@ -2116,7 +2198,28 @@ function onKeyDown( evt ) {
 		console.log(`CameraControl.target.set(${CameraControl.target.x.toFixed(1)}, ${CameraControl.target.y.toFixed(1)}, ${CameraControl.target.z.toFixed(1)});`);
 	}
 }
-				
+
+function onWheel( evt ) {
+	// In fixed camera modes (helicopter, zeppelin, sailboat), adjust FOV instead of camera position
+	if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5) {
+		evt.preventDefault();
+		
+		// Adjust FOV based on wheel delta (negative deltaY = scroll up = zoom in = smaller FOV)
+		const zoomAmount = evt.deltaY * 0.05;
+		gCameraFOV += zoomAmount;
+		
+		// Clamp FOV to valid range (3 to 170)
+		gCameraFOV = Math.max(3, Math.min(170, gCameraFOV));
+		
+		// Update camera immediately
+		Camera.fov = gCameraFOV;
+		Camera.updateProjectionMatrix();
+		
+		// Trigger menu redraw to update knob position
+		needsMenuRedraw = true;
+	}
+}
+			
 function onWindowResize() {
 	Camera.aspect = window.innerWidth / window.innerHeight;
 	Camera.updateProjectionMatrix();
@@ -2445,7 +2548,7 @@ function drawMainMenu() {
 	const itemHeight = 0.12 * menuScale;
 	const itemWidth = 0.15 * menuScale;
 	const padding = 0.02 * menuScale;
-	const menuHeight = itemHeight * 4 + (padding * 5); // Four items: play/pause, camera, simulation, and instructions
+	const menuHeight = itemHeight * 3 + (padding * 4); // Three items: play/pause, camera, and simulation
 	const menuWidth = itemWidth + (padding * 2);
 	
 	const menuBaseY = ellipsisY + 0.08 * menuScale;
@@ -2461,8 +2564,8 @@ function drawMainMenu() {
 	ctx.beginPath();
 	ctx.roundRect(menuX, menuY, menuWidth, menuHeight, cornerRadius);
 	const menuGradient = ctx.createLinearGradient(menuX, menuY, menuX, menuY + menuHeight);
-	menuGradient.addColorStop(0, 'rgba(26, 26, 26, 0.9)');
-	menuGradient.addColorStop(1, 'rgba(51, 51, 51, 0.9)');
+	menuGradient.addColorStop(0, 'rgba(9, 9, 9, 0.9)');
+	menuGradient.addColorStop(1, 'rgba(19, 19, 19, 0.9)');
 	ctx.fillStyle = menuGradient;
 	ctx.fill();
 	
@@ -2645,44 +2748,6 @@ function drawMainMenu() {
 	ctx.stroke();
 	ctx.restore();
 	
-	// Draw Instructions menu item
-	const itemY4 = itemY3 + itemHeight + padding;
-	ctx.beginPath();
-	ctx.roundRect(itemX, itemY4, itemWidth, itemHeight, cornerRadius * 0.5);
-	ctx.fillStyle = instructionsMenuVisible ? 'rgba(255, 204, 0, 0.3)' : 'rgba(38, 38, 38, 0.8)';
-	ctx.fill();
-	
-	// Draw question mark icon
-	const icon4X = itemX + itemWidth / 2;
-	const icon4Y = itemY4 + 0.42 * itemHeight;
-	const icon4Color = instructionsMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
-	ctx.strokeStyle = icon4Color;
-	ctx.fillStyle = icon4Color;
-	ctx.lineWidth = 2.5;
-	ctx.lineCap = 'round';
-	
-	ctx.save();
-	ctx.translate(icon4X, icon4Y);
-	
-	// Draw question mark
-	const qmSize = iconSize;
-	ctx.beginPath();
-	// Top curve of question mark
-	ctx.arc(0, -qmSize * 0.1, qmSize * 0.4, -Math.PI, 0);
-	// line going across
-	ctx.lineTo(qmSize * 0.4, qmSize * 0.2);
-	// Stem going down
-	ctx.lineTo(0, qmSize * 0.2);
-	ctx.lineTo(0, qmSize * 0.4);
-	ctx.stroke();
-	
-	// Dot at bottom
-	ctx.beginPath();
-	ctx.arc(0, qmSize * 0.6, qmSize * 0.08, 0, 2 * Math.PI);
-	ctx.fill();
-	
-	ctx.restore();
-	
 	ctx.restore();
 }
 
@@ -2745,6 +2810,25 @@ function drawCameraMenu() {
 	ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
 	ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
 	ctx.stroke();
+	
+	// Draw help button (question mark in circle) on top right
+	const helpIconRadius = closeIconRadius;
+	const helpIconX = menuWidth + padding - helpIconRadius - 0.02 * menuScale;
+	const helpIconY = -padding + helpIconRadius + 0.02 * menuScale;
+	ctx.beginPath();
+	ctx.arc(helpIconX, helpIconY, helpIconRadius, 0, 2 * Math.PI);
+	ctx.fillStyle = cameraHelpVisible ? 'rgba(80, 140, 200, 1.0)' : 'rgba(60, 100, 140, 1.0)';
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
+	ctx.lineWidth = 2;
+	ctx.stroke();
+	
+	// Draw question mark text
+	ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+	ctx.font = `bold ${helpIconRadius * 1.3}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.fillText('?', helpIconX, helpIconY);
 	
 	// Draw radio buttons for camera modes
 	const cameraModeNames = [
@@ -3014,8 +3098,8 @@ function drawSimulationMenu() {
 	ctx.restore();
 }
 
-function drawInstructionsMenu() {
-	if (instructionsMenuOpacity <= 0) return;
+function drawCameraHelp() {
+	if (!cameraHelpVisible) return;
 	
 	const ctx = gOverlayCtx;
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
@@ -3023,85 +3107,41 @@ function drawInstructionsMenu() {
 	const knobRadius = 0.1 * menuScale;
 	const padding = 0.17 * menuScale;
 	
-	// Use same fixed width as camera and simulation menus
-	const menuWidth = knobRadius * 3;
+	// Select the appropriate image based on camera mode
+	let currentImage = null;
+	let imageLoaded = false;
 	
-	// Menu height stays fixed
-	let menuHeight = menuWidth;
-	let imageWidth = menuWidth;
-	let imageHeight = menuWidth;
-	let imageX = 0;
-	let imageY = 0;
-	
-	if (mouseControlsImageLoaded && mouseControlsImage) {
-		const imgAspect = mouseControlsImage.width / mouseControlsImage.height;
-		imageWidth = menuWidth * 1.6;
-		imageHeight = imageWidth / imgAspect;
-		// Calculate original menu height
-		const originalMenuHeight = menuWidth / imgAspect;
-		// Center image horizontally, position down a bit vertically based on original height
-		imageX = (menuWidth - imageWidth) / 2;
-		imageY = (originalMenuHeight - imageHeight) / 2 + 0.1 * menuScale;
-		// Make menu taller than the calculated height
-		menuHeight = originalMenuHeight + 0.15 * menuScale;
+	if (gCameraMode === 0) {
+		// Manual orbit cam
+		currentImage = manualOrbitImage;
+		imageLoaded = manualOrbitImageLoaded;
+	} else if (gCameraMode === 1 || gCameraMode === 2) {
+		// Auto orbit cams
+		currentImage = autoOrbitImage;
+		imageLoaded = autoOrbitImageLoaded;
+	} else if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5) {
+		// Vehicle cams
+		currentImage = vehicleImage;
+		imageLoaded = vehicleImageLoaded;
 	}
 	
-	// Position menu (shared position with all submenus)
-	const menuOriginX = submenuX * window.innerWidth;
-	const menuOriginY = submenuY * window.innerHeight;
+	// Only draw if image is loaded
+	if (!imageLoaded || !currentImage) return;
+	
+	// Calculate image dimensions - maintain original aspect ratio
+	const cameraMenuWidth = knobRadius * 3;
+	const spacing = -0.05 * menuScale; // Negative to overlap slightly, moving left
+	const menuOriginX = submenuX * window.innerWidth + cameraMenuWidth + padding * 2 + spacing;
+	const menuOriginY = submenuY * window.innerHeight - 0.1 * menuScale; // Move up
+	
+	// Fixed width, height based on original aspect ratio
+	const imageWidth = cameraMenuWidth * 1.8;
+	const imgAspect = currentImage.width / currentImage.height;
+	const imageHeight = imageWidth / imgAspect;
 	
 	ctx.save();
-	ctx.translate(menuOriginX, menuOriginY);
-	ctx.globalAlpha = instructionsMenuOpacity;
-	
-	// Draw menu background
-	const cornerRadius = 8;
-	ctx.beginPath();
-	ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
-	const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
-	menuGradient.addColorStop(0, 'rgba(70, 60, 40, 0.95)');
-	menuGradient.addColorStop(1, 'rgba(40, 30, 20, 0.95)');
-	ctx.fillStyle = menuGradient;
-	ctx.fill();
-	ctx.strokeStyle = 'rgba(180, 140, 100, 0.9)';
-	ctx.lineWidth = 1.5;
-	ctx.stroke();
-	
-	// Draw title
-	ctx.fillStyle = 'rgba(220, 210, 180, 1.0)';
-	ctx.font = `bold ${0.05 * menuScale}px verdana`;
-	ctx.textAlign = 'center';
-	ctx.fillText('MOUSE', menuWidth / 2, -padding + 0.06 * menuScale);
-	
-	// Draw close button
-	const closeIconRadius = 0.1 * menuScale * 0.25;
-	const closeIconX = -padding + closeIconRadius + 0.02 * menuScale;
-	const closeIconY = -padding + closeIconRadius + 0.02 * menuScale;
-	ctx.beginPath();
-	ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
-	ctx.fillStyle = 'rgba(180, 40, 40, 1.0)';
-	ctx.fill();
-	ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
-	ctx.lineWidth = 2;
-	const xSize = closeIconRadius * 0.4;
-	ctx.beginPath();
-	ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
-	ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
-	ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
-	ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
-	ctx.stroke();
-	
-	// Draw image or loading message
-	if (mouseControlsImageLoaded && mouseControlsImage) {
-		ctx.drawImage(mouseControlsImage, imageX, imageY, imageWidth, imageHeight);
-	} else {
-		ctx.fillStyle = 'rgba(200, 190, 170, 1.0)';
-		ctx.font = `${0.04 * menuScale}px verdana`;
-		ctx.textAlign = 'center';
-		ctx.textBaseline = 'middle';
-		ctx.fillText('Loading instructions...', menuWidth / 2, menuHeight / 2);
-	}
-	
+	ctx.globalAlpha = cameraMenuOpacity; // Use same opacity as camera menu
+	ctx.drawImage(currentImage, menuOriginX, menuOriginY, imageWidth, imageHeight);
 	ctx.restore();
 }
 
@@ -3152,7 +3192,7 @@ function drawMenus() {
 	if (!gOverlayCtx) return;
 	
 	// Always clear and redraw if menus are visible or animating
-	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0) || (simulationMenuOpacity > 0) || (instructionsMenuOpacity > 0);
+	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0) || (simulationMenuOpacity > 0);
 	if (!needsMenuRedraw && !isAnimating) return;
 	
 	// Clear overlay
@@ -3161,8 +3201,8 @@ function drawMenus() {
 	// Draw menus
 	drawMainMenu();
 	drawCameraMenu();
+	drawCameraHelp();
 	drawSimulationMenu();
-	drawInstructionsMenu();
 	
 	needsMenuRedraw = false;
 }
@@ -3176,8 +3216,8 @@ function onMenuClick(evt) {
 		// Close all submenus when main menu is closed
 		if (!mainMenuVisible) {
 			cameraMenuVisible = false;
+			cameraHelpVisible = false;
 			simulationMenuVisible = false;
-			instructionsMenuVisible = false;
 		}
 		needsMenuRedraw = true;
 		evt.stopPropagation();
@@ -3217,10 +3257,13 @@ function onMenuClick(evt) {
 		if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
 			evt.clientY >= itemY2 && evt.clientY <= itemY2 + itemHeight) {
 			cameraMenuVisible = !cameraMenuVisible;
+			// Close camera help when camera menu is closed
+			if (!cameraMenuVisible) {
+				cameraHelpVisible = false;
+			}
 			// Close other submenus
 			if (cameraMenuVisible) {
 				simulationMenuVisible = false;
-				instructionsMenuVisible = false;
 			}
 			needsMenuRedraw = true;
 			evt.stopPropagation();
@@ -3235,22 +3278,7 @@ function onMenuClick(evt) {
 			// Close other submenus
 			if (simulationMenuVisible) {
 				cameraMenuVisible = false;
-				instructionsMenuVisible = false;
-			}
-			needsMenuRedraw = true;
-			evt.stopPropagation();
-			return true; // Menu click handled
-		}
-		
-		// Check Instructions button
-		const itemY4 = itemY3 + itemHeight + padding;
-		if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
-			evt.clientY >= itemY4 && evt.clientY <= itemY4 + itemHeight) {
-			instructionsMenuVisible = !instructionsMenuVisible;
-			// Close other submenus
-			if (instructionsMenuVisible) {
-				cameraMenuVisible = false;
-				simulationMenuVisible = false;
+				cameraHelpVisible = false;
 			}
 			needsMenuRedraw = true;
 			evt.stopPropagation();
@@ -3271,7 +3299,7 @@ function onMenuClick(evt) {
 		const knobRadius = 0.1 * menuScale;
 		const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
 		const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
-		const menuWidth = knobRadius * 3.7; // Matches drawCameraMenu
+		const menuWidth = knobRadius * 3; // Matches drawCameraMenu - FIXED
 		const radioSectionHeight = 6 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (6 camera modes)
 		const menuHeight = radioSectionHeight + knobRadius * 2.74; // Matches drawCameraMenu
 		
@@ -3283,6 +3311,20 @@ function onMenuClick(evt) {
 		const dy = evt.clientY - closeIconY;
 		if (dx * dx + dy * dy < closeIconRadius * closeIconRadius) {
 			cameraMenuVisible = false;
+			cameraHelpVisible = false; // Close help panel too
+			needsMenuRedraw = true;
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+		
+		// Check help button
+		const helpIconRadius = closeIconRadius;
+		const helpIconX = menuOriginX + menuWidth + padding - helpIconRadius - 0.02 * menuScale;
+		const helpIconY = menuOriginY - padding + helpIconRadius + 0.02 * menuScale;
+		const hdx = evt.clientX - helpIconX;
+		const hdy = evt.clientY - helpIconY;
+		if (hdx * hdx + hdy * hdy < helpIconRadius * helpIconRadius) {
+			cameraHelpVisible = !cameraHelpVisible;
 			needsMenuRedraw = true;
 			evt.stopPropagation();
 			return true; // Menu click handled
@@ -3307,6 +3349,12 @@ function onMenuClick(evt) {
 					const dx = Camera.position.x - target.x;
 					const dz = Camera.position.z - target.z;
 					gCameraAngle = Math.atan2(dz, dx);
+				}
+				
+				// When entering fixed camera modes, reset pan and tilt
+				if (i === 3 || i === 4 || i === 5) {
+					cameraPan = 0;
+					cameraTilt = 0;
 				}
 				
 				needsMenuRedraw = true;
@@ -3453,28 +3501,6 @@ function onMenuClick(evt) {
 		}
 	}
 	
-	// Check instructions menu clicks
-	if (instructionsMenuVisible && instructionsMenuOpacity > 0.5) {
-		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
-		const menuScale = cScale;
-		const padding = 0.17 * menuScale;
-		const menuOriginX = submenuX * window.innerWidth;
-		const menuOriginY = submenuY * window.innerHeight;
-		
-		// Check close button
-		const closeIconRadius = 0.1 * menuScale * 0.25;
-		const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
-		const closeIconY = menuOriginY - padding + closeIconRadius + 0.02 * menuScale;
-		const cdx = evt.clientX - closeIconX;
-		const cdy = evt.clientY - closeIconY;
-		if (cdx * cdx + cdy * cdy < closeIconRadius * closeIconRadius * 2.0) {
-			instructionsMenuVisible = false;
-			needsMenuRedraw = true;
-			evt.stopPropagation();
-			return true; // Menu click handled
-		}
-	}
-	
 	return false; // Click not on any menu element
 }
 
@@ -3542,8 +3568,20 @@ function update() {
 			helicopterCameraGhostSphere.getWorldPosition(cabCameraWorldPos);
 			Camera.position.copy(cabCameraWorldPos);
 			
-			// Look toward the firework display (barge at origin)
-			var lookTarget = new THREE.Vector3(0, 20, 0);
+			// Calculate look target with pan and tilt applied
+			var baseLookTarget = new THREE.Vector3(0, 20, 0);
+			var direction = new THREE.Vector3().subVectors(baseLookTarget, cabCameraWorldPos).normalize();
+			
+			// Apply pan (yaw) rotation around Y axis
+			var panQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), cameraPan);
+			direction.applyQuaternion(panQuat);
+			
+			// Apply tilt (pitch) rotation around right axis
+			var rightAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(panQuat);
+			var tiltQuat = new THREE.Quaternion().setFromAxisAngle(rightAxis, cameraTilt);
+			direction.applyQuaternion(tiltQuat);
+			
+			var lookTarget = cabCameraWorldPos.clone().add(direction.multiplyScalar(100));
 			Camera.lookAt(lookTarget);
 		}
 	} else if (gCameraMode === 4 && zeppelinModelTemplate) {
@@ -3553,8 +3591,20 @@ function update() {
 			zeppelinCamPoint.getWorldPosition(zeppelinCameraWorldPos);
 			Camera.position.copy(zeppelinCameraWorldPos);
 			
-			// Look toward the firework display (barge at origin)
-			var lookTarget = new THREE.Vector3(0, 20, 0);
+			// Calculate look target with pan and tilt applied
+			var baseLookTarget = new THREE.Vector3(0, 20, 0);
+			var direction = new THREE.Vector3().subVectors(baseLookTarget, zeppelinCameraWorldPos).normalize();
+			
+			// Apply pan (yaw) rotation around Y axis
+			var panQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), cameraPan);
+			direction.applyQuaternion(panQuat);
+			
+			// Apply tilt (pitch) rotation around right axis
+			var rightAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(panQuat);
+			var tiltQuat = new THREE.Quaternion().setFromAxisAngle(rightAxis, cameraTilt);
+			direction.applyQuaternion(tiltQuat);
+			
+			var lookTarget = zeppelinCameraWorldPos.clone().add(direction.multiplyScalar(100));
 			Camera.lookAt(lookTarget);
 		}
 	} else if (gCameraMode === 5 && sailboatModelTemplate) {
@@ -3564,8 +3614,20 @@ function update() {
 			sailboatCamPoint.getWorldPosition(sailboatCameraWorldPos);
 			Camera.position.copy(sailboatCameraWorldPos);
 			
-			// Look toward the firework display (barge at origin)
-			var lookTarget = new THREE.Vector3(0, 20, 0);
+			// Calculate look target with pan and tilt applied
+			var baseLookTarget = new THREE.Vector3(0, 20, 0);
+			var direction = new THREE.Vector3().subVectors(baseLookTarget, sailboatCameraWorldPos).normalize();
+			
+			// Apply pan (yaw) rotation around Y axis
+			var panQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), cameraPan);
+			direction.applyQuaternion(panQuat);
+			
+			// Apply tilt (pitch) rotation around right axis
+			var rightAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(panQuat);
+			var tiltQuat = new THREE.Quaternion().setFromAxisAngle(rightAxis, cameraTilt);
+			direction.applyQuaternion(tiltQuat);
+			
+			var lookTarget = sailboatCameraWorldPos.clone().add(direction.multiplyScalar(100));
 			Camera.lookAt(lookTarget);
 		}
 	}
@@ -3651,16 +3713,6 @@ function update() {
 		const oldOpacity = simulationMenuOpacity;
 		simulationMenuOpacity = Math.max(0, simulationMenuOpacity - simulationMenuFadeSpeed * DeltaT);
 		if (oldOpacity !== simulationMenuOpacity) needsMenuRedraw = true;
-	}
-	
-	if (instructionsMenuVisible) {
-		const oldOpacity = instructionsMenuOpacity;
-		instructionsMenuOpacity = Math.min(0.9, instructionsMenuOpacity + instructionsMenuFadeSpeed * DeltaT);
-		if (oldOpacity !== instructionsMenuOpacity) needsMenuRedraw = true;
-	} else {
-		const oldOpacity = instructionsMenuOpacity;
-		instructionsMenuOpacity = Math.max(0, instructionsMenuOpacity - instructionsMenuFadeSpeed * DeltaT);
-		if (oldOpacity !== instructionsMenuOpacity) needsMenuRedraw = true;
 	}
 	
 	simulate();
