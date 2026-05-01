@@ -23,7 +23,7 @@ frostyImage.src = 'frosty.png';
 let currentRotation = 0;
 let targetRotation = 0;
 let targetBladeIndex = 0;
-const totalBlades = 6;
+const totalBlades = 7;
 const bladeAngleSpacing = -20;
 let scrollAccumulator = 0;
 const scrollSensitivity = 0.08;
@@ -136,7 +136,7 @@ document.addEventListener('wheel', (e) => {
         const isMouseWheel = Math.abs(e.deltaY) > 40;
         const sensitivity = isMouseWheel ? scrollSensitivity * 0.3 : scrollSensitivity;
         
-        scrollAccumulator -= e.deltaY * sensitivity;
+        scrollAccumulator += e.deltaY * sensitivity;
         
         const minRotation = 0;
         const maxRotation = -(totalBlades - 1) * bladeAngleSpacing;
