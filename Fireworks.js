@@ -1353,7 +1353,7 @@ function initThreeScene() {
 			
 			// Add point lights to cabin light objects
 			if (child.name === 'cabinLight1') {
-					var cabinLight = new THREE.PointLight(0xffaa44, 1.5, 10); // Warm orange-yellow, intensity 1.5, distance 10
+					var cabinLight = new THREE.PointLight(0xffaa44, 2, 10); // Warm orange-yellow, intensity 1.5, distance 10
 					//ffaa44
 					cabinLight.castShadow = true;
 					cabinLight.shadow.camera.near = 0.1;
@@ -3660,7 +3660,7 @@ function update() {
 		}
 		// Turn on red cabin light
 		if (helicopterCabinLight) {
-			helicopterCabinLight.intensity = 0.6;
+			helicopterCabinLight.intensity = 2.0;
 		}
 	} else {
 		// Not in cab view: restore original interior materials and turn off cabin light
