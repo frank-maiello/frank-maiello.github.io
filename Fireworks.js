@@ -37,6 +37,16 @@ var Camera;
 var CameraControl;
 var gGrabber;
 var gMouseDown;
+var bargeGroup = null; // Group containing barge model, tubes, bases, and hemispheres
+var bargeModelTemplate = null; // Reference to the barge model within the group
+var baseMeshes = []; // Array of base meshes that move with barge
+var hemisphereMeshes = []; // Array of hemisphere meshes that move with barge
+var mortarLocalPositions = []; // Array of mortar positions relative to barge center
+var draggingBarge = false;
+var bargeRotating = false; // True when rotating, false when translating
+var bargeDragStartPos = new THREE.Vector3();
+var bargeStartRotation = 0;
+var bargeClickOffset = new THREE.Vector3(); // Offset from barge center to click point
 var gravityEnabled = true; // Always enabled
 var Mortars = []; // Array of all mortar instances
 var autoLaunchEnabled = false; // Auto-launch mortars at random intervals - starts disabled
@@ -172,6 +182,9 @@ var sailboatOvalRadiusZ = 35; // Smaller depth radius
 var sailboatHeight = -0.1; // Water level
 var sailboatCenterX = 0; // Center of oval path (fireworks launch point)
 var sailboatCenterZ = 0; // Center of oval path
+var sailboatTargetCenterX = 0; // Target center for smooth transition
+var sailboatTargetCenterZ = 0;
+var sailboatCenterLerpSpeed = 0.3; // Smooth transition speed (slower for boat)
 var sailboatPivotOffset = -5.0; // Offset forward from path position to make rear act as pivot
 
 var ovalRadiusX = 30; // Horizontal radius of oval
@@ -179,6 +192,9 @@ var ovalRadiusZ = 70; // Depth radius of oval
 var zeppelinHeight = 24; // Flight altitude
 var zeppelinCenterX = 0; // Center of oval path (fireworks launch point)
 var zeppelinCenterZ = 0; // Center of oval path
+var zeppelinTargetCenterX = 0; // Target center for smooth transition
+var zeppelinTargetCenterZ = 0;
+var zeppelinCenterLerpSpeed = 0.5; // Smooth transition speed
 var propellerRotationSpeed = 10.0; // Negative rotation speed for x-axis
 
 // Helicopter animation variables
@@ -200,6 +216,9 @@ var helicopterOvalRadiusZ = 120;
 var helicopterHeight = 50; // Higher altitude than zeppelin
 var helicopterCenterX = 0;
 var helicopterCenterZ = 0;
+var helicopterTargetCenterX = 0; // Target center for smooth transition
+var helicopterTargetCenterZ = 0;
+var helicopterCenterLerpSpeed = 0.5; // Smooth transition speed
 var helicopterInteriorMeshes = []; // Store all helicopter mesh references for darkening
 var helicopterInteriorOriginalMaterials = []; // Store original materials for restoration
 var helicopterCabinLight = null; // Red point light for cabin
@@ -264,8 +283,9 @@ class MORTAR {
 		let launchDir = new THREE.Vector3(0, 1, 0);
 		
 		if (mortarTubeAngle > 0) {
-			// Calculate direction from center to this mortar's position
-			let fromCenter = new THREE.Vector2(this.position.x, this.position.z);
+			// Use mortar's LOCAL position (relative to barge center) for direction calculation
+			let localPos = mortarLocalPositions[this.tubeIndex];
+			let fromCenter = new THREE.Vector2(localPos.x, localPos.z);
 			let distFromCenter = fromCenter.length();
 			
 			if (distFromCenter > 0.01) { // Only tilt if not at center
@@ -278,13 +298,18 @@ class MORTAR {
 				let horizontalComponent = Math.sin(angleRad);
 				let verticalComponent = Math.cos(angleRad);
 				
-				// Set launch direction: tilted away from center
+				// Set launch direction in LOCAL space: tilted away from center
 				launchDir.set(
 					fromCenter.x * horizontalComponent,
 					verticalComponent,
 					fromCenter.y * horizontalComponent
 				);
 				launchDir.normalize();
+				
+				// Rotate launch direction by barge's rotation to get world space direction
+				if (bargeGroup) {
+					launchDir.applyEuler(new THREE.Euler(0, bargeGroup.rotation.y, 0));
+				}
 			}
 		}
 		
@@ -498,7 +523,7 @@ class BALL {
 		
 	}
 	simulate(){
-		if (this.grabbed || !this.active)
+		if (!this.active)
 			return;
 
 		// Apply air resistance damping (firework embers have high drag)
@@ -1286,6 +1311,11 @@ function initThreeScene() {
 					child.castShadow = true;
 					child.receiveShadow = true;
 					
+					// Skip logo objects - preserve their original materials
+					if (child.name === 'foreSailLogo' || child.name === 'aftSailLogo') {
+						return; // Don't modify materials for logo objects
+					}
+					
 					// Replace material with MeshPhongMaterial
 					if (child.material) {
 						var oldMaterial = child.material;
@@ -1296,12 +1326,10 @@ function initThreeScene() {
 						// Make sails double-sided so they're visible from both sides
 						if (child.name === 'foreSail' || child.name === 'aftSail') {
 							materialConfig.side = THREE.DoubleSide;
-							materialConfig.color = 0xbe1414; // red sails
+							materialConfig.color = 0xffffff; // Bright white for sails
 						}
-
-						
 						var newMaterial = new THREE.MeshPhongMaterial(materialConfig);
-						child.material = newMaterial;
+						//child.material = newMaterial;
 					}
 				}
 				if (child.name === 'sailboatCamPoint') {
@@ -1322,6 +1350,12 @@ function initThreeScene() {
 		}
 	);
 
+	// Create barge group that will contain all barge-related objects
+	bargeGroup = new THREE.Group();
+	bargeGroup.position.set(0, 0, 0);
+	bargeGroup.rotation.y = 0;
+	gThreeScene.add(bargeGroup);
+	
 	// LOAD BARGE --------------------------------------
 	var bargeLoader = new THREE.GLTFLoader();
 	bargeLoader.load(
@@ -1365,7 +1399,7 @@ function initThreeScene() {
 				}
 			});
 		
-			gThreeScene.add(bargeModelTemplate);
+			bargeGroup.add(bargeModelTemplate);
 			console.log('barge model loaded successfully');
 			updateLoadingProgress();
 		},
@@ -1619,23 +1653,26 @@ function initThreeScene() {
 	bottomCapMesh.receiveShadow = true;
 	tubeGroup.add(bottomCapMesh);
 	
-	gThreeScene.add(tubeGroup);
-	tubeGroups.push(tubeGroup);
-	tubePositions.push({x: 0, z: 0});
-	
-	// Base (fixed, doesn't rotate with tube)
-	var baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-	baseMesh.position.set(0, deckHeight + baseHeight / 2, 0);
-	baseMesh.castShadow = true;
-	baseMesh.receiveShadow = true;
-	gThreeScene.add(baseMesh);
-	
-	// Hemisphere pivot (fixed, doesn't rotate with tube)
-	var hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
-	hemisphereMesh.position.set(0, deckHeight + baseHeight, 0);
-	hemisphereMesh.castShadow = true;
-	hemisphereMesh.receiveShadow = true;
-	gThreeScene.add(hemisphereMesh);
+bargeGroup.add(tubeGroup);
+		tubeGroups.push(tubeGroup);
+		tubePositions.push({x: 0, z: 0});
+		mortarLocalPositions.push(new THREE.Vector3(0, 0, 0)); // Store local position
+		
+		// Base (fixed, doesn't rotate with tube)
+		var baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+		baseMesh.position.set(0, deckHeight + baseHeight / 2, 0);
+		baseMesh.castShadow = true;
+		baseMesh.receiveShadow = true;
+		bargeGroup.add(baseMesh);
+		baseMeshes.push(baseMesh);
+		
+		// Hemisphere pivot (fixed, doesn't rotate with tube)
+		var hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
+		hemisphereMesh.position.set(0, deckHeight + baseHeight, 0);
+		hemisphereMesh.castShadow = true;
+		hemisphereMesh.receiveShadow = true;
+		bargeGroup.add(hemisphereMesh);
+		hemisphereMeshes.push(hemisphereMesh);
 	
 	// First elliptical ring: 8 tubes
 	for (let i = 0; i < 8; i++) {
@@ -1677,23 +1714,26 @@ function initThreeScene() {
 		bottomCapMesh.receiveShadow = true;
 		tubeGroup.add(bottomCapMesh);
 		
-		gThreeScene.add(tubeGroup);
+		bargeGroup.add(tubeGroup);
 		tubeGroups.push(tubeGroup);
 		tubePositions.push({x: x, z: z});
+		mortarLocalPositions.push(new THREE.Vector3(x, 0, z)); // Store local position
 		
 		// Base (fixed, doesn't rotate with tube)
 		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
 		baseMesh.position.set(x, deckHeight + baseHeight / 2, z);
 		baseMesh.castShadow = true;
 		baseMesh.receiveShadow = true;
-		gThreeScene.add(baseMesh);
+		bargeGroup.add(baseMesh);
+		baseMeshes.push(baseMesh);
 		
 		// Hemisphere pivot (fixed, doesn't rotate with tube)
 		hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
 		hemisphereMesh.position.set(x, deckHeight + baseHeight, z);
 		hemisphereMesh.castShadow = true;
 		hemisphereMesh.receiveShadow = true;
-		gThreeScene.add(hemisphereMesh);
+		bargeGroup.add(hemisphereMesh);
+		hemisphereMeshes.push(hemisphereMesh);
 	}
 	
 	// Second elliptical ring: 16 tubes
@@ -1736,23 +1776,26 @@ function initThreeScene() {
 		bottomCapMesh.receiveShadow = true;
 		tubeGroup.add(bottomCapMesh);
 		
-		gThreeScene.add(tubeGroup);
+		bargeGroup.add(tubeGroup);
 		tubeGroups.push(tubeGroup);
 		tubePositions.push({x: x, z: z});
+		mortarLocalPositions.push(new THREE.Vector3(x, 0, z)); // Store local position
 		
 		// Base (fixed, doesn't rotate with tube)
 		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
 		baseMesh.position.set(x, deckHeight + baseHeight / 2, z);
 		baseMesh.castShadow = true;
 		baseMesh.receiveShadow = true;
-		gThreeScene.add(baseMesh);
+		bargeGroup.add(baseMesh);
+		baseMeshes.push(baseMesh);
 		
 		// Hemisphere pivot (fixed, doesn't rotate with tube)
 		hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
 		hemisphereMesh.position.set(x, deckHeight + baseHeight, z);
 		hemisphereMesh.castShadow = true;
 		hemisphereMesh.receiveShadow = true;
-		gThreeScene.add(hemisphereMesh);
+		bargeGroup.add(hemisphereMesh);
+		hemisphereMeshes.push(hemisphereMesh);
 	}
 	
 	// gRenderer
@@ -1894,12 +1937,12 @@ function updateTubeAngles() {
 }
 
 // Grabber -----------------------------------------------------------
+// Modified to grab and drag the barge instead of particles
 class Grabber {
 	constructor() {
 		this.raycaster = new THREE.Raycaster();
-		this.raycaster.layers.set(1);
+		this.raycaster.layers.enableAll(); // Enable all layers to detect barge
 		this.raycaster.params.Line.threshold = 0.1;
-		this.physicsObject = null;
 		this.distance = 0.0;
 		this.prevPos = new THREE.Vector3();
 		this.vel = new THREE.Vector3();
@@ -1916,100 +1959,135 @@ class Grabber {
 		this.raycaster.setFromCamera( this.mousePos, Camera );
 	}
 	start(x, y) {
-		this.physicsObject = null;
+		draggingBarge = false;
+		bargeRotating = false;
 		this.updateRaycaster(x, y);
-		var intersects = this.raycaster.intersectObjects( gThreeScene.children );
+		
+		// Check if we clicked on the barge
+		if (!bargeGroup) {
+			console.log('bargeGroup not available');
+			return;
+		}
+		
+		var intersects = this.raycaster.intersectObjects( bargeGroup.children, true );
+		console.log('Raycast hits on barge:', intersects.length);
+		
 		if (intersects.length > 0) {
-			// For instanced mesh, find which ball was clicked
-			if (intersects[0].object === ballInstancedMesh && intersects[0].instanceId !== undefined) {
-				var instanceId = intersects[0].instanceId;
-				if (instanceId >= 0 && instanceId < Balls.length) {
-					this.physicsObject = Balls[instanceId];
-					this.distance = intersects[0].distance;
-				
-					var pos;
-					// For fixed ground objects, use ground plane projection
-					if (this.physicsObject.fixed) {
-						let rayOrigin = this.raycaster.ray.origin;
-						let rayDir = this.raycaster.ray.direction;
-						
-						// Calculate intersection with ground plane (y=0)
-						if (Math.abs(rayDir.y) > 0.001) {
-							let t = -rayOrigin.y / rayDir.y;
-							if (t > 0) {
-								pos = rayOrigin.clone();
-								pos.addScaledVector(rayDir, t);
-								pos.y = 0;
-							} else {
-								pos = this.physicsObject.pos.clone();
-							}
-						} else {
-							pos = this.physicsObject.pos.clone();
-						}
+			draggingBarge = true;
+			console.log('Hit barge object:', intersects[0].object.name || intersects[0].object.type);
+			
+			// Project click point to floor plane (y=0)
+			let rayOrigin = this.raycaster.ray.origin;
+			let rayDir = this.raycaster.ray.direction;
+			
+			if (Math.abs(rayDir.y) > 0.001) {
+				let t = -rayOrigin.y / rayDir.y;
+				if (t > 0) {
+					let clickPos = rayOrigin.clone();
+					clickPos.addScaledVector(rayDir, t);
+					clickPos.y = 0;
+					
+					// Calculate offset from barge center to click point in world space
+					bargeClickOffset.copy(clickPos).sub(bargeGroup.position);
+					
+					// Transform click offset to local barge space to determine if near ends
+					let localClickOffset = bargeClickOffset.clone();
+					localClickOffset.applyEuler(new THREE.Euler(0, -bargeGroup.rotation.y, 0));
+					
+					// Check if click is near front or back 
+					if (Math.abs(localClickOffset.z) > 7.0) {
+						bargeRotating = true;
+						bargeStartRotation = bargeGroup.rotation.y;
+						bargeDragStartPos.copy(clickPos);
 					} else {
-						pos = this.raycaster.ray.origin.clone();
-						pos.addScaledVector(this.raycaster.ray.direction, this.distance);
+						bargeRotating = false;
 					}
 					
-					this.physicsObject.startGrab(pos);
-					this.prevPos.copy(pos);
-					this.vel.set(0.0, 0.0, 0.0);
-					this.time = 0.0;
+					this.prevPos.copy(clickPos);
 				}
 			}
 		}
 	}
 	move(x, y) {
-		if (this.physicsObject) {
-			this.updateRaycaster(x, y);
-			
-			var pos;
-			// For fixed ground objects, project to y=0 plane
-			if (this.physicsObject.fixed) {
-				// Calculate intersection with ground plane (y=0)
-				let rayOrigin = this.raycaster.ray.origin;
-				let rayDir = this.raycaster.ray.direction;
+		if (!draggingBarge) return;
+		
+		this.updateRaycaster(x, y);
+		
+		// Project mouse to floor plane (y=0)
+		let rayOrigin = this.raycaster.ray.origin;
+		let rayDir = this.raycaster.ray.direction;
+		
+		if (Math.abs(rayDir.y) > 0.001) {
+			let t = -rayOrigin.y / rayDir.y;
+			if (t > 0) {
+				let pos = rayOrigin.clone();
+				pos.addScaledVector(rayDir, t);
+				pos.y = 0;
 				
-				// Solve for t where: origin.y + t * direction.y = 0
-				if (Math.abs(rayDir.y) > 0.001) {
-					let t = -rayOrigin.y / rayDir.y;
-					if (t > 0) {
-						pos = rayOrigin.clone();
-						pos.addScaledVector(rayDir, t);
-						pos.y = 0; // Ensure exactly on ground
-					} else {
-						// Ray pointing up, keep current position
-						pos = this.prevPos.clone();
-					}
+				if (bargeRotating) {
+					// Calculate angle from barge center to current mouse position
+					let toMouse = pos.clone().sub(bargeGroup.position);
+					let toDragStart = bargeDragStartPos.clone().sub(bargeGroup.position);
+					
+					// Calculate angle difference (reversed for correct rotation direction)
+					let angleToMouse = Math.atan2(toMouse.z, toMouse.x);
+					let angleToDragStart = Math.atan2(toDragStart.z, toDragStart.x);
+					let deltaAngle = angleToDragStart - angleToMouse;
+					
+					// Apply rotation
+					bargeGroup.rotation.y = bargeStartRotation + deltaAngle;
+					
+					// Update mortar positions
+					updateMortarPositions();
 				} else {
-					// Ray parallel to ground, keep current position
-					pos = this.prevPos.clone();
+					// Translate barge (maintain click offset)
+					bargeGroup.position.copy(pos).sub(bargeClickOffset);
+					
+					// Update mortar positions
+					updateMortarPositions();
 				}
-			} else {
-				// For non-fixed objects, use original fixed-distance method
-				pos = this.raycaster.ray.origin.clone();
-				pos.addScaledVector(this.raycaster.ray.direction, this.distance);
+				
+				this.prevPos.copy(pos);
+				this.time = 0.0;
 			}
-
-			this.vel.copy(pos);
-			this.vel.sub(this.prevPos);
-			if (this.time > 0.0)
-				this.vel.divideScalar(this.time);
-			else
-				this.vel.set(0.0, 0.0, 0.0);
-			this.prevPos.copy(pos);
-			this.time = 0.0;
-
-			this.physicsObject.moveGrabbed(pos, this.vel);
 		}
 	}
 	end(x, y) {
-		if (this.physicsObject) { 
-			this.physicsObject.endGrab(this.prevPos, this.vel);
-			this.physicsObject = null;
-		}
+		draggingBarge = false;
+		bargeRotating = false;
 	}
 }			
+
+// Update mortar positions when barge moves or rotates
+function updateMortarPositions() {
+	if (!bargeGroup || Mortars.length === 0) return;
+	
+	// Update each mortar's position based on barge group transform
+	for (let i = 0; i < Mortars.length; i++) {
+		if (i < mortarLocalPositions.length) {
+			// Transform local position to world space
+			let worldPos = mortarLocalPositions[i].clone();
+			worldPos.applyEuler(new THREE.Euler(0, bargeGroup.rotation.y, 0));
+			worldPos.add(bargeGroup.position);
+			
+			// Update mortar position
+			Mortars[i].position.copy(worldPos);
+		}
+	}
+	
+	// Update vehicle orbit targets and spotlight target to follow barge
+	if (bargeGroup) {
+		helicopterTargetCenterX = bargeGroup.position.x;
+		helicopterTargetCenterZ = bargeGroup.position.z;
+		zeppelinTargetCenterX = bargeGroup.position.x;
+		zeppelinTargetCenterZ = bargeGroup.position.z;
+		// sailboatTargetCenterX = bargeGroup.position.x;
+		// sailboatTargetCenterZ = bargeGroup.position.z;
+		
+		// Update spotlight target immediately
+		spotlightTarget.set(bargeGroup.position.x, 1.0, bargeGroup.position.z);
+	}
+}
 
 function onPointer( evt ) {
 	event.preventDefault();
@@ -2027,14 +2105,27 @@ function onPointer( evt ) {
 			return;
 		}
 		
+		// Try to start grabbing the barge first
 		gGrabber.start(evt.clientX, evt.clientY);
 		gMouseDown = true;
-		if (gGrabber.physicsObject) {
+		
+		// If barge is being dragged, disable orbit controls
+		if (draggingBarge) {
 			CameraControl.saveState();
 			CameraControl.enabled = false;
+			console.log('Barge drag started, rotation mode:', bargeRotating);
+		} else {
+			// Re-enable orbit controls if not dragging barge
+			CameraControl.enabled = true;
 		}
 	}
-	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob || draggingBallRadiusKnob || draggingCamera)) {
+	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob || draggingBallRadiusKnob || draggingCamera || draggingBarge)) {
+		// Handle barge dragging first (highest priority)
+		if (draggingBarge) {
+			gGrabber.move(evt.clientX, evt.clientY);
+			return;
+		}
+		
 		// Handle camera pan/tilt dragging in fixed camera modes
 		if (draggingCamera) {
 			const deltaX = evt.clientX - dragStartMouseX;
@@ -2180,7 +2271,7 @@ function onPointer( evt ) {
 		draggingBallRadiusKnob = false;
 		draggingCamera = false;
 		
-		if (gGrabber.physicsObject) {
+		if (draggingBarge) {
 			gGrabber.end();
 			CameraControl.reset();
 		}
@@ -2242,6 +2333,14 @@ function simulate() {
 	
 	// Skip physics simulation if paused (but still animate zeppelin and propellers below)
 	if (!gRunning) {
+		// Smoothly interpolate vehicle orbit centers toward barge position
+		helicopterCenterX += (helicopterTargetCenterX - helicopterCenterX) * helicopterCenterLerpSpeed * DeltaT;
+		helicopterCenterZ += (helicopterTargetCenterZ - helicopterCenterZ) * helicopterCenterLerpSpeed * DeltaT;
+		zeppelinCenterX += (zeppelinTargetCenterX - zeppelinCenterX) * zeppelinCenterLerpSpeed * DeltaT;
+		zeppelinCenterZ += (zeppelinTargetCenterZ - zeppelinCenterZ) * zeppelinCenterLerpSpeed * DeltaT;
+		// sailboatCenterX += (sailboatTargetCenterX - sailboatCenterX) * sailboatCenterLerpSpeed * DeltaT;
+		// sailboatCenterZ += (sailboatTargetCenterZ - sailboatCenterZ) * sailboatCenterLerpSpeed * DeltaT;
+		
 		// Animate zeppelin and propellers even when paused
 		if (zeppelinModelTemplate) {
 			zeppelinAngle += zeppelinSpeed * DeltaT;
@@ -2327,6 +2426,14 @@ function simulate() {
 		
 		return; // Skip firework physics when paused
 	}
+	
+	// Smoothly interpolate vehicle orbit centers toward barge position
+	helicopterCenterX += (helicopterTargetCenterX - helicopterCenterX) * helicopterCenterLerpSpeed * DeltaT;
+	helicopterCenterZ += (helicopterTargetCenterZ - helicopterCenterZ) * helicopterCenterLerpSpeed * DeltaT;
+	zeppelinCenterX += (zeppelinTargetCenterX - zeppelinCenterX) * zeppelinCenterLerpSpeed * DeltaT;
+	zeppelinCenterZ += (zeppelinTargetCenterZ - zeppelinCenterZ) * zeppelinCenterLerpSpeed * DeltaT;
+	// sailboatCenterX += (sailboatTargetCenterX - sailboatCenterX) * sailboatCenterLerpSpeed * DeltaT;
+	// sailboatCenterZ += (sailboatTargetCenterZ - sailboatCenterZ) * sailboatCenterLerpSpeed * DeltaT;
 	
 	// Auto-launch mortars at random intervals
 	if (autoLaunchEnabled) {
@@ -3569,7 +3676,10 @@ function update() {
 			Camera.position.copy(cabCameraWorldPos);
 			
 			// Calculate look target with pan and tilt applied
-			var baseLookTarget = new THREE.Vector3(0, 20, 0);
+			// Use barge position if available, otherwise default to origin
+			var baseLookTarget = bargeGroup ? 
+				new THREE.Vector3(bargeGroup.position.x, 20, bargeGroup.position.z) : 
+				new THREE.Vector3(0, 20, 0);
 			var direction = new THREE.Vector3().subVectors(baseLookTarget, cabCameraWorldPos).normalize();
 			
 			// Apply pan (yaw) rotation around Y axis
@@ -3592,7 +3702,10 @@ function update() {
 			Camera.position.copy(zeppelinCameraWorldPos);
 			
 			// Calculate look target with pan and tilt applied
-			var baseLookTarget = new THREE.Vector3(0, 20, 0);
+			// Use barge position if available, otherwise default to origin
+			var baseLookTarget = bargeGroup ? 
+				new THREE.Vector3(bargeGroup.position.x, 20, bargeGroup.position.z) : 
+				new THREE.Vector3(0, 20, 0);
 			var direction = new THREE.Vector3().subVectors(baseLookTarget, zeppelinCameraWorldPos).normalize();
 			
 			// Apply pan (yaw) rotation around Y axis
@@ -3615,7 +3728,10 @@ function update() {
 			Camera.position.copy(sailboatCameraWorldPos);
 			
 			// Calculate look target with pan and tilt applied
-			var baseLookTarget = new THREE.Vector3(0, 20, 0);
+			// Use barge position if available, otherwise default to origin
+			var baseLookTarget = bargeGroup ? 
+				new THREE.Vector3(bargeGroup.position.x, 20, bargeGroup.position.z) : 
+				new THREE.Vector3(0, 20, 0);
 			var direction = new THREE.Vector3().subVectors(baseLookTarget, sailboatCameraWorldPos).normalize();
 			
 			// Apply pan (yaw) rotation around Y axis
