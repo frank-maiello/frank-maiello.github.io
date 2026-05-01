@@ -1343,8 +1343,8 @@ function initThreeScene() {
 		// Set materials to DoubleSide to prevent shadow issues with thin geometry
 		bargeModelTemplate.traverse(function(child) {
 			if (child.isMesh) {
-				// Don't override material for noSmokingSign - keep its original texture/material
-				if (child.name !== 'noSmokingSign') {
+				// Don't override material for noSmokingSign and Flag - keep their original texture/material
+				if (child.name !== 'noSmokingSign' && child.name !== 'Flag') {
 					child.material = bargeMaterial;
 				}
 				child.castShadow = true;
