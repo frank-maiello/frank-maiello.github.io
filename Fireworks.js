@@ -177,7 +177,7 @@ var gBalloonArmrestMeshes = [];
 var gBalloonBasketBottom = null;
 var gBalloonEnvelopeMeshes = [];
 var balloonAngle = 0; // Current angle on circular path
-var balloonSpeed = 0.005; // Negative for clockwise motion (radians per second)
+var balloonSpeed = 0.003; // Negative for clockwise motion (radians per second)
 var balloonOvalRadiusX = 140; // Horizontal radius of circular path
 var balloonOvalRadiusZ = 140; // Depth radius (same as X for circular motion)
 var balloonHeight = 100; // Flight altitude
@@ -766,7 +766,7 @@ function initScene() {
 			side: THREE.FrontSide
 		});
 	} else if (gBallMaterialMode === 3) {
-		// Normal
+		// normal
 		ballMaterial = new THREE.MeshNormalMaterial({
 			side: THREE.FrontSide
 		});
@@ -1013,7 +1013,7 @@ function changeBallMaterial(materialMode) {
 			side: THREE.FrontSide
 		});
 	} else if (materialMode === 3) {
-		// Normal
+		// normal
 		ballMaterial = new THREE.MeshNormalMaterial({
 			side: THREE.FrontSide
 		});
@@ -1027,7 +1027,7 @@ function changeBallMaterial(materialMode) {
 	ballInstancedMesh.instanceMatrix = oldMatrix;
 	ballInstancedMesh.instanceMatrix.needsUpdate = true;
 	
-	// Restore instance colors (not used by Normal material, but keep for others)
+	// Restore instance colors (not used by normal material, but keep for others)
 	if (oldColor) {
 		ballInstancedMesh.instanceColor = oldColor;
 		ballInstancedMesh.instanceColor.needsUpdate = true;
@@ -1380,12 +1380,6 @@ function initThreeScene() {
 				balloonSpotlight.penumbra = 0.0;
 				balloonSpotlight.distance = 200;
 				balloonSpotlight.castShadow = false;
-				balloonSpotlight.shadow.camera.near = 40;
-				balloonSpotlight.shadow.camera.far = 100;
-				balloonSpotlight.shadow.camera.fov = 20;
-				balloonSpotlight.shadow.mapSize.width = 2048;
-				balloonSpotlight.shadow.mapSize.height = 2048;
-				balloonSpotlight.shadow.bias = -0.0005;
 				
 				// Attach spotlight to balloonSpotlightBase (points downward in local space)
 				balloonSpotlightBase.add(balloonSpotlight);
@@ -3377,7 +3371,7 @@ function drawSimulationMenu() {
 		'Basic',
 		'Plastic',
 		'Metallic',
-		'Normal'
+		'Normal (by facet)'
 	];
 	
 	// Position radio buttons below the third knob with its label
@@ -3426,7 +3420,7 @@ function drawSimulationMenu() {
 	const plasticY = radioStartY + 1 * radioButtonSpacing;
 	const metallicY = radioStartY + 2 * radioButtonSpacing;
 	const switchCenterY = (plasticY + metallicY) / 2;
-	const bracketX = menuWidth * 0.75;
+	const bracketX = menuWidth * 0.7;
 	const switchX = menuWidth * 1.05;
 	
 	// Draw bracket pointing from Plastic/Metallic to the switch
@@ -3457,8 +3451,8 @@ function drawSimulationMenu() {
 	ctx.font = `bold ${0.035 * menuScale}px verdana`;
 	ctx.textAlign = 'center';
 	ctx.textBaseline = 'bottom';
-	ctx.fillText('Balloon', switchX, switchCenterY - radioButtonSize * 3.1);
-	ctx.fillText('Light', switchX, switchCenterY - radioButtonSize * 2.0);
+	ctx.fillText('Balloon', switchX, switchCenterY - radioButtonSize * 3.3);
+	ctx.fillText('Spotlight', switchX, switchCenterY - radioButtonSize * 2.2);
 	
 	// Draw sliding switch
 	const switchWidth = radioButtonSize * 1.2;
@@ -4103,7 +4097,7 @@ function update() {
 		if (gCameraMode === 3) {
 			helicopterSpotlightCone.material.opacity = 0.08; // Very faint in helicopter cab view
 		} else {
-			helicopterSpotlightCone.material.opacity = 1.0; // Normal visibility in other views
+			helicopterSpotlightCone.material.opacity = 1.0; // normal visibility in other views
 		}
 	}
 	
