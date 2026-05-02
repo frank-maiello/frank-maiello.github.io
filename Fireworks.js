@@ -37,6 +37,7 @@ var Camera;
 var CameraControl;
 var gGrabber;
 var gMouseDown;
+
 var bargeGroup = null; // Group containing barge model, tubes, bases, and hemispheres
 var bargeModelTemplate = null; // Reference to the barge model within the group
 var baseMeshes = []; // Array of base meshes that move with barge
@@ -73,7 +74,7 @@ var explosionLightBrightIntensity = 0.6; // Bright flash intensity
 var explosionLightFadeSpeed = 20.0; // How fast it fades back to dim
 
 // Camera control variables
-var gCameraMode = 0; // 0=Manual Orbit, 1=Auto Orbit CCW, 2=Auto Orbit CW, 3=Helicopter Cam, 4=Zeppelin Cam, 5=Sailboat Cam
+var gCameraMode = 0; // 0=Manual Orbit, 1=Auto Orbit CCW, 2=Auto Orbit CW, 3=Helicopter Cam, 4=Zeppelin Cam, 5=Sailboat Cam, 6=Balloon Cam
 var gCameraAngle = 0;
 var gCameraRotationSpeed = 1.0;
 var gCameraFOV = 57;
@@ -86,7 +87,7 @@ var gBallMaterialMode = 0; // 0=Basic, 1=Plastic, 2=Metallic, 3=Normal
 // Loading screen variables
 var loadingScreen = null;
 var loadingProgress = 0;
-var totalResources = 6; // barge, zeppelin, cityscape south, cityscape north, helicopter, texture
+var totalResources = 7; // cityscape south, cityscape north, barge, helicopter, zeppelin, balloon, texture
 var loadedResources = 0;
 var minLoadTime = 2.0; // Minimum 2 seconds for loading screen
 var loadTimeElapsed = 0;
@@ -163,6 +164,27 @@ var ballInstancedMesh = null;
 var ballMatrix = new THREE.Matrix4();
 var ballColor = new THREE.Color();
 
+// Hot Air Balloon variables
+var balloonModelTemplate = null;
+var balloonCamPoint = null;
+var balloonSpotlightBase = null;
+var balloonRotateGimbalY = null;
+var balloonRotateGimbalZ = null;
+var balloonSpotlight = null;
+var balloonSpotlightEnabled = false; // Control for balloon spotlight and tracking
+var gBalloonBasketMeshes = [];
+var gBalloonArmrestMeshes = [];
+var gBalloonBasketBottom = null;
+var gBalloonEnvelopeMeshes = [];
+var balloonAngle = 0; // Current angle on circular path
+var balloonSpeed = 0.005; // Negative for clockwise motion (radians per second)
+var balloonOvalRadiusX = 140; // Horizontal radius of circular path
+var balloonOvalRadiusZ = 140; // Depth radius (same as X for circular motion)
+var balloonHeight = 100; // Flight altitude
+var balloonCenterX = 0; // Center of circular path
+var balloonCenterZ = 0; // Center of circular path
+var balloonSpotlightTarget = new THREE.Vector3(0, 30, 0); // Target position on barge
+
 // Zeppelin animation variables
 var zeppelinModelTemplate = null;
 var propellerPort = null;
@@ -205,7 +227,8 @@ var spotlightBase = null;
 var rotateGimbalY = null;
 var rotateGimbalZ = null;
 var helicopterSpotlight = null;
-var spotlightCone = null;
+var helicopterSpotlightCone = null;
+var balloonSpotlightCone = null;
 var spotlightTarget = new THREE.Vector3(0, 0, 0); // Target position on barge
 var helicopterCabCameraOffset = new THREE.Vector3(0.3, 0.7, -1.8); // Center seat, forward position (local to helicopter)
 var helicopterCameraGhostSphere = null;
@@ -1154,8 +1177,6 @@ function initThreeScene() {
 		}
 	);
 
-	
-
 	// LOAD HELICOPTER --------------------------------------
 	var helicopterLoader = new THREE.GLTFLoader();
 	helicopterLoader.load(
@@ -1250,10 +1271,10 @@ function initThreeScene() {
 					depthWrite: false,
 					opacity: 1.0
 				});
-				spotlightCone = new THREE.Mesh(coneGeometry, coneMaterial);
-				spotlightCone.position.y = -coneLength / 2;
+				helicopterSpotlightCone = new THREE.Mesh(coneGeometry, coneMaterial);
+				helicopterSpotlightCone.position.y = -coneLength / 2;
 				
-				spotlightBase.add(spotlightCone);
+				spotlightBase.add(helicopterSpotlightCone);
 				
 				console.log('Helicopter spotlight created and attached');
 			}
@@ -1285,6 +1306,137 @@ function initThreeScene() {
 			console.error('Error loading helicopter model:', error);
 		}
 	);
+
+	// Load Balloon ---------------------------------------
+    if (typeof THREE.GLTFLoader !== 'undefined') {
+        var balloonLoader = new THREE.GLTFLoader();
+        balloonLoader.load(
+            'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/searchlightBalloon.gltf',
+            function(gltf) {
+                balloonModelTemplate = gltf.scene;
+                
+                // Set initial position on circular path
+                var x = balloonCenterX + Math.cos(balloonAngle) * balloonOvalRadiusX;
+                var z = balloonCenterZ + Math.sin(balloonAngle) * balloonOvalRadiusZ;
+                balloonModelTemplate.position.set(x, balloonHeight, z);
+                balloonModelTemplate.scale.set(.2, .2, .2);
+                balloonModelTemplate.rotation.y = 0;
+                
+                // Enable shadows and identify basket meshes by name
+                balloonModelTemplate.traverse(function(child) {
+					// Check for gimbal and camera point components (not just meshes)
+					if (child.name === 'spotlightBase') {
+						balloonSpotlightBase = child;
+						console.log('Found balloon spotlightBase');
+					}
+					if (child.name === 'rotateGimbalY') {
+						balloonRotateGimbalY = child;
+						console.log('Found balloon rotateGimbalY');
+					}
+					if (child.name === 'rotateGimbalZ') {
+						balloonRotateGimbalZ = child;
+						console.log('Found balloon rotateGimbalZ');
+					}
+					if (child.name === 'balloonCamPoint') {
+						balloonCamPoint = child;
+						console.log('Found balloonCamPoint');
+					}
+					
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+
+						// Identify meshes by name
+						if (child.name) {
+						var name = child.name;
+						var nameLower = name.toLowerCase();
+						if (nameLower.startsWith('basketimported')) {
+							gBalloonBasketMeshes.push(child);
+							console.log('Found basket mesh:', name);
+						} else if (nameLower.startsWith('basketfloor')) {
+							gBalloonBasketBottom = child;
+							console.log('Found basket bottom:', name);
+						} else if (nameLower.includes('armrest')) {
+							gBalloonArmrestMeshes.push(child);
+							console.log('Found armrest mesh:', name);
+						} else if (nameLower.startsWith('envelope')) {
+							gBalloonEnvelopeMeshes.push(child);
+							console.log('Found envelope mesh:', name);
+						}
+					}
+				}
+			});
+                
+			console.log('Found', gBalloonBasketMeshes.length, 'basket meshes,', 
+				gBalloonArmrestMeshes.length, 'armrest meshes,', 
+				gBalloonEnvelopeMeshes.length, 'envelope meshes, and', 
+				(gBalloonBasketBottom ? '1' : '0'), 'basket bottom'
+			);
+
+			// Create and attach spotlight to balloonSpotlightBase
+			if (balloonSpotlightBase) {
+				balloonSpotlight = new THREE.SpotLight(0xffffff, 8.0);
+				balloonSpotlight.angle = Math.PI / 18;
+				balloonSpotlight.penumbra = 0.0;
+				balloonSpotlight.distance = 200;
+				balloonSpotlight.castShadow = false;
+				balloonSpotlight.shadow.camera.near = 40;
+				balloonSpotlight.shadow.camera.far = 100;
+				balloonSpotlight.shadow.camera.fov = 20;
+				balloonSpotlight.shadow.mapSize.width = 2048;
+				balloonSpotlight.shadow.mapSize.height = 2048;
+				balloonSpotlight.shadow.bias = -0.0005;
+				
+				// Attach spotlight to balloonSpotlightBase (points downward in local space)
+				balloonSpotlightBase.add(balloonSpotlight);
+				gThreeScene.add(balloonSpotlight.target);
+				balloonSpotlight.target.position.copy(balloonSpotlightTarget);
+				
+				// Create physical cone to represent the spotlight beam
+				var balloonConeLength = 5000; 
+				var balloonConeRadius = Math.tan(balloonSpotlight.angle) * balloonConeLength;
+				var balloonConeGeometry = new THREE.ConeGeometry(balloonConeRadius, balloonConeLength, 32, 1, true);
+				
+				// Create gradient texture for fade effect
+				var canvas = document.createElement('canvas');
+				canvas.width = 1;
+				canvas.height = 256;
+				var ctx = canvas.getContext('2d');
+				
+				var gradient = ctx.createLinearGradient(0, 0, 0, 256);
+				gradient.addColorStop(0, 'rgba(255, 255, 255, 0.05)'); // More opaque at narrow end
+				gradient.addColorStop(1, 'rgba(255, 255, 255, 0.0)'); // Transparent at wide end
+				ctx.fillStyle = gradient;
+				ctx.fillRect(0, 0, 1, 256);
+				
+				var gradientTexture = new THREE.CanvasTexture(canvas);
+				var balloonConeMaterial = new THREE.MeshBasicMaterial({ 
+					map: gradientTexture,
+					transparent: true,
+					side: THREE.DoubleSide,
+					depthWrite: false,
+					opacity: 1.0
+				});
+				balloonSpotlightCone = new THREE.Mesh(balloonConeGeometry, balloonConeMaterial);
+				balloonSpotlightCone.position.y = -balloonConeLength / 2;
+				balloonSpotlightBase.add(balloonSpotlightCone);
+				
+				// Set initial visibility based on balloonSpotlightEnabled
+				balloonSpotlight.visible = balloonSpotlightEnabled;
+				balloonSpotlightCone.visible = balloonSpotlightEnabled;
+			}
+				gThreeScene.add(balloonModelTemplate);
+				updateLoadingProgress()
+				console.log('Hot Air Balloon model loaded successfully');
+            },
+            function(xhr) {
+                console.log('Hot Air Balloon model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            function(error) {
+                console.error('Error loading Hot Air Balloon model:', error);
+            }
+        );
+    }
 
 	// LOAD SAILBOAT --------------------------------------
 	var sailboatLoader = new THREE.GLTFLoader();
@@ -1411,7 +1563,6 @@ function initThreeScene() {
 		}
 	);
 
-
 	// LOAD ZEPPELIN --------------------------------------
 	var zeppelinLoader = new THREE.GLTFLoader();
 	zeppelinLoader.load(
@@ -1463,7 +1614,8 @@ function initThreeScene() {
 			console.error('Error loading zeppelin model:', error);
 		}
 	);
-	
+
+	// LIGHTS ------------------------------------------
 	// ambient light
 	gThreeScene.add( new THREE.AmbientLight( 0x101010 ) );	
 
@@ -2096,8 +2248,8 @@ function onPointer( evt ) {
 		const menuHandled = onMenuClick(evt);
 		if (menuHandled) return; // Don't process further if menu consumed the click
 		
-		// In fixed camera modes (helicopter, zeppelin, sailboat), start camera pan/tilt dragging
-		if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5) {
+		// In fixed camera modes (helicopter, zeppelin, sailboat, balloon), start camera pan/tilt dragging
+		if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5 || gCameraMode === 6) {
 			draggingCamera = true;
 			dragStartMouseX = evt.clientX;
 			dragStartMouseY = evt.clientY;
@@ -2291,8 +2443,8 @@ function onKeyDown( evt ) {
 }
 
 function onWheel( evt ) {
-	// In fixed camera modes (helicopter, zeppelin, sailboat), adjust FOV instead of camera position
-	if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5) {
+	// In fixed camera modes (helicopter, zeppelin, sailboat, balloon), adjust FOV instead of camera position
+	if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5 || gCameraMode === 6) {
 		evt.preventDefault();
 		
 		// Adjust FOV based on wheel delta (negative deltaY = scroll up = zoom in = smaller FOV)
@@ -2400,6 +2552,14 @@ function simulate() {
 			helicopterModelTemplate.rotation.x = -0.1; // ~5.7 degrees nose-down
 		}
 		
+		// Animate balloon flight path even when paused
+		if (balloonModelTemplate) {
+			balloonAngle += balloonSpeed * DeltaT;
+			var x = balloonCenterX + Math.cos(balloonAngle) * balloonOvalRadiusX;
+			var z = balloonCenterZ + Math.sin(balloonAngle) * balloonOvalRadiusZ;
+			balloonModelTemplate.position.set(x, balloonHeight, z);
+		}
+		
 		// Update helicopter spotlight gimbal even when paused
 		if (helicopterSpotlight && rotateGimbalY && rotateGimbalZ && spotlightBase) {
 			helicopterSpotlight.target.position.copy(spotlightTarget);
@@ -2422,6 +2582,30 @@ function simulate() {
 			var dirInGimbalZParent = toTarget.clone().transformDirection(gimbalZParentInverse).normalize();
 			var pitchAngle = Math.atan2(dirInGimbalZParent.x, -dirInGimbalZParent.y);
 			rotateGimbalZ.rotation.z = pitchAngle;
+		}
+		
+		// Update balloon spotlight gimbal even when paused
+		if (balloonSpotlightEnabled && balloonSpotlight && balloonRotateGimbalY && balloonRotateGimbalZ && balloonSpotlightBase) {
+			balloonSpotlight.target.position.copy(balloonSpotlightTarget);
+			var balloonSpotlightWorldPos = new THREE.Vector3();
+			balloonSpotlightBase.getWorldPosition(balloonSpotlightWorldPos);
+			var toTargetBalloon = new THREE.Vector3().subVectors(balloonSpotlightTarget, balloonSpotlightWorldPos).normalize();
+			
+			// Calculate yaw in balloonRotateGimbalY's parent coordinate space
+			var balloonGimbalYParent = balloonRotateGimbalY.parent;
+			var balloonGimbalYParentInverse = new THREE.Matrix4().copy(balloonGimbalYParent.matrixWorld).invert();
+			var dirInBalloonGimbalYParent = toTargetBalloon.clone().transformDirection(balloonGimbalYParentInverse).normalize();
+			var balloonYawAngle = Math.atan2(dirInBalloonGimbalYParent.x, dirInBalloonGimbalYParent.z) + Math.PI / 2;
+			balloonRotateGimbalY.rotation.y = balloonYawAngle;
+			
+			// Update gimbalY's world matrix before calculating pitch
+			balloonRotateGimbalY.updateMatrixWorld(true);
+			
+			// Calculate pitch in balloonRotateGimbalZ's parent coordinate space (which is balloonRotateGimbalY)
+			var balloonGimbalZParentInverse = new THREE.Matrix4().copy(balloonRotateGimbalY.matrixWorld).invert();
+			var dirInBalloonGimbalZParent = toTargetBalloon.clone().transformDirection(balloonGimbalZParentInverse).normalize();
+			var balloonPitchAngle = Math.atan2(dirInBalloonGimbalZParent.x, -dirInBalloonGimbalZParent.y);
+			balloonRotateGimbalZ.rotation.z = balloonPitchAngle;
 		}
 		
 		return; // Skip firework physics when paused
@@ -2568,6 +2752,14 @@ function simulate() {
 		sailboatModelTemplate.position.set(offsetX, sailboatHeight, offsetZ);
 	}
 	
+	// Animate balloon flight path
+	if (balloonModelTemplate) {
+		balloonAngle += balloonSpeed * DeltaT;
+		var x = balloonCenterX + Math.cos(balloonAngle) * balloonOvalRadiusX;
+		var z = balloonCenterZ + Math.sin(balloonAngle) * balloonOvalRadiusZ;
+		balloonModelTemplate.position.set(x, balloonHeight, z);
+	}
+	
 	// Update helicopter spotlight gimbal to aim at target
 	if (helicopterSpotlight && rotateGimbalY && rotateGimbalZ && spotlightBase) {
 		// Update spotlight target position
@@ -2595,6 +2787,35 @@ function simulate() {
 		var dirInGimbalZParent = toTarget.clone().transformDirection(gimbalZParentInverse).normalize();
 		var pitchAngle = Math.atan2(dirInGimbalZParent.x, -dirInGimbalZParent.y);
 		rotateGimbalZ.rotation.z = pitchAngle;
+	}
+	
+	// Update balloon spotlight gimbal to aim at target
+	if (balloonSpotlightEnabled && balloonSpotlight && balloonRotateGimbalY && balloonRotateGimbalZ && balloonSpotlightBase) {
+		// Update spotlight target position
+		balloonSpotlight.target.position.copy(balloonSpotlightTarget);
+		
+		// Get spotlight base world position
+		var balloonSpotlightWorldPos = new THREE.Vector3();
+		balloonSpotlightBase.getWorldPosition(balloonSpotlightWorldPos);
+		
+		// Calculate direction from spotlight to target in world space
+		var toTargetBalloon = new THREE.Vector3().subVectors(balloonSpotlightTarget, balloonSpotlightWorldPos).normalize();
+		
+		// Calculate yaw in balloonRotateGimbalY's parent coordinate space
+		var balloonGimbalYParent = balloonRotateGimbalY.parent;
+		var balloonGimbalYParentInverse = new THREE.Matrix4().copy(balloonGimbalYParent.matrixWorld).invert();
+		var dirInBalloonGimbalYParent = toTargetBalloon.clone().transformDirection(balloonGimbalYParentInverse).normalize();
+		var balloonYawAngle = Math.atan2(dirInBalloonGimbalYParent.x, dirInBalloonGimbalYParent.z) + Math.PI / 2;
+		balloonRotateGimbalY.rotation.y = balloonYawAngle;
+		
+		// Update gimbalY's world matrix before calculating pitch
+		balloonRotateGimbalY.updateMatrixWorld(true);
+		
+		// Calculate pitch in balloonRotateGimbalZ's parent coordinate space (which is balloonRotateGimbalY)
+		var balloonGimbalZParentInverse = new THREE.Matrix4().copy(balloonRotateGimbalY.matrixWorld).invert();
+		var dirInBalloonGimbalZParent = toTargetBalloon.clone().transformDirection(balloonGimbalZParentInverse).normalize();
+		var balloonPitchAngle = Math.atan2(dirInBalloonGimbalZParent.x, -dirInBalloonGimbalZParent.y);
+		balloonRotateGimbalZ.rotation.z = balloonPitchAngle;
 	}
 	
 	// Fade explosion light back to dim
@@ -2870,7 +3091,7 @@ function drawCameraMenu() {
 	const radioButtonSpacing = 0.095 * menuScale; // Increased for more vertical spacing
 	const horizontalKnobSpacing = knobRadius * 2.5; // Increased for more horizontal spacing
 	const menuWidth = knobRadius * 3; // Fixed width
-	const radioSectionHeight = 6 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 6 camera modes
+	const radioSectionHeight = 7 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 7 camera modes
 	const menuHeight = radioSectionHeight + knobRadius * 1.7;
 	
 	// Position menu (shared position with all submenus)
@@ -2944,7 +3165,8 @@ function drawCameraMenu() {
 		'Auto Orbit Cam CW',
 		'Helicopter Cam',
 		'Zeppelin Cam',
-		'Sailboat Cam'
+		'Sailboat Cam',
+		'Balloon Cam'
 	];
 	
 	const radioStartY = 0;
@@ -3166,11 +3388,11 @@ function drawSimulationMenu() {
 	ctx.font = `bold ${0.042 * menuScale}px verdana`;
 	ctx.textAlign = 'center';
 	ctx.textBaseline = 'middle';
-	ctx.fillText('Material', menuWidth / 2, radioStartY - radioButtonSpacing * 0.9);
+	ctx.fillText('Particle Material', menuWidth / 2, radioStartY - radioButtonSpacing * 0.9);
 	
 	for (let i = 0; i < materialModeNames.length; i++) {
 		const radioY = radioStartY + i * radioButtonSpacing;
-		const radioX = 0.065 * menuScale;
+		const radioX = -0.065 * menuScale;
 		
 		// Draw radio button circle
 		ctx.beginPath();
@@ -3199,6 +3421,80 @@ function drawSimulationMenu() {
 		ctx.fillText(materialModeNames[i], radioX + radioButtonSize + 0.03 * menuScale, radioY);
 	}
 	
+	// Draw bracket and light switch for Plastic/Metallic materials
+	// Position switch to the right, centered between Plastic (row 1) and Metallic (row 2)
+	const plasticY = radioStartY + 1 * radioButtonSpacing;
+	const metallicY = radioStartY + 2 * radioButtonSpacing;
+	const switchCenterY = (plasticY + metallicY) / 2;
+	const bracketX = menuWidth * 0.75;
+	const switchX = menuWidth * 1.05;
+	
+	// Draw bracket pointing from Plastic/Metallic to the switch
+	ctx.strokeStyle = 'rgba(150, 150, 160, 1.0)';
+	ctx.lineWidth = 1.5;
+	ctx.beginPath();
+	// Make bracket taller - extend beyond the plastic/metallic buttons
+	const bracketTopY = plasticY - radioButtonSpacing * 0.3;
+	const bracketBottomY = metallicY + radioButtonSpacing * 0.3;
+	const tineLength = radioButtonSize * 1.2;
+	
+	// Top tine pointing left
+	ctx.moveTo(bracketX, bracketTopY);
+	ctx.lineTo(bracketX - tineLength, bracketTopY);
+	// Vertical line
+	ctx.moveTo(bracketX, bracketTopY);
+	ctx.lineTo(bracketX, bracketBottomY);
+	// Bottom tine pointing left
+	ctx.moveTo(bracketX, bracketBottomY);
+	ctx.lineTo(bracketX - tineLength, bracketBottomY);
+	// Horizontal line to switch
+	ctx.moveTo(bracketX, switchCenterY);
+	ctx.lineTo(switchX - radioButtonSize * 1.5, switchCenterY);
+	ctx.stroke();
+	
+	// Draw "Lights" text above switch
+	ctx.fillStyle = 'rgba(200, 210, 200, 1.0)';
+	ctx.font = `bold ${0.035 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'bottom';
+	ctx.fillText('Balloon', switchX, switchCenterY - radioButtonSize * 3.1);
+	ctx.fillText('Light', switchX, switchCenterY - radioButtonSize * 2.0);
+	
+	// Draw sliding switch
+	const switchWidth = radioButtonSize * 1.2;
+	const switchHeight = radioButtonSize * 2.5;
+	const switchTrackX = switchX - switchWidth / 2;
+	const switchTrackY = switchCenterY - switchHeight / 2;
+	
+	// Fill entire switch track with color (green when enabled, red when disabled)
+	ctx.fillStyle = balloonSpotlightEnabled ? 'rgba(50, 255, 50, 1.0)' : 'rgba(255, 50, 50, 1.0)';
+	ctx.beginPath();
+	ctx.roundRect(switchTrackX, switchTrackY, switchWidth, switchHeight, switchWidth / 2);
+	ctx.fill();
+	
+	// Draw track border
+	ctx.strokeStyle = 'rgba(150, 150, 160, 1.0)';
+	ctx.lineWidth = 2;
+	ctx.beginPath();
+	ctx.roundRect(switchTrackX, switchTrackY, switchWidth, switchHeight, switchWidth / 2);
+	ctx.stroke();
+	
+	// Calculate button position and draw it on top
+	const buttonRadius = switchWidth / 2 - 2;
+	const buttonY = balloonSpotlightEnabled ? 
+		switchTrackY + buttonRadius + 2 : 
+		switchTrackY + switchHeight - buttonRadius - 2;
+	
+	// Draw sliding button (circular)
+	
+	ctx.fillStyle = 'rgba(200, 200, 210, 1.0)';
+	ctx.strokeStyle = 'rgba(100, 100, 120, 1.0)';
+	ctx.lineWidth = 1.5;
+	ctx.beginPath();
+	ctx.arc(switchX, buttonY, buttonRadius, 0, 2 * Math.PI);
+	ctx.fill();
+	ctx.stroke();
+	
 	// Update knob positions for mouse interaction
 	updateSimulationKnobPositions();
 	
@@ -3226,7 +3522,7 @@ function drawCameraHelp() {
 		// Auto orbit cams
 		currentImage = autoOrbitImage;
 		imageLoaded = autoOrbitImageLoaded;
-	} else if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5) {
+	} else if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5 || gCameraMode === 6) {
 		// Vehicle cams
 		currentImage = vehicleImage;
 		imageLoaded = vehicleImageLoaded;
@@ -3282,7 +3578,7 @@ function updateKnobPositions() {
 	const menuScale = cScale; // Use same scale as main menu
 	const knobRadius = 0.1 * menuScale;
 	const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
-	const radioSectionHeight = 6 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (6 camera modes)
+	const radioSectionHeight = 7 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (7 camera modes)
 	const menuOriginX = submenuX * window.innerWidth;
 	const menuOriginY = submenuY * window.innerHeight;
 	const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
@@ -3407,7 +3703,7 @@ function onMenuClick(evt) {
 		const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
 		const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
 		const menuWidth = knobRadius * 3; // Matches drawCameraMenu - FIXED
-		const radioSectionHeight = 6 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (6 camera modes)
+		const radioSectionHeight = 7 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (7 camera modes)
 		const menuHeight = radioSectionHeight + knobRadius * 2.74; // Matches drawCameraMenu
 		
 		// Check close button
@@ -3442,7 +3738,7 @@ function onMenuClick(evt) {
 		const radioX = menuOriginX - 0.05 * menuScale
 		const radioButtonSize = 0.04 * menuScale;
 		
-		for (let i = 0; i < 6; i++) {
+		for (let i = 0; i < 7; i++) {
 			const radioY = menuOriginY + radioStartY + i * radioButtonSpacing;
 			const rdx = evt.clientX - radioX;
 			const rdy = evt.clientY - radioY;
@@ -3459,7 +3755,7 @@ function onMenuClick(evt) {
 				}
 				
 				// When entering fixed camera modes, reset pan and tilt
-				if (i === 3 || i === 4 || i === 5) {
+				if (i === 3 || i === 4 || i === 5 || i === 6) {
 					cameraPan = 0;
 					cameraTilt = 0;
 				}
@@ -3532,7 +3828,7 @@ function onMenuClick(evt) {
 		const knobY2 = knobY1 + verticalKnobSpacing;
 		const knobY3 = knobY2 + verticalKnobSpacing;
 		const radioStartY = knobY3 + knobRadius * 3.0;
-		const radioX = menuOriginX + 0.065 * menuScale;
+		const radioX = menuOriginX - 0.065 * menuScale;
 		
 		for (let i = 0; i < 4; i++) {
 			const radioY = menuOriginY + radioStartY + i * radioButtonSpacing;
@@ -3545,6 +3841,34 @@ function onMenuClick(evt) {
 				evt.stopPropagation();
 				return true; // Menu click handled
 			}
+		}
+		
+		// Check if clicking on light switch
+		const plasticY = menuOriginY + radioStartY + 1 * radioButtonSpacing;
+		const metallicY = menuOriginY + radioStartY + 2 * radioButtonSpacing;
+		const switchCenterY = (plasticY + metallicY) / 2;
+		const switchX = menuOriginX + menuWidth * 1.05;
+		const switchWidth = radioButtonSize * 1.2;
+		const switchHeight = radioButtonSize * 2.5;
+		const switchTrackX = switchX - switchWidth / 2;
+		const switchTrackY = switchCenterY - switchHeight / 2;
+		
+		const switchDx = evt.clientX - switchX;
+		const switchDy = evt.clientY - switchCenterY;
+		if (Math.abs(switchDx) < switchWidth && Math.abs(switchDy) < switchHeight) {
+			balloonSpotlightEnabled = !balloonSpotlightEnabled;
+			
+			// Toggle balloon spotlight and cone visibility
+			if (balloonSpotlight) {
+				balloonSpotlight.visible = balloonSpotlightEnabled;
+			}
+			if (balloonSpotlightCone) {
+				balloonSpotlightCone.visible = balloonSpotlightEnabled;
+			}
+			
+			needsMenuRedraw = true;
+			evt.stopPropagation();
+			return true; // Switch click handled
 		}
 		
 		// Check if clicking on explosion size knob
@@ -3746,14 +4070,40 @@ function update() {
 			var lookTarget = sailboatCameraWorldPos.clone().add(direction.multiplyScalar(100));
 			Camera.lookAt(lookTarget);
 		}
+	} else if (gCameraMode === 6 && balloonModelTemplate) {
+		// Balloon camera - position camera at balloonCamPoint
+		var balloonCameraWorldPos = new THREE.Vector3();
+		if (balloonCamPoint) {
+			balloonCamPoint.getWorldPosition(balloonCameraWorldPos);
+			Camera.position.copy(balloonCameraWorldPos);
+			
+			// Calculate look target with pan and tilt applied
+			// Use barge position if available, otherwise default to origin
+			var baseLookTarget = bargeGroup ? 
+				new THREE.Vector3(bargeGroup.position.x, 20, bargeGroup.position.z) : 
+				new THREE.Vector3(0, 20, 0);
+			var direction = new THREE.Vector3().subVectors(baseLookTarget, balloonCameraWorldPos).normalize();
+			
+			// Apply pan (yaw) rotation around Y axis
+			var panQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), cameraPan);
+			direction.applyQuaternion(panQuat);
+			
+			// Apply tilt (pitch) rotation around right axis
+			var rightAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(panQuat);
+			var tiltQuat = new THREE.Quaternion().setFromAxisAngle(rightAxis, cameraTilt);
+			direction.applyQuaternion(tiltQuat);
+			
+			var lookTarget = balloonCameraWorldPos.clone().add(direction.multiplyScalar(100));
+			Camera.lookAt(lookTarget);
+		}
 	}
 	
 	// Adjust spotlight cone opacity based on camera mode (very faint in cab view)
-	if (spotlightCone) {
+	if (helicopterSpotlightCone) {
 		if (gCameraMode === 3) {
-			spotlightCone.material.opacity = 0.08; // Very faint in helicopter cab view
+			helicopterSpotlightCone.material.opacity = 0.08; // Very faint in helicopter cab view
 		} else {
-			spotlightCone.material.opacity = 1.0; // Normal visibility in other views
+			helicopterSpotlightCone.material.opacity = 1.0; // Normal visibility in other views
 		}
 	}
 	
