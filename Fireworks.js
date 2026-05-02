@@ -168,6 +168,10 @@ var ballColor = new THREE.Color();
 var balloonModelTemplate = null;
 var balloonCamPoint = null;
 var balloonSpotlightBase = null;
+
+// Warning light variables
+var warningLight = null;
+var warningLightTimer = 0; // Timer for throbbing effect
 var balloonRotateGimbalY = null;
 var balloonRotateGimbalZ = null;
 var balloonSpotlight = null;
@@ -1069,7 +1073,9 @@ function initThreeScene() {
 				child.castShadow = true;
 				child.receiveShadow = true;
 				// Don't override material for warningLight - keep its original material
-				if (child.name !== 'warningLight') {
+				if (child.name === 'warningLight') {
+					warningLight = child; // Store reference for animation
+				} else {
 					// Check if this is a water object
 					if (child.name.toLowerCase().includes('water')) {
 						child.material = waterMaterial;
@@ -1114,7 +1120,9 @@ function initThreeScene() {
 				child.castShadow = true;
 				child.receiveShadow = true;
 				// Don't override material for warningLight - keep its original material
-				if (child.name !== 'warningLight') {
+				if (child.name === 'warningLight') {
+					if (!warningLight) warningLight = child; // Store reference if not already set
+				} else {
 					// Check if this is a water object
 					if (child.name.toLowerCase().includes('water')) {
 						child.material = waterMaterialNorth;
@@ -2554,6 +2562,34 @@ function simulate() {
 			balloonModelTemplate.position.set(x, balloonHeight, z);
 		}
 		
+		// Animate warning light throbbing (brief dark fade every 3 seconds)
+		if (warningLight && warningLight.material) {
+			warningLightTimer += DeltaT;
+			if (warningLightTimer >= 3.0) warningLightTimer = 0;
+			
+			// Calculate brightness: mostly 1.0, briefly fade to 0.1 during last 1.0 seconds of cycle
+			var brightness = 1.0;
+			if (warningLightTimer >= 2.0) {
+				// Fade dark over 0.3 seconds, stay dark 0.4 seconds, fade back 0.3 seconds
+				var fadeTime = warningLightTimer - 2.0;
+				if (fadeTime < 0.3) {
+					// Fade down
+					brightness = 1.0 - (fadeTime / 0.3) * 0.9; // From 1.0 to 0.1
+				} else if (fadeTime < 0.7) {
+					// Stay dark
+					brightness = 0.1;
+				} else {
+					// Fade up
+					brightness = 0.1 + ((fadeTime - 0.7) / 0.3) * 0.9; // From 0.1 to 1.0
+				}
+			}
+			
+			// Apply brightness to emissive intensity
+			if (warningLight.material.emissiveIntensity !== undefined) {
+				warningLight.material.emissiveIntensity = brightness;
+			}
+		}
+		
 		// Update helicopter spotlight gimbal even when paused
 		if (helicopterSpotlight && rotateGimbalY && rotateGimbalZ && spotlightBase) {
 			helicopterSpotlight.target.position.copy(spotlightTarget);
@@ -2810,6 +2846,34 @@ function simulate() {
 		var dirInBalloonGimbalZParent = toTargetBalloon.clone().transformDirection(balloonGimbalZParentInverse).normalize();
 		var balloonPitchAngle = Math.atan2(dirInBalloonGimbalZParent.x, -dirInBalloonGimbalZParent.y);
 		balloonRotateGimbalZ.rotation.z = balloonPitchAngle;
+	}
+	
+	// Animate warning light throbbing (brief dark fade every 3 seconds)
+	if (warningLight && warningLight.material) {
+		warningLightTimer += DeltaT;
+		if (warningLightTimer >= 3.0) warningLightTimer = 0;
+		
+		// Calculate brightness: mostly 1.0, briefly fade to 0.1 during last 1.0 seconds of cycle
+		var brightness = 1.0;
+		if (warningLightTimer >= 2.0) {
+			// Fade dark over 0.3 seconds, stay dark 0.4 seconds, fade back 0.3 seconds
+			var fadeTime = warningLightTimer - 2.0;
+			if (fadeTime < 0.3) {
+				// Fade down
+				brightness = 1.0 - (fadeTime / 0.3) * 0.9; // From 1.0 to 0.1
+			} else if (fadeTime < 0.7) {
+				// Stay dark
+				brightness = 0.1;
+			} else {
+				// Fade up
+				brightness = 0.1 + ((fadeTime - 0.7) / 0.3) * 0.9; // From 0.1 to 1.0
+			}
+		}
+		
+		// Apply brightness to emissive intensity
+		if (warningLight.material.emissiveIntensity !== undefined) {
+			warningLight.material.emissiveIntensity = brightness;
+		}
 	}
 	
 	// Fade explosion light back to dim
