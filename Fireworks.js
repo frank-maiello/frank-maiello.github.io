@@ -99,9 +99,9 @@ var fadeOutDuration = 1.0; // 1 second fade
 // Menu system variables
 var gOverlayCanvas = null;
 var gOverlayCtx = null;
-var mainMenuVisible = false;
-var mainMenuOpacity = 0;
-var mainMenuXOffset = -1.0; // Start off screen
+var mainMenuVisible = true;
+var mainMenuOpacity = 1;
+var mainMenuXOffset = 0; // Start on screen
 var mainMenuFadeSpeed = 3.0;
 var mainMenuAnimSpeed = 4.0;
 var cameraMenuVisible = false;
