@@ -22,7 +22,7 @@ const numBalls = 75000 + sparkPoolSize; // 25 mortars × 3000 + spark pool
 const mortarRadius = 0.03; // Initial cluster radius for mortar shell particles	
 const mortarAltitude = 1.5; // Start just above ground level
 var maxExplosionSize = 5.0; // Base velocity magnitude for explosion particles (controllable)
-const explosionUniformity = 0.3; // Higher values = more random explosion patterns, lower values = more uniform spheres
+const explosionUniformity = 0.7; // Higher values = more random explosion patterns, lower values = more uniform spheres
 var minLaunchVelocity = 30.0; // Controllable launch velocity
 const lauchVelocityRange = 20.0;
 var mortarTubeAngle = 10.0; // Angle in degrees for mortar tube tilt away from center (0-45)
@@ -498,7 +498,7 @@ class MORTAR {
 				Math.sin(phi) * Math.sin(theta)
 			);
 			
-			var explosionSpeed = explosionSize + Math.random() * explosionUniformity; // Velocity magnitude with some randomness
+			var explosionSpeed = explosionSize + Math.random() * (1 - explosionUniformity); // Velocity magnitude with some randomness
 			
 			dir.normalize();
 			dir.multiplyScalar(explosionSpeed * Balls[i].speedMultiplier);
@@ -746,8 +746,10 @@ function initScene() {
 		ballInstancedMesh.material.dispose();
 	}
 	
-	const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
-	
+	//const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
+	//const ballGeometry = new THREE.IcosahedronGeometry(ballRadius);
+	const ballGeometry = new THREE.TetrahedronGeometry(ballRadius);
+
 	// Material type for balls (based on gBallMaterialMode)
 	var ballMaterial;
 	if (gBallMaterialMode === 0) {
@@ -963,7 +965,8 @@ function updateBallGeometry() {
 	ballInstancedMesh.geometry.dispose();
 	
 	// Create new geometry with updated radius
-	const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
+	//const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
+	const ballGeometry = new THREE.IcosahedronGeometry(ballRadius);
 	
 	// Reuse the same material
 	const ballMaterial = ballInstancedMesh.material;
@@ -1087,9 +1090,9 @@ function initThreeScene() {
 			}
 		});
 
-			gThreeScene.add(cityscapeModelTemplate);
-			console.log('cityscape model loaded successfully');
-			updateLoadingProgress();
+		gThreeScene.add(cityscapeModelTemplate);
+		console.log('cityscape model loaded successfully');
+		updateLoadingProgress();
 		},
 		function(xhr) {
 			console.log('cityscape model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
@@ -1182,6 +1185,62 @@ function initThreeScene() {
 		},
 		function(error) {
 			console.error('Error loading cityscape model:', error);
+		}
+	);
+
+	// LOAD STREETS	 --------------------------------------
+	var streetsLoader = new THREE.GLTFLoader();
+	streetsLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/hudsonStreets.gltf',
+		function(gltf) {
+			streetsModelTemplate = gltf.scene;
+			streetsModelTemplate.position.set(-20, -0.1, -35);
+			streetsModelTemplate.scale.set(0.5, 0.5, 0.5);
+
+			var uniformStreetsMaterial = new THREE.MeshBasicMaterial({
+				color: 0x000000, 
+				side: THREE.FrontSide
+			});
+
+
+			streetsModelTemplate.traverse(function(child) {
+				if (child.isMesh) {
+					child.castShadow = false;
+					child.receiveShadow = false;
+					child.material = uniformStreetsMaterial;
+				}
+			});
+
+			gThreeScene.add(streetsModelTemplate);
+			console.log('streets model loaded successfully');
+			updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('streets model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading streets model:', error);
+		}
+	);
+
+	// LOAD GREENERY --------------------------------------
+	var greeneryLoader = new THREE.GLTFLoader();
+	greeneryLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/hudsonGreenery.gltf',
+		function(gltf) {
+			greeneryModelTemplate = gltf.scene;
+			greeneryModelTemplate.position.set(-20, -0.1, -35);
+			greeneryModelTemplate.scale.set(0.5, 0.5, 0.5);
+
+			gThreeScene.add(greeneryModelTemplate);
+			console.log('greenery model loaded successfully');
+			updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('greenery model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading greenery model:', error);
 		}
 	);
 
