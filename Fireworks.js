@@ -172,6 +172,10 @@ var balloonSpotlightBase = null;
 // Warning light variables
 var warningLight = null;
 var warningLightTimer = 0; // Timer for throbbing effect
+
+// Colgate Clock variables
+var clockHourHand = null;
+var clockMinuteHand = null;
 var balloonRotateGimbalY = null;
 var balloonRotateGimbalZ = null;
 var balloonSpotlight = null;
@@ -1071,13 +1075,37 @@ function initThreeScene() {
 			side: THREE.FrontSide
 		});
 		
+		// Helper function to check if object is within ColgateClock group
+		function isInColgateClock(obj) {
+			let current = obj;
+			while (current) {
+				if (current.name === 'ColgateClock') {
+					return true;
+				}
+				current = current.parent;
+			}
+			return false;
+		}
+
 		cityscapeModelTemplate.traverse(function(child) {
+			// Find clock hands for animation
+			if (child.name === 'hourHand') {
+				clockHourHand = child;
+				console.log('Found clock hour hand');
+			} else if (child.name === 'minuteHand') {
+				clockMinuteHand = child;
+				console.log('Found clock minute hand');
+			}
+			
 			if (child.isMesh) {
 				child.castShadow = true;
 				child.receiveShadow = true;
 				// Don't override material for warningLight - keep its original material
 				if (child.name === 'warningLight') {
 					warningLight = child; // Store reference for animation
+				} else if (isInColgateClock(child)) {
+					// Don't override material for objects in ColgateClock.gltf group
+					// Keep original material
 				} else {
 					// Check if this is a water object
 					if (child.name.toLowerCase().includes('water')) {
@@ -2619,6 +2647,29 @@ function simulate() {
 			var x = balloonCenterX + Math.cos(balloonAngle) * balloonOvalRadiusX;
 			var z = balloonCenterZ + Math.sin(balloonAngle) * balloonOvalRadiusZ;
 			balloonModelTemplate.position.set(x, balloonHeight, z);
+		}
+		
+		// Update Colgate Clock hands to show current time
+		if (clockHourHand || clockMinuteHand) {
+			var now = new Date();
+			var hours = now.getHours() % 12; // Convert to 12-hour format
+			var minutes = now.getMinutes();
+			var seconds = now.getSeconds();
+			
+			// Calculate rotation angles (y-axis rotation)
+			// Minute hand: 360 degrees per hour, plus smooth seconds
+			var minuteAngle = ((minutes + seconds / 60) / 60) * Math.PI * 2;
+			
+			// Hour hand: 360 degrees per 12 hours, plus smooth minutes
+			var hourAngle = ((hours + minutes / 60) / 12) * Math.PI * 2;
+			
+			// Apply rotations (negative because clock hands rotate clockwise)
+			if (clockMinuteHand) {
+				clockMinuteHand.rotation.y = -minuteAngle;
+			}
+			if (clockHourHand) {
+				clockHourHand.rotation.y = -hourAngle;
+			}
 		}
 		
 		// Animate warning light throbbing (brief dark fade every 3 seconds)
