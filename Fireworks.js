@@ -1374,7 +1374,7 @@ function initThreeScene() {
 		}
 	);
 
-	// LOAD AIRBUS --------------------------------------
+	/*// LOAD AIRBUS --------------------------------------
 	var airbusLoader = new THREE.GLTFLoader();
 	airbusLoader.load(
 		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Airbus.gltf',
@@ -1396,7 +1396,7 @@ function initThreeScene() {
 		function(error) {
 			console.error('Error loading airbus model:', error);
 		}
-	);
+	);*/
 
 	// LOAD HELICOPTER --------------------------------------
 	var helicopterLoader = new THREE.GLTFLoader();
