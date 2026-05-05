@@ -84,6 +84,9 @@ var startupTimer = 3.0; // Start paused for 3 seconds
 // Ball material variables
 var gBallMaterialMode = 0; // 0=Basic, 1=Plastic, 2=Metallic, 3=Normal
 
+// Ball geometry variables
+var gBallGeometryMode = 0; // 0=Sphere, 1=Tetrahedron, 2=Cube, 3=Octahedron
+
 // Loading screen variables
 var loadingScreen = null;
 var loadingProgress = 0;
@@ -750,10 +753,18 @@ function initScene() {
 		ballInstancedMesh.material.dispose();
 	}
 	
-	//const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
-	//const ballGeometry = new THREE.IcosahedronGeometry(ballRadius);
-	const ballGeometry = new THREE.TetrahedronGeometry(ballRadius);
-
+	// Create geometry based on gBallGeometryMode
+	var ballGeometry;
+	if (gBallGeometryMode === 0) {
+		ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
+	} else if (gBallGeometryMode === 1) {
+		ballGeometry = new THREE.TetrahedronGeometry(ballRadius);
+	} else if (gBallGeometryMode === 2) {
+		ballGeometry = new THREE.BoxGeometry(ballRadius * 2, ballRadius * 2, ballRadius * 2);
+	} else if (gBallGeometryMode === 3) {
+		ballGeometry = new THREE.OctahedronGeometry(ballRadius);
+	}
+	
 	// Material type for balls (based on gBallMaterialMode)
 	var ballMaterial;
 	if (gBallMaterialMode === 0) {
@@ -969,8 +980,10 @@ function updateBallGeometry() {
 	ballInstancedMesh.geometry.dispose();
 	
 	// Create new geometry with updated radius
-	//const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
-	const ballGeometry = new THREE.IcosahedronGeometry(ballRadius);
+	const ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
+	//const ballGeometry = new THREE.TetrahedronGeometry(ballRadius);
+	//const ballGeometry = new THREE.IcosahedronGeometry(ballRadius);
+	
 	
 	// Reuse the same material
 	const ballMaterial = ballInstancedMesh.material;
@@ -1047,19 +1060,59 @@ function changeBallMaterial(materialMode) {
 	gThreeScene.add(ballInstancedMesh);
 }
 
+function changeBallGeometry(geometryMode) {
+	if (!ballInstancedMesh || !gThreeScene) return;
+	
+	// Store current instance matrix and colors
+	const oldMatrix = ballInstancedMesh.instanceMatrix.clone();
+	const oldColor = ballInstancedMesh.instanceColor ? ballInstancedMesh.instanceColor.clone() : null;
+	const oldMaterial = ballInstancedMesh.material;
+	
+	// Dispose old geometry
+	ballInstancedMesh.geometry.dispose();
+	
+	// Create new geometry based on mode
+	let ballGeometry;
+	if (geometryMode === 0) {
+		ballGeometry = new THREE.SphereGeometry(ballRadius, 8, 8);
+	} else if (geometryMode === 1) {
+		ballGeometry = new THREE.TetrahedronGeometry(ballRadius);
+	} else if (geometryMode === 2) {
+		ballGeometry = new THREE.BoxGeometry(ballRadius * 2, ballRadius * 2, ballRadius * 2);
+	} else if (geometryMode === 3) {
+		ballGeometry = new THREE.OctahedronGeometry(ballRadius);
+	}
+	
+	// Remove old mesh
+	gThreeScene.remove(ballInstancedMesh);
+	
+	// Create new instanced mesh with new geometry
+	ballInstancedMesh = new THREE.InstancedMesh(ballGeometry, oldMaterial, numBalls);
+	ballInstancedMesh.instanceMatrix = oldMatrix;
+	ballInstancedMesh.instanceMatrix.needsUpdate = true;
+	
+	// Restore instance colors
+	if (oldColor) {
+		ballInstancedMesh.instanceColor = oldColor;
+		ballInstancedMesh.instanceColor.needsUpdate = true;
+	}
+	
+	gThreeScene.add(ballInstancedMesh);
+}
+
 // ------------------------------------------
 function initThreeScene() {
 	gThreeScene = new THREE.Scene();
 	gThreeScene.background = new THREE.Color(0x000000);
 
-	// LOAD DOWNTOWN --------------------------------------
-	var cityscapeLoader = new THREE.GLTFLoader();
-	cityscapeLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonView.gltf',
+	// LOAD JERSEY AND HUDSON RIVER --------------------------------------
+	var jerseyLoader = new THREE.GLTFLoader();
+	jerseyLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonJerseyView.gltf',
 		function(gltf) {
-			cityscapeModelTemplate = gltf.scene;
-			cityscapeModelTemplate.position.set(-20, -0.1, -35);
-			cityscapeModelTemplate.scale.set(0.5, 0.5, 0.5);
+			jerseyModelTemplate = gltf.scene;
+			jerseyModelTemplate.position.set(-20, -0.1, -35);
+			jerseyModelTemplate.scale.set(0.5, 0.5, 0.5);
 
 		// Enable shadow casting and receiving on all meshes in the model
 		// Replace all materials with uniform 70% gray MeshPhongMaterial
@@ -1087,7 +1140,7 @@ function initThreeScene() {
 			return false;
 		}
 
-		cityscapeModelTemplate.traverse(function(child) {
+		jerseyModelTemplate.traverse(function(child) {
 			// Find clock hands for animation
 			if (child.name === 'hourHand') {
 				clockHourHand = child;
@@ -1118,15 +1171,64 @@ function initThreeScene() {
 			}
 		});
 
-		gThreeScene.add(cityscapeModelTemplate);
-		console.log('cityscape model loaded successfully');
+		gThreeScene.add(jerseyModelTemplate);
+		console.log('jersey model loaded successfully');
 		updateLoadingProgress();
 		},
 		function(xhr) {
-			console.log('cityscape model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+			console.log('jersey model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
 		},
 		function(error) {
-			console.error('Error loading cityscape model:', error);
+			console.error('Error loading jersey model:', error);
+		}
+	);
+
+	// LOAD DOWNTOWN MANHATTAN --------------------------------------
+	var downtownLoader = new THREE.GLTFLoader();
+	downtownLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonNYCView.gltf',
+		function(gltf) {
+			downtownModelTemplate = gltf.scene;
+			downtownModelTemplate.position.set(-20, -0.1, -35);
+			downtownModelTemplate.scale.set(0.5, 0.5, 0.5);
+
+		// Enable shadow casting and receiving on all meshes in the model
+		// Replace all materials with uniform 70% gray MeshPhongMaterial
+		var uniformCityscapeMaterial = new THREE.MeshPhongMaterial({
+			color: 0x666666, // 40% gray
+			side: THREE.FrontSide
+		});
+		
+		// Special material for water objects
+		var waterMaterial = new THREE.MeshStandardMaterial({
+			color: 0x05060c, // #05060c dark blue
+			roughness: 0.7,
+			side: THREE.FrontSide
+		});
+		
+		downtownModelTemplate.traverse(function(child) {
+			if (child.isMesh) {
+				child.castShadow = true;
+				child.receiveShadow = true;
+				// Don't override material for warningLight - keep its original material
+				if (child.name === 'warningLight') {
+					warningLight = child; // Store reference for animation
+				} else {
+					// Replace material with uniform gray
+					child.material = uniformCityscapeMaterial;
+				}
+			}
+		});
+
+		gThreeScene.add(downtownModelTemplate);
+		console.log('downtown model loaded successfully');
+		updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('downtown model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading downtown model:', error);
 		}
 	);
 
@@ -1269,6 +1371,30 @@ function initThreeScene() {
 		},
 		function(error) {
 			console.error('Error loading greenery model:', error);
+		}
+	);
+
+	// LOAD AIRBUS --------------------------------------
+	var airbusLoader = new THREE.GLTFLoader();
+	airbusLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Airbus.gltf',
+		function(gltf) {
+			airbusModelTemplate = gltf.scene;
+			airbusModelTemplate.position.set(35, -0.30, -200);
+			airbusModelTemplate.scale.set(0.1, 0.1, 0.1);
+			airbusModelTemplate.rotation.y = (-0.54 * Math.PI); // Rotate to face the correct direction
+			//airbusModelTemplate.rotation.x = (-0.02 * Math.PI);
+			airbusModelTemplate.rotation.z = (0.03 * Math.PI);
+
+			gThreeScene.add(airbusModelTemplate);
+			console.log('airbus model loaded successfully');
+			updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('airbus model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading airbus model:', error);
 		}
 	);
 
@@ -2900,6 +3026,29 @@ function simulate() {
 		balloonModelTemplate.position.set(x, balloonHeight, z);
 	}
 	
+	// Update Colgate Clock hands to show current time
+	if (clockHourHand || clockMinuteHand) {
+		var now = new Date();
+		var hours = now.getHours() % 12; // Convert to 12-hour format
+		var minutes = now.getMinutes();
+		var seconds = now.getSeconds();
+		
+		// Calculate rotation angles (y-axis rotation)
+		// Minute hand: 360 degrees per hour, plus smooth seconds
+		var minuteAngle = ((minutes + seconds / 60) / 60) * Math.PI * 2;
+		
+		// Hour hand: 360 degrees per 12 hours, plus smooth minutes
+		var hourAngle = ((hours + minutes / 60) / 12) * Math.PI * 2;
+		
+		// Apply rotations (negative because clock hands rotate clockwise)
+		if (clockMinuteHand) {
+			clockMinuteHand.rotation.y = -minuteAngle;
+		}
+		if (clockHourHand) {
+			clockHourHand.rotation.y = -hourAngle;
+		}
+	}
+	
 	// Update helicopter spotlight gimbal to aim at target
 	if (helicopterSpotlight && rotateGimbalY && rotateGimbalZ && spotlightBase) {
 		// Update spotlight target position
@@ -3021,7 +3170,7 @@ function simulate() {
 function drawMainMenu() {
 	const ctx = gOverlayCtx;
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
-	const menuScale = cScale; // Use same scale as ellipsis
+	const menuScale = 0.7 * cScale; // Use same scale as ellipsis
 	const ellipsisWorldX = 0.05;
 	const ellipsisWorldY = 0.05;
 	const ellipsisX = ellipsisWorldX * cScale;
@@ -3252,7 +3401,7 @@ function drawCameraMenu() {
 	
 	const ctx = gOverlayCtx;
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
-	const menuScale = cScale; // Use same scale as main menu
+	const menuScale = 0.7 * cScale; // Use same scale as main menu
 	const knobRadius = 0.1 * menuScale;
 	const padding = 0.17 * menuScale;
 	const radioButtonSize = 0.04 * menuScale;
@@ -3260,11 +3409,23 @@ function drawCameraMenu() {
 	const horizontalKnobSpacing = knobRadius * 2.5; // Increased for more horizontal spacing
 	const menuWidth = knobRadius * 3; // Fixed width
 	const radioSectionHeight = 7 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 7 camera modes
-	const menuHeight = radioSectionHeight + knobRadius * 1.7;
+	const menuHeight = radioSectionHeight + knobRadius * 2.0; // Height to contain knobs and labels
 	
-	// Position menu (shared position with all submenus)
-	const menuOriginX = submenuX * window.innerWidth;
-	const menuOriginY = submenuY * window.innerHeight;
+	// Position menu relative to main menu
+	const ellipsisWorldX = 0.05;
+	const ellipsisWorldY = 0.05;
+	const ellipsisX = ellipsisWorldX * cScale;
+	const ellipsisY = ellipsisWorldY * cScale;
+	const mainItemWidth = 0.15 * menuScale;
+	const mainPadding = 0.02 * menuScale;
+	const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+	const mainMenuBaseX = ellipsisX - mainPadding;
+	const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+	const mainMenuY = ellipsisY + 0.08 * menuScale;
+	const submenuPadding = 0.17 * menuScale; // Submenu uses larger padding
+	const submenuGap = 0.01 * menuScale;
+	const menuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+	const menuOriginY = mainMenuY + submenuPadding;
 	
 	ctx.save();
 	ctx.translate(menuOriginX, menuOriginY);
@@ -3450,7 +3611,7 @@ function drawSimulationMenu() {
 	
 	const ctx = gOverlayCtx;
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
-	const menuScale = cScale;
+	const menuScale = 0.7 * cScale;
 	const knobRadius = 0.1 * menuScale;
 	const padding = 0.17 * menuScale;
 	const radioButtonSize = 0.04 * menuScale;
@@ -3458,16 +3619,30 @@ function drawSimulationMenu() {
 	const horizontalKnobSpacing = knobRadius * 2.5;
 	const verticalKnobSpacing = knobRadius * 2.8;
 	const menuWidth = knobRadius * 3;
-	// Calculate menu height: knobs section + spacing + radio buttons section
+	// Calculate menu height: knobs section + spacing + radio buttons sections (material + geometry)
 	const knobY1 = knobRadius * 0.8;
 	const knobY3 = knobY1 + 2 * verticalKnobSpacing;
-	const radioStartY = knobY3 + knobRadius * 3.0;
-	const radioSectionHeight = 2.0 * radioButtonSpacing;
-	const menuHeight = radioStartY + radioSectionHeight;
+	const radioStartY = knobY3 + knobRadius * 3.0 + 0.021 * menuScale; // Added offset to move sections down
+	const materialSectionHeight = 4.0 * radioButtonSpacing; // 4 material buttons
+	const geometryStartY = radioStartY + materialSectionHeight + radioButtonSpacing * 1.5; // Extra spacing between sections
+	const geometrySectionHeight = 2.5 * radioButtonSpacing; // 4 geometry buttons
+	const menuHeight = geometryStartY + geometrySectionHeight;
 	
-	// Position menu (shared position with all submenus)
-	const menuOriginX = submenuX * window.innerWidth;
-	const menuOriginY = submenuY * window.innerHeight;
+	// Position menu relative to main menu
+	const ellipsisWorldX = 0.05;
+	const ellipsisWorldY = 0.05;
+	const ellipsisX = ellipsisWorldX * cScale;
+	const ellipsisY = ellipsisWorldY * cScale;
+	const mainItemWidth = 0.15 * menuScale;
+	const mainPadding = 0.02 * menuScale;
+	const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+	const mainMenuBaseX = ellipsisX - mainPadding;
+	const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+	const mainMenuY = ellipsisY + 0.08 * menuScale;
+	const submenuPadding = 0.17 * menuScale; // Submenu uses larger padding
+	const submenuGap = 0.01 * menuScale;
+	const menuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+	const menuOriginY = mainMenuY + submenuPadding;
 	
 	ctx.save();
 	ctx.translate(menuOriginX, menuOriginY);
@@ -3588,7 +3763,53 @@ function drawSimulationMenu() {
 		ctx.fillStyle = `rgba(${gBallMaterialMode === i ? 240 : 200}, ${gBallMaterialMode === i ? 240 : 200}, ${gBallMaterialMode === i ? 240 : 240}, 1.0)`;
 		ctx.fillText(materialModeNames[i], radioX + radioButtonSize + 0.03 * menuScale, radioY);
 	}
-	
+
+	// Draw radio buttons for ball geometry (below material section)
+	const geometryModeNames = [
+		'Sphere',
+		'Tetrahedron',
+		'Cube',
+		'Octahedron'
+	];
+
+	// Draw "Particle Shape" heading
+	ctx.fillStyle = 'rgba(200, 210, 200, 1.0)';
+	ctx.font = `bold ${0.042 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.fillText('Particle Shape', menuWidth / 2, geometryStartY - radioButtonSpacing * 0.9);
+
+	for (let i = 0; i < geometryModeNames.length; i++) {
+		const radioY = geometryStartY + i * radioButtonSpacing;
+		const radioX = -0.065 * menuScale;
+
+		// Draw radio button circle
+		ctx.beginPath();
+		ctx.arc(radioX, radioY, radioButtonSize, 0, 2 * Math.PI);
+		ctx.strokeStyle = 'rgba(150, 150, 160, 1.0)';
+		ctx.fillStyle = 'rgba(40, 40, 50, 0.8)';
+		ctx.lineWidth = 2;
+		ctx.stroke();
+		ctx.fill();
+
+		// Fill if selected
+		if (gBallGeometryMode === i) {
+			ctx.beginPath();
+			ctx.arc(radioX, radioY, radioButtonSize * 0.6, 0, 2 * Math.PI);
+			ctx.fillStyle = 'rgba(130, 140, 200, 1.0)';
+			ctx.fill();
+		}
+
+		// Draw label
+		ctx.font = `${0.037 * menuScale}px verdana`;
+		ctx.textAlign = 'left';
+		ctx.textBaseline = 'middle';
+		ctx.fillStyle = 'rgba(10, 10, 10, 1.0)';
+		ctx.fillText(geometryModeNames[i], radioX + radioButtonSize + 0.03 * menuScale + 1, 1 + radioY);
+		ctx.fillStyle = `rgba(${gBallGeometryMode === i ? 240 : 200}, ${gBallGeometryMode === i ? 240 : 200}, ${gBallGeometryMode === i ? 240 : 240}, 1.0)`;
+		ctx.fillText(geometryModeNames[i], radioX + radioButtonSize + 0.03 * menuScale, radioY);
+	}
+
 	// Draw bracket and light switch for Plastic/Metallic materials
 	// Position switch to the right, centered between Plastic (row 1) and Metallic (row 2)
 	const plasticY = radioStartY + 1 * radioButtonSpacing;
@@ -3674,7 +3895,7 @@ function drawCameraHelp() {
 	
 	const ctx = gOverlayCtx;
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
-	const menuScale = cScale;
+	const menuScale = 0.7 * cScale;
 	const knobRadius = 0.1 * menuScale;
 	const padding = 0.17 * menuScale;
 	
@@ -3702,8 +3923,22 @@ function drawCameraHelp() {
 	// Calculate image dimensions - maintain original aspect ratio
 	const cameraMenuWidth = knobRadius * 3;
 	const spacing = -0.05 * menuScale; // Negative to overlap slightly, moving left
-	const menuOriginX = submenuX * window.innerWidth + cameraMenuWidth + padding * 2 + spacing;
-	const menuOriginY = submenuY * window.innerHeight - 0.1 * menuScale; // Move up
+	// Position relative to main menu
+	const ellipsisWorldX = 0.05;
+	const ellipsisWorldY = 0.05;
+	const ellipsisX = ellipsisWorldX * cScale;
+	const ellipsisY = ellipsisWorldY * cScale;
+	const mainItemWidth = 0.15 * menuScale;
+	const mainPadding = 0.02 * menuScale;
+	const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+	const mainMenuBaseX = ellipsisX - mainPadding;
+	const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+	const mainMenuY = ellipsisY + 0.08 * menuScale;
+	const submenuPadding = 0.17 * menuScale; // Submenu uses larger padding
+	const submenuGap = 0.01 * menuScale;
+	const cameraMenuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+	const menuOriginX = cameraMenuOriginX + cameraMenuWidth + padding * 2 + spacing;
+	const menuOriginY = mainMenuY + submenuPadding - 0.1 * menuScale; // Move up slightly
 	
 	// Fixed width, height based on original aspect ratio
 	const imageWidth = cameraMenuWidth * 1.8;
@@ -3718,10 +3953,23 @@ function drawCameraHelp() {
 
 function updateSimulationKnobPositions() {
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
-	const menuScale = cScale;
+	const menuScale = 0.7 * cScale;
 	const knobRadius = 0.1 * menuScale;
-	const menuOriginX = submenuX * window.innerWidth;
-	const menuOriginY = submenuY * window.innerHeight;
+	// Position relative to main menu
+	const ellipsisWorldX = 0.05;
+	const ellipsisWorldY = 0.05;
+	const ellipsisX = ellipsisWorldX * cScale;
+	const ellipsisY = ellipsisWorldY * cScale;
+	const mainItemWidth = 0.15 * menuScale;
+	const mainPadding = 0.02 * menuScale;
+	const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+	const mainMenuBaseX = ellipsisX - mainPadding;
+	const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+	const mainMenuY = ellipsisY + 0.08 * menuScale;
+	const submenuPadding = 0.17 * menuScale; // Submenu uses larger padding
+	const submenuGap = 0.01 * menuScale;
+	const menuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+	const menuOriginY = mainMenuY + submenuPadding;
 	const horizontalKnobSpacing = knobRadius * 2.5;
 	const verticalKnobSpacing = knobRadius * 2.8;
 	const menuWidth = knobRadius * 3;
@@ -3743,14 +3991,27 @@ function updateSimulationKnobPositions() {
 
 function updateKnobPositions() {
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
-	const menuScale = cScale; // Use same scale as main menu
+	const menuScale = 0.7 * cScale; // Use same scale as main menu
 	const knobRadius = 0.1 * menuScale;
 	const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
 	const radioSectionHeight = 7 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (7 camera modes)
-	const menuOriginX = submenuX * window.innerWidth;
-	const menuOriginY = submenuY * window.innerHeight;
+	// Position relative to main menu
+	const ellipsisWorldX = 0.05;
+	const ellipsisWorldY = 0.05;
+	const ellipsisX = ellipsisWorldX * cScale;
+	const ellipsisY = ellipsisWorldY * cScale;
+	const mainItemWidth = 0.15 * menuScale;
+	const mainPadding = 0.02 * menuScale;
+	const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+	const mainMenuBaseX = ellipsisX - mainPadding;
+	const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+	const mainMenuY = ellipsisY + 0.08 * menuScale;
+	const submenuPadding = 0.17 * menuScale; // Submenu uses larger padding
+	const submenuGap = 0.01 * menuScale;
+	const menuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+	const menuOriginY = mainMenuY + submenuPadding;
 	const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
-	const menuWidth = knobRadius * 3.7; // Matches drawCameraMenu
+	const menuWidth = knobRadius * 3; // Matches drawCameraMenu
 	const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
 	const orbitSpeedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
 	const knobY = radioSectionHeight + knobRadius * 1.3;
@@ -3798,7 +4059,7 @@ function onMenuClick(evt) {
 	// Check main menu clicks
 	if (mainMenuVisible && mainMenuOpacity > 0.5) {
 		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
-		const menuScale = cScale; // Use same scale as main menu
+		const menuScale = 0.7 * cScale; // Use same scale as main menu
 		const ellipsisWorldX = 0.05;
 		const ellipsisWorldY = 0.05;
 		const ellipsisX = ellipsisWorldX * cScale;
@@ -3863,9 +4124,22 @@ function onMenuClick(evt) {
 		updateKnobPositions();
 		
 		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
-		const menuScale = cScale; // Use same scale as main menu
-		const menuOriginX = submenuX * window.innerWidth;
-		const menuOriginY = submenuY * window.innerHeight;
+		const menuScale = 0.7 * cScale; // Use same scale as main menu
+		// Position relative to main menu
+		const ellipsisWorldX = 0.05;
+		const ellipsisWorldY = 0.05;
+		const ellipsisX = ellipsisWorldX * cScale;
+		const ellipsisY = ellipsisWorldY * cScale;
+		const mainItemWidth = 0.15 * menuScale;
+		const mainPadding = 0.02 * menuScale;
+		const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+		const mainMenuBaseX = ellipsisX - mainPadding;
+		const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+		const mainMenuY = ellipsisY + 0.08 * menuScale;
+		const submenuPadding = 0.17 * menuScale; // Submenu uses larger padding
+		const submenuGap = 0.01 * menuScale;
+		const menuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+		const menuOriginY = mainMenuY + submenuPadding;
 		const padding = 0.17 * menuScale;
 		const knobRadius = 0.1 * menuScale;
 		const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
@@ -3966,9 +4240,22 @@ function onMenuClick(evt) {
 		updateSimulationKnobPositions();
 		
 		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
-		const menuScale = cScale;
-		const menuOriginX = submenuX * window.innerWidth;
-		const menuOriginY = submenuY * window.innerHeight;
+		const menuScale = 0.7 * cScale;
+		// Position relative to main menu
+		const ellipsisWorldX = 0.05;
+		const ellipsisWorldY = 0.05;
+		const ellipsisX = ellipsisWorldX * cScale;
+		const ellipsisY = ellipsisWorldY * cScale;
+		const mainItemWidth = 0.15 * menuScale;
+		const mainPadding = 0.02 * menuScale;
+		const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+		const mainMenuBaseX = ellipsisX - mainPadding;
+		const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+		const mainMenuY = ellipsisY + 0.08 * menuScale;
+		const submenuPadding = 0.17 * menuScale; // Submenu uses larger padding
+		const submenuGap = 0.01 * menuScale;
+		const menuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+		const menuOriginY = mainMenuY + submenuPadding;
 		const padding = 0.17 * menuScale;
 		const knobRadius = 0.1 * menuScale;
 		const verticalKnobSpacing = knobRadius * 2.8;
@@ -3995,7 +4282,7 @@ function onMenuClick(evt) {
 		const knobY1 = knobRadius * 0.8;
 		const knobY2 = knobY1 + verticalKnobSpacing;
 		const knobY3 = knobY2 + verticalKnobSpacing;
-		const radioStartY = knobY3 + knobRadius * 3.0;
+		const radioStartY = knobY3 + knobRadius * 3.0 + 0.021 * menuScale; // Added offset to match menu drawing
 		const radioX = menuOriginX - 0.065 * menuScale;
 		
 		for (let i = 0; i < 4; i++) {
@@ -4005,6 +4292,22 @@ function onMenuClick(evt) {
 			if (rdx * rdx + rdy * rdy < (radioButtonSize * 2) * (radioButtonSize * 2)) {
 				gBallMaterialMode = i;
 				changeBallMaterial(i);
+				needsMenuRedraw = true;
+				evt.stopPropagation();
+				return true; // Menu click handled
+			}
+		}
+
+		// Check radio buttons for ball geometry
+		const materialSectionHeight = 4.0 * radioButtonSpacing; // 4 material buttons
+		const geometryStartY = radioStartY + materialSectionHeight + radioButtonSpacing * 1.5; // Extra spacing between sections
+		for (let i = 0; i < 4; i++) {
+			const radioY = menuOriginY + geometryStartY + i * radioButtonSpacing;
+			const rdx = evt.clientX - radioX;
+			const rdy = evt.clientY - radioY;
+			if (rdx * rdx + rdy * rdy < (radioButtonSize * 2) * (radioButtonSize * 2)) {
+				gBallGeometryMode = i;
+				changeBallGeometry(i);
 				needsMenuRedraw = true;
 				evt.stopPropagation();
 				return true; // Menu click handled
