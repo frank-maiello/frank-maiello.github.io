@@ -1775,6 +1775,45 @@ function initThreeScene() {
 		}
 	);
 
+	// LOAD FIREBOAT --------------------------------------
+	var fireboatLoader = new THREE.GLTFLoader();
+	fireboatLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/fireboat.gltf',
+		function(gltf) {
+			fireboatModelTemplate = gltf.scene;
+			fireboatModelTemplate.position.set(-65, -0.75, 140);
+			fireboatModelTemplate.scale.set(1.0, 1.0, 1.0);
+
+			// Enable shadow casting and receiving on all meshes in the model
+			fireboatModelTemplate.traverse(function(child) {
+				if (child.isMesh) {
+					child.castShadow = true;
+					child.receiveShadow = true;
+					// Set materials to FrontSide only
+					if (child.material) {
+						if (Array.isArray(child.material)) {
+							child.material.forEach(function(mat) {
+								mat.side = THREE.FrontSide;
+							});
+						} else {
+							child.material.side = THREE.FrontSide;
+						}
+					}
+				}
+			});
+
+			gThreeScene.add(fireboatModelTemplate);
+			console.log('fireboat model loaded successfully');
+			updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('fireboat model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading fireboat model:', error);
+		}
+	);
+
 	// LOAD ZEPPELIN --------------------------------------
 	var zeppelinLoader = new THREE.GLTFLoader();
 	zeppelinLoader.load(
