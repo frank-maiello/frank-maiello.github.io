@@ -3164,10 +3164,12 @@ function simulate() {
 	
 	// Calculate dynamic dim intensity based on active particle count
 	// More burning particles = brighter ambient light (range: 0.05 to 0.8)
+	// Use square root to make intensity drop faster as particles decrease
 	const minDimIntensity = 0.05;
 	const maxDimIntensity = 0.8;
 	const particleScaleFactor = 25000; // Number of particles for mid-range brightness
-	explosionLightDimIntensity = minDimIntensity + Math.min(1.0, activeParticleCount / particleScaleFactor) * (maxDimIntensity - minDimIntensity);
+	const normalizedCount = Math.min(1.0, activeParticleCount / particleScaleFactor);
+	explosionLightDimIntensity = minDimIntensity + Math.sqrt(normalizedCount) * (maxDimIntensity - minDimIntensity);
 	
 	// Fade explosion light back to dim (now using dynamic dim intensity)
 	if (explosionLight && explosionLightIntensity > explosionLightDimIntensity) {
@@ -4083,7 +4085,7 @@ function onMenuClick(evt) {
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
 	
 	// Check ellipsis click (toggle main menu) - simple large top-left corner hitbox
-	if (evt.clientX < 0.15 * cScale && evt.clientY < 0.15 * cScale) {
+	if (evt.clientX < 0.12 * cScale && evt.clientY < 0.09 * cScale) {
 		mainMenuVisible = !mainMenuVisible;
 		// Close all submenus when main menu is closed
 		if (!mainMenuVisible) {
