@@ -1,8 +1,8 @@
 // Fireworks on the Hudson 
 // copyright 2026 :: Frank Maiello :: maiello.frank@gmail.com
 
-// "Those who would give up essential Liberty, 
-// to purchase a little temporary Safety, 
+// "Those who would give up essential Liberty 
+// to purchase a little temporary Safety
 // deserve neither Liberty nor Safety."
 // - Benjamin Franklin
 
@@ -11,7 +11,7 @@
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 const DeltaT = 1.0 / 60.0;
-var Gravity = -1.7; // Controllable gravity strength
+var Gravity = -1.7; 
 const worldRadius = 200; // Circular boundary radius
 const worldSizeY = 20;
 
@@ -22,7 +22,7 @@ const numBalls = 75000 + sparkPoolSize; // 25 mortars × 3000 + spark pool
 const mortarRadius = 0.03; // Initial cluster radius for mortar shell particles	
 const mortarAltitude = 1.5; // Start just above ground level
 var maxExplosionSize = 5.0; // Base velocity magnitude for explosion particles (controllable)
-const explosionUniformity = 0.7; // Higher values = more random explosion patterns, lower values = more uniform spheres
+var explosionUniformity = 0.7; // Controls particle explosion uniformity (-2.0 to 1.0)
 var minLaunchVelocity = 30.0; // Controllable launch velocity
 const lauchVelocityRange = 20.0;
 var mortarTubeAngle = 10.0; // Angle in degrees for mortar tube tilt away from center (0-45)
@@ -57,7 +57,7 @@ var sparkPool = []; // Pool of available spark particle indices
 var clusterCenter = new THREE.Vector3(); // Center of initial ball cluster
 var stats;
 
-// Tube flash system
+// Mortar tube flash system
 var tubeMaterials = []; // Array of inner tube materials for each mortar
 var tubeFlashTimers = []; // Array of flash timers (0 = no flash, > 0 = flashing)
 var tubeGroups = []; // Array of THREE.Group objects for each mortar tube
@@ -66,12 +66,13 @@ var tubeFlashDuration = 0.25; // Duration of tube flash in seconds
 var tubeNormalColor = 0x1a1a1a; // Dark interior color
 var tubeFlashColor = 0xffffff; // White flash color
 
-// Explosion flash variables
+// Explosion flash lighting variables
 var explosionLight = null;
 var explosionLightIntensity = 0.0; // Current intensity (dim by default)
-var explosionLightDimIntensity = 0.0; // Dim baseline intensity
-var explosionLightBrightIntensity = 0.6; // Bright flash intensity
-var explosionLightFadeSpeed = 20.0; // How fast it fades back to dim
+var explosionLightDimIntensity = 0.0; // Dim baseline intensity (dynamically calculated)
+var explosionLightBrightIntensity = 2.0; // Bright flash intensity
+var explosionLightFadeSpeed = 10.0; // How fast it fades back to dim
+var activeParticleCount = 0; // Track number of active particles for dynamic lighting
 
 // Camera control variables
 var gCameraMode = 0; // 0=Manual Orbit, 1=Auto Orbit CCW, 2=Auto Orbit CW, 3=Helicopter Cam, 4=Zeppelin Cam, 5=Sailboat Cam, 6=Balloon Cam
@@ -137,6 +138,7 @@ var vehicleImageLoaded = false;
 var draggingFOVKnob = false;
 var draggingOrbitSpeedKnob = false;
 var draggingExplosionSizeKnob = false;
+var draggingExplosionUniformityKnob = false;
 var draggingLaunchVelocityKnob = false;
 var draggingMortarAngleKnob = false;
 var draggingGravityKnob = false;
@@ -144,6 +146,7 @@ var draggingBallRadiusKnob = false;
 var draggingCamera = false; // For fixed camera pan/tilt dragging
 var fovKnobInfo = { x: 0, y: 0, radius: 0 };
 var explosionSizeKnobInfo = { x: 0, y: 0, radius: 0 };
+var explosionUniformityKnobInfo = { x: 0, y: 0, radius: 0 };
 var launchVelocityKnobInfo = { x: 0, y: 0, radius: 0 };
 var mortarAngleKnobInfo = { x: 0, y: 0, radius: 0 };
 var gravityKnobInfo = { x: 0, y: 0, radius: 0 };
@@ -631,7 +634,7 @@ class ShockWave {
 	constructor(position) {
 		this.position = position.clone();
 		this.age = 0;
-		this.lifetime = 0.05; // 
+		this.lifetime = 0.04; // 
 		this.startRadius = 0.0;
 		this.maxRadius = 2.0; // Maximum expansion radius
 		this.active = true;
@@ -657,8 +660,8 @@ class ShockWave {
 		// Expand radius (very fast flash-like expansion)
 		const radius = this.startRadius + (this.maxRadius - this.startRadius) * Math.pow(progress, 0.3);
 		
-		// Fade opacity (start at 0.5, fade to 0)
-		const opacity = 0.6 - (0.5 * progress);
+		// Fade opacity
+		const opacity = 1.0 - progress;
 		
 		// Update mesh
 		if (this.mesh) {
@@ -1114,10 +1117,8 @@ function initThreeScene() {
 			jerseyModelTemplate.position.set(-20, -0.1, -35);
 			jerseyModelTemplate.scale.set(0.5, 0.5, 0.5);
 
-		// Enable shadow casting and receiving on all meshes in the model
-		// Replace all materials with uniform 70% gray MeshPhongMaterial
 		var uniformCityscapeMaterial = new THREE.MeshPhongMaterial({
-			color: 0x666666, // 40% gray
+			color: 0x1a1a1a, // 20% gray
 			side: THREE.FrontSide
 		});
 		
@@ -1192,10 +1193,8 @@ function initThreeScene() {
 			downtownModelTemplate.position.set(-20, -0.1, -35);
 			downtownModelTemplate.scale.set(0.5, 0.5, 0.5);
 
-		// Enable shadow casting and receiving on all meshes in the model
-		// Replace all materials with uniform 70% gray MeshPhongMaterial
 		var uniformCityscapeMaterial = new THREE.MeshPhongMaterial({
-			color: 0x666666, // 40% gray
+			color: 0x1a1a1a, // 20% gray
 			side: THREE.FrontSide
 		});
 		
@@ -1241,10 +1240,8 @@ function initThreeScene() {
 			cityscapeNorthModelTemplate.position.set(31.75, -0.1, -146.5);
 			cityscapeNorthModelTemplate.scale.set(0.5, 0.5, 0.5);
 
-			// Enable shadow casting and receiving on all meshes in the model
-		// Replace all materials with uniform 70% gray MeshPhongMaterial
 		var uniformCityscapeMaterialNorth = new THREE.MeshPhongMaterial({
-			color: 0x666666, // 40% gray
+			color: 0x1a1a1a, // 20% gray
 			side: THREE.FrontSide
 		});
 		
@@ -1276,45 +1273,6 @@ function initThreeScene() {
 		},
 		function(error) {
 			console.error('Error loading cityscape north model:', error);
-		}
-	);
-
-	// LOAD STATUE --------------------------------------
-	var statueLoader = new THREE.GLTFLoader();
-	statueLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/SoLwithBase.gltf',
-		function(gltf) {
-			statueModelTemplate = gltf.scene;
-			statueModelTemplate.position.set(-20, -0.1, -35);
-			statueModelTemplate.scale.set(0.5, 0.5, 0.5);
-
-			// Enable shadow casting and receiving on all meshes in the model
-			statueModelTemplate.traverse(function(child) {
-				if (child.isMesh) {
-					child.castShadow = true;
-					child.receiveShadow = true;
-					// Set materials to FrontSide only
-					if (child.material) {
-						if (Array.isArray(child.material)) {
-							child.material.forEach(function(mat) {
-								mat.side = THREE.FrontSide;
-							});
-						} else {
-							child.material.side = THREE.FrontSide;
-						}
-					}
-				}
-			});
-
-			gThreeScene.add(statueModelTemplate);
-			console.log('statue model loaded successfully');
-			updateLoadingProgress();
-		},
-		function(xhr) {
-			console.log('cityscape model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
-		},
-		function(error) {
-			console.error('Error loading cityscape model:', error);
 		}
 	);
 
@@ -1371,6 +1329,45 @@ function initThreeScene() {
 		},
 		function(error) {
 			console.error('Error loading greenery model:', error);
+		}
+	);
+
+	// LOAD STATUE --------------------------------------
+	var statueLoader = new THREE.GLTFLoader();
+	statueLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/SoLwithBase.glb',
+		function(gltf) {
+			statueModelTemplate = gltf.scene;
+			statueModelTemplate.position.set(-20, -0.1, -35);
+			statueModelTemplate.scale.set(0.5, 0.5, 0.5);
+
+			// Enable shadow casting and receiving on all meshes in the model
+			statueModelTemplate.traverse(function(child) {
+				if (child.isMesh) {
+					child.castShadow = true;
+					child.receiveShadow = true;
+					// Set materials to FrontSide only
+					if (child.material) {
+						if (Array.isArray(child.material)) {
+							child.material.forEach(function(mat) {
+								mat.side = THREE.FrontSide;
+							});
+						} else {
+							child.material.side = THREE.FrontSide;
+						}
+					}
+				}
+			});
+
+			gThreeScene.add(statueModelTemplate);
+			console.log('statue model loaded successfully');
+			updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('cityscape model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading cityscape model:', error);
 		}
 	);
 
@@ -1781,7 +1778,7 @@ function initThreeScene() {
 	// LOAD ZEPPELIN --------------------------------------
 	var zeppelinLoader = new THREE.GLTFLoader();
 	zeppelinLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Zeppelin.gltf',
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Zeppelin.glb',
 		function(gltf) {
 			zeppelinModelTemplate = gltf.scene;
 			zeppelinModelTemplate.position.set(0, 0, 0);
@@ -2020,26 +2017,26 @@ function initThreeScene() {
 	bottomCapMesh.receiveShadow = true;
 	tubeGroup.add(bottomCapMesh);
 	
-bargeGroup.add(tubeGroup);
-		tubeGroups.push(tubeGroup);
-		tubePositions.push({x: 0, z: 0});
-		mortarLocalPositions.push(new THREE.Vector3(0, 0, 0)); // Store local position
-		
-		// Base (fixed, doesn't rotate with tube)
-		var baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-		baseMesh.position.set(0, deckHeight + baseHeight / 2, 0);
-		baseMesh.castShadow = true;
-		baseMesh.receiveShadow = true;
-		bargeGroup.add(baseMesh);
-		baseMeshes.push(baseMesh);
-		
-		// Hemisphere pivot (fixed, doesn't rotate with tube)
-		var hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
-		hemisphereMesh.position.set(0, deckHeight + baseHeight, 0);
-		hemisphereMesh.castShadow = true;
-		hemisphereMesh.receiveShadow = true;
-		bargeGroup.add(hemisphereMesh);
-		hemisphereMeshes.push(hemisphereMesh);
+	bargeGroup.add(tubeGroup);
+	tubeGroups.push(tubeGroup);
+	tubePositions.push({x: 0, z: 0});
+	mortarLocalPositions.push(new THREE.Vector3(0, 0, 0)); // Store local position
+	
+	// Base (fixed, doesn't rotate with tube)
+	var baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+	baseMesh.position.set(0, deckHeight + baseHeight / 2, 0);
+	baseMesh.castShadow = true;
+	baseMesh.receiveShadow = true;
+	bargeGroup.add(baseMesh);
+	baseMeshes.push(baseMesh);
+	
+	// Hemisphere pivot (fixed, doesn't rotate with tube)
+	var hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
+	hemisphereMesh.position.set(0, deckHeight + baseHeight, 0);
+	hemisphereMesh.castShadow = true;
+	hemisphereMesh.receiveShadow = true;
+	bargeGroup.add(hemisphereMesh);
+	hemisphereMeshes.push(hemisphereMesh);
 	
 	// First elliptical ring: 8 tubes
 	for (let i = 0; i < 8; i++) {
@@ -2304,7 +2301,7 @@ function updateTubeAngles() {
 }
 
 // Grabber -----------------------------------------------------------
-// Modified to grab and drag the barge instead of particles
+// grab and drag the barge
 class Grabber {
 	constructor() {
 		this.raycaster = new THREE.Raycaster();
@@ -2410,6 +2407,11 @@ class Grabber {
 					// Translate barge (maintain click offset)
 					bargeGroup.position.copy(pos).sub(bargeClickOffset);
 					
+					// Update explosion light position to follow barge
+					if (explosionLight) {
+						explosionLight.position.set(bargeGroup.position.x, 20, bargeGroup.position.z);
+					}
+					
 					// Update mortar positions
 					updateMortarPositions();
 				}
@@ -2448,8 +2450,8 @@ function updateMortarPositions() {
 		helicopterTargetCenterZ = bargeGroup.position.z;
 		zeppelinTargetCenterX = bargeGroup.position.x;
 		zeppelinTargetCenterZ = bargeGroup.position.z;
-		// sailboatTargetCenterX = bargeGroup.position.x;
-		// sailboatTargetCenterZ = bargeGroup.position.z;
+		sailboatTargetCenterX = bargeGroup.position.x;
+		sailboatTargetCenterZ = bargeGroup.position.z;
 		
 		// Update spotlight target immediately
 		spotlightTarget.set(bargeGroup.position.x, 1.0, bargeGroup.position.z);
@@ -2486,7 +2488,7 @@ function onPointer( evt ) {
 			CameraControl.enabled = true;
 		}
 	}
-	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob || draggingBallRadiusKnob || draggingCamera || draggingBarge)) {
+	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingExplosionUniformityKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob || draggingBallRadiusKnob || draggingCamera || draggingBarge)) {
 		// Handle barge dragging first (highest priority)
 		if (draggingBarge) {
 			gGrabber.move(evt.clientX, evt.clientY);
@@ -2557,6 +2559,22 @@ function onPointer( evt ) {
 			newValue = Math.max(1.0, Math.min(15.0, newValue));
 			
 			maxExplosionSize = newValue;
+			needsMenuRedraw = true;
+			return;
+		}
+		
+		if (draggingExplosionUniformityKnob) {
+			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+			const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+			const dragDelta = deltaX + deltaY;
+			
+			const dragSensitivity = 0.1;
+			const normalizedDelta = dragDelta / dragSensitivity;
+			const rangeSize = 1.0 - (-2.0);
+			let newValue = dragStartValue + normalizedDelta * rangeSize;
+			newValue = Math.max(-2.0, Math.min(1.0, newValue));
+			
+			explosionUniformity = newValue;
 			needsMenuRedraw = true;
 			return;
 		}
@@ -2632,6 +2650,7 @@ function onPointer( evt ) {
 		draggingFOVKnob = false;
 		draggingOrbitSpeedKnob = false;
 		draggingExplosionSizeKnob = false;
+		draggingExplosionUniformityKnob = false;
 		draggingLaunchVelocityKnob = false;
 		draggingMortarAngleKnob = false;
 		draggingGravityKnob = false;
@@ -2705,8 +2724,8 @@ function simulate() {
 		helicopterCenterZ += (helicopterTargetCenterZ - helicopterCenterZ) * helicopterCenterLerpSpeed * DeltaT;
 		zeppelinCenterX += (zeppelinTargetCenterX - zeppelinCenterX) * zeppelinCenterLerpSpeed * DeltaT;
 		zeppelinCenterZ += (zeppelinTargetCenterZ - zeppelinCenterZ) * zeppelinCenterLerpSpeed * DeltaT;
-		// sailboatCenterX += (sailboatTargetCenterX - sailboatCenterX) * sailboatCenterLerpSpeed * DeltaT;
-		// sailboatCenterZ += (sailboatTargetCenterZ - sailboatCenterZ) * sailboatCenterLerpSpeed * DeltaT;
+		sailboatCenterX += (sailboatTargetCenterX - sailboatCenterX) * sailboatCenterLerpSpeed * DeltaT;
+		sailboatCenterZ += (sailboatTargetCenterZ - sailboatCenterZ) * sailboatCenterLerpSpeed * DeltaT;
 		
 		// Animate zeppelin and propellers even when paused
 		if (zeppelinModelTemplate) {
@@ -2882,8 +2901,8 @@ function simulate() {
 	helicopterCenterZ += (helicopterTargetCenterZ - helicopterCenterZ) * helicopterCenterLerpSpeed * DeltaT;
 	zeppelinCenterX += (zeppelinTargetCenterX - zeppelinCenterX) * zeppelinCenterLerpSpeed * DeltaT;
 	zeppelinCenterZ += (zeppelinTargetCenterZ - zeppelinCenterZ) * zeppelinCenterLerpSpeed * DeltaT;
-	// sailboatCenterX += (sailboatTargetCenterX - sailboatCenterX) * sailboatCenterLerpSpeed * DeltaT;
-	// sailboatCenterZ += (sailboatTargetCenterZ - sailboatCenterZ) * sailboatCenterLerpSpeed * DeltaT;
+	sailboatCenterX += (sailboatTargetCenterX - sailboatCenterX) * sailboatCenterLerpSpeed * DeltaT;
+	sailboatCenterZ += (sailboatTargetCenterZ - sailboatCenterZ) * sailboatCenterLerpSpeed * DeltaT;
 	
 	// Auto-launch mortars at random intervals
 	if (autoLaunchEnabled) {
@@ -2921,9 +2940,17 @@ function simulate() {
 		}
 	}
 	
+	// Count active particles for dynamic explosion light intensity (very lightweight)
+	activeParticleCount = 0;
+	
 	// Simulate ball physics without collisions (firework particles pass through each other)
 	for (let i = 0; i < Balls.length; i++) {
 		if (!Balls[i] || !Balls[i].active) continue;
+		
+		// Count active exploded particles for ambient light calculation
+		if (Balls[i].hasExploded) {
+			activeParticleCount++;
+		}
 		
 		Balls[i].simulate();
 		
@@ -3135,7 +3162,14 @@ function simulate() {
 		}
 	}
 	
-	// Fade explosion light back to dim
+	// Calculate dynamic dim intensity based on active particle count
+	// More burning particles = brighter ambient light (range: 0.05 to 0.8)
+	const minDimIntensity = 0.05;
+	const maxDimIntensity = 0.8;
+	const particleScaleFactor = 25000; // Number of particles for mid-range brightness
+	explosionLightDimIntensity = minDimIntensity + Math.min(1.0, activeParticleCount / particleScaleFactor) * (maxDimIntensity - minDimIntensity);
+	
+	// Fade explosion light back to dim (now using dynamic dim intensity)
 	if (explosionLight && explosionLightIntensity > explosionLightDimIntensity) {
 		explosionLightIntensity -= explosionLightFadeSpeed * DeltaT;
 		explosionLightIntensity = Math.max(explosionLightDimIntensity, explosionLightIntensity);
@@ -3685,35 +3719,39 @@ function drawSimulationMenu() {
 	ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
 	ctx.stroke();
 	
-	// Draw five knobs (at top)
-	// Row 1: Explosion Size and Launch Velocity (side by side)
+	// Draw six knobs (at top) in 2 columns × 3 rows
+	// Row 1: Explosion Size (Max Blast) and Explosion Uniformity
 	const explosionKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
-	const launchVelocityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+	const uniformityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
 	// knobY1 already declared above for menu height calculation
 	
-	// Row 2: Mortar Angle and Gravity (side by side)
-	const mortarAngleKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
-	const gravityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+	// Row 2: Launch Velocity (Mortar Vel) and Mortar Angle (Spread)
+	const launchVelocityKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+	const mortarAngleKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
 	const knobY2 = knobY1 + verticalKnobSpacing;
 	
-	// Row 3: Ball Radius (centered)
-	const ballRadiusKnobX = menuWidth / 2;
+	// Row 3: Gravity and Ball Radius (Particle Size)
+	const gravityKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+	const ballRadiusKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
 	// knobY3 already declared above for menu height calculation
 	
-	// Explosion Size Knob
-	drawKnob(ctx, explosionKnobX, knobY1, knobRadius, maxExplosionSize, 1.0, 15.0, false, 'Max Blast', 30);
+	// Explosion Size Knob (Max Blast)
+	drawKnob(ctx, explosionKnobX, knobY1, knobRadius, maxExplosionSize, 1.0, 15.0, false, 'Blast Size', 30);
 	
-	// Launch Velocity Knob
-	drawKnob(ctx, launchVelocityKnobX, knobY1, knobRadius, minLaunchVelocity, 15.0, 60.0, false, 'Mortar Vel', 120);
+	// Explosion Uniformity Knob
+	drawKnob(ctx, uniformityKnobX, knobY1, knobRadius, explosionUniformity, -2.0, 1.0, false, 'Uniformity', 30);
 	
-	// Mortar Angle Knob
+	// Launch Velocity Knob (Mortar Vel)
+	drawKnob(ctx, launchVelocityKnobX, knobY2, knobRadius, minLaunchVelocity, 15.0, 60.0, false, 'Mortar Vel', 180);
+	
+	// Mortar Angle Knob (Spread)
 	drawKnob(ctx, mortarAngleKnobX, knobY2, knobRadius, mortarTubeAngle, 0.0, 45.0, false, 'Spread', 180);
 	
 	// Gravity Knob
-	drawKnob(ctx, gravityKnobX, knobY2, knobRadius, Math.abs(Gravity), 0.5, 5.0, false, 'Gravity', 280);
+	drawKnob(ctx, gravityKnobX, knobY3, knobRadius, Math.abs(Gravity), 0.5, 5.0, false, 'Gravity', 270);
 	
-	// Ball Radius Knob
-	drawKnob(ctx, ballRadiusKnobX, knobY3, knobRadius, ballRadius, 0.01, 0.10, false, 'Particle Size', 90);
+	// Ball Radius Knob (Particle Size)
+	drawKnob(ctx, ballRadiusKnobX, knobY3, knobRadius, ballRadius, 0.01, 0.10, false, 'Particle Size', 330);
 	
 	// Draw radio buttons for ball material (at bottom)
 	const materialModeNames = [
@@ -3974,18 +4012,20 @@ function updateSimulationKnobPositions() {
 	const verticalKnobSpacing = knobRadius * 2.8;
 	const menuWidth = knobRadius * 3;
 	const explosionKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
-	const launchVelocityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
-	const mortarAngleKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
-	const gravityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
-	const ballRadiusKnobX = menuWidth / 2;
+	const uniformityKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+	const launchVelocityKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+	const mortarAngleKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
+	const gravityKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
+	const ballRadiusKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
 	const knobY1 = knobRadius * 0.8;
 	const knobY2 = knobY1 + verticalKnobSpacing;
 	const knobY3 = knobY2 + verticalKnobSpacing;
 	
 	explosionSizeKnobInfo = { x: menuOriginX + explosionKnobX, y: menuOriginY + knobY1, radius: knobRadius };
-	launchVelocityKnobInfo = { x: menuOriginX + launchVelocityKnobX, y: menuOriginY + knobY1, radius: knobRadius };
+	explosionUniformityKnobInfo = { x: menuOriginX + uniformityKnobX, y: menuOriginY + knobY1, radius: knobRadius };
+	launchVelocityKnobInfo = { x: menuOriginX + launchVelocityKnobX, y: menuOriginY + knobY2, radius: knobRadius };
 	mortarAngleKnobInfo = { x: menuOriginX + mortarAngleKnobX, y: menuOriginY + knobY2, radius: knobRadius };
-	gravityKnobInfo = { x: menuOriginX + gravityKnobX, y: menuOriginY + knobY2, radius: knobRadius };
+	gravityKnobInfo = { x: menuOriginX + gravityKnobX, y: menuOriginY + knobY3, radius: knobRadius };
 	ballRadiusKnobInfo = { x: menuOriginX + ballRadiusKnobX, y: menuOriginY + knobY3, radius: knobRadius };
 }
 
@@ -4350,6 +4390,18 @@ function onMenuClick(evt) {
 			dragStartMouseX = evt.clientX;
 			dragStartMouseY = evt.clientY;
 			dragStartValue = maxExplosionSize;
+			if (CameraControl) CameraControl.enabled = false;
+			return true; // Knob click handled
+		}
+		
+		// Check if clicking on explosion uniformity knob
+		const uniformityDx = evt.clientX - explosionUniformityKnobInfo.x;
+		const uniformityDy = evt.clientY - explosionUniformityKnobInfo.y;
+		if (uniformityDx * uniformityDx + uniformityDy * uniformityDy < explosionUniformityKnobInfo.radius * explosionUniformityKnobInfo.radius * 1.2) {
+			draggingExplosionUniformityKnob = true;
+			dragStartMouseX = evt.clientX;
+			dragStartMouseY = evt.clientY;
+			dragStartValue = explosionUniformity;
 			if (CameraControl) CameraControl.enabled = false;
 			return true; // Knob click handled
 		}
