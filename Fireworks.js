@@ -15,10 +15,12 @@ var Gravity = -1.7;
 const worldRadius = 200; // Circular boundary radius
 const worldSizeY = 20;
 
-var ballRadius = 0.04; // Base radius for particles (can be adjusted with knob)
-const particlesPerMortar = 3000; // Particles per mortar
-const sparkPoolSize = 3000; // Extra particles for spark trails
-const numBalls = 75000 + sparkPoolSize; // 25 mortars × 3000 + spark pool
+var ballRadius = 0.035; // Base radius for particles (can be adjusted with knob)
+var particlesPerMortar = 3000; // Particles per mortar (adjustable)
+var numBarges = 1; // Number of barges (adjustable)
+const mortarsPerBarge = 25; // Fixed: 1 center + 8 ring1 + 16 ring2
+const sparkPoolSize = 5000; // Extra particles for spark trails
+var numBalls = numBarges * mortarsPerBarge * particlesPerMortar + sparkPoolSize; // Total particles
 const mortarRadius = 0.03; // Initial cluster radius for mortar shell particles	
 const mortarAltitude = 1.5; // Start just above ground level
 var maxExplosionSize = 5.0; // Base velocity magnitude for explosion particles (controllable)
@@ -38,12 +40,13 @@ var CameraControl;
 var gGrabber;
 var gMouseDown;
 
-var bargeGroup = null; // Group containing barge model, tubes, bases, and hemispheres
+var bargeGroups = []; // Array of THREE.Group objects, one per barge
 var bargeModelTemplate = null; // Reference to the barge model within the group
 var baseMeshes = []; // Array of base meshes that move with barge
 var hemisphereMeshes = []; // Array of hemisphere meshes that move with barge
 var mortarLocalPositions = []; // Array of mortar positions relative to barge center
 var draggingBarge = false;
+var draggedBargeIndex = -1; // Index of the barge being dragged
 var bargeRotating = false; // True when rotating, false when translating
 var bargeDragStartPos = new THREE.Vector3();
 var bargeStartRotation = 0;
@@ -144,6 +147,12 @@ var draggingMortarAngleKnob = false;
 var draggingGravityKnob = false;
 var draggingBallRadiusKnob = false;
 var draggingCamera = false; // For fixed camera pan/tilt dragging
+var particleCountMinusInfo = { x: 0, y: 0, width: 0, height: 0 };
+var particleCountPlusInfo = { x: 0, y: 0, width: 0, height: 0 };
+var bargeCountMinusInfo = { x: 0, y: 0, width: 0, height: 0 };
+var bargeCountPlusInfo = { x: 0, y: 0, width: 0, height: 0 };
+var restartButtonInfo = { x: 0, y: 0, width: 0, height: 0 };
+var particleCountChanged = false; // Track if particle count has been adjusted
 var fovKnobInfo = { x: 0, y: 0, radius: 0 };
 var explosionSizeKnobInfo = { x: 0, y: 0, radius: 0 };
 var explosionUniformityKnobInfo = { x: 0, y: 0, radius: 0 };
@@ -265,12 +274,13 @@ var helicopterCabinLight = null; // Red point light for cabin
 
 // Mortar Class -------------------------------------------
 class MORTAR {
-	constructor(position, particleColor, startIndex, particleCount, tubeIndex) {
+	constructor(position, particleColor, startIndex, particleCount, tubeIndex, bargeIndex) {
 		this.position = position.clone();
 		this.particleColor = particleColor; // Base color for particles
 		this.startIndex = startIndex; // Starting index in global Balls array
 		this.particleCount = particleCount; // Number of particles this mortar uses
 		this.tubeIndex = tubeIndex; // Index of this mortar's tube for flash effect
+		this.bargeIndex = bargeIndex; // Index of the barge this mortar belongs to
 		this.inFlight = false;
 		this.detonationTime = 0;
 		this.flightTime = 0;
@@ -431,8 +441,8 @@ class MORTAR {
 				launchDir.normalize();
 				
 				// Rotate launch direction by barge's rotation to get world space direction
-				if (bargeGroup) {
-					launchDir.applyEuler(new THREE.Euler(0, bargeGroup.rotation.y, 0));
+				if (bargeGroups[this.bargeIndex]) {
+					launchDir.applyEuler(new THREE.Euler(0, bargeGroups[this.bargeIndex].rotation.y, 0));
 				}
 			}
 		}
@@ -440,14 +450,25 @@ class MORTAR {
 		// Reset and launch all this mortar's particles
 		for (let i = this.startIndex; i < this.startIndex + this.particleCount; i++) {
 			if (Balls[i]) {
+				// Calculate world position from barge position + rotated local offset
+				let worldPos = new THREE.Vector3();
+				if (bargeGroups[this.bargeIndex]) {
+					// Apply barge rotation to local position, then add barge world position
+					worldPos.copy(this.position);
+					worldPos.applyEuler(new THREE.Euler(0, bargeGroups[this.bargeIndex].rotation.y, 0));
+					worldPos.add(bargeGroups[this.bargeIndex].position);
+				} else {
+					worldPos.copy(this.position);
+				}
+				
 				// Reset position to tight cluster at mortar location
 				let theta = Math.random() * Math.PI * 2;
 				let phi = Math.acos(2 * Math.random() - 1);
 				let r = Math.cbrt(Math.random()) * mortarRadius; 
 				Balls[i].pos.set(
-					this.position.x + r * Math.sin(phi) * Math.cos(theta),
+					worldPos.x + r * Math.sin(phi) * Math.cos(theta),
 					mortarAltitude + r * Math.cos(phi),
-					this.position.z + r * Math.sin(phi) * Math.sin(theta)
+					worldPos.z + r * Math.sin(phi) * Math.sin(theta)
 				);
 				
 				// Set velocity based on launch direction and speed
@@ -860,7 +881,75 @@ function updateLoadingProgress() {
 }
 
 // ------------------------------------------------------------------
+function restartSimulation() {
+	// Recalculate total balls with new particle count and barge count
+	numBalls = numBarges * mortarsPerBarge * particlesPerMortar + sparkPoolSize;
+	
+	// Clear existing scene elements
+	if (ballInstancedMesh) {
+		gThreeScene.remove(ballInstancedMesh);
+		ballInstancedMesh.geometry.dispose();
+		ballInstancedMesh.material.dispose();
+		ballInstancedMesh = null;
+	}
+	
+	// Clear shock waves
+	for (let wave of shockWaves) {
+		if (wave.mesh) {
+			gThreeScene.remove(wave.mesh);
+		}
+	}
+	shockWaves = [];
+	
+	// Return shock wave meshes to pool
+	for (let mesh of shockWaveMeshPool) {
+		gThreeScene.remove(mesh);
+	}
+	shockWaveMeshPool = [];
+	
+	// Clear mortars
+	Mortars = [];
+	
+	// Clear barge-related arrays and remove barge groups
+	console.log('Clearing', bargeGroups.length, 'barge groups');
+	for (let i = 0; i < bargeGroups.length; i++) {
+		let bargeGroup = bargeGroups[i];
+		if (bargeGroup) {
+			gThreeScene.remove(bargeGroup);
+		}
+	}
+	
+	// Only dispose of tube materials (not barge materials which might be shared with template)
+	for (let tubeMat of tubeMaterials) {
+		if (tubeMat) tubeMat.dispose();
+	}
+	
+	bargeGroups = [];
+	tubeGroups = [];
+	tubePositions = [];
+	mortarLocalPositions = [];
+	baseMeshes = [];
+	hemisphereMeshes = [];
+	tubeMaterials = [];
+	tubeFlashTimers = [];
+	
+	console.log('About to call initScene, bargeModelTemplate available:', bargeModelTemplate !== null);
+	
+	// Barge groups will be created in initScene during tube creation
+	
+	// Reinitialize scene
+	initScene();
+	
+	// Reset launch timers but keep running state
+	nextLaunchTime = 0;
+	timeSinceLastLaunch = 0;
+	
+	needsMenuRedraw = true;
+}
+
 function initScene() {	
+	console.log('=== initScene START === numBarges:', numBarges);
+	
 	// Create instanced mesh for all balls (single draw call)
 	if (ballInstancedMesh) {
 		gThreeScene.remove(ballInstancedMesh);
@@ -961,41 +1050,60 @@ function initScene() {
 	
 	// Create mortars in elliptical rings to fit on narrow barge deck: 1 center + 8 in ring 1 + 16 in ring 2
 	let mortarIndex = 0;
-	let mortarPositions = [];
 	
 	// Barge deck height and ellipse dimensions
 	const deckHeight = 1.0; // Height of barge deck
 	const ellipseRadiusX = 1.1; // Narrow width (cross-deck)
 	const ellipseRadiusZ = 3.0; // Long length (along deck)
+	const bargeSpacing = 10.0; // Distance between barges
 	
-	// Center mortar
-	mortarPositions.push(new THREE.Vector3(0, deckHeight, 0));
-	
-	// First elliptical ring: 8 mortars
-	for (let i = 0; i < 8; i++) {
-		let angle = (i / 8) * Math.PI * 2;
-		let x = Math.cos(angle) * ellipseRadiusX;
-		let z = Math.sin(angle) * ellipseRadiusZ;
-		mortarPositions.push(new THREE.Vector3(x, deckHeight, z));
-	}
-	
-	// Second elliptical ring: 16 mortars
-	for (let i = 0; i < 16; i++) {
-		let angle = (i / 16) * Math.PI * 2;
-		let x = Math.cos(angle) * ellipseRadiusX * 1.8;
-		let z = Math.sin(angle) * ellipseRadiusZ * 1.8;
-		mortarPositions.push(new THREE.Vector3(x, deckHeight, z));
-	}
-	
-	// Create mortars at each position
-	for (let i = 0; i < mortarPositions.length; i++) {
-		let color = mortarColors[mortarIndex % mortarColors.length];
-		let startIndex = mortarIndex * particlesPerMortar;
-		let mortar = new MORTAR(mortarPositions[i], color, startIndex, particlesPerMortar, i);
-		Mortars.push(mortar);
-		mortarIndex++;
-		// Initialize tube flash timer
-		tubeFlashTimers.push(0);
+	// Create mortars for each barge
+	for (let bargeIdx = 0; bargeIdx < numBarges; bargeIdx++) {
+		// Calculate barge offset position
+		let bargeOffset = new THREE.Vector3(0, 0, 0);
+		if (numBarges > 1) {
+			// Arrange barges in a circle
+			let angle = (bargeIdx / numBarges) * Math.PI * 2;
+			bargeOffset.x = Math.cos(angle) * bargeSpacing;
+			bargeOffset.z = Math.sin(angle) * bargeSpacing;
+		}
+		
+		let mortarPositions = [];
+		
+		// Center mortar (local position relative to barge)
+		mortarPositions.push(new THREE.Vector3(0, deckHeight, 0));
+		
+		// First elliptical ring: 8 mortars
+		for (let i = 0; i < 8; i++) {
+			let angle = (i / 8) * Math.PI * 2;
+			let x = Math.cos(angle) * ellipseRadiusX;
+			let z = Math.sin(angle) * ellipseRadiusZ;
+			mortarPositions.push(new THREE.Vector3(x, deckHeight, z));
+		}
+		
+		// Second elliptical ring: 16 mortars
+		for (let i = 0; i < 16; i++) {
+			let angle = (i / 16) * Math.PI * 2;
+			let x = Math.cos(angle) * ellipseRadiusX * 1.8;
+			let z = Math.sin(angle) * ellipseRadiusZ * 1.8;
+			mortarPositions.push(new THREE.Vector3(x, deckHeight, z));
+		}
+		
+		// Create mortars at each position on this barge
+		for (let i = 0; i < mortarPositions.length; i++) {
+			let color = mortarColors[mortarIndex % mortarColors.length];
+			let startIndex = mortarIndex * particlesPerMortar;
+			// Pass local position (relative to barge) to constructor
+			let mortar = new MORTAR(mortarPositions[i], color, startIndex, particlesPerMortar, mortarIndex, bargeIdx);
+			Mortars.push(mortar);
+			
+			// Store local position for tube rotation calculations
+			mortarLocalPositions.push(new THREE.Vector3(mortarPositions[i].x, 0, mortarPositions[i].z));
+			
+			mortarIndex++;
+			// Initialize tube flash timer
+			tubeFlashTimers.push(0);
+		}
 	}
 	
 	// Initialize spark pool (indices after mortar particles)
@@ -1032,6 +1140,322 @@ function initScene() {
 	// Set initial random launch time
 	nextLaunchTime = 0;
 	timeSinceLastLaunch = 0;
+	
+	// Create mortar tubes and barges
+	// Create mortar tubes in concentric rings 
+	var tubeHeight = 0.6;
+	var tubeInnerRadius = 0.07;
+	var tubeWallThickness = 0.015;
+	var tubeOuterRadius = tubeInnerRadius + tubeWallThickness;
+	
+	// Inner tube (hollow, open-ended)
+	var innerTubeGeometry = new THREE.CylinderGeometry(tubeInnerRadius, tubeInnerRadius, tubeHeight, 8, 1, true);
+	// Outer tube (hollow, open-ended)
+	var outerTubeGeometry = new THREE.CylinderGeometry(tubeOuterRadius, tubeOuterRadius, tubeHeight, 16, 1, true);
+	// Top ring cap (connects inner and outer tube at top)
+	var topCapGeometry = new THREE.RingGeometry(tubeInnerRadius, tubeOuterRadius, 32);
+	// Bottom cap (disc to close bottom of tube) - slightly larger than inner radius
+	var bottomCapGeometry = new THREE.CircleGeometry(tubeInnerRadius * 1.2, 32);
+	
+	// Inner tube material template (we'll create unique materials for each tube)
+	var createInnerTubeMaterial = function() {
+		return new THREE.MeshPhongMaterial({
+			color: tubeNormalColor,
+			emissive: new THREE.Color(0x000000),
+			emissiveIntensity: 0,
+			side: THREE.BackSide
+		});
+	};
+	
+	// Load texture for outer tube (reuse if already loaded)
+	if (!window.redStripeTexture) {
+		var textureLoader = new THREE.TextureLoader();
+		window.redStripeTexture = textureLoader.load(
+			'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/redStripe.jpg'
+		);
+		window.redStripeTexture.wrapS = THREE.RepeatWrapping;
+		window.redStripeTexture.wrapT = THREE.RepeatWrapping;
+	}
+	
+	// Outer tube material (front side - shows outer surface with texture)
+	var outerTubeMaterial = new THREE.MeshPhongMaterial({
+		map: window.redStripeTexture,
+		side: THREE.FrontSide
+	});
+	
+	// Top cap material 
+	var topCapMaterial = new THREE.MeshPhongMaterial({
+		color: 0x666666,
+		side: THREE.FrontSide
+	});
+	
+	// Bottom cap material 
+	var bottomCapMaterial = new THREE.MeshPhongMaterial({
+		color: 0x000000,
+		side: THREE.DoubleSide
+	});
+	
+	// Round base geometry (thin box)
+	var baseSize = 0.2;
+	var baseHeight = 0.05;
+	var baseGeometry = new THREE.CylinderGeometry(baseSize, baseSize, baseHeight, 32, 1, false);
+	var baseMaterial = new THREE.MeshPhongMaterial({
+		color: 0x262626,  
+	});
+	
+	// Hemisphere pivot geometry (sits on top of base)
+	var hemisphereRadius = baseSize * 0.9; // Slightly smaller than base
+	var hemisphereGeometry = new THREE.SphereGeometry(hemisphereRadius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+	var hemisphereMaterial = new THREE.MeshPhongMaterial({
+		color: 0x444444,
+	});
+	
+	// Barge deck height and ellipse dimensions (matching MORTAR positions)
+	const bargedeckHeight = 1.0;
+	const bargeellipseRadiusX = 1.1;
+	const bargeellipseRadiusZ = 3.0;
+	const bargebargeSpacing = 10.0; // Distance between barges
+	
+	// Create tubes and barge models for each barge
+	console.log('Creating', numBarges, 'barge(s) in initScene');
+	console.log('bargeModelTemplate available:', bargeModelTemplate !== null);
+	
+	for (let bargeIdx = 0; bargeIdx < numBarges; bargeIdx++) {
+		console.log('  Starting barge', bargeIdx);
+		
+		// Calculate barge offset position
+		let bargeOffset = new THREE.Vector3(0, 0, 0);
+		if (numBarges > 1) {
+			// Arrange barges in a circle
+			let angle = (bargeIdx / numBarges) * Math.PI * 2;
+			bargeOffset.x = Math.cos(angle) * bargebargeSpacing;
+			bargeOffset.z = Math.sin(angle) * bargebargeSpacing;
+		}
+		
+		console.log('  Barge', bargeIdx, 'offset:', bargeOffset.x, bargeOffset.z);
+		
+		// Create a new group for this barge
+		let bargeGroup = new THREE.Group();
+		bargeGroup.position.set(bargeOffset.x, 0, bargeOffset.z);
+		bargeGroup.rotation.y = 0;
+		console.log('  Created bargeGroup for barge', bargeIdx);
+		gThreeScene.add(bargeGroup);
+		bargeGroups.push(bargeGroup);
+		console.log('  Added bargeGroup to scene, bargeGroups.length:', bargeGroups.length);
+		
+		// Add barge model to this barge's group
+		if (bargeModelTemplate) {
+			try {
+				// Deep clone the barge model with all materials and children
+				let bargeClone = bargeModelTemplate.clone(true);
+				bargeClone.position.set(0, 0, 0); // Position relative to bargeGroup
+				
+				// Traverse the clone to ensure all properties are set correctly
+				// and clone materials to avoid shared references
+				bargeClone.traverse(function(child) {
+					if (child.isMesh) {
+						// Clone the material to avoid shared references
+						if (child.material) {
+							child.material = child.material.clone();
+						}
+						child.castShadow = true;
+						child.receiveShadow = true;
+					}
+					// Point lights should be cloned with the scene
+				});
+				
+				bargeGroup.add(bargeClone);
+			} catch (e) {
+				console.error('  Error adding barge model to barge', bargeIdx, ':', e);
+			}
+		}
+		
+		// Center tube with base (create as group for dynamic rotation)
+		var tubeGroup = new THREE.Group();
+		tubeGroup.position.set(0, bargedeckHeight, 0); // Position relative to bargeGroup
+		
+		// Inner tube
+		var innerTubeMaterial0 = createInnerTubeMaterial();
+		tubeMaterials.push(innerTubeMaterial0);
+		var innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial0);
+		innerTubeMesh.position.set(0, tubeHeight / 2, 0);
+		innerTubeMesh.castShadow = true;
+		innerTubeMesh.receiveShadow = true;
+		tubeGroup.add(innerTubeMesh);
+		
+		// Outer tube
+		var outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
+		outerTubeMesh.position.set(0, tubeHeight / 2, 0);
+		outerTubeMesh.castShadow = true;
+		outerTubeMesh.receiveShadow = true;
+		tubeGroup.add(outerTubeMesh);
+		
+		// Top cap
+		var topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
+		topCapMesh.position.set(0, tubeHeight, 0);
+		topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+		topCapMesh.castShadow = true;
+		topCapMesh.receiveShadow = true;
+		tubeGroup.add(topCapMesh);
+		
+		// Bottom cap
+		var bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
+		bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
+		bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
+		bottomCapMesh.receiveShadow = true;
+		tubeGroup.add(bottomCapMesh);
+		
+		bargeGroup.add(tubeGroup);
+		tubeGroups.push(tubeGroup);
+		tubePositions.push({x: 0, z: 0}); // Position relative to bargeGroup
+		
+		// Base (fixed, doesn't rotate with tube)
+		var baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+		baseMesh.position.set(0, bargedeckHeight + baseHeight / 2, 0);
+		baseMesh.castShadow = true;
+		baseMesh.receiveShadow = true;
+		bargeGroup.add(baseMesh);
+		baseMeshes.push(baseMesh);
+		
+		// Hemisphere pivot (fixed, doesn't rotate with tube)
+		var hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
+		hemisphereMesh.position.set(0, bargedeckHeight + baseHeight, 0);
+		hemisphereMesh.castShadow = true;
+		hemisphereMesh.receiveShadow = true;
+		bargeGroup.add(hemisphereMesh);
+		hemisphereMeshes.push(hemisphereMesh);
+		
+		console.log('  Created center tube for barge', bargeIdx);
+		
+		// First elliptical ring: 8 tubes
+		for (let i = 0; i < 8; i++) {
+			let angle = (i / 8) * Math.PI * 2;
+			let x = Math.cos(angle) * bargeellipseRadiusX;
+			let z = Math.sin(angle) * bargeellipseRadiusZ;
+			
+			tubeGroup = new THREE.Group();
+			tubeGroup.position.set(x, bargedeckHeight, z);
+			
+			// Inner tube (create unique material for flash effect)
+			let innerTubeMat = createInnerTubeMaterial();
+			tubeMaterials.push(innerTubeMat);
+			innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMat);
+			innerTubeMesh.position.set(0, tubeHeight / 2, 0);
+			innerTubeMesh.castShadow = true;
+			innerTubeMesh.receiveShadow = true;
+			tubeGroup.add(innerTubeMesh);
+			
+			// Outer tube
+			outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
+			outerTubeMesh.position.set(0, tubeHeight / 2, 0);
+			outerTubeMesh.castShadow = true;
+			outerTubeMesh.receiveShadow = true;
+			tubeGroup.add(outerTubeMesh);
+			
+			// Top cap
+			topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
+			topCapMesh.position.set(0, tubeHeight, 0);
+			topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+			topCapMesh.castShadow = true;
+			topCapMesh.receiveShadow = true;
+			tubeGroup.add(topCapMesh);
+			
+			// Bottom cap
+			bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
+			bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
+			bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
+			bottomCapMesh.receiveShadow = true;
+			tubeGroup.add(bottomCapMesh);
+			
+			bargeGroup.add(tubeGroup);
+			tubeGroups.push(tubeGroup);
+			tubePositions.push({x: x, z: z});
+			
+			// Base (fixed, doesn't rotate with tube)
+			baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+			baseMesh.position.set(x, bargedeckHeight + baseHeight / 2, z);
+			baseMesh.castShadow = true;
+			baseMesh.receiveShadow = true;
+			bargeGroup.add(baseMesh);
+			baseMeshes.push(baseMesh);
+			
+			// Hemisphere pivot (fixed, doesn't rotate with tube)
+			hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
+			hemisphereMesh.position.set(x, bargedeckHeight + baseHeight, z);
+			hemisphereMesh.castShadow = true;
+			hemisphereMesh.receiveShadow = true;
+			bargeGroup.add(hemisphereMesh);
+			hemisphereMeshes.push(hemisphereMesh);
+		}
+		
+		console.log('  Created first ring (8 tubes) for barge', bargeIdx);
+		
+		// Second elliptical ring: 16 tubes
+		for (let i = 0; i < 16; i++) {
+			let angle = (i / 16) * Math.PI * 2;
+			let x = Math.cos(angle) * bargeellipseRadiusX * 1.8;
+			let z = Math.sin(angle) * bargeellipseRadiusZ * 1.8;
+			
+			tubeGroup = new THREE.Group();
+			tubeGroup.position.set(x, bargedeckHeight, z);
+			
+			// Inner tube (create unique material for flash effect)
+			let innerTubeMat = createInnerTubeMaterial();
+			tubeMaterials.push(innerTubeMat);
+			innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMat);
+			innerTubeMesh.position.set(0, tubeHeight / 2, 0);
+			innerTubeMesh.castShadow = true;
+			innerTubeMesh.receiveShadow = true;
+			tubeGroup.add(innerTubeMesh);
+			
+			// Outer tube
+			outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
+			outerTubeMesh.position.set(0, tubeHeight / 2, 0);
+			outerTubeMesh.castShadow = true;
+			outerTubeMesh.receiveShadow = true;
+			tubeGroup.add(outerTubeMesh);
+			
+			// Top cap
+			topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
+			topCapMesh.position.set(0, tubeHeight, 0);
+			topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+			topCapMesh.castShadow = true;
+			topCapMesh.receiveShadow = true;
+			tubeGroup.add(topCapMesh);
+			
+			// Bottom cap
+			bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
+			bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
+			bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
+			bottomCapMesh.receiveShadow = true;
+			tubeGroup.add(bottomCapMesh);
+			
+			bargeGroup.add(tubeGroup);
+			tubeGroups.push(tubeGroup);
+			tubePositions.push({x: x, z: z});
+			
+			// Base (fixed, doesn't rotate with tube)
+			baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+			baseMesh.position.set(x, bargedeckHeight + baseHeight / 2, z);
+			baseMesh.castShadow = true;
+			baseMesh.receiveShadow = true;
+			bargeGroup.add(baseMesh);
+			baseMeshes.push(baseMesh);
+			
+			// Hemisphere pivot (fixed, doesn't rotate with tube)
+			hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
+			hemisphereMesh.position.set(x, bargedeckHeight + baseHeight, z);
+			hemisphereMesh.castShadow = true;
+			hemisphereMesh.receiveShadow = true;
+			bargeGroup.add(hemisphereMesh);
+			hemisphereMeshes.push(hemisphereMesh);
+		}
+		
+		console.log('  Created second ring (16 tubes) for barge', bargeIdx);
+		console.log('  Finished barge', bargeIdx, 'with', bargeGroup.children.length, 'children');
+	} // End barge loop
+	
+	console.log('Finished creating barges. Total bargeGroups:', bargeGroups.length, 'Total tubes:', tubeGroups.length);
 	
 	// Load instructions image
 	mouseControlsImage = new Image();
@@ -1079,6 +1503,7 @@ function initScene() {
 	};
 	vehicleImage.src = 'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/vehicleMouseControls.png';
 
+	console.log('=== initScene END ===');
 }
 	
 // ------------------------------------------
@@ -1826,11 +2251,7 @@ function initThreeScene() {
 		}
 	);
 
-	// Create barge group that will contain all barge-related objects
-	bargeGroup = new THREE.Group();
-	bargeGroup.position.set(0, 0, 0);
-	bargeGroup.rotation.y = 0;
-	gThreeScene.add(bargeGroup);
+	// Barge groups will be created later in initScene() during tube creation
 	
 	// LOAD BARGE --------------------------------------
 	var bargeLoader = new THREE.GLTFLoader();
@@ -1875,8 +2296,34 @@ function initThreeScene() {
 				}
 			});
 		
-			bargeGroup.add(bargeModelTemplate);
+			// Store as template - will be cloned for each barge in initScene()
 			console.log('barge model loaded successfully');
+			
+			// If barge groups already exist (scene was initialized before model loaded), add the model to them now
+			if (bargeGroups.length > 0) {
+				console.log('Adding barge models to existing', bargeGroups.length, 'barge groups');
+				for (let i = 0; i < bargeGroups.length; i++) {
+					let bargeClone = bargeModelTemplate.clone(true);
+					bargeClone.position.set(0, 0, 0);
+					
+					// Traverse the clone to ensure all properties are set correctly
+					// and clone materials to avoid shared references
+					bargeClone.traverse(function(child) {
+						if (child.isMesh) {
+							// Clone the material to avoid shared references
+							if (child.material) {
+								child.material = child.material.clone();
+							}
+							child.castShadow = true;
+							child.receiveShadow = true;
+						}
+					});
+					
+					bargeGroups[i].add(bargeClone);
+					console.log('Added barge model to existing barge group', i);
+				}
+			}
+			
 			updateLoadingProgress();
 		},
 		function(xhr) {
@@ -2079,257 +2526,7 @@ function initThreeScene() {
 	floorMesh.receiveShadow = true;
 	gThreeScene.add(floorMesh);
 	
-	// Create mortar tubes in concentric rings 
-	var tubeHeight = 0.6;
-	var tubeInnerRadius = 0.07;
-	var tubeWallThickness = 0.015;
-	var tubeOuterRadius = tubeInnerRadius + tubeWallThickness;
-	
-	// Inner tube (hollow, open-ended)
-	var innerTubeGeometry = new THREE.CylinderGeometry(tubeInnerRadius, tubeInnerRadius, tubeHeight, 8, 1, true);
-	// Outer tube (hollow, open-ended)
-	var outerTubeGeometry = new THREE.CylinderGeometry(tubeOuterRadius, tubeOuterRadius, tubeHeight, 16, 1, true);
-	// Top ring cap (connects inner and outer tube at top)
-	var topCapGeometry = new THREE.RingGeometry(tubeInnerRadius, tubeOuterRadius, 32);
-	// Bottom cap (disc to close bottom of tube) - slightly larger than inner radius
-	var bottomCapGeometry = new THREE.CircleGeometry(tubeInnerRadius * 1.2, 32);
-	
-	// Inner tube material template (we'll create unique materials for each tube)
-	var createInnerTubeMaterial = function() {
-		return new THREE.MeshPhongMaterial({
-			color: tubeNormalColor,
-			emissive: new THREE.Color(0x000000),
-			emissiveIntensity: 0,
-			side: THREE.BackSide
-		});
-	};
-	
-	// Load texture for outer tube
-	var textureLoader = new THREE.TextureLoader();
-	var redStripeTexture = textureLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/redStripe.jpg',
-		function() { updateLoadingProgress(); } // onLoad
-	);
-	redStripeTexture.wrapS = THREE.RepeatWrapping;
-	redStripeTexture.wrapT = THREE.RepeatWrapping;
-	
-	// Outer tube material (front side - shows outer surface with texture)
-	var outerTubeMaterial = new THREE.MeshPhongMaterial({
-		map: redStripeTexture,
-		side: THREE.FrontSide
-	});
-	
-	// Top cap material 
-	var topCapMaterial = new THREE.MeshPhongMaterial({
-		color: 0x666666,
-		side: THREE.FrontSide
-	});
-	
-	// Bottom cap material 
-	var bottomCapMaterial = new THREE.MeshPhongMaterial({
-		color: 0x000000,
-		side: THREE.DoubleSide
-	});
-	
-	// Round base geometry (thin box)
-	var baseSize = 0.2;
-	var baseHeight = 0.05;
-	var baseGeometry = new THREE.CylinderGeometry(baseSize, baseSize, baseHeight, 32, 1, false);
-	var baseMaterial = new THREE.MeshPhongMaterial({
-		color: 0x262626,  
-	});
-	
-	// Hemisphere pivot geometry (sits on top of base)
-	var hemisphereRadius = baseSize * 0.9; // Slightly smaller than base
-	var hemisphereGeometry = new THREE.SphereGeometry(hemisphereRadius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-	var hemisphereMaterial = new THREE.MeshPhongMaterial({
-		color: 0x444444,
-	});
-	
-	// Barge deck height and ellipse dimensions (matching MORTAR positions)
-	const deckHeight = 1.0;
-	const ellipseRadiusX = 1.1;
-	const ellipseRadiusZ = 3.0;
-	
-	// Center tube with base (create as group for dynamic rotation)
-	var tubeGroup = new THREE.Group();
-	tubeGroup.position.set(0, deckHeight, 0);
-	
-	// Inner tube
-	var innerTubeMaterial0 = createInnerTubeMaterial();
-	tubeMaterials.push(innerTubeMaterial0);
-	var innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial0);
-	innerTubeMesh.position.set(0, tubeHeight / 2, 0);
-	innerTubeMesh.castShadow = true;
-	innerTubeMesh.receiveShadow = true;
-	tubeGroup.add(innerTubeMesh);
-	
-	// Outer tube
-	var outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-	outerTubeMesh.position.set(0, tubeHeight / 2, 0);
-	outerTubeMesh.castShadow = true;
-	outerTubeMesh.receiveShadow = true;
-	tubeGroup.add(outerTubeMesh);
-	
-	// Top cap
-	var topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-	topCapMesh.position.set(0, tubeHeight, 0);
-	topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-	topCapMesh.castShadow = true;
-	topCapMesh.receiveShadow = true;
-	tubeGroup.add(topCapMesh);
-	
-	// Bottom cap
-	var bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
-	bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
-	bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
-	bottomCapMesh.receiveShadow = true;
-	tubeGroup.add(bottomCapMesh);
-	
-	bargeGroup.add(tubeGroup);
-	tubeGroups.push(tubeGroup);
-	tubePositions.push({x: 0, z: 0});
-	mortarLocalPositions.push(new THREE.Vector3(0, 0, 0)); // Store local position
-	
-	// Base (fixed, doesn't rotate with tube)
-	var baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-	baseMesh.position.set(0, deckHeight + baseHeight / 2, 0);
-	baseMesh.castShadow = true;
-	baseMesh.receiveShadow = true;
-	bargeGroup.add(baseMesh);
-	baseMeshes.push(baseMesh);
-	
-	// Hemisphere pivot (fixed, doesn't rotate with tube)
-	var hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
-	hemisphereMesh.position.set(0, deckHeight + baseHeight, 0);
-	hemisphereMesh.castShadow = true;
-	hemisphereMesh.receiveShadow = true;
-	bargeGroup.add(hemisphereMesh);
-	hemisphereMeshes.push(hemisphereMesh);
-	
-	// First elliptical ring: 8 tubes
-	for (let i = 0; i < 8; i++) {
-		let angle = (i / 8) * Math.PI * 2;
-		let x = Math.cos(angle) * ellipseRadiusX;
-		let z = Math.sin(angle) * ellipseRadiusZ;
-		
-		tubeGroup = new THREE.Group();
-		tubeGroup.position.set(x, deckHeight, z);
-		
-		// Inner tube (create unique material for flash effect)
-		let innerTubeMat = createInnerTubeMaterial();
-		tubeMaterials.push(innerTubeMat);
-		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMat);
-		innerTubeMesh.position.set(0, tubeHeight / 2, 0);
-		innerTubeMesh.castShadow = true;
-		innerTubeMesh.receiveShadow = true;
-		tubeGroup.add(innerTubeMesh);
-		
-		// Outer tube
-		outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-		outerTubeMesh.position.set(0, tubeHeight / 2, 0);
-		outerTubeMesh.castShadow = true;
-		outerTubeMesh.receiveShadow = true;
-		tubeGroup.add(outerTubeMesh);
-		
-		// Top cap
-		topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-		topCapMesh.position.set(0, tubeHeight, 0);
-		topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-		topCapMesh.castShadow = true;
-		topCapMesh.receiveShadow = true;
-		tubeGroup.add(topCapMesh);
-		
-		// Bottom cap
-		bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
-		bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
-		bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
-		bottomCapMesh.receiveShadow = true;
-		tubeGroup.add(bottomCapMesh);
-		
-		bargeGroup.add(tubeGroup);
-		tubeGroups.push(tubeGroup);
-		tubePositions.push({x: x, z: z});
-		mortarLocalPositions.push(new THREE.Vector3(x, 0, z)); // Store local position
-		
-		// Base (fixed, doesn't rotate with tube)
-		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-		baseMesh.position.set(x, deckHeight + baseHeight / 2, z);
-		baseMesh.castShadow = true;
-		baseMesh.receiveShadow = true;
-		bargeGroup.add(baseMesh);
-		baseMeshes.push(baseMesh);
-		
-		// Hemisphere pivot (fixed, doesn't rotate with tube)
-		hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
-		hemisphereMesh.position.set(x, deckHeight + baseHeight, z);
-		hemisphereMesh.castShadow = true;
-		hemisphereMesh.receiveShadow = true;
-		bargeGroup.add(hemisphereMesh);
-		hemisphereMeshes.push(hemisphereMesh);
-	}
-	
-	// Second elliptical ring: 16 tubes
-	for (let i = 0; i < 16; i++) {
-		let angle = (i / 16) * Math.PI * 2;
-		let x = Math.cos(angle) * ellipseRadiusX * 1.8;
-		let z = Math.sin(angle) * ellipseRadiusZ * 1.8;
-		
-		tubeGroup = new THREE.Group();
-		tubeGroup.position.set(x, deckHeight, z);
-		
-		// Inner tube (create unique material for flash effect)
-		let innerTubeMat = createInnerTubeMaterial();
-		tubeMaterials.push(innerTubeMat);
-		innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMat);
-		innerTubeMesh.position.set(0, tubeHeight / 2, 0);
-		innerTubeMesh.castShadow = true;
-		innerTubeMesh.receiveShadow = true;
-		tubeGroup.add(innerTubeMesh);
-		
-		// Outer tube
-		outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-		outerTubeMesh.position.set(0, tubeHeight / 2, 0);
-		outerTubeMesh.castShadow = true;
-		outerTubeMesh.receiveShadow = true;
-		tubeGroup.add(outerTubeMesh);
-		
-		// Top cap
-		topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-		topCapMesh.position.set(0, tubeHeight, 0);
-		topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-		topCapMesh.castShadow = true;
-		topCapMesh.receiveShadow = true;
-		tubeGroup.add(topCapMesh);
-		
-		// Bottom cap
-		bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
-		bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
-		bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
-		bottomCapMesh.receiveShadow = true;
-		tubeGroup.add(bottomCapMesh);
-		
-		bargeGroup.add(tubeGroup);
-		tubeGroups.push(tubeGroup);
-		tubePositions.push({x: x, z: z});
-		mortarLocalPositions.push(new THREE.Vector3(x, 0, z)); // Store local position
-		
-		// Base (fixed, doesn't rotate with tube)
-		baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-		baseMesh.position.set(x, deckHeight + baseHeight / 2, z);
-		baseMesh.castShadow = true;
-		baseMesh.receiveShadow = true;
-		bargeGroup.add(baseMesh);
-		baseMeshes.push(baseMesh);
-		
-		// Hemisphere pivot (fixed, doesn't rotate with tube)
-		hemisphereMesh = new THREE.Mesh(hemisphereGeometry, hemisphereMaterial);
-		hemisphereMesh.position.set(x, deckHeight + baseHeight, z);
-		hemisphereMesh.castShadow = true;
-		hemisphereMesh.receiveShadow = true;
-		bargeGroup.add(hemisphereMesh);
-		hemisphereMeshes.push(hemisphereMesh);
-	}
+	// Barge tubes and models are now created in initScene() so they're recreated on restart
 	
 	// gRenderer
 	var container = document.getElementById('container');
@@ -2357,6 +2554,10 @@ function initThreeScene() {
 	Camera.position.set(-28.9, 13.4, 15.2);
 	Camera.updateMatrixWorld();	
 	gThreeScene.add(Camera);
+
+	/*Camera position and target:
+	Fireworks.js:2951 Camera.position.set(-87.4, 6.4, 158.6);
+	Fireworks.js:2952 CameraControl.target.set(-15.8, 15.4, -14.4);*/
 
 	// Camera control
 	CameraControl = new THREE.OrbitControls(Camera, gRenderer.domElement);
@@ -2493,56 +2694,67 @@ class Grabber {
 	}
 	start(x, y) {
 		draggingBarge = false;
+		draggedBargeIndex = -1;
 		bargeRotating = false;
 		this.updateRaycaster(x, y);
 		
-		// Check if we clicked on the barge
-		if (!bargeGroup) {
-			console.log('bargeGroup not available');
+		// Check if we clicked on any barge
+		if (bargeGroups.length === 0) {
+			console.log('No barges available');
 			return;
 		}
 		
-		var intersects = this.raycaster.intersectObjects( bargeGroup.children, true );
-		console.log('Raycast hits on barge:', intersects.length);
-		
-		if (intersects.length > 0) {
-			draggingBarge = true;
-			console.log('Hit barge object:', intersects[0].object.name || intersects[0].object.type);
+		// Check each barge for intersection
+		for (let i = 0; i < bargeGroups.length; i++) {
+			let bargeGroup = bargeGroups[i];
+			var intersects = this.raycaster.intersectObjects(bargeGroup.children, true);
 			
-			// Project click point to floor plane (y=0)
-			let rayOrigin = this.raycaster.ray.origin;
-			let rayDir = this.raycaster.ray.direction;
+			if (intersects.length > 0) {
+				draggingBarge = true;
+				draggedBargeIndex = i;
+				console.log('Hit barge', i, ':', intersects[0].object.name || intersects[0].object.type);
 			
-			if (Math.abs(rayDir.y) > 0.001) {
-				let t = -rayOrigin.y / rayDir.y;
-				if (t > 0) {
-					let clickPos = rayOrigin.clone();
-					clickPos.addScaledVector(rayDir, t);
-					clickPos.y = 0;
-					
-					// Calculate offset from barge center to click point in world space
-					bargeClickOffset.copy(clickPos).sub(bargeGroup.position);
-					
-					// Transform click offset to local barge space to determine if near ends
-					let localClickOffset = bargeClickOffset.clone();
-					localClickOffset.applyEuler(new THREE.Euler(0, -bargeGroup.rotation.y, 0));
-					
-					// Check if click is near front or back 
-					if (Math.abs(localClickOffset.z) > 7.0) {
-						bargeRotating = true;
-						bargeStartRotation = bargeGroup.rotation.y;
-						bargeDragStartPos.copy(clickPos);
-					} else {
-						bargeRotating = false;
+				// Project click point to floor plane (y=0)
+				let rayOrigin = this.raycaster.ray.origin;
+				let rayDir = this.raycaster.ray.direction;
+				
+				if (Math.abs(rayDir.y) > 0.001) {
+					let t = -rayOrigin.y / rayDir.y;
+					if (t > 0) {
+						let clickPos = rayOrigin.clone();
+						clickPos.addScaledVector(rayDir, t);
+						clickPos.y = 0;
+						
+						// Calculate offset from barge center to click point in world space
+						bargeClickOffset.copy(clickPos).sub(bargeGroup.position);
+						
+						// Transform click offset to local barge space to determine if near ends
+						let localClickOffset = bargeClickOffset.clone();
+						localClickOffset.applyEuler(new THREE.Euler(0, -bargeGroup.rotation.y, 0));
+						
+						// Check if click is near front or back 
+						if (Math.abs(localClickOffset.z) > 7.0) {
+							bargeRotating = true;
+							bargeStartRotation = bargeGroup.rotation.y;
+							bargeDragStartPos.copy(clickPos);
+						} else {
+							bargeRotating = false;
+						}
+						
+						this.prevPos.copy(clickPos);
 					}
-					
-					this.prevPos.copy(clickPos);
 				}
+				
+				// Stop checking other barges once we've found one
+				break;
 			}
 		}
 	}
 	move(x, y) {
-		if (!draggingBarge) return;
+		if (!draggingBarge || draggedBargeIndex < 0) return;
+		
+		let bargeGroup = bargeGroups[draggedBargeIndex];
+		if (!bargeGroup) return;
 		
 		this.updateRaycaster(x, y);
 		
@@ -2570,18 +2782,23 @@ class Grabber {
 					// Apply rotation
 					bargeGroup.rotation.y = bargeStartRotation + deltaAngle;
 					
-					// Update mortar positions
+					// Update vehicle targets after rotation
 					updateMortarPositions();
 				} else {
 					// Translate barge (maintain click offset)
 					bargeGroup.position.copy(pos).sub(bargeClickOffset);
 					
-					// Update explosion light position to follow barge
-					if (explosionLight) {
-						explosionLight.position.set(bargeGroup.position.x, 20, bargeGroup.position.z);
+					// Update explosion light position to follow barge center (average of all barges)
+					if (explosionLight && bargeGroups.length > 0) {
+						let avgPos = new THREE.Vector3();
+						for (let bg of bargeGroups) {
+							avgPos.add(bg.position);
+						}
+						avgPos.divideScalar(bargeGroups.length);
+						explosionLight.position.set(avgPos.x, 20, avgPos.z);
 					}
 					
-					// Update mortar positions
+					// Update vehicle targets after translation
 					updateMortarPositions();
 				}
 				
@@ -2592,38 +2809,31 @@ class Grabber {
 	}
 	end(x, y) {
 		draggingBarge = false;
+		draggedBargeIndex = -1;
 		bargeRotating = false;
 	}
 }			
 
 // Update mortar positions when barge moves or rotates
 function updateMortarPositions() {
-	if (!bargeGroup || Mortars.length === 0) return;
-	
-	// Update each mortar's position based on barge group transform
-	for (let i = 0; i < Mortars.length; i++) {
-		if (i < mortarLocalPositions.length) {
-			// Transform local position to world space
-			let worldPos = mortarLocalPositions[i].clone();
-			worldPos.applyEuler(new THREE.Euler(0, bargeGroup.rotation.y, 0));
-			worldPos.add(bargeGroup.position);
-			
-			// Update mortar position
-			Mortars[i].position.copy(worldPos);
+	// Update vehicle orbit targets and spotlight target to follow barges center
+	if (bargeGroups.length > 0) {
+		// Calculate average position of all barges
+		let avgPos = new THREE.Vector3();
+		for (let bargeGroup of bargeGroups) {
+			avgPos.add(bargeGroup.position);
 		}
-	}
-	
-	// Update vehicle orbit targets and spotlight target to follow barge
-	if (bargeGroup) {
-		helicopterTargetCenterX = bargeGroup.position.x;
-		helicopterTargetCenterZ = bargeGroup.position.z;
-		zeppelinTargetCenterX = bargeGroup.position.x;
-		zeppelinTargetCenterZ = bargeGroup.position.z;
-		sailboatTargetCenterX = bargeGroup.position.x;
-		sailboatTargetCenterZ = bargeGroup.position.z;
+		avgPos.divideScalar(bargeGroups.length);
+		
+		helicopterTargetCenterX = avgPos.x;
+		helicopterTargetCenterZ = avgPos.z;
+		zeppelinTargetCenterX = avgPos.x;
+		zeppelinTargetCenterZ = avgPos.z;
+		sailboatTargetCenterX = avgPos.x;
+		sailboatTargetCenterZ = avgPos.z;
 		
 		// Update spotlight target immediately
-		spotlightTarget.set(bargeGroup.position.x, 1.0, bargeGroup.position.z);
+		spotlightTarget.set(avgPos.x, 1.0, avgPos.z);
 	}
 }
 
@@ -3830,8 +4040,9 @@ function drawSimulationMenu() {
 	const radioStartY = knobY3 + knobRadius * 3.0 + 0.021 * menuScale; // Added offset to move sections down
 	const materialSectionHeight = 4.0 * radioButtonSpacing; // 4 material buttons
 	const geometryStartY = radioStartY + materialSectionHeight + radioButtonSpacing * 1.5; // Extra spacing between sections
-	const geometrySectionHeight = 2.5 * radioButtonSpacing; // 4 geometry buttons
-	const menuHeight = geometryStartY + geometrySectionHeight;
+	const geometrySectionHeight = 4.5 * radioButtonSpacing; // 4 geometry buttons
+	const particleControlSectionHeight = radioButtonSpacing * 4.5; // Barge count + Particle count controls + restart button
+	const menuHeight = 2.2 * menuScale;
 	
 	// Position menu relative to main menu
 	const ellipsisWorldX = 0.05;
@@ -4093,6 +4304,130 @@ function drawSimulationMenu() {
 	ctx.fill();
 	ctx.stroke();
 	
+	// Draw Number of Barges control
+	const bargeControlY = geometryStartY + geometryModeNames.length * radioButtonSpacing + radioButtonSpacing * 0.5;
+	
+	ctx.fillStyle = 'rgba(200, 210, 200, 1.0)';
+	ctx.font = `bold ${0.042 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.fillText('Number of Barges', menuWidth / 2, bargeControlY);
+	
+	const buttonSize = 0.08 * menuScale;
+	const bargeButtonY = bargeControlY + radioButtonSpacing * 0.4;
+	const bargeMinusX = menuWidth / 2 - buttonSize * 2;
+	const bargePlusX = menuWidth / 2 + buttonSize;
+	
+	// Store button positions for click detection (convert to screen coordinates)
+	bargeCountMinusInfo = { x: menuOriginX + bargeMinusX, y: menuOriginY + bargeButtonY, width: buttonSize, height: buttonSize };
+	bargeCountPlusInfo = { x: menuOriginX + bargePlusX, y: menuOriginY + bargeButtonY, width: buttonSize, height: buttonSize };
+	
+	// Minus button
+	ctx.fillStyle = 'rgba(40, 40, 50, 0.95)';
+	ctx.beginPath();
+	ctx.arc(bargeMinusX + buttonSize/2, bargeButtonY + buttonSize/2, buttonSize/2, 0, 2 * Math.PI);
+	ctx.fill();
+	
+	ctx.fillStyle = numBarges > 1 ? 'rgba(255, 255, 255, 1.0)' : 'rgba(100, 100, 100, 1.0)';
+	ctx.font = `bold ${0.08 * menuScale}px Arial`;
+	ctx.textAlign = 'center';
+	ctx.fillText('\u2212', bargeMinusX + buttonSize/2, bargeButtonY + buttonSize/2 + 0.01 * menuScale);
+	
+	// Plus button
+	ctx.fillStyle = 'rgba(40, 40, 50, 0.95)';
+	ctx.beginPath();
+	ctx.arc(bargePlusX + buttonSize/2, bargeButtonY + buttonSize/2, buttonSize/2, 0, 2 * Math.PI);
+	ctx.fill();
+	
+	ctx.fillStyle = numBarges < 10 ? 'rgba(255, 255, 255, 1.0)' : 'rgba(100, 100, 100, 1.0)';
+	ctx.font = `bold ${0.08 * menuScale}px Arial`;
+	ctx.fillText('+', bargePlusX + buttonSize/2, bargeButtonY + buttonSize/2 + 0.01 * menuScale);
+	
+	// Value display
+	ctx.font = `${0.045 * menuScale}px verdana`;
+	ctx.fillStyle = 'rgba(100, 255, 100, 1.0)';
+	ctx.fillText(numBarges.toString(), menuWidth / 2, bargeButtonY + buttonSize/2);
+	
+	// Draw Particles per Mortar control
+	const particleControlY = bargeControlY + radioButtonSpacing * 2.0;
+	
+	ctx.fillStyle = 'rgba(200, 210, 200, 1.0)';
+	ctx.font = `bold ${0.042 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.fillText('Particles per Mortar', menuWidth / 2, particleControlY);
+	
+	const particleButtonY = particleControlY + radioButtonSpacing * 0.4;
+	const minusX = menuWidth / 2 - buttonSize * 2;
+	const plusX = menuWidth / 2 + buttonSize;
+	
+	// Store button positions for click detection (convert to screen coordinates)
+	particleCountMinusInfo = { x: menuOriginX + minusX, y: menuOriginY + particleButtonY, width: buttonSize, height: buttonSize };
+	particleCountPlusInfo = { x: menuOriginX + plusX, y: menuOriginY + particleButtonY, width: buttonSize, height: buttonSize };
+	
+	// Minus button
+	ctx.fillStyle = 'rgba(40, 40, 50, 0.95)';
+	ctx.beginPath();
+	ctx.arc(minusX + buttonSize/2, particleButtonY + buttonSize/2, buttonSize/2, 0, 2 * Math.PI);
+	ctx.fill();
+	
+	ctx.fillStyle = particlesPerMortar > 100 ? 'rgba(255, 255, 255, 1.0)' : 'rgba(100, 100, 100, 1.0)';
+	ctx.font = `bold ${0.08 * menuScale}px Arial`;
+	ctx.textAlign = 'center';
+	ctx.fillText('\u2212', minusX + buttonSize/2, particleButtonY + buttonSize/2 + 0.01 * menuScale);
+	
+	// Plus button
+	ctx.fillStyle = 'rgba(40, 40, 50, 0.95)';
+	ctx.beginPath();
+	ctx.arc(plusX + buttonSize/2, particleButtonY + buttonSize/2, buttonSize/2, 0, 2 * Math.PI);
+	ctx.fill();
+	
+	ctx.fillStyle = particlesPerMortar < 10000 ? 'rgba(255, 255, 255, 1.0)' : 'rgba(100, 100, 100, 1.0)';
+	ctx.font = `bold ${0.08 * menuScale}px Arial`;
+	ctx.fillText('+', plusX + buttonSize/2, particleButtonY + buttonSize/2 + 0.01 * menuScale);
+	
+	// Value display
+	ctx.font = `${0.045 * menuScale}px verdana`;
+	ctx.fillStyle = 'rgba(100, 255, 100, 1.0)';
+	ctx.fillText(particlesPerMortar.toString(), menuWidth / 2, particleButtonY + buttonSize/2);
+	
+	// "Restart required" note and button
+	const restartButtonWidth = 0.25 * menuScale;
+	const restartButtonHeight = 0.075 * menuScale;
+	const restartButtonY = particleButtonY + buttonSize + radioButtonSpacing * 0.25;
+	const restartButtonX = menuWidth / 2 - restartButtonWidth / 2;
+	
+	restartButtonInfo = { x: menuOriginX + restartButtonX, y: menuOriginY + restartButtonY, width: restartButtonWidth, height: restartButtonHeight };
+	
+	// Draw restart button (pill-shaped)
+	let restartButtonColor, restartButtonStroke;
+	if (particleCountChanged) {
+		// Throb red when changes are pending
+		const throb = 0.5 + 0.5 * Math.sin(Date.now() * 0.005);
+		const redIntensity = 150 + throb * 80;
+		restartButtonColor = `rgba(${redIntensity}, 40, 40, 0.95)`;
+		restartButtonStroke = `rgba(${Math.min(255, redIntensity + 60)}, 80, 80, 1.0)`;
+	} else {
+		// Dim gray when no changes
+		restartButtonColor = 'rgba(40, 40, 45, 0.5)';
+		restartButtonStroke = 'rgba(70, 70, 80, 0.5)';
+	}
+	
+	const restartButtonRadius = restartButtonHeight / 2;
+	ctx.fillStyle = restartButtonColor;
+	ctx.beginPath();
+	ctx.roundRect(restartButtonX, restartButtonY, restartButtonWidth, restartButtonHeight, restartButtonRadius);
+	ctx.fill();
+	ctx.strokeStyle = restartButtonStroke;
+	ctx.lineWidth = 2;
+	ctx.stroke();
+	
+	ctx.font = `bold ${0.035 * menuScale}px verdana`;
+	ctx.fillStyle = particleCountChanged ? 'rgba(255, 255, 255, 1.0)' : 'rgba(90, 90, 100, 0.6)';
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.fillText('RESTART', menuWidth / 2, restartButtonY + restartButtonHeight / 2);
+	
 	// Update knob positions for mouse interaction
 	updateSimulationKnobPositions();
 	
@@ -4235,7 +4570,7 @@ function drawMenus() {
 	if (!gOverlayCtx) return;
 	
 	// Always clear and redraw if menus are visible or animating
-	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0) || (simulationMenuOpacity > 0);
+	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0) || (simulationMenuOpacity > 0) || particleCountChanged;
 	if (!needsMenuRedraw && !isAnimating) return;
 	
 	// Clear overlay
@@ -4471,7 +4806,15 @@ function onMenuClick(evt) {
 		const knobRadius = 0.1 * menuScale;
 		const verticalKnobSpacing = knobRadius * 2.8;
 		const menuWidth = knobRadius * 3;
-		const menuHeight = verticalKnobSpacing * 2 + knobRadius * 1.2;
+		const radioButtonSpacing = 0.095 * menuScale;
+		const knobY1 = knobRadius * 0.8;
+		const knobY3 = knobY1 + 2 * verticalKnobSpacing;
+		const radioStartY = knobY3 + knobRadius * 3.0 + 0.021 * menuScale;
+		const materialSectionHeight = 4.0 * radioButtonSpacing;
+		const geometryStartY = radioStartY + materialSectionHeight + radioButtonSpacing * 1.5;
+		const geometrySectionHeight = 4.5 * radioButtonSpacing;
+		const particleControlSectionHeight = radioButtonSpacing * 4.5;
+		const menuHeight = geometryStartY + geometrySectionHeight + particleControlSectionHeight;
 		
 		// Check close button
 		const closeIconRadius = 0.1 * menuScale * 0.25;
@@ -4488,12 +4831,6 @@ function onMenuClick(evt) {
 		
 		// Check radio buttons for ball material (at bottom)
 		const radioButtonSize = 0.04 * menuScale;
-		const radioButtonSpacing = 0.095 * menuScale;
-		// verticalKnobSpacing already declared above
-		const knobY1 = knobRadius * 0.8;
-		const knobY2 = knobY1 + verticalKnobSpacing;
-		const knobY3 = knobY2 + verticalKnobSpacing;
-		const radioStartY = knobY3 + knobRadius * 3.0 + 0.021 * menuScale; // Added offset to match menu drawing
 		const radioX = menuOriginX - 0.065 * menuScale;
 		
 		for (let i = 0; i < 4; i++) {
@@ -4510,8 +4847,6 @@ function onMenuClick(evt) {
 		}
 
 		// Check radio buttons for ball geometry
-		const materialSectionHeight = 4.0 * radioButtonSpacing; // 4 material buttons
-		const geometryStartY = radioStartY + materialSectionHeight + radioButtonSpacing * 1.5; // Extra spacing between sections
 		for (let i = 0; i < 4; i++) {
 			const radioY = menuOriginY + geometryStartY + i * radioButtonSpacing;
 			const rdx = evt.clientX - radioX;
@@ -4623,6 +4958,90 @@ function onMenuClick(evt) {
 			dragStartValue = ballRadius;
 			if (CameraControl) CameraControl.enabled = false;
 			return true; // Knob click handled
+		}
+		
+		// Check barge count minus button (circular)
+		const bargeMinusButtonCenterX = bargeCountMinusInfo.x + bargeCountMinusInfo.width / 2;
+		const bargeMinusButtonCenterY = bargeCountMinusInfo.y + bargeCountMinusInfo.height / 2;
+		const bargeMinusButtonRadius = bargeCountMinusInfo.width / 2;
+		const bargeMinusDx = evt.clientX - bargeMinusButtonCenterX;
+		const bargeMinusDy = evt.clientY - bargeMinusButtonCenterY;
+		if (bargeMinusDx * bargeMinusDx + bargeMinusDy * bargeMinusDy < bargeMinusButtonRadius * bargeMinusButtonRadius) {
+			if (numBarges > 1) { // Minimum 1
+				numBarges -= 1;
+				particleCountChanged = true;
+				needsMenuRedraw = true;
+			}
+			evt.stopPropagation();
+			return true;
+		}
+		
+		// Check barge count plus button (circular)
+		const bargePlusButtonCenterX = bargeCountPlusInfo.x + bargeCountPlusInfo.width / 2;
+		const bargePlusButtonCenterY = bargeCountPlusInfo.y + bargeCountPlusInfo.height / 2;
+		const bargePlusButtonRadius = bargeCountPlusInfo.width / 2;
+		const bargePlusDx = evt.clientX - bargePlusButtonCenterX;
+		const bargePlusDy = evt.clientY - bargePlusButtonCenterY;
+		if (bargePlusDx * bargePlusDx + bargePlusDy * bargePlusDy < bargePlusButtonRadius * bargePlusButtonRadius) {
+			if (numBarges < 10) { // Maximum 10
+				numBarges += 1;
+				particleCountChanged = true;
+				needsMenuRedraw = true;
+			}
+			evt.stopPropagation();
+			return true;
+		}
+		
+		// Check particle count minus button (circular)
+		const minusButtonCenterX = particleCountMinusInfo.x + particleCountMinusInfo.width / 2;
+		const minusButtonCenterY = particleCountMinusInfo.y + particleCountMinusInfo.height / 2;
+		const minusButtonRadius = particleCountMinusInfo.width / 2;
+		const minusDx = evt.clientX - minusButtonCenterX;
+		const minusDy = evt.clientY - minusButtonCenterY;
+		if (minusDx * minusDx + minusDy * minusDy < minusButtonRadius * minusButtonRadius) {
+			if (particlesPerMortar > 100) { // Minimum 100
+				if (particlesPerMortar > 500) {
+					particlesPerMortar -= 500;
+				} else {
+					particlesPerMortar -= 100;
+				}
+				particleCountChanged = true;
+				needsMenuRedraw = true;
+			}
+			evt.stopPropagation();
+			return true;
+		}
+		
+		// Check particle count plus button (circular)
+		const plusButtonCenterX = particleCountPlusInfo.x + particleCountPlusInfo.width / 2;
+		const plusButtonCenterY = particleCountPlusInfo.y + particleCountPlusInfo.height / 2;
+		const plusButtonRadius = particleCountPlusInfo.width / 2;
+		const plusDx = evt.clientX - plusButtonCenterX;
+		const plusDy = evt.clientY - plusButtonCenterY;
+		if (plusDx * plusDx + plusDy * plusDy < plusButtonRadius * plusButtonRadius) {
+			if (particlesPerMortar < 10000) { // Maximum 10000
+				if (particlesPerMortar < 500) {
+					particlesPerMortar += 100;
+				} else {
+					particlesPerMortar += 500;
+				}
+				particleCountChanged = true;
+				needsMenuRedraw = true;
+			}
+			evt.stopPropagation();
+			return true;
+		}
+		
+		// Check restart button
+		if (particleCountChanged && 
+		    evt.clientX >= restartButtonInfo.x && 
+		    evt.clientX <= restartButtonInfo.x + restartButtonInfo.width &&
+		    evt.clientY >= restartButtonInfo.y && 
+		    evt.clientY <= restartButtonInfo.y + restartButtonInfo.height) {
+			particleCountChanged = false;
+			restartSimulation();
+			evt.stopPropagation();
+			return true;
 		}
 	}
 	
