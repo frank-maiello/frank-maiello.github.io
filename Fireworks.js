@@ -15,7 +15,7 @@ var Gravity = -1.7;
 const worldRadius = 200; // Circular boundary radius
 const worldSizeY = 20;
 
-var ballRadius = 0.03;
+var ballRadius = 0.04; // Base radius for particles (can be adjusted with knob)
 const particlesPerMortar = 3000; // Particles per mortar
 const sparkPoolSize = 3000; // Extra particles for spark trails
 const numBalls = 75000 + sparkPoolSize; // 25 mortars × 3000 + spark pool
@@ -178,6 +178,9 @@ var balloonSpotlightBase = null;
 // Warning light variables
 var warningLight = null;
 var warningLightTimer = 0; // Timer for throbbing effect
+
+// Moon sprite
+var moonSprite = null;
 
 // Colgate Clock variables
 var clockHourHand = null;
@@ -382,6 +385,18 @@ class MORTAR {
 	}
 	launch() {
 		if (!this.isReadyToLaunch()) return; // Not ready yet
+		
+		// Regenerate random rotation for hemisphere mode (each explosion gets new orientation)
+		if (this.useHemisphereMode) {
+			this.gapRotation = new THREE.Quaternion();
+			let randomAxis = new THREE.Vector3(
+				Math.random() - 0.5,
+				Math.random() - 0.5,
+				Math.random() - 0.5
+			).normalize();
+			let randomAngle = Math.random() * Math.PI * 2;
+			this.gapRotation.setFromAxisAngle(randomAxis, randomAngle);
+		}
 		
 		// Randomize launch speed (10.0 to 15.0 m/s)
 		let launchVelocity = minLaunchVelocity + Math.random() * lauchVelocityRange;
@@ -2001,6 +2016,24 @@ function initThreeScene() {
 	dirLight.shadow.mapSize.width = 1024;
 	dirLight.shadow.mapSize.height = 1024;
 	gThreeScene.add( dirLight );
+
+	// Add moon sprite in the sky (will follow camera for infinite distance illusion)
+	var moonTextureLoader = new THREE.TextureLoader();
+	moonTextureLoader.load('https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/FullMoon500.png', function(texture) {
+		var moonMaterial = new THREE.SpriteMaterial({
+			map: texture,
+			transparent: false,
+			depthTest: true, // Don't occlude, acts like skybox
+			depthWrite: false
+		});
+		moonSprite = new THREE.Sprite(moonMaterial);
+		moonSprite.scale.set(10, 10, 1);
+		moonSprite.renderOrder = -999; // Render first (background)
+		gThreeScene.add(moonSprite);
+		console.log('Moon sprite added to scene');
+	}, undefined, function(error) {
+		console.error('Error loading moon texture:', error);
+	});
 
 	// OLD SPOTLIGHT CODE - Now using helicopter-mounted spotlight with gimbal
 	// The spotlight is created and attached in the helicopter loader above
@@ -3886,7 +3919,7 @@ function drawSimulationMenu() {
 	drawKnob(ctx, mortarAngleKnobX, knobY2, knobRadius, mortarTubeAngle, 0.0, 45.0, false, 'Spread', 180);
 	
 	// Gravity Knob
-	drawKnob(ctx, gravityKnobX, knobY3, knobRadius, Math.abs(Gravity), 0.5, 5.0, false, 'Gravity', 270);
+	drawKnob(ctx, gravityKnobX, knobY3, knobRadius, Math.abs(Gravity), 0.5, 5.0, false, 'Gravity', 240);
 	
 	// Ball Radius Knob (Particle Size)
 	drawKnob(ctx, ballRadiusKnobX, knobY3, knobRadius, ballRadius, 0.01, 0.10, false, 'Particle Size', 330);
@@ -4843,6 +4876,15 @@ function update() {
 	}
 	
 	simulate();
+	
+	// Update moon position to follow camera (creates infinite distance illusion)
+	if (moonSprite && Camera) {
+		// Position moon relative to camera, in the direction of the moonlight
+		const moonDirection = new THREE.Vector3(-1, 0.6, -1).normalize(); // Direction matching moonlight
+		const moonDistance = 300; // Distance from camera
+		moonSprite.position.copy(Camera.position).add(moonDirection.multiplyScalar(moonDistance));
+	}
+	
 	render();
 	drawMenus(); // Draw menus on overlay canvas
 	
