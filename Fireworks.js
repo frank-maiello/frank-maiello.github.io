@@ -85,6 +85,12 @@ var gCameraFOV = 57;
 var gRunning = false; // Simulation running state - starts paused
 var startupTimer = 3.0; // Start paused for 3 seconds
 
+// Vehicle camera tracking - which barge index each vehicle follows
+var helicopterTrackedBargeIndex = 0; // Helicopter tracks barge 0
+var zeppelinTrackedBargeIndex = 0;   // Zeppelin initially tracks barge 0, then barge 1 when created
+var sailboatTrackedBargeIndex = 0;   // Sailboat initially tracks barge 0, then barge 2 when created
+var balloonTrackedBargeIndex = 0;    // Balloon initially tracks barge 0, then barge 3 when created
+
 // Ball material variables
 var gBallMaterialMode = 0; // 0=Basic, 1=Plastic, 2=Metallic, 3=Normal
 
@@ -1456,6 +1462,26 @@ function initScene() {
 	} // End barge loop
 	
 	console.log('Finished creating barges. Total bargeGroups:', bargeGroups.length, 'Total tubes:', tubeGroups.length);
+	
+	// Update vehicle tracking assignments based on number of barges
+	// All vehicles start tracking barge 0
+	helicopterTrackedBargeIndex = 0;
+	zeppelinTrackedBargeIndex = 0;
+	sailboatTrackedBargeIndex = 0;
+	balloonTrackedBargeIndex = 0;
+	
+	// When barge 1 is created, zeppelin tracks it
+	if (numBarges >= 2) {
+		zeppelinTrackedBargeIndex = 1;
+	}
+	// When barge 2 is created, sailboat tracks it
+	if (numBarges >= 3) {
+		sailboatTrackedBargeIndex = 2;
+	}
+	// When barge 3 is created, balloon tracks it
+	if (numBarges >= 4) {
+		balloonTrackedBargeIndex = 3;
+	}
 	
 	// Load instructions image
 	mouseControlsImage = new Image();
@@ -5113,9 +5139,9 @@ function update() {
 			Camera.position.copy(cabCameraWorldPos);
 			
 			// Calculate look target with pan and tilt applied
-			// Use barge position if available, otherwise default to origin
-			var baseLookTarget = bargeGroup ? 
-				new THREE.Vector3(bargeGroup.position.x, 20, bargeGroup.position.z) : 
+			// Use tracked barge position if available, otherwise default to origin
+			var baseLookTarget = (bargeGroups.length > helicopterTrackedBargeIndex && bargeGroups[helicopterTrackedBargeIndex]) ? 
+				new THREE.Vector3(bargeGroups[helicopterTrackedBargeIndex].position.x, 20, bargeGroups[helicopterTrackedBargeIndex].position.z) : 
 				new THREE.Vector3(0, 20, 0);
 			var direction = new THREE.Vector3().subVectors(baseLookTarget, cabCameraWorldPos).normalize();
 			
@@ -5139,9 +5165,9 @@ function update() {
 			Camera.position.copy(zeppelinCameraWorldPos);
 			
 			// Calculate look target with pan and tilt applied
-			// Use barge position if available, otherwise default to origin
-			var baseLookTarget = bargeGroup ? 
-				new THREE.Vector3(bargeGroup.position.x, 20, bargeGroup.position.z) : 
+			// Use tracked barge position if available, otherwise default to origin
+			var baseLookTarget = (bargeGroups.length > zeppelinTrackedBargeIndex && bargeGroups[zeppelinTrackedBargeIndex]) ? 
+				new THREE.Vector3(bargeGroups[zeppelinTrackedBargeIndex].position.x, 20, bargeGroups[zeppelinTrackedBargeIndex].position.z) : 
 				new THREE.Vector3(0, 20, 0);
 			var direction = new THREE.Vector3().subVectors(baseLookTarget, zeppelinCameraWorldPos).normalize();
 			
@@ -5165,9 +5191,9 @@ function update() {
 			Camera.position.copy(sailboatCameraWorldPos);
 			
 			// Calculate look target with pan and tilt applied
-			// Use barge position if available, otherwise default to origin
-			var baseLookTarget = bargeGroup ? 
-				new THREE.Vector3(bargeGroup.position.x, 20, bargeGroup.position.z) : 
+			// Use tracked barge position if available, otherwise default to origin
+			var baseLookTarget = (bargeGroups.length > sailboatTrackedBargeIndex && bargeGroups[sailboatTrackedBargeIndex]) ? 
+				new THREE.Vector3(bargeGroups[sailboatTrackedBargeIndex].position.x, 20, bargeGroups[sailboatTrackedBargeIndex].position.z) : 
 				new THREE.Vector3(0, 20, 0);
 			var direction = new THREE.Vector3().subVectors(baseLookTarget, sailboatCameraWorldPos).normalize();
 			
@@ -5192,9 +5218,9 @@ function update() {
 			Camera.position.copy(balloonCameraWorldPos);
 			
 			// Calculate look target with pan and tilt applied
-			// Use barge position if available, otherwise default to origin
-			var baseLookTarget = bargeGroup ? 
-				new THREE.Vector3(bargeGroup.position.x, 20, bargeGroup.position.z) : 
+			// Use tracked barge position if available, otherwise default to origin
+			var baseLookTarget = (bargeGroups.length > balloonTrackedBargeIndex && bargeGroups[balloonTrackedBargeIndex]) ? 
+				new THREE.Vector3(bargeGroups[balloonTrackedBargeIndex].position.x, 20, bargeGroups[balloonTrackedBargeIndex].position.z) : 
 				new THREE.Vector3(0, 20, 0);
 			var direction = new THREE.Vector3().subVectors(baseLookTarget, balloonCameraWorldPos).normalize();
 			
