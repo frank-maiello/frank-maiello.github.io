@@ -4757,8 +4757,9 @@ function update() {
 			direction.applyQuaternion(panQuat);
 			
 			// Apply tilt (pitch) rotation around right axis
+			// Negate tilt for sailboat due to model orientation
 			var rightAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(panQuat);
-			var tiltQuat = new THREE.Quaternion().setFromAxisAngle(rightAxis, cameraTilt);
+			var tiltQuat = new THREE.Quaternion().setFromAxisAngle(rightAxis, -cameraTilt);
 			direction.applyQuaternion(tiltQuat);
 			
 			var lookTarget = sailboatCameraWorldPos.clone().add(direction.multiplyScalar(100));
