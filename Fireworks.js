@@ -274,6 +274,27 @@ class MORTAR {
 		this.hasExploded = false;
 		this.clusterCenter = new THREE.Vector3();
 		
+		// 30% chance for hemisphere mode, 70% for normal spherical
+		this.useHemisphereMode = Math.random() < 0.30;
+		
+		if (this.useHemisphereMode) {
+			// Generate two complementary colors for hemispheres
+			let hsl = { h: 0, s: 0, l: 0 };
+			particleColor.getHSL(hsl);
+			this.topHemisphereColor = particleColor.clone();
+			this.bottomHemisphereColor = new THREE.Color().setHSL((hsl.h + 0.5) % 1.0, hsl.s, hsl.l); // Opposite hue
+			
+			// Generate random 3D rotation for gap band orientation
+			this.gapRotation = new THREE.Quaternion();
+			let randomAxis = new THREE.Vector3(
+				Math.random() - 0.5,
+				Math.random() - 0.5,
+				Math.random() - 0.5
+			).normalize();
+			let randomAngle = Math.random() * Math.PI * 2;
+			this.gapRotation.setFromAxisAngle(randomAxis, randomAngle);
+		}
+		
 		// Create particles for this mortar
 		this.createParticles();
 	}
@@ -292,19 +313,70 @@ class MORTAR {
 	createParticles() {
 		for (let i = 0; i < this.particleCount; i++) {
 			let pos = null;
-			let theta = Math.random() * Math.PI * 2;
-			let phi = Math.acos(2 * Math.random() - 1);
-			let r = Math.cbrt(Math.random()) * mortarRadius; // Cube root for uniform distribution in sphere
-			pos = new THREE.Vector3(
-				this.position.x + r * Math.sin(phi) * Math.cos(theta),
-				mortarAltitude + r * Math.cos(phi),
-				this.position.z + r * Math.sin(phi) * Math.sin(theta)
-			);
+			let isTopHemisphere = false;
+			
+			if (this.useHemisphereMode) {
+				// Hemisphere mode - two hemispheres with gap and rotation
+				let theta = Math.random() * Math.PI * 2;
+				
+				// Create gap by splitting phi into two ranges (top and bottom hemispheres)
+				let gapAngle = Math.PI / 8; // Gap of 22.5 degrees (π/8 radians on each side of equator)
+				let topHemisphereMax = Math.PI / 2 - gapAngle; // 0 to ~67.5°
+				let bottomHemisphereMin = Math.PI / 2 + gapAngle; // ~112.5° to 180°
+				
+				let phi;
+				if (Math.random() < 0.5) {
+					// Top hemisphere: phi from 0 to topHemisphereMax
+					phi = Math.acos(1 - Math.random() * (1 - Math.cos(topHemisphereMax)));
+					isTopHemisphere = true;
+				} else {
+					// Bottom hemisphere: phi from bottomHemisphereMin to π
+					phi = Math.acos(Math.cos(bottomHemisphereMin) - Math.random() * (Math.cos(bottomHemisphereMin) + 1));
+					isTopHemisphere = false;
+				}
+				
+				let r = Math.cbrt(Math.random()) * mortarRadius; // Cube root for uniform distribution
+				
+				// Create direction vector and apply random rotation
+				let dir = new THREE.Vector3(
+					r * Math.sin(phi) * Math.cos(theta),
+					r * Math.cos(phi),
+					r * Math.sin(phi) * Math.sin(theta)
+				);
+				dir.applyQuaternion(this.gapRotation);
+				
+				pos = new THREE.Vector3(
+					this.position.x + dir.x,
+					mortarAltitude + dir.y,
+					this.position.z + dir.z
+				);
+			} else {
+				// Normal spherical mode - original code
+				let theta = Math.random() * Math.PI * 2;
+				let phi = Math.acos(2 * Math.random() - 1);
+				let r = Math.cbrt(Math.random()) * mortarRadius; // Cube root for uniform distribution in sphere
+				pos = new THREE.Vector3(
+					this.position.x + r * Math.sin(phi) * Math.cos(theta),
+					mortarAltitude + r * Math.cos(phi),
+					this.position.z + r * Math.sin(phi) * Math.sin(theta)
+				);
+			}
+			
 			let vel = new THREE.Vector3(0, 0, 0);
-			let ball = new BALL(pos, vel, ballRadius, this.particleColor.clone());
+			// Assign color based on mode
+			let particleColor;
+			if (this.useHemisphereMode) {
+				particleColor = isTopHemisphere ? this.topHemisphereColor.clone() : this.bottomHemisphereColor.clone();
+			} else {
+				particleColor = this.particleColor.clone();
+			}
+			
+			let ball = new BALL(pos, vel, ballRadius, particleColor);
 			ball.mortarId = Mortars.length; // Track which mortar this belongs to
 			ball.active = false; // Start inactive
 			ball.hasExploded = false;
+			ball.hemisphereColor = particleColor.clone(); // Store color for later restoration
+			ball.isTopHemisphere = isTopHemisphere; // Store which hemisphere this particle belongs to
 			Balls[this.startIndex + i] = ball;
 		}
 	}
@@ -495,18 +567,45 @@ class MORTAR {
 			Balls[i].speedMultiplier = 2.0 + (-0.5 + Math.random()) * 0.1;
 			Balls[i].lifetime = blastSpeed + Math.random() * 2.0;
 			
-			// NOW set to mortar's color for explosion
-			Balls[i].baseColor = this.particleColor.clone();
+			// Restore hemisphere color for explosion
+			if (Balls[i].hemisphereColor) {
+				Balls[i].baseColor = Balls[i].hemisphereColor.clone();
+			}
 			Balls[i].updateColorWithBrightness();
 			
-			// Create random spherical explosion direction (not based on particle position)
+			// Create explosion direction based on mode
 			let theta = Math.random() * Math.PI * 2; // Azimuthal angle (0 to 2π)
-			let phi = Math.acos(2 * Math.random() - 1); // Polar angle (0 to π) - uniform distribution
+			let phi;
+			
+			if (this.useHemisphereMode) {
+				// Hemisphere mode with gap
+				let gapAngle = Math.PI / 8; // Gap of 22.5 degrees (π/8 radians on each side of equator)
+				let topHemisphereMax = Math.PI / 2 - gapAngle; // 0 to ~67.5°
+				let bottomHemisphereMin = Math.PI / 2 + gapAngle; // ~112.5° to 180°
+				
+				// Use the stored hemisphere assignment for this particle
+				if (Balls[i].isTopHemisphere) {
+					// Top hemisphere: phi from 0 to topHemisphereMax
+					phi = Math.acos(1 - Math.random() * (1 - Math.cos(topHemisphereMax)));
+				} else {
+					// Bottom hemisphere: phi from bottomHemisphereMin to π
+					phi = Math.acos(Math.cos(bottomHemisphereMin) - Math.random() * (Math.cos(bottomHemisphereMin) + 1));
+				}
+			} else {
+				// Normal spherical mode
+				phi = Math.acos(2 * Math.random() - 1); // Polar angle (0 to π) - uniform distribution
+			}
+			
 			let dir = new THREE.Vector3(
 				Math.sin(phi) * Math.cos(theta),
 				Math.cos(phi),
 				Math.sin(phi) * Math.sin(theta)
 			);
+			
+			// Apply rotation only for hemisphere mode
+			if (this.useHemisphereMode) {
+				dir.applyQuaternion(this.gapRotation);
+			}
 			
 			var explosionSpeed = explosionSize + Math.random() * (1 - explosionUniformity); // Velocity magnitude with some randomness
 			
@@ -609,8 +708,6 @@ class BALL {
 			ballInstancedMesh.setMatrixAt(this.instanceId, ballMatrix);
 		}
 	}
-	
-	
 	updateColorWithBrightness() {
 		// Use this particle's base color and fade with brightness
 		if (!this.baseColor) {
