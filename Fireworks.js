@@ -47,6 +47,7 @@ var hemisphereMeshes = []; // Array of hemisphere meshes that move with barge
 var mortarLocalPositions = []; // Array of mortar positions relative to barge center
 var draggingBarge = false;
 var draggedBargeIndex = -1; // Index of the barge being dragged
+var savedBargeTransforms = []; // Store barge positions/rotations for restart
 var bargeRotating = false; // True when rotating, false when translating
 var bargeDragStartPos = new THREE.Vector3();
 var bargeStartRotation = 0;
@@ -69,16 +70,16 @@ var tubeFlashDuration = 0.25; // Duration of tube flash in seconds
 var tubeNormalColor = 0x1a1a1a; // Dark interior color
 var tubeFlashColor = 0xffffff; // White flash color
 
-// Explosion flash lighting variables
-var explosionLight = null;
-var explosionLightIntensity = 0.0; // Current intensity (dim by default)
+// Explosion flash lighting variables (per-barge)
+var explosionLights = []; // Array of lights, one per barge
+var explosionLightIntensities = []; // Current intensity for each light
 var explosionLightDimIntensity = 0.0; // Dim baseline intensity (dynamically calculated)
 var explosionLightBrightIntensity = 2.0; // Bright flash intensity
 var explosionLightFadeSpeed = 10.0; // How fast it fades back to dim
 var activeParticleCount = 0; // Track number of active particles for dynamic lighting
 
 // Camera control variables
-var gCameraMode = 0; // 0=Manual Orbit, 1=Auto Orbit CCW, 2=Auto Orbit CW, 3=Helicopter Cam, 4=Zeppelin Cam, 5=Sailboat Cam, 6=Balloon Cam
+var gCameraMode = 0; // 0=Manual Orbit, 1=Auto Orbit CCW, 2=Auto Orbit CW, 3=Helicopter Cam, 4=Zeppelin Cam, 5=Sailboat Cam, 6=Balloon Cam, 7=Biplane Cam
 var gCameraAngle = 0;
 var gCameraRotationSpeed = 1.0;
 var gCameraFOV = 57;
@@ -90,6 +91,7 @@ var helicopterTrackedBargeIndex = 0; // Helicopter tracks barge 0
 var zeppelinTrackedBargeIndex = 0;   // Zeppelin initially tracks barge 0, then barge 1 when created
 var sailboatTrackedBargeIndex = 0;   // Sailboat initially tracks barge 0, then barge 2 when created
 var balloonTrackedBargeIndex = 0;    // Balloon initially tracks barge 0, then barge 3 when created
+var biplaneTrackedBargeIndex = 0;    // Biplane tracks barge 0 (same as helicopter)
 
 // Ball material variables
 var gBallMaterialMode = 0; // 0=Basic, 1=Plastic, 2=Metallic, 3=Normal
@@ -277,6 +279,22 @@ var helicopterCenterLerpSpeed = 0.5; // Smooth transition speed
 var helicopterInteriorMeshes = []; // Store all helicopter mesh references for darkening
 var helicopterInteriorOriginalMaterials = []; // Store original materials for restoration
 var helicopterCabinLight = null; // Red point light for cabin
+
+// Biplane animation variables
+var biplaneModelTemplate = null;
+var propAssembly = null;
+var biplaneCamPoint = null;
+var biplaneAngle = 0.5 * Math.PI; // Start at different position
+var biplaneSpeed = 0.07; // Fastest of all vehicles
+var biplaneOvalRadiusX = 100; // Largest horizontal radius
+var biplaneOvalRadiusZ = 300; // Largest depth radius
+var biplaneHeight = 75; // Between helicopter (50) and balloon (100)
+var biplaneCenterX = 0;
+var biplaneCenterZ = 0;
+var biplaneTargetCenterX = 0; // Target center for smooth transition
+var biplaneTargetCenterZ = 0;
+var biplaneCenterLerpSpeed = 0.5; // Smooth transition speed
+var propellerBiplaneRotationSpeed = 40.0; // Fast propeller rotation
 
 // Mortar Class -------------------------------------------
 class MORTAR {
@@ -664,10 +682,10 @@ class MORTAR {
 			shockWaves.push(shockWave);
 		}
 		
-		// Flash the explosion light
-		if (explosionLight) {
-			explosionLightIntensity = explosionLightBrightIntensity;
-			explosionLight.intensity = explosionLightIntensity;
+		// Flash the explosion light for this barge
+		if (explosionLights[this.bargeIndex]) {
+			explosionLightIntensities[this.bargeIndex] = explosionLightBrightIntensity;
+			explosionLights[this.bargeIndex].intensity = explosionLightIntensities[this.bargeIndex];
 		}
 		
 		// Update instance colors on GPU
@@ -887,7 +905,7 @@ function updateLoadingProgress() {
 }
 
 // ------------------------------------------------------------------
-function restartSimulation() {
+function restartSimulation(bargeTransforms) {
 	// Recalculate total balls with new particle count and barge count
 	numBalls = numBarges * mortarsPerBarge * particlesPerMortar + sparkPoolSize;
 	
@@ -930,6 +948,15 @@ function restartSimulation() {
 		if (tubeMat) tubeMat.dispose();
 	}
 	
+	// Clear explosion lights
+	for (let light of explosionLights) {
+		if (light) {
+			gThreeScene.remove(light);
+		}
+	}
+	explosionLights = [];
+	explosionLightIntensities = [];
+	
 	bargeGroups = [];
 	tubeGroups = [];
 	tubePositions = [];
@@ -943,8 +970,8 @@ function restartSimulation() {
 	
 	// Barge groups will be created in initScene during tube creation
 	
-	// Reinitialize scene
-	initScene();
+	// Reinitialize scene with saved transforms
+	initScene(bargeTransforms);
 	
 	// Reset launch timers but keep running state
 	nextLaunchTime = 0;
@@ -953,7 +980,7 @@ function restartSimulation() {
 	needsMenuRedraw = true;
 }
 
-function initScene() {	
+function initScene(bargeTransforms) {	
 	console.log('=== initScene START === numBarges:', numBarges);
 	
 	// Create instanced mesh for all balls (single draw call)
@@ -1226,28 +1253,65 @@ function initScene() {
 	console.log('Creating', numBarges, 'barge(s) in initScene');
 	console.log('bargeModelTemplate available:', bargeModelTemplate !== null);
 	
+	// Track the last barge's position and rotation for placing new barges
+	let lastBargePosition = null;
+	let lastBargeRotation = 0;
+	
 	for (let bargeIdx = 0; bargeIdx < numBarges; bargeIdx++) {
 		console.log('  Starting barge', bargeIdx);
 		
 		// Calculate barge offset position
 		let bargeOffset = new THREE.Vector3(0, 0, 0);
-		if (numBarges > 1) {
-			// Arrange barges in a circle
-			let angle = (bargeIdx / numBarges) * Math.PI * 2;
-			bargeOffset.x = Math.cos(angle) * bargebargeSpacing;
-			bargeOffset.z = Math.sin(angle) * bargebargeSpacing;
+		let bargeRotation = 0;
+		
+		// Use saved transform if available, otherwise use default positioning
+		if (bargeTransforms && bargeTransforms[bargeIdx]) {
+			// Use saved position for existing barge
+			bargeOffset.copy(bargeTransforms[bargeIdx].position);
+			bargeRotation = bargeTransforms[bargeIdx].rotation;
+			console.log('  Barge', bargeIdx, 'using saved position:', bargeOffset.x, bargeOffset.z, 'rotation:', bargeRotation);
+		} else if (lastBargePosition !== null) {
+			// New barge being added - place it at the opposite end of the last barge (saved or just created)
+			// Calculate position along the last barge's facing direction (backward)
+			// Use 3x spacing to account for barge length and ensure no overlap
+			bargeOffset.x = lastBargePosition.x - Math.sin(lastBargeRotation) * bargebargeSpacing * 3.0;
+			bargeOffset.z = lastBargePosition.z - Math.cos(lastBargeRotation) * bargebargeSpacing * 3.0;
+			bargeRotation = lastBargeRotation;
+			console.log('  Barge', bargeIdx, 'placed at opposite end of previous barge at:', bargeOffset.x, bargeOffset.z);
+		} else {
+			// Initial setup - arrange in circle
+			if (numBarges > 1) {
+				let angle = (bargeIdx / numBarges) * Math.PI * 2;
+				bargeOffset.x = Math.cos(angle) * bargebargeSpacing;
+				bargeOffset.z = Math.sin(angle) * bargebargeSpacing;
+			}
+			console.log('  Barge', bargeIdx, 'using default offset:', bargeOffset.x, bargeOffset.z);
 		}
 		
-		console.log('  Barge', bargeIdx, 'offset:', bargeOffset.x, bargeOffset.z);
+		// Update last barge position/rotation for next iteration
+		lastBargePosition = bargeOffset.clone();
+		lastBargeRotation = bargeRotation;
 		
 		// Create a new group for this barge
 		let bargeGroup = new THREE.Group();
 		bargeGroup.position.set(bargeOffset.x, 0, bargeOffset.z);
-		bargeGroup.rotation.y = 0;
+		bargeGroup.rotation.y = bargeRotation;
 		console.log('  Created bargeGroup for barge', bargeIdx);
 		gThreeScene.add(bargeGroup);
 		bargeGroups.push(bargeGroup);
 		console.log('  Added bargeGroup to scene, bargeGroups.length:', bargeGroups.length);
+		
+		// Create explosion light for this barge
+		let explosionLight = new THREE.PointLight( 0xffaa66, explosionLightDimIntensity, 200 );
+		explosionLight.position.set( bargeOffset.x, 20, bargeOffset.z ); // Above this barge's position
+		explosionLight.castShadow = true;
+		explosionLight.shadow.camera.near = 0.1;
+		explosionLight.shadow.camera.far = 200;
+		explosionLight.shadow.mapSize.width = 1024;
+		explosionLight.shadow.mapSize.height = 1024;
+		gThreeScene.add( explosionLight );
+		explosionLights.push(explosionLight);
+		explosionLightIntensities.push(explosionLightDimIntensity);
 		
 		// Add barge model to this barge's group
 		if (bargeModelTemplate) {
@@ -1466,6 +1530,7 @@ function initScene() {
 	// Update vehicle tracking assignments based on number of barges
 	// All vehicles start tracking barge 0
 	helicopterTrackedBargeIndex = 0;
+	biplaneTrackedBargeIndex = 0;
 	zeppelinTrackedBargeIndex = 0;
 	sailboatTrackedBargeIndex = 0;
 	balloonTrackedBargeIndex = 0;
@@ -1482,6 +1547,19 @@ function initScene() {
 	if (numBarges >= 4) {
 		balloonTrackedBargeIndex = 3;
 	}
+	
+	// Initialize vehicle orbit targets and centers based on tracked barges
+	updateMortarPositions();
+	// Set current centers to match targets for immediate positioning
+	helicopterCenterX = helicopterTargetCenterX;
+	helicopterCenterZ = helicopterTargetCenterZ;
+	biplaneCenterX = biplaneTargetCenterX;
+	biplaneCenterZ = biplaneTargetCenterZ;
+	zeppelinCenterX = zeppelinTargetCenterX;
+	zeppelinCenterZ = zeppelinTargetCenterZ;
+	sailboatCenterX = sailboatTargetCenterX;
+	sailboatCenterZ = sailboatTargetCenterZ;
+	// Balloon center is set directly in updateMortarPositions, no interpolation needed
 	
 	// Load instructions image
 	mouseControlsImage = new Image();
@@ -2308,18 +2386,18 @@ function initThreeScene() {
 				child.receiveShadow = true;
 			}
 			
-			// Add point lights to cabin light objects
+			/*// Add point lights to cabin light objects
 			if (child.name === 'cabinLight1') {
-					var cabinLight = new THREE.PointLight(0xffaa44, 2, 10); // Warm orange-yellow, intensity 1.5, distance 10
-					//ffaa44
-					cabinLight.castShadow = true;
-					cabinLight.shadow.camera.near = 0.1;
-					cabinLight.shadow.camera.far = 10;
-					cabinLight.shadow.mapSize.width = 512;
-					cabinLight.shadow.mapSize.height = 512;
-					child.add(cabinLight); // Attach light to the object so it moves with it
-					console.log('Added point light to ' + child.name);
-				}
+				var cabinLight = new THREE.PointLight(0xffaa44, 2, 10); // Warm orange-yellow, intensity 1.5, distance 10
+				//ffaa44
+				cabinLight.castShadow = true;
+				cabinLight.shadow.camera.near = 0.1;
+				cabinLight.shadow.camera.far = 10;
+				cabinLight.shadow.mapSize.width = 512;
+				cabinLight.shadow.mapSize.height = 512;
+				child.add(cabinLight); // Attach light to the object so it moves with it
+				console.log('Added point light to ' + child.name);
+			}*/
 			});
 		
 			// Store as template - will be cloned for each barge in initScene()
@@ -2451,6 +2529,39 @@ function initThreeScene() {
 		}
 	);
 
+	// LOAD BIPLANE --------------------------------------
+	var biplaneLoader = new THREE.GLTFLoader();
+	biplaneLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Biplane.gltf',
+		function(gltf) {
+			biplaneModelTemplate = gltf.scene;
+			biplaneModelTemplate.position.set(0, -10, 0);
+			biplaneModelTemplate.scale.set(1.0, 1.0, 1.0);
+			
+			// Find propeller objects in the model hierarchy
+			biplaneModelTemplate.traverse(function(child) {
+				if (child.name === 'propAssembly') {
+				propAssembly = child;
+				}
+				if (child.name === 'biplaneCam') {
+					biplaneCamPoint = child;
+					console.log('Found biplaneCam');
+				}
+				
+			});
+
+			gThreeScene.add(biplaneModelTemplate);
+			console.log('biplane model loaded successfully');
+			updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('biplane model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading biplane model:', error);
+		}
+	);
+
 	// LIGHTS ------------------------------------------
 	// ambient light
 	gThreeScene.add( new THREE.AmbientLight( 0x101010 ) );	
@@ -2511,15 +2622,7 @@ function initThreeScene() {
 	// OLD SPOTLIGHT CODE - Now using helicopter-mounted spotlight with gimbal
 	// The spotlight is created and attached in the helicopter loader above
 
-	// Explosion point light at center of fireworks
-	explosionLight = new THREE.PointLight( 0xffaa66, explosionLightDimIntensity, 200 );
-	explosionLight.position.set( 0, 20, 0 ); // Center above barge where fireworks explode
-	explosionLight.castShadow = true;
-	explosionLight.shadow.camera.near = 0.1;
-	explosionLight.shadow.camera.far = 200;
-	explosionLight.shadow.mapSize.width = 1024;
-	explosionLight.shadow.mapSize.height = 1024;
-	gThreeScene.add( explosionLight );
+	// Explosion point lights are now created per-barge in initScene()
 
 	// create round floor plane with radial gradient
 	var floorGeometry = new THREE.CircleGeometry(2 * worldRadius, 64);
@@ -2814,14 +2917,9 @@ class Grabber {
 					// Translate barge (maintain click offset)
 					bargeGroup.position.copy(pos).sub(bargeClickOffset);
 					
-					// Update explosion light position to follow barge center (average of all barges)
-					if (explosionLight && bargeGroups.length > 0) {
-						let avgPos = new THREE.Vector3();
-						for (let bg of bargeGroups) {
-							avgPos.add(bg.position);
-						}
-						avgPos.divideScalar(bargeGroups.length);
-						explosionLight.position.set(avgPos.x, 20, avgPos.z);
+					// Update explosion light position for this barge
+					if (explosionLights[draggedBargeIndex]) {
+						explosionLights[draggedBargeIndex].position.set(bargeGroup.position.x, 20, bargeGroup.position.z);
 					}
 					
 					// Update vehicle targets after translation
@@ -2842,24 +2940,50 @@ class Grabber {
 
 // Update mortar positions when barge moves or rotates
 function updateMortarPositions() {
-	// Update vehicle orbit targets and spotlight target to follow barges center
+	// Update vehicle orbit targets based on their tracked barge assignments
 	if (bargeGroups.length > 0) {
-		// Calculate average position of all barges
-		let avgPos = new THREE.Vector3();
-		for (let bargeGroup of bargeGroups) {
-			avgPos.add(bargeGroup.position);
+		// Helicopter tracks its assigned barge
+		if (helicopterTrackedBargeIndex < bargeGroups.length) {
+			let helicopterBarge = bargeGroups[helicopterTrackedBargeIndex];
+			helicopterTargetCenterX = helicopterBarge.position.x;
+			helicopterTargetCenterZ = helicopterBarge.position.z;
 		}
-		avgPos.divideScalar(bargeGroups.length);
 		
-		helicopterTargetCenterX = avgPos.x;
-		helicopterTargetCenterZ = avgPos.z;
-		zeppelinTargetCenterX = avgPos.x;
-		zeppelinTargetCenterZ = avgPos.z;
-		sailboatTargetCenterX = avgPos.x;
-		sailboatTargetCenterZ = avgPos.z;
+		// Biplane tracks same barge as helicopter
+		if (biplaneTrackedBargeIndex < bargeGroups.length) {
+			let biplaneBarge = bargeGroups[biplaneTrackedBargeIndex];
+			biplaneTargetCenterX = biplaneBarge.position.x;
+			biplaneTargetCenterZ = biplaneBarge.position.z;
+		}
 		
-		// Update spotlight target immediately
-		spotlightTarget.set(avgPos.x, 1.0, avgPos.z);
+		// Zeppelin tracks its assigned barge
+		if (zeppelinTrackedBargeIndex < bargeGroups.length) {
+			let zeppelinBarge = bargeGroups[zeppelinTrackedBargeIndex];
+			zeppelinTargetCenterX = zeppelinBarge.position.x;
+			zeppelinTargetCenterZ = zeppelinBarge.position.z;
+		}
+		
+		// Sailboat tracks its assigned barge
+		if (sailboatTrackedBargeIndex < bargeGroups.length) {
+			let sailboatBarge = bargeGroups[sailboatTrackedBargeIndex];
+			sailboatTargetCenterX = sailboatBarge.position.x;
+			sailboatTargetCenterZ = sailboatBarge.position.z;
+		}
+		
+		// Balloon tracks its assigned barge (direct update, no interpolation)
+		if (balloonTrackedBargeIndex < bargeGroups.length) {
+			let balloonBarge = bargeGroups[balloonTrackedBargeIndex];
+			balloonCenterX = balloonBarge.position.x;
+			balloonCenterZ = balloonBarge.position.z;
+			// Update balloon spotlight target to tracked barge position
+			balloonSpotlightTarget.set(balloonBarge.position.x, 30, balloonBarge.position.z);
+		}
+		
+		// Helicopter spotlight target follows helicopter's tracked barge
+		if (helicopterTrackedBargeIndex < bargeGroups.length) {
+			let helicopterBarge = bargeGroups[helicopterTrackedBargeIndex];
+			spotlightTarget.set(helicopterBarge.position.x, 1.0, helicopterBarge.position.z);
+		}
 	}
 }
 
@@ -2870,8 +2994,8 @@ function onPointer( evt ) {
 		const menuHandled = onMenuClick(evt);
 		if (menuHandled) return; // Don't process further if menu consumed the click
 		
-		// In fixed camera modes (helicopter, zeppelin, sailboat, balloon), start camera pan/tilt dragging
-		if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5 || gCameraMode === 6) {
+		// In fixed camera modes (helicopter, zeppelin, sailboat, balloon, biplane), start camera pan/tilt dragging
+		if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5 || gCameraMode === 6 || gCameraMode === 7) {
 			draggingCamera = true;
 			dragStartMouseX = evt.clientX;
 			dragStartMouseY = evt.clientY;
@@ -3082,8 +3206,8 @@ function onKeyDown( evt ) {
 }
 
 function onWheel( evt ) {
-	// In fixed camera modes (helicopter, zeppelin, sailboat, balloon), adjust FOV instead of camera position
-	if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5 || gCameraMode === 6) {
+	// In fixed camera modes (helicopter, zeppelin, sailboat, balloon, biplane), adjust FOV instead of camera position
+	if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5 || gCameraMode === 6 || gCameraMode === 7) {
 		evt.preventDefault();
 		
 		// Adjust FOV based on wheel delta (negative deltaY = scroll up = zoom in = smaller FOV)
@@ -3308,6 +3432,8 @@ function simulate() {
 	zeppelinCenterZ += (zeppelinTargetCenterZ - zeppelinCenterZ) * zeppelinCenterLerpSpeed * DeltaT;
 	sailboatCenterX += (sailboatTargetCenterX - sailboatCenterX) * sailboatCenterLerpSpeed * DeltaT;
 	sailboatCenterZ += (sailboatTargetCenterZ - sailboatCenterZ) * sailboatCenterLerpSpeed * DeltaT;
+	biplaneCenterX += (biplaneTargetCenterX - biplaneCenterX) * biplaneCenterLerpSpeed * DeltaT;
+	biplaneCenterZ += (biplaneTargetCenterZ - biplaneCenterZ) * biplaneCenterLerpSpeed * DeltaT;
 	
 	// Auto-launch mortars at random intervals
 	if (autoLaunchEnabled) {
@@ -3406,6 +3532,9 @@ function simulate() {
 	if (mainRotor) {
 		mainRotor.rotation.z += rotorRotationSpeed * DeltaT;
 	}
+	if (propAssembly) {
+		propAssembly.rotation.z += propellerBiplaneRotationSpeed * DeltaT;
+	}
 	
 	// Animate helicopter flight path
 	if (helicopterModelTemplate) {
@@ -3456,6 +3585,28 @@ function simulate() {
 		var x = balloonCenterX + Math.cos(balloonAngle) * balloonOvalRadiusX;
 		var z = balloonCenterZ + Math.sin(balloonAngle) * balloonOvalRadiusZ;
 		balloonModelTemplate.position.set(x, balloonHeight, z);
+	}
+	
+	// Animate biplane flight path
+	if (biplaneModelTemplate) {
+		biplaneAngle += biplaneSpeed * DeltaT;
+		var x = biplaneCenterX + Math.cos(biplaneAngle) * biplaneOvalRadiusX;
+		var z = biplaneCenterZ + Math.sin(biplaneAngle) * biplaneOvalRadiusZ;
+		biplaneModelTemplate.position.set(x, biplaneHeight, z);
+		
+		// Calculate direction of movement (tangent to oval)
+		var dx = -Math.sin(biplaneAngle) * biplaneOvalRadiusX;
+		var dz = Math.cos(biplaneAngle) * biplaneOvalRadiusZ;
+		
+		// Orient biplane to face direction of travel
+		var headingAngle = Math.atan2(dx, dz);
+		biplaneModelTemplate.rotation.y = headingAngle;
+		
+		// Bank into turns - varies with curvature but always banks inward
+		// More banking at narrow X ends (tight turns), less at wide Z sides
+		var bankMagnitude = (Math.abs(Math.cos(biplaneAngle)) * 0.2 + 0.15); // 15-35 degrees
+		var bankAngle = bankMagnitude; // Bank inward toward center
+		biplaneModelTemplate.rotation.z = bankAngle;
 	}
 	
 	// Update Colgate Clock hands to show current time
@@ -3576,11 +3727,13 @@ function simulate() {
 	const normalizedCount = Math.min(1.0, activeParticleCount / particleScaleFactor);
 	explosionLightDimIntensity = minDimIntensity + Math.sqrt(normalizedCount) * (maxDimIntensity - minDimIntensity);
 	
-	// Fade explosion light back to dim (now using dynamic dim intensity)
-	if (explosionLight && explosionLightIntensity > explosionLightDimIntensity) {
-		explosionLightIntensity -= explosionLightFadeSpeed * DeltaT;
-		explosionLightIntensity = Math.max(explosionLightDimIntensity, explosionLightIntensity);
-		explosionLight.intensity = explosionLightIntensity;
+	// Fade explosion lights back to dim (now using dynamic dim intensity)
+	for (let i = 0; i < explosionLights.length; i++) {
+		if (explosionLights[i] && explosionLightIntensities[i] > explosionLightDimIntensity) {
+			explosionLightIntensities[i] -= explosionLightFadeSpeed * DeltaT;
+			explosionLightIntensities[i] = Math.max(explosionLightDimIntensity, explosionLightIntensities[i]);
+			explosionLights[i].intensity = explosionLightIntensities[i];
+		}
 	}
 	
 	// Fade tube flashes back to normal
@@ -3849,8 +4002,8 @@ function drawCameraMenu() {
 	const radioButtonSpacing = 0.095 * menuScale; // Increased for more vertical spacing
 	const horizontalKnobSpacing = knobRadius * 2.5; // Increased for more horizontal spacing
 	const menuWidth = knobRadius * 3; // Fixed width
-	const radioSectionHeight = 7 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 7 camera modes
-	const menuHeight = radioSectionHeight + knobRadius * 2.0; // Height to contain knobs and labels
+	const radioSectionHeight = 8 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 8 camera modes
+	const menuHeight = radioSectionHeight + knobRadius * 1.5; // Height to contain knobs and labels
 	
 	// Position menu relative to main menu
 	const ellipsisWorldX = 0.05;
@@ -3936,7 +4089,8 @@ function drawCameraMenu() {
 		'Helicopter Cam',
 		'Zeppelin Cam',
 		'Sailboat Cam',
-		'Balloon Cam'
+		'Balloon Cam',
+		'Biplane Cam'
 	];
 	
 	const radioStartY = 0;
@@ -3975,13 +4129,14 @@ function drawCameraMenu() {
 	// Draw Focal Length and Orbit Speed knobs at bottom (2 knobs side by side, centered)
 	const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
 	const orbitSpeedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
-	const knobY = radioSectionHeight + knobRadius * 1.3;
+	const knobY = radioSectionHeight + knobRadius * 1.3 - radioButtonSpacing * 0.4;
 	
 	// FOV Knob
-	drawKnob(ctx, fovKnobX, knobY, knobRadius, gCameraFOV, 3, 170, true, 'Focal Length', 210);
+	drawKnob(ctx, fovKnobX, knobY, knobRadius, gCameraFOV, 3, 170, true, 'Focal Length', 210, true);
 	
-	// Orbit Speed Knob
-	drawKnob(ctx, orbitSpeedKnobX, knobY, knobRadius, gCameraRotationSpeed, 0.1, 10.0, false, 'Orbit Speed', 280);
+	// Orbit Speed Knob (only enabled in auto orbit modes)
+	const orbitSpeedEnabled = (gCameraMode === 1 || gCameraMode === 2);
+	drawKnob(ctx, orbitSpeedKnobX, knobY, knobRadius, gCameraRotationSpeed, 0.1, 10.0, false, 'Orbit Speed', 280, orbitSpeedEnabled);
 	
 	// Update knob positions for mouse interaction
 	updateKnobPositions();
@@ -3989,13 +4144,13 @@ function drawCameraMenu() {
 	ctx.restore();
 }
 
-function drawKnob(ctx, x, y, radius, value, min, max, reversed, label, hue) {
+function drawKnob(ctx, x, y, radius, value, min, max, reversed, label, hue, enabled = true) {
 	// Draw knob background
 	ctx.beginPath();
 	ctx.arc(x, y, radius * 1.05, 0, 2 * Math.PI);
-	ctx.fillStyle = 'rgba(20, 20, 30, 0.9)';
+	ctx.fillStyle = enabled ? 'rgba(20, 20, 30, 0.9)' : 'rgba(30, 30, 30, 0.6)';
 	ctx.fill();
-	ctx.strokeStyle = 'rgba(150, 150, 160, 1.0)';
+	ctx.strokeStyle = enabled ? 'rgba(150, 150, 160, 1.0)' : 'rgba(100, 100, 100, 0.6)';
 	ctx.lineWidth = 1;
 	ctx.stroke();
 	
@@ -4007,7 +4162,7 @@ function drawKnob(ctx, x, y, radius, value, min, max, reversed, label, hue) {
 	const pointerAngle = meterStart + fullMeterSweep * normalized;
 	
 	// Draw meter arc
-	ctx.strokeStyle = `hsla(${hue}, 60%, 60%, 1.0)`;
+	ctx.strokeStyle = enabled ? `hsla(${hue}, 60%, 60%, 1.0)` : 'rgba(120, 120, 120, 0.6)';
 	ctx.beginPath();
 	ctx.arc(x, y, radius * 0.85, meterStart, pointerAngle);
 	ctx.lineWidth = 4;
@@ -4020,7 +4175,7 @@ function drawKnob(ctx, x, y, radius, value, min, max, reversed, label, hue) {
 	ctx.beginPath();
 	ctx.moveTo(x, y);
 	ctx.lineTo(pointerEndX, pointerEndY);
-	ctx.strokeStyle = 'rgba(200, 200, 210, 1.0)';
+	ctx.strokeStyle = enabled ? 'rgba(200, 200, 210, 1.0)' : 'rgba(120, 120, 120, 0.6)';
 	ctx.lineWidth = 2;
 	ctx.stroke();
 	
@@ -4028,7 +4183,7 @@ function drawKnob(ctx, x, y, radius, value, min, max, reversed, label, hue) {
 	ctx.font = `${0.3 * radius}px verdana`;
 	ctx.textAlign = 'center';
 	ctx.textBaseline = 'middle';
-	ctx.fillStyle = `hsla(${hue}, 60%, 70%, 1.0)`;
+	ctx.fillStyle = enabled ? `hsla(${hue}, 60%, 70%, 1.0)` : 'rgba(120, 120, 120, 0.6)';
 	
 	if (label === 'Focal Length') {
 		const focalLength = 24 / (2 * Math.tan(value * Math.PI / 360));
@@ -4043,7 +4198,7 @@ function drawKnob(ctx, x, y, radius, value, min, max, reversed, label, hue) {
 	
 	// Draw label
 	ctx.font = `${0.35 * radius}px verdana`;
-	ctx.fillStyle = 'rgba(220, 220, 230, 1.0)';
+	ctx.fillStyle = enabled ? 'rgba(220, 220, 230, 1.0)' : 'rgba(120, 120, 120, 0.6)';
 	ctx.fillText(label, x, y + 1.35 * radius);
 }
 
@@ -4417,11 +4572,15 @@ function drawSimulationMenu() {
 	ctx.fillStyle = 'rgba(100, 255, 100, 1.0)';
 	ctx.fillText(particlesPerMortar.toString(), menuWidth / 2, particleButtonY + buttonSize/2);
 	
-	// "Restart required" note and button
+	// Calculate particle counts
+	const currentParticleCount = numBalls;
+	const pendingParticleCount = numBarges * mortarsPerBarge * particlesPerMortar + sparkPoolSize;
+	
+	// "Restart required" note and button (left side)
 	const restartButtonWidth = 0.25 * menuScale;
 	const restartButtonHeight = 0.075 * menuScale;
 	const restartButtonY = particleButtonY + buttonSize + radioButtonSpacing * 0.25;
-	const restartButtonX = menuWidth / 2 - restartButtonWidth / 2;
+	const restartButtonX = -0.09 * menuScale; // Left side
 	
 	restartButtonInfo = { x: menuOriginX + restartButtonX, y: menuOriginY + restartButtonY, width: restartButtonWidth, height: restartButtonHeight };
 	
@@ -4452,7 +4611,29 @@ function drawSimulationMenu() {
 	ctx.fillStyle = particleCountChanged ? 'rgba(255, 255, 255, 1.0)' : 'rgba(90, 90, 100, 0.6)';
 	ctx.textAlign = 'center';
 	ctx.textBaseline = 'middle';
-	ctx.fillText('RESTART', menuWidth / 2, restartButtonY + restartButtonHeight / 2);
+	ctx.fillText('RESTART', restartButtonX + restartButtonWidth / 2, restartButtonY + restartButtonHeight / 2);
+	
+	// Particle count readout (right side)
+	const particleCountX = menuWidth + 0.09 * menuScale;
+	ctx.textAlign = 'right';
+	ctx.textBaseline = 'middle';
+	
+	// Display the number
+	ctx.font = `italic ${0.035 * menuScale}px verdana`;
+	if (particleCountChanged && currentParticleCount !== pendingParticleCount) {
+		// Show pending count in orange when changes are pending
+		ctx.fillStyle = 'rgba(255, 200, 100, 1.0)';
+		ctx.fillText(`${pendingParticleCount.toLocaleString()}`, particleCountX, restartButtonY + restartButtonHeight * 0.3);
+	} else {
+		// Show current count in green
+		ctx.fillStyle = 'rgba(100, 255, 100, 1.0)';
+		ctx.fillText(`${currentParticleCount.toLocaleString()}`, particleCountX, restartButtonY + restartButtonHeight * 0.3);
+	}
+	
+	// Display label below
+	ctx.font = `${0.025 * menuScale}px verdana`;
+	ctx.fillStyle = 'rgba(180, 180, 180, 0.8)';
+	ctx.fillText('Particle Count', particleCountX, restartButtonY + restartButtonHeight * 0.75);
 	
 	// Update knob positions for mouse interaction
 	updateSimulationKnobPositions();
@@ -4481,7 +4662,7 @@ function drawCameraHelp() {
 		// Auto orbit cams
 		currentImage = autoOrbitImage;
 		imageLoaded = autoOrbitImageLoaded;
-	} else if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5 || gCameraMode === 6) {
+	} else if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5 || gCameraMode === 6 || gCameraMode === 7) {
 		// Vehicle cams
 		currentImage = vehicleImage;
 		imageLoaded = vehicleImageLoaded;
@@ -4566,7 +4747,7 @@ function updateKnobPositions() {
 	const menuScale = 0.7 * cScale; // Use same scale as main menu
 	const knobRadius = 0.1 * menuScale;
 	const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
-	const radioSectionHeight = 7 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (7 camera modes)
+	const radioSectionHeight = 8 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (8 camera modes)
 	// Position relative to main menu
 	const ellipsisWorldX = 0.05;
 	const ellipsisWorldY = 0.05;
@@ -4586,7 +4767,7 @@ function updateKnobPositions() {
 	const menuWidth = knobRadius * 3; // Matches drawCameraMenu
 	const fovKnobX = menuWidth / 2 - horizontalKnobSpacing / 2;
 	const orbitSpeedKnobX = menuWidth / 2 + horizontalKnobSpacing / 2;
-	const knobY = radioSectionHeight + knobRadius * 1.3;
+	const knobY = radioSectionHeight + knobRadius * 1.3 - radioButtonSpacing * 0.4;
 	
 	fovKnobInfo = { x: menuOriginX + fovKnobX, y: menuOriginY + knobY, radius: knobRadius };
 	orbitSpeedKnobInfo = { x: menuOriginX + orbitSpeedKnobX, y: menuOriginY + knobY, radius: knobRadius };
@@ -4717,7 +4898,7 @@ function onMenuClick(evt) {
 		const radioButtonSpacing = 0.095 * menuScale; // Matches drawCameraMenu
 		const horizontalKnobSpacing = knobRadius * 2.5; // Matches drawCameraMenu
 		const menuWidth = knobRadius * 3; // Matches drawCameraMenu - FIXED
-		const radioSectionHeight = 7 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (7 camera modes)
+		const radioSectionHeight = 8 * radioButtonSpacing + 0.004 * menuScale; // Matches drawCameraMenu (8 camera modes)
 		const menuHeight = radioSectionHeight + knobRadius * 2.74; // Matches drawCameraMenu
 		
 		// Check close button
@@ -4752,7 +4933,7 @@ function onMenuClick(evt) {
 		const radioX = menuOriginX - 0.05 * menuScale
 		const radioButtonSize = 0.04 * menuScale;
 		
-		for (let i = 0; i < 7; i++) {
+		for (let i = 0; i < 8; i++) {
 			const radioY = menuOriginY + radioStartY + i * radioButtonSpacing;
 			const rdx = evt.clientX - radioX;
 			const rdy = evt.clientY - radioY;
@@ -4769,7 +4950,7 @@ function onMenuClick(evt) {
 				}
 				
 				// When entering fixed camera modes, reset pan and tilt
-				if (i === 3 || i === 4 || i === 5 || i === 6) {
+				if (i === 3 || i === 4 || i === 5 || i === 6 || i === 7) {
 					cameraPan = 0;
 					cameraTilt = 0;
 				}
@@ -5065,7 +5246,19 @@ function onMenuClick(evt) {
 		    evt.clientY >= restartButtonInfo.y && 
 		    evt.clientY <= restartButtonInfo.y + restartButtonInfo.height) {
 			particleCountChanged = false;
-			restartSimulation();
+			
+			// Capture current barge transforms before restarting
+			savedBargeTransforms = [];
+			for (let i = 0; i < bargeGroups.length; i++) {
+				if (bargeGroups[i]) {
+					savedBargeTransforms.push({
+						position: bargeGroups[i].position.clone(),
+						rotation: bargeGroups[i].rotation.y
+					});
+				}
+			}
+			
+			restartSimulation(savedBargeTransforms);
 			evt.stopPropagation();
 			return true;
 		}
@@ -5234,6 +5427,32 @@ function update() {
 			direction.applyQuaternion(tiltQuat);
 			
 			var lookTarget = balloonCameraWorldPos.clone().add(direction.multiplyScalar(100));
+			Camera.lookAt(lookTarget);
+		}
+	} else if (gCameraMode === 7 && biplaneModelTemplate) {
+		// Biplane camera - position camera at biplaneCamPoint
+		var biplaneCameraWorldPos = new THREE.Vector3();
+		if (biplaneCamPoint) {
+			biplaneCamPoint.getWorldPosition(biplaneCameraWorldPos);
+			Camera.position.copy(biplaneCameraWorldPos);
+			
+			// Calculate look target with pan and tilt applied
+			// Use tracked barge position if available, otherwise default to origin
+			var baseLookTarget = (bargeGroups.length > biplaneTrackedBargeIndex && bargeGroups[biplaneTrackedBargeIndex]) ? 
+				new THREE.Vector3(bargeGroups[biplaneTrackedBargeIndex].position.x, 20, bargeGroups[biplaneTrackedBargeIndex].position.z) : 
+				new THREE.Vector3(0, 20, 0);
+			var direction = new THREE.Vector3().subVectors(baseLookTarget, biplaneCameraWorldPos).normalize();
+			
+			// Apply pan (yaw) rotation around Y axis
+			var panQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), cameraPan);
+			direction.applyQuaternion(panQuat);
+			
+			// Apply tilt (pitch) rotation around right axis
+			var rightAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(panQuat);
+			var tiltQuat = new THREE.Quaternion().setFromAxisAngle(rightAxis, cameraTilt);
+			direction.applyQuaternion(tiltQuat);
+			
+			var lookTarget = biplaneCameraWorldPos.clone().add(direction.multiplyScalar(100));
 			Camera.lookAt(lookTarget);
 		}
 	}
