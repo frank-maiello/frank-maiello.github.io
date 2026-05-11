@@ -1749,10 +1749,56 @@ function initThreeScene() {
 	gThreeScene = new THREE.Scene();
 	gThreeScene.background = new THREE.Color(0x000000);
 
-	// LOAD JERSEY AND HUDSON RIVER --------------------------------------
+	// LOAD HUDSON RIVER --------------------------------------
+	var hudsonLoader = new THREE.GLTFLoader();
+	hudsonLoader.load(
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonRiver.glb',
+		function(gltf) {
+			hudsonModelTemplate = gltf.scene;
+			hudsonModelTemplate.position.set(-20, -0.1, -35);
+			hudsonModelTemplate.scale.set(0.5, 0.5, 0.5);
+
+		var uniformCityscapeMaterial = new THREE.MeshPhongMaterial({
+			color: 0x1a1a1a, // 20% gray
+			side: THREE.FrontSide
+		});
+		
+		// Special material for water objects
+		var waterMaterial = new THREE.MeshStandardMaterial({
+			color: 0x05060c, // #05060c dark blue
+			roughness: 0.7,
+			side: THREE.FrontSide
+		});
+
+		hudsonModelTemplate.traverse(function(child) {
+			if (child.isMesh) {
+				child.castShadow = true;
+				child.receiveShadow = true;
+				if (child.name.toLowerCase().includes('water')) {
+					child.material = waterMaterial;
+				} else {
+					// Replace material with uniform gray
+					child.material = uniformCityscapeMaterial;
+				}
+			}
+		});
+
+		gThreeScene.add(hudsonModelTemplate);
+		console.log('hudson model loaded successfully');
+		updateLoadingProgress();
+		},
+		function(xhr) {
+			console.log('hudson model: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+		},
+		function(error) {
+			console.error('Error loading hudson model:', error);
+		}
+	);
+
+	// LOAD JERSEY --------------------------------------
 	var jerseyLoader = new THREE.GLTFLoader();
 	jerseyLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonJerseyView.gltf',
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/JerseyCityHoboken.glb',
 		function(gltf) {
 			jerseyModelTemplate = gltf.scene;
 			jerseyModelTemplate.position.set(-20, -0.1, -35);
@@ -1828,7 +1874,7 @@ function initThreeScene() {
 	// LOAD DOWNTOWN MANHATTAN --------------------------------------
 	var downtownLoader = new THREE.GLTFLoader();
 	downtownLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonNYCView.gltf',
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/DowntownManhattan.glb',
 		function(gltf) {
 			downtownModelTemplate = gltf.scene;
 			downtownModelTemplate.position.set(-20, -0.1, -35);
@@ -1875,10 +1921,10 @@ function initThreeScene() {
 	// LOAD MIDTOWN --------------------------------------
 	var cityscapeNorthLoader = new THREE.GLTFLoader();
 	cityscapeNorthLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonViewNorth.gltf',
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/MidtownManhattan.glb',
 		function(gltf) {
 			cityscapeNorthModelTemplate = gltf.scene;
-			cityscapeNorthModelTemplate.position.set(31.75, -0.1, -146.5);
+			cityscapeNorthModelTemplate.position.set(-20, -0.1, -35);
 			cityscapeNorthModelTemplate.scale.set(0.5, 0.5, 0.5);
 
 		var uniformCityscapeMaterialNorth = new THREE.MeshPhongMaterial({
@@ -1955,7 +2001,7 @@ function initThreeScene() {
 	// LOAD GREENERY --------------------------------------
 	var greeneryLoader = new THREE.GLTFLoader();
 	greeneryLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/hudsonGreenery.gltf',
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonGreenery.glb',
 		function(gltf) {
 			greeneryModelTemplate = gltf.scene;
 			greeneryModelTemplate.position.set(-20, -0.1, -35);
@@ -1976,7 +2022,7 @@ function initThreeScene() {
 	// LOAD STATUE --------------------------------------
 	var statueLoader = new THREE.GLTFLoader();
 	statueLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/SoLwithBase.glb',
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/SoLwithBase.gltf',
 		function(gltf) {
 			statueModelTemplate = gltf.scene;
 			statueModelTemplate.position.set(-20, -0.1, -35);
@@ -3602,10 +3648,18 @@ function simulate() {
 		var headingAngle = Math.atan2(dx, dz);
 		biplaneModelTemplate.rotation.y = headingAngle;
 		
-		// Bank into turns - varies with curvature but always banks inward
-		// More banking at narrow X ends (tight turns), less at wide Z sides
-		var bankMagnitude = (Math.abs(Math.cos(biplaneAngle)) * 0.2 + 0.15); // 15-35 degrees
-		var bankAngle = bankMagnitude; // Bank inward toward center
+		// Bank into turns based on radius of curvature
+		// Radius of curvature for ellipse: R = (a²b²) / (b²sin²θ + a²cos²θ)^(3/2)
+		var a = biplaneOvalRadiusX;
+		var b = biplaneOvalRadiusZ;
+		var cosTheta = Math.cos(biplaneAngle);
+		var sinTheta = Math.sin(biplaneAngle);
+		var denominator = Math.pow(b * b * sinTheta * sinTheta + a * a * cosTheta * cosTheta, 1.5);
+		var radiusOfCurvature = (a * a * b * b) / denominator;
+		
+		// Bank angle inversely proportional to radius of curvature
+		// Smaller radius = tighter turn = more banking
+		var bankAngle = 0.2 + 10.0 / radiusOfCurvature; // Tuning constant for good visual effect
 		biplaneModelTemplate.rotation.z = bankAngle;
 	}
 	
