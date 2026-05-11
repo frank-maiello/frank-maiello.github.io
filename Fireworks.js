@@ -102,7 +102,8 @@ var gBallGeometryMode = 0; // 0=Sphere, 1=Tetrahedron, 2=Cube, 3=Octahedron
 // Loading screen variables
 var loadingScreen = null;
 var loadingProgress = 0;
-var totalResources = 7; // cityscape south, cityscape north, barge, helicopter, zeppelin, balloon, texture
+var totalResources = 14; 
+// downtown, midtown, new jersey, water, greenery, streets, statue, barge, helicopter, zeppelin, balloon, biplane, texture
 var loadedResources = 0;
 var minLoadTime = 2.0; // Minimum 2 seconds for loading screen
 var loadTimeElapsed = 0;
