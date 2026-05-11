@@ -1973,7 +1973,7 @@ function initThreeScene() {
 			streetsModelTemplate.scale.set(0.5, 0.5, 0.5);
 
 			var uniformStreetsMaterial = new THREE.MeshBasicMaterial({
-				color: 0x000000, 
+				color: 0x3b2a20, 
 				side: THREE.FrontSide
 			});
 
