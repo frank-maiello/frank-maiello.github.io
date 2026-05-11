@@ -3660,7 +3660,7 @@ function simulate() {
 		
 		// Bank angle inversely proportional to radius of curvature
 		// Smaller radius = tighter turn = more banking
-		var bankAngle = 0.2 + 10.0 / radiusOfCurvature; // Tuning constant for good visual effect
+		var bankAngle = 0.3 + 10.0 / radiusOfCurvature; // Tuning constant for good visual effect
 		biplaneModelTemplate.rotation.z = bankAngle;
 	}
 	
