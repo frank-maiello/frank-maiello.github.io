@@ -77,12 +77,31 @@ var explosionLightDimIntensity = 0.0; // Dim baseline intensity (dynamically cal
 var explosionLightBrightIntensity = 2.0; // Bright flash intensity
 var explosionLightFadeSpeed = 10.0; // How fast it fades back to dim
 var activeParticleCount = 0; // Track number of active particles for dynamic lighting
+var averageBurstHeight = 20; // Lightweight tracking of average burst height for point light positioning
 
 // Camera control variables
-var gCameraMode = 0; // 0=Manual Orbit, 1=Auto Orbit CCW, 2=Auto Orbit CW, 3=Helicopter Cam, 4=Zeppelin Cam, 5=Sailboat Cam, 6=Balloon Cam, 7=Biplane Cam
+var gCameraMode = 0; // 0=Manual Orbit, 1=Auto Orbit CCW, 2=Auto Orbit CW, 3=Helicopter Cam, 4=Zeppelin Cam, 5=Sailboat Cam, 6=Balloon Cam, 7=Biplane Cam, 8=Ground Cam
 var gCameraAngle = 0;
 var gCameraRotationSpeed = 1.0;
 var gCameraFOV = 57;
+var previousCameraMode = 0; // Store previous mode when entering ground cam
+var previousCameraPosition = new THREE.Vector3(); // Store previous camera position
+var previousCameraQuaternion = new THREE.Quaternion(); // Store previous camera rotation
+var groundCamPosition = new THREE.Vector3(0, 0, 35); // Ground camera position
+var groundCamYaw = 0; // Left-right rotation
+var groundCamPitch = 0; // Up-down rotation
+var draggingGroundPin = false; // Track if pin is being dragged from menu
+var groundPinWorldPosition = null; // 3D position where pin is placed
+var groundPinMesh = null; // 3D mesh for the placed pin
+var pinPreviewLine = null; // Dashed line preview when dragging pin
+var pinPreviewRing = null; // Ring on ground preview when dragging pin
+var cameraAnimating = false; // Track if camera is animating
+var cameraAnimStartPos = new THREE.Vector3(); // Animation start position
+var cameraAnimEndPos = new THREE.Vector3(); // Animation end position
+var cameraAnimStartQuat = new THREE.Quaternion(); // Animation start rotation
+var cameraAnimEndQuat = new THREE.Quaternion(); // Animation end rotation
+var cameraAnimProgress = 0; // Animation progress 0-1
+var cameraAnimDuration = 1.5; // Animation duration in seconds
 var gRunning = false; // Simulation running state - starts paused
 var startupTimer = 3.0; // Start paused for 3 seconds
 
@@ -129,6 +148,9 @@ var simulationMenuFadeSpeed = 3.0;
 var instructionsMenuVisible = false;
 var instructionsMenuOpacity = 0;
 var instructionsMenuFadeSpeed = 3.0;
+var modelsMenuVisible = false;
+var modelsMenuOpacity = 0;
+var modelsMenuFadeSpeed = 3.0;
 var submenuX = 0.15; // Shared position for all submenus
 var submenuY = 0.1; // Shared position for all submenus
 var needsMenuRedraw = true; // Flag to optimize canvas clearing
@@ -156,6 +178,9 @@ var draggingMortarAngleKnob = false;
 var draggingGravityKnob = false;
 var draggingBallRadiusKnob = false;
 var draggingCamera = false; // For fixed camera pan/tilt dragging
+var draggingElevation = false; // For ground camera elevation dragging (right-click)
+var dragStartElevation = 0; // Store starting elevation
+var dragStartHorizontalPos = new THREE.Vector3(); // Store starting horizontal position
 var particleCountMinusInfo = { x: 0, y: 0, width: 0, height: 0 };
 var particleCountPlusInfo = { x: 0, y: 0, width: 0, height: 0 };
 var bargeCountMinusInfo = { x: 0, y: 0, width: 0, height: 0 };
@@ -297,6 +322,22 @@ var biplaneTargetCenterZ = 0;
 var biplaneCenterLerpSpeed = 0.5; // Smooth transition speed
 var propellerBiplaneRotationSpeed = 40.0; // Fast propeller rotation
 
+// Scenery model templates and visibility flags
+var hudsonModelTemplate = null;
+var greeneryModelTemplate = null;
+var statueModelTemplate = null;
+var jerseyModelTemplate = null;
+var downtownModelTemplate = null;
+var cityscapeNorthModelTemplate = null;
+var streetsModelTemplate = null;
+var hudsonVisible = true;
+var greeneryVisible = true;
+var statueVisible = true;
+var jerseyVisible = true;
+var downtownVisible = true;
+var midtownVisible = true;
+var streetsVisible = true;
+
 // Mortar Class -------------------------------------------
 class MORTAR {
 	constructor(position, particleColor, startIndex, particleCount, tubeIndex, bargeIndex) {
@@ -312,8 +353,12 @@ class MORTAR {
 		this.hasExploded = false;
 		this.clusterCenter = new THREE.Vector3();
 		
-		// 30% chance for hemisphere mode, 70% for normal spherical
-		this.useHemisphereMode = Math.random() < 0.30;
+		// 30% chance for hemisphere mode, 70% for normal spherical (center tube always normal)
+		let isCenterTube = (tubeIndex % 25 == 0);
+		this.useHemisphereMode = !isCenterTube && Math.random() < 0.30;
+		
+		// 30% chance for spherical mortars to be sparkle type (always for center tube)
+		this.isSparkleType = isCenterTube || (!this.useHemisphereMode && Math.random() < 0.30);
 		
 		if (this.useHemisphereMode) {
 			// Generate two complementary colors for hemispheres
@@ -358,9 +403,9 @@ class MORTAR {
 				let theta = Math.random() * Math.PI * 2;
 				
 				// Create gap by splitting phi into two ranges (top and bottom hemispheres)
-				let gapAngle = Math.PI / 8; // Gap of 22.5 degrees (π/8 radians on each side of equator)
-				let topHemisphereMax = Math.PI / 2 - gapAngle; // 0 to ~67.5°
-				let bottomHemisphereMin = Math.PI / 2 + gapAngle; // ~112.5° to 180°
+				let gapAngle = Math.PI / 16; // Gap of 11.25 degrees (π/16 radians on each side of equator)
+				let topHemisphereMax = Math.PI / 2 - gapAngle; // 0 to ~78.75°
+				let bottomHemisphereMin = Math.PI / 2 + gapAngle; // ~101.25° to 180°
 				
 				let phi;
 				if (Math.random() < 0.5) {
@@ -415,6 +460,8 @@ class MORTAR {
 			ball.hasExploded = false;
 			ball.hemisphereColor = particleColor.clone(); // Store color for later restoration
 			ball.isTopHemisphere = isTopHemisphere; // Store which hemisphere this particle belongs to
+			ball.isCenterTube = (this.tubeIndex % 25 == 0); // Track if from center tube
+			ball.isSparkleType = this.isSparkleType; // Track if this mortar has sparkle effect
 			Balls[this.startIndex + i] = ball;
 		}
 	}
@@ -613,6 +660,9 @@ class MORTAR {
 		if (count > 0) {
 			this.clusterCenter.divideScalar(count);
 		}
+		
+		// Update average burst height (lightweight exponential moving average)
+		averageBurstHeight = 0.9 * averageBurstHeight + 0.1 * this.clusterCenter.y;
 
 		let blastSpeed = 1 + Math.random() * 1;
 		var explosionSize = 1 + Math.random() * maxExplosionSize; // Base velocity magnitude for explosion particles
@@ -639,10 +689,10 @@ class MORTAR {
 			let phi;
 			
 			if (this.useHemisphereMode) {
-				// Hemisphere mode with gap
-				let gapAngle = Math.PI / 8; // Gap of 22.5 degrees (π/8 radians on each side of equator)
-				let topHemisphereMax = Math.PI / 2 - gapAngle; // 0 to ~67.5°
-				let bottomHemisphereMin = Math.PI / 2 + gapAngle; // ~112.5° to 180°
+				// Create gap by splitting phi into two ranges (top and bottom hemispheres)
+				let gapAngle = Math.PI / 16; // Gap of 11.25 degrees (π/16 radians on each side of equator)
+				let topHemisphereMax = Math.PI / 2 - gapAngle; // 0 to ~78.75°
+				let bottomHemisphereMin = Math.PI / 2 + gapAngle; // ~101.25° to 180°
 				
 				// Use the stored hemisphere assignment for this particle
 				if (Balls[i].isTopHemisphere) {
@@ -712,6 +762,8 @@ class BALL {
 		this.age = 0; // Time since explosion/creation
 		this.hasExploded = false; // Track if this particle has been part of an explosion
 		this.isSpark = false; // Track if this is a trail spark (not main firework particle)
+		this.isCenterTube = false; // Track if from center tube for special effects
+		this.isSparkleType = false; // Track if this particle should have sparkle effect
 		
 		// Add variability to speed and lifetime (firework embers burn out over time)
 		this.speedMultiplier = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
@@ -775,11 +827,33 @@ class BALL {
 			this.baseColor = new THREE.Color(0xff8800); // Default orange if not set
 		}
 		
-		this.color.setRGB(
-			this.baseColor.r * this.brightness,
-			this.baseColor.g * this.brightness,
-			this.baseColor.b * this.brightness
-		);
+		// Sparkle flourish: flash white just before fading out (center tube or sparkle type)
+		if (this.isSparkleType && this.hasExploded && !this.isSpark) {
+			let lifetimeRatio = this.age / this.lifetime;
+			// Flash white in the last 10% of lifetime
+			if (lifetimeRatio > 0.90) {
+				// Pure white flash
+				let flashIntensity = (lifetimeRatio - 0.90) / 0.10; // 0 to 1 in last 10%
+				let baseIntensity = this.brightness * (1 - flashIntensity);
+				this.color.setRGB(
+					this.baseColor.r * baseIntensity + flashIntensity,
+					this.baseColor.g * baseIntensity + flashIntensity,
+					this.baseColor.b * baseIntensity + flashIntensity
+				);
+			} else {
+				this.color.setRGB(
+					this.baseColor.r * this.brightness,
+					this.baseColor.g * this.brightness,
+					this.baseColor.b * this.brightness
+				);
+			}
+		} else {
+			this.color.setRGB(
+				this.baseColor.r * this.brightness,
+				this.baseColor.g * this.brightness,
+				this.baseColor.b * this.brightness
+			);
+		}
 		
 		if (ballInstancedMesh && this.instanceId < numBalls) {
 			ballInstancedMesh.setColorAt(this.instanceId, this.color);
@@ -1303,10 +1377,10 @@ function initScene(bargeTransforms) {
 		console.log('  Added bargeGroup to scene, bargeGroups.length:', bargeGroups.length);
 		
 		// Create explosion light for this barge
-		let explosionLight = new THREE.PointLight( 0xffaa66, explosionLightDimIntensity, 200 );
-		explosionLight.position.set( bargeOffset.x, 20, bargeOffset.z ); // Above this barge's position
+		let explosionLight = new THREE.PointLight( 0xffaa66, explosionLightDimIntensity, 100 );
+		explosionLight.position.set( bargeOffset.x, averageBurstHeight, bargeOffset.z ); // Position at average burst height
 		explosionLight.castShadow = true;
-		explosionLight.shadow.camera.near = 0.1;
+		explosionLight.shadow.camera.near = 1;
 		explosionLight.shadow.camera.far = 200;
 		explosionLight.shadow.mapSize.width = 1024;
 		explosionLight.shadow.mapSize.height = 1024;
@@ -1759,13 +1833,7 @@ function initThreeScene() {
 			hudsonModelTemplate.position.set(-20, -0.1, -35);
 			hudsonModelTemplate.scale.set(0.5, 0.5, 0.5);
 
-		var uniformCityscapeMaterial = new THREE.MeshPhongMaterial({
-			color: 0x1a1a1a, // 20% gray
-			side: THREE.FrontSide
-		});
-		
-		// Special material for water objects
-		var waterMaterial = new THREE.MeshStandardMaterial({
+		var waterMaterial = new THREE.MeshPhongMaterial({
 			color: 0x05060c, // #05060c dark blue
 			roughness: 0.7,
 			side: THREE.FrontSide
@@ -1810,13 +1878,6 @@ function initThreeScene() {
 			side: THREE.FrontSide
 		});
 		
-		// Special material for water objects
-		var waterMaterial = new THREE.MeshStandardMaterial({
-			color: 0x05060c, // #05060c dark blue
-			roughness: 0.7,
-			side: THREE.FrontSide
-		});
-		
 		// Helper function to check if object is within ColgateClock group
 		function isInColgateClock(obj) {
 			let current = obj;
@@ -1849,13 +1910,7 @@ function initThreeScene() {
 					// Don't override material for objects in ColgateClock.gltf group
 					// Keep original material
 				} else {
-					// Check if this is a water object
-					if (child.name.toLowerCase().includes('water')) {
-						child.material = waterMaterial;
-					} else {
-						// Replace material with uniform gray
-						child.material = uniformCityscapeMaterial;
-					}
+					child.material = uniformCityscapeMaterial;
 				}
 			}
 		});
@@ -1886,13 +1941,6 @@ function initThreeScene() {
 			side: THREE.FrontSide
 		});
 		
-		// Special material for water objects
-		var waterMaterial = new THREE.MeshStandardMaterial({
-			color: 0x05060c, // #05060c dark blue
-			roughness: 0.7,
-			side: THREE.FrontSide
-		});
-		
 		downtownModelTemplate.traverse(function(child) {
 			if (child.isMesh) {
 				child.castShadow = true;
@@ -1919,7 +1967,7 @@ function initThreeScene() {
 		}
 	);
 
-	// LOAD MIDTOWN --------------------------------------
+	// LOAD MIDTOWN MANHATTAN --------------------------------------
 	var cityscapeNorthLoader = new THREE.GLTFLoader();
 	cityscapeNorthLoader.load(
 		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/MidtownManhattan.glb',
@@ -1967,17 +2015,17 @@ function initThreeScene() {
 	// LOAD STREETS	 --------------------------------------
 	var streetsLoader = new THREE.GLTFLoader();
 	streetsLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/hudsonStreets.gltf',
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonStreets.gltf',
 		function(gltf) {
 			streetsModelTemplate = gltf.scene;
 			streetsModelTemplate.position.set(-20, -0.1, -35);
 			streetsModelTemplate.scale.set(0.5, 0.5, 0.5);
 
 			var uniformStreetsMaterial = new THREE.MeshBasicMaterial({
-				color: 0x3b2a20, 
+				color: 0x38271e, 
+				//color: 0x3b2a20, 
 				side: THREE.FrontSide
 			});
-
 
 			streetsModelTemplate.traverse(function(child) {
 				if (child.isMesh) {
@@ -2002,11 +2050,24 @@ function initThreeScene() {
 	// LOAD GREENERY --------------------------------------
 	var greeneryLoader = new THREE.GLTFLoader();
 	greeneryLoader.load(
-		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonGreenery.glb',
+		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/HudsonGreenery.gltf',
 		function(gltf) {
 			greeneryModelTemplate = gltf.scene;
 			greeneryModelTemplate.position.set(-20, -0.1, -35);
 			greeneryModelTemplate.scale.set(0.5, 0.5, 0.5);
+
+			/*var uniformGreeneryMaterial = new THREE.MeshBasicMaterial({
+				color: 0x3b2a20, 
+				side: THREE.FrontSide
+			});
+
+			greeneryModelTemplate.traverse(function(child) {
+				if (child.isMesh) {
+					child.castShadow = false;
+					child.receiveShadow = false;
+					child.material = uniformGreeneryMaterial;
+				}
+			});*/
 
 			gThreeScene.add(greeneryModelTemplate);
 			console.log('greenery model loaded successfully');
@@ -2059,7 +2120,7 @@ function initThreeScene() {
 		}
 	);
 
-	/*// LOAD AIRBUS --------------------------------------
+	/*// LOAD AIRLINER --------------------------------------
 	var airbusLoader = new THREE.GLTFLoader();
 	airbusLoader.load(
 		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/Airbus.gltf',
@@ -2491,7 +2552,8 @@ function initThreeScene() {
 		'https://raw.githubusercontent.com/frank-maiello/frank-maiello.github.io/main/fireboat.gltf',
 		function(gltf) {
 			fireboatModelTemplate = gltf.scene;
-			fireboatModelTemplate.position.set(-65, -0.75, 140);
+			fireboatModelTemplate.position.set(-20, -0.75, 140);
+			fireboatModelTemplate.rotation.y = 0.5 * Math.PI;
 			fireboatModelTemplate.scale.set(1.0, 1.0, 1.0);
 
 			// Enable shadow casting and receiving on all meshes in the model
@@ -2760,7 +2822,10 @@ function initThreeScene() {
 	window.addEventListener( 'keydown', onKeyDown, false );
 	
 	// Wheel event for zooming in fixed camera modes
-	window.addEventListener( 'wheel', onWheel, false );
+	window.addEventListener( 'wheel', onWheel, { passive: false } );
+	
+	// Prevent context menu on right-click
+	container.addEventListener( 'contextmenu', (evt) => evt.preventDefault(), false );
 	
 	// Create 2D overlay canvas for menus
 	gOverlayCanvas = document.createElement('canvas');
@@ -2966,7 +3031,7 @@ class Grabber {
 					
 					// Update explosion light position for this barge
 					if (explosionLights[draggedBargeIndex]) {
-						explosionLights[draggedBargeIndex].position.set(bargeGroup.position.x, 20, bargeGroup.position.z);
+						explosionLights[draggedBargeIndex].position.set(bargeGroup.position.x, averageBurstHeight, bargeGroup.position.z);
 					}
 					
 					// Update vehicle targets after translation
@@ -3039,7 +3104,18 @@ function onPointer( evt ) {
 	if (evt.type == "pointerdown") {
 		// Check for menu clicks first
 		const menuHandled = onMenuClick(evt);
-		if (menuHandled) return; // Don't process further if menu consumed the click
+		if (menuHandled) {
+			// Disable orbit controls when clicking in menus
+			if (CameraControl) CameraControl.enabled = false;
+			return; // Don't process further if menu consumed the click
+		}
+		
+		// Check if clicking inside any visible submenu
+		const clickedInMenu = isClickInsideMenu(evt.clientX, evt.clientY);
+		if (clickedInMenu) {
+			if (CameraControl) CameraControl.enabled = false;
+			return;
+		}
 		
 		// In fixed camera modes (helicopter, zeppelin, sailboat, balloon, biplane), start camera pan/tilt dragging
 		if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5 || gCameraMode === 6 || gCameraMode === 7) {
@@ -3047,6 +3123,26 @@ function onPointer( evt ) {
 			dragStartMouseX = evt.clientX;
 			dragStartMouseY = evt.clientY;
 			gMouseDown = true;
+			return;
+		}
+		
+		// In ground camera mode, start pan/tilt dragging (left button) or elevation dragging (right button)
+		if (gCameraMode === 8) {
+			if (evt.button === 2) {
+				// Right button: elevation and horizontal dragging
+				draggingElevation = true;
+				dragStartMouseX = evt.clientX;
+				dragStartMouseY = evt.clientY;
+				dragStartElevation = groundCamPosition.y;
+				dragStartHorizontalPos.copy(groundCamPosition);
+			} else {
+				// Left button: pan/tilt dragging
+				draggingCamera = true;
+				dragStartMouseX = evt.clientX;
+				dragStartMouseY = evt.clientY;
+			}
+			gMouseDown = true;
+			if (CameraControl) CameraControl.enabled = false;
 			return;
 		}
 		
@@ -3064,26 +3160,139 @@ function onPointer( evt ) {
 			CameraControl.enabled = true;
 		}
 	}
-	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingExplosionUniformityKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob || draggingBallRadiusKnob || draggingCamera || draggingBarge)) {
+	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingExplosionUniformityKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob || draggingBallRadiusKnob || draggingCamera || draggingElevation || draggingBarge || draggingGroundPin)) {
+		// Track mouse position for dragging visualizations
+		window.gLastMouseX = evt.clientX;
+		window.gLastMouseY = evt.clientY;
+		
+		// Handle ground pin dragging
+		if (draggingGroundPin) {
+			// Calculate 3D cursor position by intersecting with a horizontal plane at reasonable height
+			const rect = gRenderer.domElement.getBoundingClientRect();
+			const x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+			const y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+			
+			const raycaster = new THREE.Raycaster();
+			raycaster.setFromCamera(new THREE.Vector2(x, y), Camera);
+			
+			// Use a horizontal plane at height 10 (reasonable viewing height)
+			const targetHeight = 10;
+			const horizontalPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -targetHeight);
+			const cursorPos = new THREE.Vector3();
+			const intersected = raycaster.ray.intersectPlane(horizontalPlane, cursorPos);
+			
+			// Only show preview if we hit the plane
+			if (intersected) {
+				// Project down to ground (keep x,z but set y=0)
+				const groundPos = new THREE.Vector3(cursorPos.x, 0, cursorPos.z);
+				
+				// Create or update preview line
+				if (!pinPreviewLine) {
+					const lineMaterial = new THREE.LineDashedMaterial({
+						color: 0xff6666,
+						dashSize: 0.5,
+						gapSize: 0.3,
+						linewidth: 2
+					});
+					const lineGeometry = new THREE.BufferGeometry();
+					const linePositions = new Float32Array(6);
+					lineGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+					pinPreviewLine = new THREE.Line(lineGeometry, lineMaterial);
+					pinPreviewLine.computeLineDistances();
+					gThreeScene.add(pinPreviewLine);
+				}
+				
+				// Update line position (vertical line from ground to cursor)
+				const positions = pinPreviewLine.geometry.attributes.position.array;
+				positions[0] = groundPos.x;
+				positions[1] = groundPos.y;
+				positions[2] = groundPos.z;
+				positions[3] = cursorPos.x;
+				positions[4] = cursorPos.y;
+				positions[5] = cursorPos.z;
+				pinPreviewLine.geometry.attributes.position.needsUpdate = true;
+				pinPreviewLine.computeLineDistances();
+				
+				// Create or update preview ring
+				if (!pinPreviewRing) {
+					const ringGeometry = new THREE.TorusGeometry(0.8, 0.05, 8, 32);
+					const ringMaterial = new THREE.MeshStandardMaterial({
+						color: 0xff6666,
+						emissive: 0xff6666,
+						emissiveIntensity: 0.3,
+						transparent: true,
+						opacity: 0.6
+					});
+					pinPreviewRing = new THREE.Mesh(ringGeometry, ringMaterial);
+					pinPreviewRing.rotation.x = Math.PI / 2; // Rotate to lie flat on ground
+					gThreeScene.add(pinPreviewRing);
+				}
+				
+				// Update ring position on ground
+				pinPreviewRing.position.set(groundPos.x, 0.05, groundPos.z);
+			}
+			
+			needsMenuRedraw = true;
+			return;
+		}
+		
 		// Handle barge dragging first (highest priority)
 		if (draggingBarge) {
 			gGrabber.move(evt.clientX, evt.clientY);
 			return;
 		}
 		
-		// Handle camera pan/tilt dragging in fixed camera modes
+		// Handle elevation and horizontal dragging in ground camera mode (right-click)
+		if (draggingElevation) {
+			const deltaX = evt.clientX - dragStartMouseX;
+			const deltaY = evt.clientY - dragStartMouseY;
+			const movementSensitivity = 0.05; // Adjust for desired drag speed
+			
+			// Update elevation (drag up = increase elevation)
+			groundCamPosition.y = dragStartElevation - deltaY * movementSensitivity;
+			
+			// Clamp elevation to reasonable range (0.5 to 20 meters)
+			groundCamPosition.y = Math.max(0.5, Math.min(20, groundCamPosition.y));
+			
+			// Calculate right vector from camera yaw (perpendicular to look direction)
+			const rightVector = new THREE.Vector3(
+				Math.cos(groundCamYaw), // Right is 90 degrees from forward
+				0,
+				-Math.sin(groundCamYaw)
+			).normalize();
+			
+			// Update horizontal position (drag right = move left, reversed for natural feel)
+			groundCamPosition.x = dragStartHorizontalPos.x - deltaX * movementSensitivity * rightVector.x;
+			groundCamPosition.z = dragStartHorizontalPos.z - deltaX * movementSensitivity * rightVector.z;
+			
+			return;
+		}
+		
+		// Handle camera pan/tilt dragging in fixed camera modes and ground camera
 		if (draggingCamera) {
 			const deltaX = evt.clientX - dragStartMouseX;
 			const deltaY = evt.clientY - dragStartMouseY;
 			
 			// Update pan (horizontal) and tilt (vertical)
 			const sensitivity = 0.003; // Adjust for desired drag speed
-			cameraPan -= deltaX * sensitivity; // Negative for natural drag direction
-			cameraTilt += deltaY * sensitivity; // Positive for natural drag direction
 			
-			// Clamp tilt to prevent flipping upside down
-			const maxTilt = Math.PI / 2 - 0.1; // Slightly less than 90 degrees
-			cameraTilt = Math.max(-maxTilt, Math.min(maxTilt, cameraTilt));
+			if (gCameraMode === 8) {
+				// Ground camera mode: update yaw and pitch
+				groundCamYaw -= deltaX * sensitivity; // Negative for natural drag direction
+				groundCamPitch -= deltaY * sensitivity; // Negative for inverted (drag down looks down)
+				
+				// Clamp pitch to prevent flipping upside down
+				const maxPitch = Math.PI / 2 - 0.1; // Slightly less than 90 degrees
+				groundCamPitch = Math.max(-maxPitch, Math.min(maxPitch, groundCamPitch));
+			} else {
+				// Fixed vehicle camera modes
+				cameraPan -= deltaX * sensitivity; // Negative for natural drag direction
+				cameraTilt += deltaY * sensitivity; // Positive for natural drag direction
+				
+				// Clamp tilt to prevent flipping upside down
+				const maxTilt = Math.PI / 2 - 0.1; // Slightly less than 90 degrees
+				cameraTilt = Math.max(-maxTilt, Math.min(maxTilt, cameraTilt));
+			}
 			
 			dragStartMouseX = evt.clientX;
 			dragStartMouseY = evt.clientY;
@@ -3162,9 +3371,9 @@ function onPointer( evt ) {
 			
 			const dragSensitivity = 0.1;
 			const normalizedDelta = dragDelta / dragSensitivity;
-			const rangeSize = 60.0 - 15.0;
+			const rangeSize = 80.0 - 15.0;
 			let newValue = dragStartValue + normalizedDelta * rangeSize;
-			newValue = Math.max(15.0, Math.min(60.0, newValue));
+			newValue = Math.max(15.0, Math.min(80.0, newValue));
 			
 			minLaunchVelocity = newValue;
 			needsMenuRedraw = true;
@@ -3194,9 +3403,9 @@ function onPointer( evt ) {
 			
 			const dragSensitivity = 0.1;
 			const normalizedDelta = dragDelta / dragSensitivity;
-			const rangeSize = 5.0 - 0.5;
+			const rangeSize = 10.0 - 0.5;
 			let newValue = dragStartValue + normalizedDelta * rangeSize;
-			newValue = Math.max(0.5, Math.min(5.0, newValue));
+			newValue = Math.max(0.5, Math.min(10.0, newValue));
 			
 			Gravity = -newValue; // Keep gravity negative
 			needsMenuRedraw = true;
@@ -3223,6 +3432,93 @@ function onPointer( evt ) {
 		gGrabber.move(evt.clientX, evt.clientY);
 	}
 	else if (evt.type == "pointerup") {
+		// Handle ground pin placement
+		if (draggingGroundPin) {
+			// Use same calculation as preview - intersect with horizontal plane at height 10
+			const rect = gRenderer.domElement.getBoundingClientRect();
+			const x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+			const y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+			
+			const raycaster = new THREE.Raycaster();
+			raycaster.setFromCamera(new THREE.Vector2(x, y), Camera);
+			
+			// Use a horizontal plane at height 10 (same as preview)
+			const targetHeight = 10;
+			const horizontalPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -targetHeight);
+			const cursorPos = new THREE.Vector3();
+			const intersected = raycaster.ray.intersectPlane(horizontalPlane, cursorPos);
+			
+			if (intersected) {
+				// Use the x,z coordinates from cursor position for ground placement
+				const intersectPoint = new THREE.Vector3(cursorPos.x, 0, cursorPos.z);
+				
+				// Store previous camera mode, position, and orientation
+				previousCameraMode = gCameraMode;
+				Camera.updateMatrixWorld();
+				previousCameraPosition.copy(Camera.position);
+				previousCameraQuaternion.copy(Camera.quaternion);
+				
+				// Get the current look target in world space
+				const currentTarget = new THREE.Vector3();
+				if (CameraControl) {
+					currentTarget.copy(CameraControl.target);
+				} else {
+					// If no orbit controls, calculate target from camera direction
+					const lookDir = new THREE.Vector3();
+					Camera.getWorldDirection(lookDir);
+					currentTarget.copy(Camera.position).add(lookDir.multiplyScalar(100));
+				}
+				
+				// Set ground camera position
+				groundCamPosition.copy(intersectPoint);
+				groundCamPosition.y = 1.5; // Eye level height
+				groundPinWorldPosition = intersectPoint.clone();
+				
+				// Calculate direction from new ground position to the same target
+				const newLookDir = new THREE.Vector3().subVectors(currentTarget, groundCamPosition).normalize();
+				
+				// Calculate yaw and pitch to look at the same target from the new position
+				groundCamYaw = Math.atan2(newLookDir.x, newLookDir.z);
+				groundCamPitch = Math.asin(newLookDir.y);
+				
+				// Set up camera animation
+				cameraAnimStartPos.copy(Camera.position);
+				cameraAnimEndPos.copy(groundCamPosition);
+				
+				// Store current camera orientation as quaternion
+				Camera.updateMatrixWorld();
+				cameraAnimStartQuat.copy(Camera.quaternion);
+				
+				// Calculate end orientation looking at the same target
+				const tempCam = Camera.clone();
+				tempCam.position.copy(groundCamPosition);
+				tempCam.lookAt(currentTarget);
+				cameraAnimEndQuat.copy(tempCam.quaternion);
+				
+				cameraAnimProgress = 0;
+				cameraAnimating = true;
+				gCameraMode = 8;
+				
+				// Don't create physical 3D pin mesh - just store the position
+				groundPinWorldPosition = intersectPoint.clone();
+				
+				needsMenuRedraw = true;
+			}
+			
+			// Remove preview visuals
+			if (pinPreviewLine) {
+				gThreeScene.remove(pinPreviewLine);
+				pinPreviewLine = null;
+			}
+			if (pinPreviewRing) {
+				gThreeScene.remove(pinPreviewRing);
+				pinPreviewRing = null;
+			}
+			
+			draggingGroundPin = false;
+			return;
+		}
+		
 		draggingFOVKnob = false;
 		draggingOrbitSpeedKnob = false;
 		draggingExplosionSizeKnob = false;
@@ -3232,6 +3528,7 @@ function onPointer( evt ) {
 		draggingGravityKnob = false;
 		draggingBallRadiusKnob = false;
 		draggingCamera = false;
+		draggingElevation = false;
 		
 		if (draggingBarge) {
 			gGrabber.end();
@@ -3253,6 +3550,26 @@ function onKeyDown( evt ) {
 }
 
 function onWheel( evt ) {
+	// Ground camera mode: dolly forward/backward in view direction
+	if (gCameraMode === 8) {
+		evt.preventDefault();
+		
+		// Dolly amount based on wheel delta
+		const dollyAmount = evt.deltaY * 0.05;
+		
+		// Calculate forward direction from yaw and pitch
+		const forward = new THREE.Vector3(
+			Math.sin(groundCamYaw),
+			0, // Keep on ground plane
+			Math.cos(groundCamYaw)
+		);
+		
+		// Move camera position
+		groundCamPosition.addScaledVector(forward, -dollyAmount);
+		
+		return;
+	}
+	
 	// In fixed camera modes (helicopter, zeppelin, sailboat, balloon, biplane), adjust FOV instead of camera position
 	if (gCameraMode === 3 || gCameraMode === 4 || gCameraMode === 5 || gCameraMode === 6 || gCameraMode === 7) {
 		evt.preventDefault();
@@ -3789,6 +4106,10 @@ function simulate() {
 			explosionLightIntensities[i] = Math.max(explosionLightDimIntensity, explosionLightIntensities[i]);
 			explosionLights[i].intensity = explosionLightIntensities[i];
 		}
+		// Update light height to track average burst height
+		if (explosionLights[i]) {
+			explosionLights[i].position.y = averageBurstHeight;
+		}
 	}
 	
 	// Fade tube flashes back to normal
@@ -3842,7 +4163,7 @@ function drawMainMenu() {
 	const itemHeight = 0.12 * menuScale;
 	const itemWidth = 0.15 * menuScale;
 	const padding = 0.02 * menuScale;
-	const menuHeight = itemHeight * 3 + (padding * 4); // Three items: play/pause, camera, and simulation
+	const menuHeight = itemHeight * 4 + (padding * 5); // Four items: play/pause, camera, simulation, and models
 	const menuWidth = itemWidth + (padding * 2);
 	
 	const menuBaseY = ellipsisY + 0.08 * menuScale;
@@ -4042,6 +4363,98 @@ function drawMainMenu() {
 	ctx.stroke();
 	ctx.restore();
 	
+	// Draw Models menu item
+	const itemY4 = itemY3 + itemHeight + padding;
+	ctx.beginPath();
+	ctx.roundRect(itemX, itemY4, itemWidth, itemHeight, cornerRadius * 0.5);
+	ctx.fillStyle = modelsMenuVisible ? 'rgba(80, 180, 120, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+	ctx.fill();
+	
+	// Draw cityscape icon
+	const icon4X = itemX + itemWidth / 2;
+	const icon4Y = itemY4 + itemHeight / 2;
+	const icon4Color = modelsMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+	ctx.strokeStyle = icon4Color;
+	ctx.fillStyle = icon4Color;
+	ctx.lineWidth = 1.5;
+	ctx.lineCap = 'butt';
+	ctx.lineJoin = 'miter';
+	
+	// Draw 2D cityscape silhouette
+	ctx.save();
+	ctx.translate(icon4X, icon4Y + iconSize * 0.1);
+	const buildingScale = iconSize * 0.6;
+	
+	// Ground line reference
+	const groundY = buildingScale * 0.9;
+	
+	ctx.beginPath();
+	// Start from ground left
+	ctx.moveTo(-buildingScale * 1.2, groundY);
+	
+	// Building 1 (left, short)
+	ctx.lineTo(-buildingScale * 1.2, groundY - buildingScale * 0.6);
+	ctx.lineTo(-buildingScale * 1.0, groundY - buildingScale * 0.6);
+	ctx.lineTo(-buildingScale * 1.0, groundY);
+	
+	// Building 2 (medium)
+	ctx.lineTo(-buildingScale * 0.9, groundY);
+	ctx.lineTo(-buildingScale * 0.9, groundY - buildingScale * 1.0);
+	ctx.lineTo(-buildingScale * 0.65, groundY - buildingScale * 1.0);
+	ctx.lineTo(-buildingScale * 0.65, groundY);
+	
+	// Building 3 (very tall - tallest with spire)
+	ctx.lineTo(-buildingScale * 0.55, groundY);
+	ctx.lineTo(-buildingScale * 0.55, groundY - buildingScale * 1.6);
+	// Spire base
+	ctx.lineTo(-buildingScale * 0.45, groundY - buildingScale * 1.6);
+	ctx.lineTo(-buildingScale * 0.45, groundY - buildingScale * 1.75);
+	// Spire tip
+	ctx.lineTo(-buildingScale * 0.40, groundY - buildingScale * 2.0);
+	ctx.lineTo(-buildingScale * 0.35, groundY - buildingScale * 1.75);
+	// Back down to roof
+	ctx.lineTo(-buildingScale * 0.35, groundY - buildingScale * 1.6);
+	ctx.lineTo(-buildingScale * 0.25, groundY - buildingScale * 1.6);
+	ctx.lineTo(-buildingScale * 0.25, groundY);
+	
+	// Building 4 (short)
+	ctx.lineTo(-buildingScale * 0.15, groundY);
+	ctx.lineTo(-buildingScale * 0.15, groundY - buildingScale * 0.7);
+	ctx.lineTo(buildingScale * 0.05, groundY - buildingScale * 0.7);
+	ctx.lineTo(buildingScale * 0.05, groundY);
+	
+	// Building 5 (tall)
+	ctx.lineTo(buildingScale * 0.15, groundY);
+	ctx.lineTo(buildingScale * 0.15, groundY - buildingScale * 1.3);
+	ctx.lineTo(buildingScale * 0.35, groundY - buildingScale * 1.3);
+	ctx.lineTo(buildingScale * 0.35, groundY);
+	
+	// Building 6 (medium-short)
+	ctx.lineTo(buildingScale * 0.45, groundY);
+	ctx.lineTo(buildingScale * 0.45, groundY - buildingScale * 0.8);
+	ctx.lineTo(buildingScale * 0.65, groundY - buildingScale * 0.8);
+	ctx.lineTo(buildingScale * 0.65, groundY);
+	
+	// Building 7 (medium-tall)
+	ctx.lineTo(buildingScale * 0.75, groundY);
+	ctx.lineTo(buildingScale * 0.75, groundY - buildingScale * 1.1);
+	ctx.lineTo(buildingScale * 0.95, groundY - buildingScale * 1.1);
+	ctx.lineTo(buildingScale * 0.95, groundY);
+	
+	// Building 8 (right, short)
+	ctx.lineTo(buildingScale * 1.05, groundY);
+	ctx.lineTo(buildingScale * 1.05, groundY - buildingScale * 0.65);
+	ctx.lineTo(buildingScale * 1.2, groundY - buildingScale * 0.65);
+	ctx.lineTo(buildingScale * 1.2, groundY);
+	
+	// Close to ground
+	ctx.closePath();
+	
+	ctx.fill();
+	ctx.stroke();
+	
+	ctx.restore();
+	
 	ctx.restore();
 }
 
@@ -4058,6 +4471,10 @@ function drawCameraMenu() {
 	const horizontalKnobSpacing = knobRadius * 2.5; // Increased for more horizontal spacing
 	const menuWidth = knobRadius * 3; // Fixed width
 	const radioSectionHeight = 8 * radioButtonSpacing + 0.004 * menuScale; // Adjusted for 8 camera modes
+	const pinIconSize = 0.16 * menuScale; // Size of pin icon (doubled)
+	const headRadius = pinIconSize * 0.18; // Smaller red pin head
+	const pinIconX = menuWidth + padding - pinIconSize * 0.3 - headRadius * 1.5; // Right side, moved 1.5 radii left
+	const pinIconY = radioSectionHeight * 0.45 + headRadius * 2; // Positioned vertically
 	const menuHeight = radioSectionHeight + knobRadius * 1.5; // Height to contain knobs and labels
 	
 	// Position menu relative to main menu
@@ -4135,6 +4552,85 @@ function drawCameraMenu() {
 	ctx.textAlign = 'center';
 	ctx.textBaseline = 'middle';
 	ctx.fillText('?', helpIconX, helpIconY);
+	
+	// Draw pin icon for ground camera
+	ctx.save();
+	ctx.translate(pinIconX, pinIconY);
+	
+	// Draw rounded rectangle background (always visible)
+	const bgPadding = headRadius * 0.5;
+	const bgWidth = headRadius * 2 + bgPadding * 2;
+	const bgHeight = headRadius * 2 + pinIconSize * 0.7 + bgPadding * 2;
+	const bgCornerRadius = headRadius * 0.4;
+	
+	ctx.beginPath();
+	ctx.roundRect(-bgWidth/2, -headRadius - bgPadding, bgWidth, bgHeight, bgCornerRadius);
+	
+	// Gray background when in ground camera mode, otherwise subtle highlight
+	if (gCameraMode === 8) {
+		ctx.fillStyle = 'rgba(100, 100, 100, 0.8)';
+	} else {
+		ctx.fillStyle = 'rgba(80, 70, 60, 0.5)';
+	}
+	ctx.fill();
+	ctx.strokeStyle = gCameraMode === 8 ? 'rgba(150, 150, 150, 1.0)' : 'rgba(120, 100, 80, 0.8)';
+	ctx.lineWidth = 1.5;
+	ctx.stroke();
+	
+	// Draw the pin icon only when not dragging (ghost version when in ground camera mode)
+	if (!draggingGroundPin) {
+		const pinOpacity = gCameraMode === 8 ? 0.3 : 1.0;
+		
+		// Draw pin head (sphere) - headRadius already calculated above
+		const gradient = ctx.createRadialGradient(-headRadius * 0.3, -headRadius * 0.3, 0, 0, 0, headRadius);
+		gradient.addColorStop(0, `rgba(255, 100, 100, ${pinOpacity})`);
+		gradient.addColorStop(1, `rgba(200, 50, 50, ${pinOpacity})`);
+		ctx.beginPath();
+		ctx.arc(0, 0, headRadius, 0, 2 * Math.PI);
+		ctx.fillStyle = gradient;
+		ctx.fill();
+		ctx.strokeStyle = `rgba(120, 30, 30, ${pinOpacity})`;
+		ctx.lineWidth = 1;
+		ctx.stroke();
+		
+		// Draw pin spike (tapered triangle)
+		const spikeLength = pinIconSize * 0.7;
+		const spikeBaseWidth = pinIconSize * 0.1;
+		ctx.beginPath();
+		ctx.moveTo(-spikeBaseWidth / 2, headRadius);
+		ctx.lineTo(spikeBaseWidth / 2, headRadius);
+		ctx.lineTo(0, headRadius + spikeLength);
+		ctx.closePath();
+		const spikeGradient = ctx.createLinearGradient(0, headRadius, 0, headRadius + spikeLength);
+		spikeGradient.addColorStop(0, `rgba(180, 180, 190, ${pinOpacity})`);
+		spikeGradient.addColorStop(1, `rgba(120, 120, 130, ${pinOpacity})`);
+		ctx.fillStyle = spikeGradient;
+		ctx.fill();
+		ctx.strokeStyle = `rgba(80, 80, 90, ${pinOpacity})`;
+		ctx.lineWidth = 0.5;
+		ctx.stroke();
+	}
+	
+	// Draw "Ground Level View" text below pin (always visible)
+	const spikeLength = pinIconSize * 0.7;
+	ctx.font = `${0.037 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'top';
+	const textY1 = headRadius + spikeLength + 0.025 * menuScale;
+	const textY2 = headRadius + spikeLength + 0.060 * menuScale;
+	const textY3 = headRadius + spikeLength + 0.095 * menuScale;
+	// Draw shadow
+	ctx.fillStyle = 'rgba(10, 10, 10, 1.0)';
+	ctx.fillText('Ground', 1, textY1 + 1);
+	ctx.fillText('Level', 1, textY2 + 1);
+	ctx.fillText('Cam', 1, textY3 + 1);
+	// Draw text with same color behavior as radio buttons
+	ctx.fillStyle = `rgba(${gCameraMode === 8 ? 240 : 200}, ${gCameraMode === 8 ? 240 : 200}, ${gCameraMode === 8 ? 240 : 240}, 1.0)`;
+	ctx.fillText('Ground', 0, textY1);
+	ctx.fillText('Level', 0, textY2);
+	ctx.fillText('Cam', 0, textY3);
+	
+	ctx.restore();
 	
 	// Draw radio buttons for camera modes
 	const cameraModeNames = [
@@ -4360,13 +4856,13 @@ function drawSimulationMenu() {
 	drawKnob(ctx, uniformityKnobX, knobY1, knobRadius, explosionUniformity, -2.0, 1.0, false, 'Uniformity', 30);
 	
 	// Launch Velocity Knob (Mortar Vel)
-	drawKnob(ctx, launchVelocityKnobX, knobY2, knobRadius, minLaunchVelocity, 15.0, 60.0, false, 'Mortar Vel', 180);
+	drawKnob(ctx, launchVelocityKnobX, knobY2, knobRadius, minLaunchVelocity, 15.0, 80.0, false, 'Mortar Vel', 180);
 	
 	// Mortar Angle Knob (Spread)
 	drawKnob(ctx, mortarAngleKnobX, knobY2, knobRadius, mortarTubeAngle, 0.0, 45.0, false, 'Spread', 180);
 	
 	// Gravity Knob
-	drawKnob(ctx, gravityKnobX, knobY3, knobRadius, Math.abs(Gravity), 0.5, 5.0, false, 'Gravity', 240);
+	drawKnob(ctx, gravityKnobX, knobY3, knobRadius, Math.abs(Gravity), 0.5, 10.0, false, 'Gravity', 240);
 	
 	// Ball Radius Knob (Particle Size)
 	drawKnob(ctx, ballRadiusKnobX, knobY3, knobRadius, ballRadius, 0.01, 0.10, false, 'Particle Size', 330);
@@ -4376,7 +4872,7 @@ function drawSimulationMenu() {
 		'Basic',
 		'Plastic',
 		'Metallic',
-		'Normal (by facet)'
+		'By Face'
 	];
 	
 	// Position radio buttons below the third knob with its label
@@ -4696,6 +5192,132 @@ function drawSimulationMenu() {
 	ctx.restore();
 }
 
+function drawModelsMenu() {
+	if (modelsMenuOpacity <= 0) return;
+	
+	const ctx = gOverlayCtx;
+	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+	const menuScale = 0.7 * cScale;
+	const padding = 0.17 * menuScale;
+	const radioButtonSize = 0.04 * menuScale;
+	const radioButtonSpacing = 0.095 * menuScale;
+	const knobRadius = 0.1 * menuScale;
+	const menuWidth = knobRadius * 3; // Match other menus
+	const modelList = 6; // Number of models
+	const menuHeight = 0.8 * modelList * radioButtonSpacing;
+	
+	// Position menu relative to main menu
+	const ellipsisWorldX = 0.05;
+	const ellipsisWorldY = 0.05;
+	const ellipsisX = ellipsisWorldX * cScale;
+	const ellipsisY = ellipsisWorldY * cScale;
+	const mainItemWidth = 0.15 * menuScale;
+	const mainPadding = 0.02 * menuScale;
+	const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+	const mainMenuBaseX = ellipsisX - mainPadding;
+	const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+	const mainMenuY = ellipsisY + 0.08 * menuScale;
+	const submenuPadding = 0.17 * menuScale;
+	const submenuGap = 0.01 * menuScale;
+	const menuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+	const menuOriginY = mainMenuY + submenuPadding;
+	
+	ctx.save();
+	ctx.translate(menuOriginX, menuOriginY);
+	ctx.globalAlpha = modelsMenuOpacity;
+	
+	// Draw menu background (green to match models icon)
+	const cornerRadius = 8;
+	ctx.beginPath();
+	ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+	const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+	menuGradient.addColorStop(0, 'rgba(50, 70, 60, 0.9)');
+	menuGradient.addColorStop(1, 'rgba(30, 45, 35, 0.9)');
+	ctx.fillStyle = menuGradient;
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(120, 180, 140, 0.9)';
+	ctx.lineWidth = 1.5;
+	ctx.stroke();
+	
+	// Draw title
+	ctx.fillStyle = 'rgba(200, 210, 200, 1.0)';
+	ctx.font = `bold ${0.05 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.fillText('SCENERY', menuWidth / 2, -padding + 0.06 * menuScale);
+	
+	// Draw close button
+	const closeIconRadius = 0.1 * menuScale * 0.25;
+	const closeIconX = -padding + closeIconRadius + 0.02 * menuScale;
+	const closeIconY = -padding + closeIconRadius + 0.02 * menuScale;
+	ctx.beginPath();
+	ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+	ctx.fillStyle = 'rgba(180, 40, 40, 1.0)';
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
+	ctx.lineWidth = 2;
+	const xSize = closeIconRadius * 0.4;
+	ctx.beginPath();
+	ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+	ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+	ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+	ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+	ctx.stroke();
+	
+	// Draw radio buttons for each model
+	const modelNames = [
+		'Hudson & East Rivers',
+		'Greenery',
+		'Jersey City & Hoboken',
+		'Downtown Manhattan',
+		'Midtown Manhattan',
+		'Streets'
+	];
+	
+	const modelStates = [
+		hudsonVisible,
+		greeneryVisible,
+		jerseyVisible,
+		downtownVisible,
+		midtownVisible,
+		streetsVisible
+	];
+	
+	const radioStartY = radioButtonSpacing * 0.2;
+	
+	for (let i = 0; i < modelNames.length; i++) {
+		const radioY = radioStartY + i * radioButtonSpacing;
+		const radioX = -0.065 * menuScale;
+		
+		// Draw radio button circle
+		ctx.beginPath();
+		ctx.arc(radioX, radioY, radioButtonSize, 0, 2 * Math.PI);
+		ctx.strokeStyle = 'rgba(150, 160, 150, 1.0)';
+		ctx.fillStyle = 'rgba(40, 50, 40, 0.8)';
+		ctx.lineWidth = 2;
+		ctx.stroke();
+		ctx.fill();
+		
+		// Fill if enabled
+		if (modelStates[i]) {
+			ctx.beginPath();
+			ctx.arc(radioX, radioY, radioButtonSize * 0.6, 0, 2 * Math.PI);
+			ctx.fillStyle = 'rgba(130, 200, 140, 1.0)';
+			ctx.fill();
+		}
+		
+		// Draw label
+		ctx.font = `${0.037 * menuScale}px verdana`;
+		ctx.textAlign = 'left';
+		ctx.textBaseline = 'middle';
+		ctx.fillStyle = 'rgba(10, 10, 10, 1.0)';
+		ctx.fillText(modelNames[i], radioX + radioButtonSize + 0.03 * menuScale + 1, radioY + 1);
+		ctx.fillStyle = `rgba(${modelStates[i] ? 240 : 200}, ${modelStates[i] ? 240 : 200}, ${modelStates[i] ? 240 : 240}, 1.0)`;
+		ctx.fillText(modelNames[i], radioX + radioButtonSize + 0.03 * menuScale, radioY);
+	}
+	
+	ctx.restore();
+}
+
 function drawCameraHelp() {
 	if (!cameraHelpVisible) return;
 	
@@ -4832,7 +5454,7 @@ function drawMenus() {
 	if (!gOverlayCtx) return;
 	
 	// Always clear and redraw if menus are visible or animating
-	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0) || (simulationMenuOpacity > 0) || particleCountChanged;
+	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0) || (simulationMenuOpacity > 0) || (modelsMenuOpacity > 0) || particleCountChanged;
 	if (!needsMenuRedraw && !isAnimating) return;
 	
 	// Clear overlay
@@ -4843,12 +5465,189 @@ function drawMenus() {
 	drawCameraMenu();
 	drawCameraHelp();
 	drawSimulationMenu();
+	drawModelsMenu();
+	
+	// Draw dragging ground pin at mouse cursor
+	if (draggingGroundPin) {
+		const ctx = gOverlayCtx;
+		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+		const menuScale = 0.7 * cScale;
+		const pinIconSize = 0.16 * menuScale; // Match the increased size
+		
+		ctx.save();
+		ctx.translate(window.gLastMouseX || window.innerWidth / 2, window.gLastMouseY || window.innerHeight / 2);
+		
+		// Draw pin head (sphere)
+		const headRadius = pinIconSize * 0.18;
+		const gradient = ctx.createRadialGradient(-headRadius * 0.3, -headRadius * 0.3, 0, 0, 0, headRadius);
+		gradient.addColorStop(0, 'rgba(255, 100, 100, 0.9)');
+		gradient.addColorStop(1, 'rgba(200, 50, 50, 0.9)');
+		ctx.beginPath();
+		ctx.arc(0, 0, headRadius, 0, 2 * Math.PI);
+		ctx.fillStyle = gradient;
+		ctx.fill();
+		ctx.strokeStyle = 'rgba(120, 30, 30, 0.9)';
+		ctx.lineWidth = 1;
+		ctx.stroke();
+		
+		// Draw pin spike (tapered triangle)
+		const spikeLength = pinIconSize * 0.7;
+		const spikeBaseWidth = pinIconSize * 0.1;
+		ctx.beginPath();
+		ctx.moveTo(-spikeBaseWidth / 2, headRadius);
+		ctx.lineTo(spikeBaseWidth / 2, headRadius);
+		ctx.lineTo(0, headRadius + spikeLength);
+		ctx.closePath();
+		const spikeGradient = ctx.createLinearGradient(0, headRadius, 0, headRadius + spikeLength);
+		spikeGradient.addColorStop(0, 'rgba(180, 180, 190, 0.9)');
+		spikeGradient.addColorStop(1, 'rgba(120, 120, 130, 0.9)');
+		ctx.fillStyle = spikeGradient;
+		ctx.fill();
+		ctx.strokeStyle = 'rgba(80, 80, 90, 0.9)';
+		ctx.lineWidth = 0.5;
+		ctx.stroke();
+		
+		ctx.restore();
+	}
+	
+	// Draw exit button for ground camera mode
+	if (gCameraMode === 8) {
+		const ctx = gOverlayCtx;
+		const buttonWidth = 150;
+		const buttonHeight = 32;
+		const buttonX = window.innerWidth - buttonWidth - 20;
+		const buttonY = 20;
+		
+		ctx.save();
+		ctx.fillStyle = 'rgba(80, 60, 40, 0.9)';
+		ctx.strokeStyle = 'rgba(180, 120, 80, 0.9)';
+		ctx.lineWidth = 2;
+		ctx.beginPath();
+		ctx.roundRect(buttonX, buttonY, buttonWidth, buttonHeight, 5);
+		ctx.fill();
+		ctx.stroke();
+		
+		ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+		ctx.font = 'bold 11px verdana';
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.fillText('Exit Ground Level View', buttonX + buttonWidth / 2, buttonY + buttonHeight / 2);
+		ctx.restore();
+	}
 	
 	needsMenuRedraw = false;
 }
 
+function isClickInsideMenu(x, y) {
+	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+	const menuScale = 0.7 * cScale;
+	const knobRadius = 0.1 * menuScale;
+	const padding = 0.17 * menuScale;
+	const menuWidth = knobRadius * 3;
+	
+	// Main menu position
+	const ellipsisWorldX = 0.05;
+	const ellipsisWorldY = 0.05;
+	const ellipsisX = ellipsisWorldX * cScale;
+	const ellipsisY = ellipsisWorldY * cScale;
+	const mainItemWidth = 0.15 * menuScale;
+	const mainPadding = 0.02 * menuScale;
+	const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+	const mainMenuBaseX = ellipsisX - mainPadding;
+	const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+	const mainMenuY = ellipsisY + 0.08 * menuScale;
+	
+	// Check main menu
+	if (mainMenuVisible && mainMenuOpacity > 0.3) {
+		const mainMenuHeight = 0.12 * menuScale * 4 + mainPadding * 5;
+		if (x >= mainMenuX && x <= mainMenuX + mainMenuWidth &&
+		    y >= mainMenuY && y <= mainMenuY + mainMenuHeight) {
+			return true;
+		}
+	}
+	
+	// Submenu positions
+	const submenuPadding = 0.17 * menuScale;
+	const submenuGap = 0.01 * menuScale;
+	const menuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+	const menuOriginY = mainMenuY + submenuPadding;
+	
+	// Check camera menu
+	if (cameraMenuVisible && cameraMenuOpacity > 0.3) {
+		const radioButtonSpacing = 0.095 * menuScale;
+		const radioSectionHeight = 8 * radioButtonSpacing + 0.004 * menuScale;
+		const menuHeight = radioSectionHeight + knobRadius * 1.5;
+		if (x >= menuOriginX - padding && x <= menuOriginX + menuWidth + padding &&
+		    y >= menuOriginY - padding && y <= menuOriginY + menuHeight + padding) {
+			return true;
+		}
+	}
+	
+	// Check simulation menu
+	if (simulationMenuVisible && simulationMenuOpacity > 0.3) {
+		const cameraMenuWidth = knobRadius * 3;
+		const spacing = -0.05 * menuScale;
+		const simMenuX = menuOriginX + cameraMenuWidth + padding * 2 + spacing;
+		const verticalKnobSpacing = knobRadius * 2.8;
+		const simMenuHeight = verticalKnobSpacing * 2 + knobRadius * 2;
+		if (x >= simMenuX - padding && x <= simMenuX + menuWidth + padding * 2 &&
+		    y >= menuOriginY - padding && y <= menuOriginY + simMenuHeight + padding) {
+			return true;
+		}
+	}
+	
+	// Check models menu
+	if (modelsMenuVisible && modelsMenuOpacity > 0.3) {
+		const cameraMenuWidth = knobRadius * 3;
+		const spacing = -0.05 * menuScale;
+		const simMenuX = menuOriginX + cameraMenuWidth + padding * 2 + spacing;
+		const modelsMenuX = simMenuX + menuWidth + padding * 2 + spacing;
+		const radioButtonSpacing = 0.095 * menuScale;
+		const modelsMenuHeight = 6 * radioButtonSpacing + 0.004 * menuScale;
+		if (x >= modelsMenuX - padding && x <= modelsMenuX + menuWidth + padding * 2 &&
+		    y >= menuOriginY - padding && y <= menuOriginY + modelsMenuHeight + padding) {
+			return true;
+		}
+	}
+	
+	return false;
+}
+
 function onMenuClick(evt) {
 	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+	
+	// Check exit ground camera button
+	if (gCameraMode === 8) {
+		const buttonWidth = 150;
+		const buttonHeight = 32;
+		const buttonX = window.innerWidth - buttonWidth - 20;
+		const buttonY = 20;
+		
+		if (evt.clientX >= buttonX && evt.clientX <= buttonX + buttonWidth &&
+		    evt.clientY >= buttonY && evt.clientY <= buttonY + buttonHeight) {
+			// Animate camera back to previous position
+			cameraAnimStartPos.copy(Camera.position);
+			cameraAnimEndPos.copy(previousCameraPosition);
+			Camera.updateMatrixWorld();
+			cameraAnimStartQuat.copy(Camera.quaternion);
+			cameraAnimEndQuat.copy(previousCameraQuaternion);
+			cameraAnimProgress = 0;
+			cameraAnimating = true;
+			
+			gCameraMode = previousCameraMode;
+			groundPinWorldPosition = null;
+			
+			// Remove pin mesh from scene
+			if (groundPinMesh) {
+				gThreeScene.remove(groundPinMesh);
+				groundPinMesh = null;
+			}
+			
+			needsMenuRedraw = true;
+			evt.stopPropagation();
+			return true;
+		}
+	}
 	
 	// Check ellipsis click (toggle main menu) - simple large top-left corner hitbox
 	if (evt.clientX < 0.12 * cScale && evt.clientY < 0.09 * cScale) {
@@ -4858,6 +5657,7 @@ function onMenuClick(evt) {
 			cameraMenuVisible = false;
 			cameraHelpVisible = false;
 			simulationMenuVisible = false;
+			modelsMenuVisible = false;
 		}
 		needsMenuRedraw = true;
 		evt.stopPropagation();
@@ -4904,6 +5704,7 @@ function onMenuClick(evt) {
 			// Close other submenus
 			if (cameraMenuVisible) {
 				simulationMenuVisible = false;
+				modelsMenuVisible = false;
 			}
 			needsMenuRedraw = true;
 			evt.stopPropagation();
@@ -4919,6 +5720,23 @@ function onMenuClick(evt) {
 			if (simulationMenuVisible) {
 				cameraMenuVisible = false;
 				cameraHelpVisible = false;
+				modelsMenuVisible = false;
+			}
+			needsMenuRedraw = true;
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+		
+		// Check Models button
+		const itemY4 = itemY3 + itemHeight + padding;
+		if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+			evt.clientY >= itemY4 && evt.clientY <= itemY4 + itemHeight) {
+			modelsMenuVisible = !modelsMenuVisible;
+			// Close other submenus
+			if (modelsMenuVisible) {
+				cameraMenuVisible = false;
+				cameraHelpVisible = false;
+				simulationMenuVisible = false;
 			}
 			needsMenuRedraw = true;
 			evt.stopPropagation();
@@ -4981,6 +5799,22 @@ function onMenuClick(evt) {
 			needsMenuRedraw = true;
 			evt.stopPropagation();
 			return true; // Menu click handled
+		}
+		
+		// Check ground camera pin icon (only if not already in ground camera mode)
+		if (gCameraMode !== 8) {
+			const pinIconSize = 0.16 * menuScale;
+			const headRadius = pinIconSize * 0.18;
+			const pinIconX = menuOriginX + menuWidth + padding - pinIconSize * 0.3 - headRadius * 1.5;
+			const pinIconY = menuOriginY + radioSectionHeight * 0.45 + headRadius * 2;
+			const pdx = evt.clientX - pinIconX;
+			const pdy = evt.clientY - pinIconY;
+			if (pdx * pdx + pdy * pdy < (headRadius * 2) * (headRadius * 2)) {
+				draggingGroundPin = true;
+				needsMenuRedraw = true;
+				evt.stopPropagation();
+				return true; // Pin click handled
+			}
 		}
 		
 		// Check radio buttons
@@ -5261,11 +6095,13 @@ function onMenuClick(evt) {
 		const minusDx = evt.clientX - minusButtonCenterX;
 		const minusDy = evt.clientY - minusButtonCenterY;
 		if (minusDx * minusDx + minusDy * minusDy < minusButtonRadius * minusButtonRadius) {
-			if (particlesPerMortar > 100) { // Minimum 100
-				if (particlesPerMortar > 500) {
-					particlesPerMortar -= 500;
-				} else {
+			if (particlesPerMortar > 10) { // Minimum 10
+				if (particlesPerMortar > 1000) {
+					particlesPerMortar -= 250;
+				} else if (particlesPerMortar > 100) {
 					particlesPerMortar -= 100;
+				} else {
+					particlesPerMortar -= 10;
 				}
 				particleCountChanged = true;
 				needsMenuRedraw = true;
@@ -5282,10 +6118,12 @@ function onMenuClick(evt) {
 		const plusDy = evt.clientY - plusButtonCenterY;
 		if (plusDx * plusDx + plusDy * plusDy < plusButtonRadius * plusButtonRadius) {
 			if (particlesPerMortar < 10000) { // Maximum 10000
-				if (particlesPerMortar < 500) {
+				if (particlesPerMortar >= 1000) {
+					particlesPerMortar += 250;
+				} else if (particlesPerMortar >= 100) {
 					particlesPerMortar += 100;
 				} else {
-					particlesPerMortar += 500;
+					particlesPerMortar += 10;
 				}
 				particleCountChanged = true;
 				needsMenuRedraw = true;
@@ -5316,6 +6154,91 @@ function onMenuClick(evt) {
 			restartSimulation(savedBargeTransforms);
 			evt.stopPropagation();
 			return true;
+		}
+	}
+	
+	// Check models menu clicks
+	if (modelsMenuVisible && modelsMenuOpacity > 0.5) {
+		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+		const menuScale = 0.7 * cScale;
+		// Position relative to main menu
+		const ellipsisWorldX = 0.05;
+		const ellipsisWorldY = 0.05;
+		const ellipsisX = ellipsisWorldX * cScale;
+		const ellipsisY = ellipsisWorldY * cScale;
+		const mainItemWidth = 0.15 * menuScale;
+		const mainPadding = 0.02 * menuScale;
+		const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+		const mainMenuBaseX = ellipsisX - mainPadding;
+		const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+		const mainMenuY = ellipsisY + 0.08 * menuScale;
+		const submenuPadding = 0.17 * menuScale;
+		const submenuGap = 0.01 * menuScale;
+		const menuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+		const menuOriginY = mainMenuY + submenuPadding;
+		const padding = 0.17 * menuScale;
+		const radioButtonSize = 0.04 * menuScale;
+		const radioButtonSpacing = 0.095 * menuScale;
+		const knobRadius = 0.1 * menuScale;
+		const menuWidth = knobRadius * 3; // Match other menus
+		
+		// Check close button
+		const closeIconRadius = 0.1 * menuScale * 0.25;
+		const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
+		const closeIconY = menuOriginY - padding + closeIconRadius + 0.02 * menuScale;
+		const dx = evt.clientX - closeIconX;
+		const dy = evt.clientY - closeIconY;
+		if (dx * dx + dy * dy < closeIconRadius * closeIconRadius) {
+			modelsMenuVisible = false;
+			needsMenuRedraw = true;
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+		
+		// Check checkboxes
+		const radioStartY = radioButtonSpacing * 0.2;
+		const radioX = menuOriginX - 0.065 * menuScale;
+		
+		for (let i = 0; i < 6; i++) {
+			const radioY = menuOriginY + radioStartY + i * radioButtonSpacing;
+			const rdx = evt.clientX - radioX;
+			const rdy = evt.clientY - radioY;
+			
+			// Check if clicking within radio button or label area
+			if (rdx * rdx + rdy * rdy < (radioButtonSize * 2) * (radioButtonSize * 2)) {
+				// Toggle the corresponding model visibility
+				switch(i) {
+					case 0: // Hudson River
+						hudsonVisible = !hudsonVisible;
+						if (hudsonModelTemplate) hudsonModelTemplate.visible = hudsonVisible;
+						break;
+					case 1: // Greenery
+						greeneryVisible = !greeneryVisible;
+						if (greeneryModelTemplate) greeneryModelTemplate.visible = greeneryVisible;
+						break;
+					case 2: // Jersey City/Hoboken (also controls Statue of Liberty)
+						jerseyVisible = !jerseyVisible;
+						statueVisible = jerseyVisible; // Keep statue in sync
+						if (jerseyModelTemplate) jerseyModelTemplate.visible = jerseyVisible;
+						if (statueModelTemplate) statueModelTemplate.visible = statueVisible;
+						break;
+					case 3: // Downtown Manhattan
+						downtownVisible = !downtownVisible;
+						if (downtownModelTemplate) downtownModelTemplate.visible = downtownVisible;
+						break;
+					case 4: // Midtown Manhattan
+						midtownVisible = !midtownVisible;
+						if (cityscapeNorthModelTemplate) cityscapeNorthModelTemplate.visible = midtownVisible;
+						break;
+					case 5: // Streets
+						streetsVisible = !streetsVisible;
+						if (streetsModelTemplate) streetsModelTemplate.visible = streetsVisible;
+						break;
+				}
+				needsMenuRedraw = true;
+				evt.stopPropagation();
+				return true; // Checkbox click handled
+			}
 		}
 	}
 	
@@ -5512,6 +6435,48 @@ function update() {
 		}
 	}
 	
+	// Handle camera animation (smooth transition to ground camera)
+	if (cameraAnimating) {
+		cameraAnimProgress += DeltaT / cameraAnimDuration;
+		
+		// Disable orbit controls during animation
+		if (CameraControl) CameraControl.enabled = false;
+		
+		if (cameraAnimProgress >= 1.0) {
+			cameraAnimProgress = 1.0;
+			cameraAnimating = false;
+			
+			// Re-enable orbit controls if not in ground camera mode
+			if (gCameraMode !== 8 && CameraControl) {
+				CameraControl.enabled = true;
+			}
+		}
+		
+		// Smooth easing function (ease in-out)
+		const t = cameraAnimProgress;
+		const easedT = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+		
+		// Interpolate position
+		Camera.position.lerpVectors(cameraAnimStartPos, cameraAnimEndPos, easedT);
+		
+		// Interpolate rotation
+		Camera.quaternion.slerpQuaternions(cameraAnimStartQuat, cameraAnimEndQuat, easedT);
+	} else if (gCameraMode === 8) {
+		// Ground camera mode - position at ground level, pan and tilt with mouse
+		// (elevation preserved from drag or initial placement)
+		Camera.position.copy(groundCamPosition);
+		
+		// Calculate look direction from yaw and pitch
+		const lookDirection = new THREE.Vector3(
+			Math.sin(groundCamYaw) * Math.cos(groundCamPitch),
+			Math.sin(groundCamPitch),
+			Math.cos(groundCamYaw) * Math.cos(groundCamPitch)
+		).normalize();
+		
+		const lookTarget = groundCamPosition.clone().add(lookDirection.multiplyScalar(100));
+		Camera.lookAt(lookTarget);
+	}
+	
 	// Adjust spotlight cone opacity based on camera mode (very faint in cab view)
 	if (helicopterSpotlightCone) {
 		if (gCameraMode === 3) {
@@ -5593,6 +6558,16 @@ function update() {
 		const oldOpacity = simulationMenuOpacity;
 		simulationMenuOpacity = Math.max(0, simulationMenuOpacity - simulationMenuFadeSpeed * DeltaT);
 		if (oldOpacity !== simulationMenuOpacity) needsMenuRedraw = true;
+	}
+	
+	if (modelsMenuVisible) {
+		const oldOpacity = modelsMenuOpacity;
+		modelsMenuOpacity = Math.min(0.9, modelsMenuOpacity + modelsMenuFadeSpeed * DeltaT);
+		if (oldOpacity !== modelsMenuOpacity) needsMenuRedraw = true;
+	} else {
+		const oldOpacity = modelsMenuOpacity;
+		modelsMenuOpacity = Math.max(0, modelsMenuOpacity - modelsMenuFadeSpeed * DeltaT);
+		if (oldOpacity !== modelsMenuOpacity) needsMenuRedraw = true;
 	}
 	
 	simulate();
