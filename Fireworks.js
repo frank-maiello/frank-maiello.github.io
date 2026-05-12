@@ -905,7 +905,7 @@ class ShockWave {
 	}
 }
 
-// Spatial Hash Grid for efficient collision detection -------------------------------------------
+/*// Spatial Hash Grid for efficient collision detection -------------------------------------------
 // Optimized with integer hashing instead of string keys
 class SpatialHashGrid {
 	constructor(cellSize) {
@@ -961,7 +961,7 @@ class SpatialHashGrid {
 	}
 }
 
-var spatialGrid = new SpatialHashGrid(0.5); // Cell size based on typical ball radius
+var spatialGrid = new SpatialHashGrid(0.5); // Cell size based on typical ball radius*/
 
 // Loading progress update function
 function updateLoadingProgress() {
