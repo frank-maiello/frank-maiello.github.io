@@ -151,9 +151,25 @@ var instructionsMenuFadeSpeed = 3.0;
 var modelsMenuVisible = false;
 var modelsMenuOpacity = 0;
 var modelsMenuFadeSpeed = 3.0;
+var bargeMenuVisible = false;
+var bargeMenuOpacity = 0;
+var bargeMenuFadeSpeed = 3.0;
 var submenuX = 0.15; // Shared position for all submenus
 var submenuY = 0.1; // Shared position for all submenus
 var needsMenuRedraw = true; // Flag to optimize canvas clearing
+
+// Barge path animation variables
+var bargeAnimationEnabled = false;
+var bargePathPoints = []; // Array of THREE.Vector3 for control points
+var bargePathMarkers = []; // Array of THREE.Mesh for visualizing control points
+var bargePathCurve = null; // THREE.CatmullRomCurve3 for smooth path
+var bargePathLine = null; // THREE.Line for visualizing the path
+var bargePathProgress = 0; // Current position along path (0 to 1)
+var bargeAnimationSpeed = 0.005; // Speed along path per second
+var draggingPathPoint = -1; // Index of path point being dragged, -1 if none
+var bargeTargetPosition = null; // Smooth transition to path start
+var bargeManuallyMoved = false; // Track if barge was manually moved while animation off
+var bargeTargetRotation = null; // Smooth rotation to face direction
 
 // Instructions image
 var mouseControlsImage = null;
@@ -179,6 +195,7 @@ var draggingGravityKnob = false;
 var draggingBallRadiusKnob = false;
 var draggingCamera = false; // For fixed camera pan/tilt dragging
 var draggingElevation = false; // For ground camera elevation dragging (right-click)
+var draggingBargeSpeedKnob = false; // For barge path speed control
 var dragStartElevation = 0; // Store starting elevation
 var dragStartHorizontalPos = new THREE.Vector3(); // Store starting horizontal position
 var particleCountMinusInfo = { x: 0, y: 0, width: 0, height: 0 };
@@ -195,6 +212,7 @@ var mortarAngleKnobInfo = { x: 0, y: 0, radius: 0 };
 var gravityKnobInfo = { x: 0, y: 0, radius: 0 };
 var ballRadiusKnobInfo = { x: 0, y: 0, radius: 0 };
 var orbitSpeedKnobInfo = { x: 0, y: 0, radius: 0 };
+var bargeSpeedKnobInfo = { x: 0, y: 0, radius: 0 };
 var dragStartMouseX = 0;
 var dragStartMouseY = 0;
 var dragStartValue = 0;
@@ -3023,23 +3041,33 @@ class Grabber {
 					// Apply rotation
 					bargeGroup.rotation.y = bargeStartRotation + deltaAngle;
 					
-					// Update vehicle targets after rotation
-					updateMortarPositions();
-				} else {
-					// Translate barge (maintain click offset)
-					bargeGroup.position.copy(pos).sub(bargeClickOffset);
-					
-					// Update explosion light position for this barge
-					if (explosionLights[draggedBargeIndex]) {
-						explosionLights[draggedBargeIndex].position.set(bargeGroup.position.x, averageBurstHeight, bargeGroup.position.z);
-					}
-					
-					// Update vehicle targets after translation
-					updateMortarPositions();
-				}
-				
-				this.prevPos.copy(pos);
-				this.time = 0.0;
+			// Mark as manually moved if animation is not running
+			if (!bargeAnimationEnabled) {
+				bargeManuallyMoved = true;
+			}
+			
+			// Update vehicle targets after rotation
+			updateMortarPositions();
+		} else {
+			// Translate barge (maintain click offset)
+			bargeGroup.position.copy(pos).sub(bargeClickOffset);
+			
+			// Mark as manually moved if animation is not running
+			if (!bargeAnimationEnabled) {
+				bargeManuallyMoved = true;
+			}
+			
+			// Update explosion light position for this barge
+			if (explosionLights[draggedBargeIndex]) {
+				explosionLights[draggedBargeIndex].position.set(bargeGroup.position.x, averageBurstHeight, bargeGroup.position.z);
+			}
+			
+			// Update vehicle targets after translation
+			updateMortarPositions();
+		}
+		
+		this.prevPos.copy(pos);
+		this.time = 0.0;
 			}
 		}
 	}
@@ -3146,6 +3174,159 @@ function onPointer( evt ) {
 			return;
 		}
 		
+		// Handle right-click on path (add/remove control points)
+		if (evt.button === 2 && bargeMenuVisible && bargePathPoints.length > 0) {
+			const rect = gRenderer.domElement.getBoundingClientRect();
+			const mouse = new THREE.Vector2();
+			mouse.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+			mouse.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+			
+			const raycaster = new THREE.Raycaster();
+			raycaster.setFromCamera(mouse, Camera);
+			
+			// First check if near an existing marker (for deletion)
+			const deleteThreshold = 3.0;
+			let nearestMarkerIndex = -1;
+			let nearestMarkerDist = Infinity;
+			
+			for (let i = 0; i < bargePathMarkers.length; i++) {
+				const dist = raycaster.ray.distanceToPoint(bargePathMarkers[i].position);
+				if (dist < nearestMarkerDist) {
+					nearestMarkerDist = dist;
+					nearestMarkerIndex = i;
+				}
+			}
+			
+			// Delete marker if close enough and we have more than 3 points
+			if (nearestMarkerDist < deleteThreshold && bargePathPoints.length > 3) {
+				// Remove the control point
+				bargePathPoints.splice(nearestMarkerIndex, 1);
+				
+				// Remove the marker from scene and array
+				gScene.remove(bargePathMarkers[nearestMarkerIndex]);
+				bargePathMarkers.splice(nearestMarkerIndex, 1);
+				
+				// Update userData indices for remaining markers
+				for (let i = 0; i < bargePathMarkers.length; i++) {
+					bargePathMarkers[i].userData.pathPointIndex = i;
+				}
+				
+				// Regenerate curve using centripetal Catmull-Rom (prevents sharp cusps)
+				bargePathCurve = new THREE.CatmullRomCurve3(bargePathPoints, true, 'centripetal', 0.5);
+				const pathSegments = 100;
+				const pathPoints = bargePathCurve.getPoints(pathSegments);
+				bargePathLine.geometry.setFromPoints(pathPoints);
+				
+				if (CameraControl) CameraControl.enabled = false;
+				return;
+			}
+			
+			// Otherwise, try to add a new control point on the path line
+			const intersects = raycaster.intersectObject(bargePathLine);
+			if (intersects.length > 0) {
+				const clickPoint = intersects[0].point;
+				
+				// Find the closest point on the curve and determine where to insert
+				let closestT = 0;
+				let closestDist = Infinity;
+				
+				for (let t = 0; t <= 1; t += 0.01) {
+					const curvePoint = bargePathCurve.getPoint(t);
+					const dist = clickPoint.distanceTo(curvePoint);
+					if (dist < closestDist) {
+						closestDist = dist;
+						closestT = t;
+					}
+				}
+				
+				// Determine insertion index based on t parameter
+				const insertIndex = Math.ceil(closestT * bargePathPoints.length) % bargePathPoints.length;
+				const insertPoint = bargePathCurve.getPoint(closestT);
+				
+				// Insert the new point
+				bargePathPoints.splice(insertIndex, 0, new THREE.Vector3(insertPoint.x, 0, insertPoint.z));
+				
+				// Create new marker with striped texture
+				const stripeCanvas = document.createElement('canvas');
+				stripeCanvas.width = 256;
+				stripeCanvas.height = 32;
+				const stripeCtx = stripeCanvas.getContext('2d');
+				const numStripes = 8;
+				const stripeWidth = stripeCanvas.width / numStripes;
+				for (let i = 0; i < numStripes; i++) {
+					stripeCtx.fillStyle = i % 2 === 0 ? '#ff0000' : '#ffffff';
+					stripeCtx.fillRect(i * stripeWidth, 0, stripeWidth, stripeCanvas.height);
+				}
+				const stripeTexture = new THREE.CanvasTexture(stripeCanvas);
+				stripeTexture.wrapS = THREE.RepeatWrapping;
+				stripeTexture.wrapT = THREE.RepeatWrapping;
+				
+				const markerGeometry = new THREE.TorusGeometry(1.2, 0.25, 16, 32);
+				const markerMaterial = new THREE.MeshBasicMaterial({ 
+					map: stripeTexture,
+					transparent: true, 
+					opacity: bargeMenuVisible ? 0.8 : 0, 
+					depthTest: false
+				});
+				const newMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+				newMarker.position.set(insertPoint.x, 0.5, insertPoint.z);
+				newMarker.rotation.x = Math.PI / 2;
+				newMarker.userData = { pathPointIndex: insertIndex };
+				
+				// Add invisible larger hit area for easier selection
+				const hitAreaGeometry = new THREE.CircleGeometry(3.0, 32);
+				const hitAreaMaterial = new THREE.MeshBasicMaterial({ 
+					transparent: true, 
+					opacity: 0, 
+					depthTest: false,
+					side: THREE.DoubleSide
+				});
+				const hitArea = new THREE.Mesh(hitAreaGeometry, hitAreaMaterial);
+				hitArea.userData.pathPointIndex = insertIndex;
+				newMarker.add(hitArea);
+				
+				// Insert marker into array and scene
+				bargePathMarkers.splice(insertIndex, 0, newMarker);
+				gScene.add(newMarker);
+				
+				// Update userData indices for all markers
+				for (let i = 0; i < bargePathMarkers.length; i++) {
+					bargePathMarkers[i].userData.pathPointIndex = i;
+				}
+				
+				// Regenerate curve using centripetal Catmull-Rom (prevents sharp cusps)
+				bargePathCurve = new THREE.CatmullRomCurve3(bargePathPoints, true, 'centripetal', 0.5);
+				const pathSegments = 100;
+				const pathPoints = bargePathCurve.getPoints(pathSegments);
+				bargePathLine.geometry.setFromPoints(pathPoints);
+				
+				if (CameraControl) CameraControl.enabled = false;
+				return;
+			}
+		}
+		
+		// Try to start dragging a path marker (only when menu is visible, left-click only)
+		if (evt.button === 0 && bargeMenuVisible && bargePathMarkers.length > 0) {
+			const rect = gRenderer.domElement.getBoundingClientRect();
+			const mouse = new THREE.Vector2();
+			mouse.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+			mouse.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+			
+			const raycaster = new THREE.Raycaster();
+			raycaster.setFromCamera(mouse, Camera);
+			
+			const intersects = raycaster.intersectObjects(bargePathMarkers, true); // true = check children (hit areas)
+			if (intersects.length > 0) {
+				const marker = intersects[0].object.userData.pathPointIndex !== undefined 
+					? intersects[0].object 
+					: intersects[0].object.parent; // Get parent if we hit the child hit area
+				draggingPathPoint = marker.userData.pathPointIndex;
+				gMouseDown = true;
+				if (CameraControl) CameraControl.enabled = false;
+				return;
+			}
+		}
+		
 		// Try to start grabbing the barge first
 		gGrabber.start(evt.clientX, evt.clientY);
 		gMouseDown = true;
@@ -3160,7 +3341,7 @@ function onPointer( evt ) {
 			CameraControl.enabled = true;
 		}
 	}
-	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingExplosionUniformityKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob || draggingBallRadiusKnob || draggingCamera || draggingElevation || draggingBarge || draggingGroundPin)) {
+	else if (evt.type == "pointermove" && (gMouseDown || draggingFOVKnob || draggingOrbitSpeedKnob || draggingExplosionSizeKnob || draggingExplosionUniformityKnob || draggingLaunchVelocityKnob || draggingMortarAngleKnob || draggingGravityKnob || draggingBallRadiusKnob || draggingBargeSpeedKnob || draggingCamera || draggingElevation || draggingBarge || draggingGroundPin)) {
 		// Track mouse position for dragging visualizations
 		window.gLastMouseX = evt.clientX;
 		window.gLastMouseY = evt.clientY;
@@ -3236,70 +3417,114 @@ function onPointer( evt ) {
 			return;
 		}
 		
-		// Handle barge dragging first (highest priority)
-		if (draggingBarge) {
-			gGrabber.move(evt.clientX, evt.clientY);
-			return;
-		}
-		
-		// Handle elevation and horizontal dragging in ground camera mode (right-click)
-		if (draggingElevation) {
-			const deltaX = evt.clientX - dragStartMouseX;
-			const deltaY = evt.clientY - dragStartMouseY;
-			const movementSensitivity = 0.05; // Adjust for desired drag speed
+		// Handle path point dragging
+		if (draggingPathPoint >= 0) {
+			const rect = gRenderer.domElement.getBoundingClientRect();
+			const mouse = new THREE.Vector2();
+			mouse.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+			mouse.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
 			
-			// Update elevation (drag up = increase elevation)
-			groundCamPosition.y = dragStartElevation - deltaY * movementSensitivity;
+			const raycaster = new THREE.Raycaster();
+			raycaster.setFromCamera(mouse, Camera);
 			
-			// Clamp elevation to reasonable range (0.5 to 20 meters)
-			groundCamPosition.y = Math.max(0.5, Math.min(20, groundCamPosition.y));
+			// Intersect with a horizontal plane at y=0 (water level)
+			const waterPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+			const intersectPoint = new THREE.Vector3();
+			const intersected = raycaster.ray.intersectPlane(waterPlane, intersectPoint);
 			
-			// Calculate right vector from camera yaw (perpendicular to look direction)
-			const rightVector = new THREE.Vector3(
-				Math.cos(groundCamYaw), // Right is 90 degrees from forward
-				0,
-				-Math.sin(groundCamYaw)
-			).normalize();
-			
-			// Update horizontal position (drag right = move left, reversed for natural feel)
-			groundCamPosition.x = dragStartHorizontalPos.x - deltaX * movementSensitivity * rightVector.x;
-			groundCamPosition.z = dragStartHorizontalPos.z - deltaX * movementSensitivity * rightVector.z;
-			
-			return;
-		}
-		
-		// Handle camera pan/tilt dragging in fixed camera modes and ground camera
-		if (draggingCamera) {
-			const deltaX = evt.clientX - dragStartMouseX;
-			const deltaY = evt.clientY - dragStartMouseY;
-			
-			// Update pan (horizontal) and tilt (vertical)
-			const sensitivity = 0.003; // Adjust for desired drag speed
-			
-			if (gCameraMode === 8) {
-				// Ground camera mode: update yaw and pitch
-				groundCamYaw -= deltaX * sensitivity; // Negative for natural drag direction
-				groundCamPitch -= deltaY * sensitivity; // Negative for inverted (drag down looks down)
+			if (intersected) {
+				// Simple minimum distance check
+				const minDistance = 8.0; // Minimum distance between control points
+				const numPoints = bargePathPoints.length;
+				const prevIndex = (draggingPathPoint - 1 + numPoints) % numPoints;
+				const nextIndex = (draggingPathPoint + 1) % numPoints;
 				
-				// Clamp pitch to prevent flipping upside down
-				const maxPitch = Math.PI / 2 - 0.1; // Slightly less than 90 degrees
-				groundCamPitch = Math.max(-maxPitch, Math.min(maxPitch, groundCamPitch));
-			} else {
-				// Fixed vehicle camera modes
-				cameraPan -= deltaX * sensitivity; // Negative for natural drag direction
-				cameraTilt += deltaY * sensitivity; // Positive for natural drag direction
+				const distToPrev = intersectPoint.distanceTo(bargePathPoints[prevIndex]);
+				const distToNext = intersectPoint.distanceTo(bargePathPoints[nextIndex]);
 				
-				// Clamp tilt to prevent flipping upside down
-				const maxTilt = Math.PI / 2 - 0.1; // Slightly less than 90 degrees
-				cameraTilt = Math.max(-maxTilt, Math.min(maxTilt, cameraTilt));
+				// Only update if distances are acceptable
+				if (distToPrev >= minDistance && distToNext >= minDistance) {
+					// Update path point position
+					bargePathPoints[draggingPathPoint].set(intersectPoint.x, 0, intersectPoint.z);
+					
+					// Update marker position
+					bargePathMarkers[draggingPathPoint].position.set(intersectPoint.x, 0.5, intersectPoint.z);
+					
+					// Regenerate curve using centripetal Catmull-Rom (prevents sharp cusps)
+					bargePathCurve = new THREE.CatmullRomCurve3(bargePathPoints, true, 'centripetal', 0.5);
+					
+					// Update the path line
+					const pathSegments = 100;
+					const pathPoints = bargePathCurve.getPoints(pathSegments);
+					bargePathLine.geometry.setFromPoints(pathPoints);
+				}
 			}
 			
-			dragStartMouseX = evt.clientX;
-			dragStartMouseY = evt.clientY;
 			return;
 		}
 		
-		// Handle knob dragging with linear drag method (like boids3D.js)
+		// Handle barge dragging first (highest priority)
+		if (draggingBarge) {
+		gGrabber.move(evt.clientX, evt.clientY);
+		return;
+	}
+	
+	// Handle elevation dragging in ground camera mode
+	if (draggingElevation) {
+		const deltaX = evt.clientX - dragStartMouseX;
+		const deltaY = evt.clientY - dragStartMouseY;
+		const movementSensitivity = 0.05; // Adjust for desired drag speed
+		
+		// Update elevation (drag down = increase elevation)
+		groundCamPosition.y = dragStartElevation + deltaY * movementSensitivity;
+		
+		// Clamp elevation to reasonable range (0.5 to 20 meters, water level is at y=0)
+		groundCamPosition.y = Math.max(0.5, Math.min(20, groundCamPosition.y));
+		
+		// Calculate right vector from camera yaw (perpendicular to look direction)
+		const rightVector = new THREE.Vector3(
+			Math.cos(groundCamYaw), // Right is 90 degrees from forward
+			0,
+			-Math.sin(groundCamYaw)
+		).normalize();
+		
+		// Update horizontal position (drag right = move left, reversed for natural feel)
+		groundCamPosition.x = dragStartHorizontalPos.x - deltaX * movementSensitivity * rightVector.x;
+		groundCamPosition.z = dragStartHorizontalPos.z - deltaX * movementSensitivity * rightVector.z;
+		
+		return;
+	}
+	
+	// Handle camera pan/tilt dragging in fixed camera modes and ground camera
+	if (draggingCamera) {
+		const deltaX = evt.clientX - dragStartMouseX;
+		const deltaY = evt.clientY - dragStartMouseY;
+		
+		// Update pan (horizontal) and tilt (vertical)
+		const sensitivity = 0.003; // Adjust for desired drag speed
+		
+		if (gCameraMode === 8) {
+			// Ground camera mode: update yaw and pitch
+			groundCamYaw -= deltaX * sensitivity; // Negative for natural drag direction
+			groundCamPitch -= deltaY * sensitivity; // Negative for inverted (drag down looks down)
+			
+			// Clamp pitch to prevent flipping upside down
+			const maxPitch = Math.PI / 2 - 0.1; // Slightly less than 90 degrees
+			groundCamPitch = Math.max(-maxPitch, Math.min(maxPitch, groundCamPitch));
+		} else {
+			// Fixed vehicle camera modes
+			cameraPan -= deltaX * sensitivity; // Negative for natural drag direction
+			cameraTilt += deltaY * sensitivity; // Positive for natural drag direction
+			
+			// Clamp tilt to prevent flipping upside down
+			const maxTilt = Math.PI / 2 - 0.1; // Slightly less than 90 degrees
+			cameraTilt = Math.max(-maxTilt, Math.min(maxTilt, cameraTilt));
+		}
+		
+		dragStartMouseX = evt.clientX;
+		dragStartMouseY = evt.clientY;
+		return;
+	}
 		if (draggingFOVKnob) {
 			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
 			const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
@@ -3429,6 +3654,22 @@ function onPointer( evt ) {
 			return;
 		}
 		
+		if (draggingBargeSpeedKnob) {
+			const deltaX = (evt.clientX - dragStartMouseX) / window.innerWidth;
+			const deltaY = (evt.clientY - dragStartMouseY) / window.innerHeight;
+			const dragDelta = deltaX + deltaY;
+			
+			const dragSensitivity = 0.1;
+			const normalizedDelta = dragDelta / dragSensitivity;
+			const rangeSize = 0.01 - 0.0001;
+			let newValue = dragStartValue + normalizedDelta * rangeSize;
+			newValue = Math.max(0.0001, Math.min(0.01, newValue));
+			
+			bargeAnimationSpeed = newValue;
+			needsMenuRedraw = true;
+			return;
+		}
+		
 		gGrabber.move(evt.clientX, evt.clientY);
 	}
 	else if (evt.type == "pointerup") {
@@ -3529,6 +3770,8 @@ function onPointer( evt ) {
 		draggingBallRadiusKnob = false;
 		draggingCamera = false;
 		draggingElevation = false;
+		draggingBargeSpeedKnob = false;
+		draggingPathPoint = -1;
 		
 		if (draggingBarge) {
 			gGrabber.end();
@@ -3546,6 +3789,17 @@ function onKeyDown( evt ) {
 		console.log('Camera position and target:');
 		console.log(`Camera.position.set(${Camera.position.x.toFixed(1)}, ${Camera.position.y.toFixed(1)}, ${Camera.position.z.toFixed(1)});`);
 		console.log(`CameraControl.target.set(${CameraControl.target.x.toFixed(1)}, ${CameraControl.target.y.toFixed(1)}, ${CameraControl.target.z.toFixed(1)});`);
+	}
+	
+	if (evt.key === 'b' || evt.key === 'B') {
+		console.log('Barge path control points:');
+		console.log('bargePathPoints = [');
+		for (let i = 0; i < bargePathPoints.length; i++) {
+			const pt = bargePathPoints[i];
+			const comma = i < bargePathPoints.length - 1 ? ',' : '';
+			console.log(`\tnew THREE.Vector3(${pt.x.toFixed(1)}, ${pt.y.toFixed(1)}, ${pt.z.toFixed(1)})${comma}`);
+		}
+		console.log('];');
 	}
 }
 
@@ -4163,7 +4417,7 @@ function drawMainMenu() {
 	const itemHeight = 0.12 * menuScale;
 	const itemWidth = 0.15 * menuScale;
 	const padding = 0.02 * menuScale;
-	const menuHeight = itemHeight * 4 + (padding * 5); // Four items: play/pause, camera, simulation, and models
+	const menuHeight = itemHeight * 5 + (padding * 6); // Five items: play/pause, camera, simulation, models, and barge
 	const menuWidth = itemWidth + (padding * 2);
 	
 	const menuBaseY = ellipsisY + 0.08 * menuScale;
@@ -4450,6 +4704,55 @@ function drawMainMenu() {
 	// Close to ground
 	ctx.closePath();
 	
+	ctx.fill();
+	ctx.stroke();
+	
+	ctx.restore();
+	
+	// Draw Barge menu item
+	const itemY5 = itemY4 + itemHeight + padding;
+	ctx.beginPath();
+	ctx.roundRect(itemX, itemY5, itemWidth, itemHeight, cornerRadius * 0.5);
+	ctx.fillStyle = bargeMenuVisible ? 'rgba(100, 150, 200, 0.3)' : 'rgba(38, 38, 38, 0.8)';
+	ctx.fill();
+	
+	// Draw barge/boat icon
+	const icon5X = itemX + itemWidth / 2;
+	const icon5Y = itemY5 + itemHeight / 2;
+	const icon5Color = bargeMenuVisible ? 'rgba(230, 230, 230, 1.0)' : 'rgba(76, 76, 76, 1.0)';
+	ctx.strokeStyle = icon5Color;
+	ctx.fillStyle = icon5Color;
+	ctx.lineWidth = 2;
+	ctx.lineCap = 'round';
+	ctx.lineJoin = 'round';
+	
+	// Draw simple barge silhouette
+	ctx.save();
+	ctx.translate(icon5X, icon5Y);
+	const bargeScale = iconSize * 0.8;
+	
+	ctx.beginPath();
+	// Hull bottom (longer and less tall)
+	ctx.moveTo(-bargeScale * 1.1, bargeScale * 0.3);
+	ctx.lineTo(-bargeScale * 0.9, bargeScale * 0.4);
+	ctx.lineTo(bargeScale * 0.9, bargeScale * 0.4);
+	ctx.lineTo(bargeScale * 1.1, bargeScale * 0.3);
+	// Hull top/deck
+	ctx.lineTo(bargeScale * 1.1, 0);
+	ctx.lineTo(-bargeScale * 1.1, 0);
+	ctx.closePath();
+	ctx.fill();
+	ctx.stroke();
+	
+	// Draw cabin/superstructure (moved to far right)
+	ctx.beginPath();
+	ctx.rect(bargeScale * 0.4, -bargeScale * 0.45, bargeScale * 0.5, bargeScale * 0.45);
+	ctx.fill();
+	ctx.stroke();
+	
+	// Draw smoke stack (moved to far right)
+	ctx.beginPath();
+	ctx.rect(bargeScale * 0.42, -bargeScale * 0.65, bargeScale * 0.15, bargeScale * 0.25);
 	ctx.fill();
 	ctx.stroke();
 	
@@ -4743,6 +5046,8 @@ function drawKnob(ctx, x, y, radius, value, min, max, reversed, label, hue, enab
 		ctx.fillText(value.toFixed(1) + '°', x, y + 0.6 * radius);
 	} else if (label === 'Particle Size') {
 		ctx.fillText(value.toFixed(2), x, y + 0.6 * radius);
+	} else if (label === 'Speed') {
+		ctx.fillText(value.toFixed(4), x, y + 0.6 * radius);
 	} else {
 		ctx.fillText(value.toFixed(1), x, y + 0.6 * radius);
 	}
@@ -5318,6 +5623,106 @@ function drawModelsMenu() {
 	ctx.restore();
 }
 
+function drawBargeMenu() {
+	if (bargeMenuOpacity <= 0) return;
+	
+	const ctx = gOverlayCtx;
+	const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+	const menuScale = 0.7 * cScale;
+	const padding = 0.17 * menuScale;
+	const knobRadius = 0.1 * menuScale;
+	const menuWidth = knobRadius * 3;
+	const toggleButtonHeight = 0.11 * menuScale;
+	const menuHeight = toggleButtonHeight + knobRadius * 2.5 + 0.05 * menuScale;
+	
+	// Position menu relative to main menu
+	const ellipsisWorldX = 0.05;
+	const ellipsisWorldY = 0.05;
+	const ellipsisX = ellipsisWorldX * cScale;
+	const ellipsisY = ellipsisWorldY * cScale;
+	const mainItemWidth = 0.15 * menuScale;
+	const mainPadding = 0.02 * menuScale;
+	const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+	const mainMenuBaseX = ellipsisX - mainPadding;
+	const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+	const mainMenuY = ellipsisY + 0.08 * menuScale;
+	const submenuPadding = 0.17 * menuScale;
+	const submenuGap = 0.01 * menuScale;
+	const menuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+	const menuOriginY = mainMenuY + submenuPadding;
+	
+	ctx.save();
+	ctx.translate(menuOriginX, menuOriginY);
+	ctx.globalAlpha = bargeMenuOpacity;
+	
+	// Draw menu background (blue to match barge icon)
+	const cornerRadius = 8;
+	ctx.beginPath();
+	ctx.roundRect(-padding, -padding, menuWidth + padding * 2, menuHeight + padding * 2, cornerRadius);
+	const menuGradient = ctx.createLinearGradient(0, -padding, 0, menuHeight + padding);
+	menuGradient.addColorStop(0, 'rgba(50, 60, 80, 0.9)');
+	menuGradient.addColorStop(1, 'rgba(30, 35, 50, 0.9)');
+	ctx.fillStyle = menuGradient;
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(100, 150, 200, 0.9)';
+	ctx.lineWidth = 1.5;
+	ctx.stroke();
+	
+	// Draw title
+	ctx.fillStyle = 'rgba(200, 200, 210, 1.0)';
+	ctx.font = `bold ${0.05 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.fillText('BARGE', menuWidth / 2, -padding + 0.06 * menuScale);
+	
+	// Draw close button
+	const closeIconRadius = 0.1 * menuScale * 0.25;
+	const closeIconX = -padding + closeIconRadius + 0.02 * menuScale;
+	const closeIconY = -padding + closeIconRadius + 0.02 * menuScale;
+	ctx.beginPath();
+	ctx.arc(closeIconX, closeIconY, closeIconRadius, 0, 2 * Math.PI);
+	ctx.fillStyle = 'rgba(180, 40, 40, 1.0)';
+	ctx.fill();
+	ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
+	ctx.lineWidth = 2;
+	const xSize = closeIconRadius * 0.4;
+	ctx.beginPath();
+	ctx.moveTo(closeIconX - xSize, closeIconY - xSize);
+	ctx.lineTo(closeIconX + xSize, closeIconY + xSize);
+	ctx.moveTo(closeIconX + xSize, closeIconY - xSize);
+	ctx.lineTo(closeIconX - xSize, closeIconY + xSize);
+	ctx.stroke();
+	
+	// Draw animation toggle button
+	const toggleButtonY = -0.01 * menuScale;
+	const toggleButtonWidth = menuWidth * 1.45;
+	const toggleButtonX = (menuWidth - toggleButtonWidth) / 2;
+	const toggleButtonRadius = toggleButtonHeight * 0.8;
+	ctx.beginPath();
+	ctx.roundRect(toggleButtonX, toggleButtonY, toggleButtonWidth, toggleButtonHeight, toggleButtonRadius);
+	ctx.fillStyle = bargeAnimationEnabled ? 'rgba(80, 180, 100, 0.4)' : 'rgba(180, 80, 80, 0.4)';
+	ctx.fill();
+	ctx.strokeStyle = bargeAnimationEnabled ? 'rgba(120, 220, 140, 1.0)' : 'rgba(220, 120, 120, 1.0)';
+	ctx.lineWidth = 2;
+	ctx.stroke();
+	
+	// Draw toggle button text
+	ctx.fillStyle = 'rgba(230, 230, 230, 1.0)';
+	ctx.font = `bold ${0.04 * menuScale}px verdana`;
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.fillText(bargeAnimationEnabled ? 'ANIMATION ON' : 'ANIMATION OFF', menuWidth / 2, toggleButtonY + toggleButtonHeight / 2);
+	
+	// Draw speed knob
+	const knobY = toggleButtonY + toggleButtonHeight + knobRadius * 1.8;
+	const knobX = menuWidth / 2;
+	drawKnob(ctx, knobX, knobY, knobRadius, bargeAnimationSpeed, 0.0001, 0.01, false, 'Speed', 200, true);
+	
+	// Store knob info for click detection
+	bargeSpeedKnobInfo = { x: menuOriginX + knobX, y: menuOriginY + knobY, radius: knobRadius };
+	
+	ctx.restore();
+}
+
 function drawCameraHelp() {
 	if (!cameraHelpVisible) return;
 	
@@ -5454,7 +5859,7 @@ function drawMenus() {
 	if (!gOverlayCtx) return;
 	
 	// Always clear and redraw if menus are visible or animating
-	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0) || (simulationMenuOpacity > 0) || (modelsMenuOpacity > 0) || particleCountChanged;
+	const isAnimating = (mainMenuOpacity > 0) || (cameraMenuOpacity > 0) || (simulationMenuOpacity > 0) || (modelsMenuOpacity > 0) || (bargeMenuOpacity > 0) || particleCountChanged;
 	if (!needsMenuRedraw && !isAnimating) return;
 	
 	// Clear overlay
@@ -5466,6 +5871,7 @@ function drawMenus() {
 	drawCameraHelp();
 	drawSimulationMenu();
 	drawModelsMenu();
+	drawBargeMenu();
 	
 	// Draw dragging ground pin at mouse cursor
 	if (draggingGroundPin) {
@@ -5610,6 +6016,16 @@ function isClickInsideMenu(x, y) {
 		}
 	}
 	
+	// Check barge menu
+	if (bargeMenuVisible && bargeMenuOpacity > 0.3) {
+		const toggleButtonHeight = 0.11 * menuScale;
+		const bargeMenuHeight = toggleButtonHeight + knobRadius * 2.5 + 0.05 * menuScale;
+		if (x >= menuOriginX - padding && x <= menuOriginX + menuWidth + padding &&
+		    y >= menuOriginY - padding && y <= menuOriginY + bargeMenuHeight + padding) {
+			return true;
+		}
+	}
+	
 	return false;
 }
 
@@ -5658,6 +6074,7 @@ function onMenuClick(evt) {
 			cameraHelpVisible = false;
 			simulationMenuVisible = false;
 			modelsMenuVisible = false;
+			bargeMenuVisible = false;
 		}
 		needsMenuRedraw = true;
 		evt.stopPropagation();
@@ -5705,6 +6122,7 @@ function onMenuClick(evt) {
 			if (cameraMenuVisible) {
 				simulationMenuVisible = false;
 				modelsMenuVisible = false;
+				bargeMenuVisible = false;
 			}
 			needsMenuRedraw = true;
 			evt.stopPropagation();
@@ -5721,6 +6139,7 @@ function onMenuClick(evt) {
 				cameraMenuVisible = false;
 				cameraHelpVisible = false;
 				modelsMenuVisible = false;
+				bargeMenuVisible = false;
 			}
 			needsMenuRedraw = true;
 			evt.stopPropagation();
@@ -5737,6 +6156,24 @@ function onMenuClick(evt) {
 				cameraMenuVisible = false;
 				cameraHelpVisible = false;
 				simulationMenuVisible = false;
+				bargeMenuVisible = false;
+			}
+			needsMenuRedraw = true;
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+		
+		// Check Barge button
+		const itemY5 = itemY4 + itemHeight + padding;
+		if (evt.clientX >= itemX && evt.clientX <= itemX + itemWidth &&
+			evt.clientY >= itemY5 && evt.clientY <= itemY5 + itemHeight) {
+			bargeMenuVisible = !bargeMenuVisible;
+			// Close other submenus
+			if (bargeMenuVisible) {
+				cameraMenuVisible = false;
+				cameraHelpVisible = false;
+				simulationMenuVisible = false;
+				modelsMenuVisible = false;
 			}
 			needsMenuRedraw = true;
 			evt.stopPropagation();
@@ -6242,6 +6679,95 @@ function onMenuClick(evt) {
 		}
 	}
 	
+	// Check barge menu clicks
+	if (bargeMenuVisible && bargeMenuOpacity > 0.5) {
+		const cScale = Math.min(window.innerWidth, window.innerHeight) / 2.0;
+		const menuScale = 0.7 * cScale;
+		// Position relative to main menu
+		const ellipsisWorldX = 0.05;
+		const ellipsisWorldY = 0.05;
+		const ellipsisX = ellipsisWorldX * cScale;
+		const ellipsisY = ellipsisWorldY * cScale;
+		const mainItemWidth = 0.15 * menuScale;
+		const mainPadding = 0.02 * menuScale;
+		const mainMenuWidth = mainItemWidth + (mainPadding * 2);
+		const mainMenuBaseX = ellipsisX - mainPadding;
+		const mainMenuX = mainMenuBaseX + mainMenuXOffset * menuScale;
+		const mainMenuY = ellipsisY + 0.08 * menuScale;
+		const submenuPadding = 0.17 * menuScale;
+		const submenuGap = 0.01 * menuScale;
+		const menuOriginX = mainMenuX + mainMenuWidth + submenuGap + submenuPadding;
+		const menuOriginY = mainMenuY + submenuPadding;
+		const padding = 0.17 * menuScale;
+		const knobRadius = 0.1 * menuScale;
+		const menuWidth = knobRadius * 3;
+		const toggleButtonHeight = 0.11 * menuScale;
+		
+		// Check close button
+		const closeIconRadius = 0.1 * menuScale * 0.25;
+		const closeIconX = menuOriginX - padding + closeIconRadius + 0.02 * menuScale;
+		const closeIconY = menuOriginY - padding + closeIconRadius + 0.02 * menuScale;
+		const dx = evt.clientX - closeIconX;
+		const dy = evt.clientY - closeIconY;
+		if (dx * dx + dy * dy < closeIconRadius * closeIconRadius) {
+			bargeMenuVisible = false;
+			needsMenuRedraw = true;
+			evt.stopPropagation();
+			return true; // Menu click handled
+		}
+		
+		// Check toggle button
+		const toggleButtonY = menuOriginY + -0.01 * menuScale;
+		const toggleButtonWidth = menuWidth * 1.45;
+		const toggleButtonX = menuOriginX + (menuWidth - toggleButtonWidth) / 2;
+		if (evt.clientX >= toggleButtonX && evt.clientX <= toggleButtonX + toggleButtonWidth &&
+		    evt.clientY >= toggleButtonY && evt.clientY <= toggleButtonY + toggleButtonHeight) {
+			bargeAnimationEnabled = !bargeAnimationEnabled;
+			
+		// When enabling, check if barge was manually moved
+		if (bargeAnimationEnabled && bargeGroups.length > 0 && bargePathCurve) {
+			// Only find nearest point if barge was manually moved, otherwise continue from last position
+			if (bargeManuallyMoved) {
+				const bargePos = bargeGroups[0].position;
+				
+				// Find the closest point on the curve
+				let closestT = 0;
+				let closestDist = Infinity;
+				
+				for (let t = 0; t <= 1; t += 0.01) {
+					const curvePoint = bargePathCurve.getPointAt(t);
+					const dist = bargePos.distanceTo(curvePoint);
+					if (dist < closestDist) {
+						closestDist = dist;
+						closestT = t;
+					}
+				}
+				
+				bargePathProgress = closestT; // Start from nearest point on path
+				bargeManuallyMoved = false; // Reset flag
+			}
+			// else: continue from current bargePathProgress
+		}
+		
+		needsMenuRedraw = true;
+		evt.stopPropagation();
+		return true; // Toggle button click handled
+	}
+	
+	// Check speed knob
+	const knobDx = evt.clientX - bargeSpeedKnobInfo.x;
+	const knobDy = evt.clientY - bargeSpeedKnobInfo.y;
+	if (knobDx * knobDx + knobDy * knobDy < bargeSpeedKnobInfo.radius * bargeSpeedKnobInfo.radius * 1.2) {
+		draggingBargeSpeedKnob = true;
+		dragStartMouseX = evt.clientX;
+		dragStartMouseY = evt.clientY;
+		dragStartValue = bargeAnimationSpeed;
+		if (CameraControl) CameraControl.enabled = false;
+		evt.stopPropagation();
+		return true; // Knob click handled
+	}
+	}
+	
 	return false; // Click not on any menu element
 }
 
@@ -6570,6 +7096,65 @@ function update() {
 		if (oldOpacity !== modelsMenuOpacity) needsMenuRedraw = true;
 	}
 	
+	if (bargeMenuVisible) {
+		const oldOpacity = bargeMenuOpacity;
+		bargeMenuOpacity = Math.min(0.9, bargeMenuOpacity + bargeMenuFadeSpeed * DeltaT);
+		if (oldOpacity !== bargeMenuOpacity) needsMenuRedraw = true;
+	} else {
+		const oldOpacity = bargeMenuOpacity;
+		bargeMenuOpacity = Math.max(0, bargeMenuOpacity - bargeMenuFadeSpeed * DeltaT);
+		if (oldOpacity !== bargeMenuOpacity) needsMenuRedraw = true;
+	}
+	
+	// Update barge path visibility and animation
+	if (bargePathLine) {
+		// Make path visible when menu is open
+		bargePathLine.material.opacity = bargeMenuVisible ? 0.6 : 0;
+		
+		// Update path marker visibility
+		for (let i = 0; i < bargePathMarkers.length; i++) {
+			bargePathMarkers[i].material.opacity = bargeMenuVisible ? 0.8 : 0;
+		}
+		
+		// Animate barge along path if enabled (but not while dragging)
+		if (bargeAnimationEnabled && !draggingBarge && bargePathCurve && bargeGroups.length > 0) {
+			// Update progress along path
+			bargePathProgress += bargeAnimationSpeed * DeltaT;
+			if (bargePathProgress > 1) bargePathProgress -= 1; // Loop back to start
+			
+			// Get position and tangent at current progress (using arc-length parameterization for constant speed)
+			const pathPosition = bargePathCurve.getPointAt(bargePathProgress);
+			const pathTangent = bargePathCurve.getTangentAt(bargePathProgress);
+			
+			// Update barge position (all barges move together for now)
+			for (let i = 0; i < bargeGroups.length; i++) {
+				const barge = bargeGroups[i];
+				if (!barge) continue;
+				
+				// Set position
+				barge.position.copy(pathPosition);
+				
+				// Calculate rotation to face direction of movement (add π to reverse direction)
+				const targetRotation = Math.atan2(pathTangent.x, pathTangent.z) + Math.PI;
+				
+				// Smooth rotation (turn like a long barge - about its center)
+				const currentRotation = barge.rotation.y;
+				let rotationDiff = targetRotation - currentRotation;
+				
+				// Normalize angle difference to [-π, π]
+				while (rotationDiff > Math.PI) rotationDiff -= 2 * Math.PI;
+				while (rotationDiff < -Math.PI) rotationDiff += 2 * Math.PI;
+				
+				// Apply smooth rotation (damping factor for realistic turning)
+				const rotationSpeed = 2.0; // Adjust for faster/slower turns
+				barge.rotation.y += rotationDiff * rotationSpeed * DeltaT;
+			}
+			
+			// Update vehicle orbit targets to follow barge
+			updateMortarPositions();
+		}
+	}
+	
 	simulate();
 	
 	// Update moon position to follow camera (creates infinite distance illusion)
@@ -6589,6 +7174,91 @@ function update() {
 	requestAnimationFrame(update);
 }
 
+// Initialize barge path with default oval shape
+function initBargePath() {
+	// Create 4 points in an oval shape around origin
+	// Oval centered at (0, 0, 0) with width ~40 and depth ~60
+	// Create 8 control points in an octagon pattern
+	const radius = 30;
+	bargePathPoints = [
+		new THREE.Vector3(26.6, 0.0, 174.5),
+		new THREE.Vector3(77.7, 0.0, 93.7),
+		new THREE.Vector3(8.5, 0.0, 77.1),
+		new THREE.Vector3(60.8, 0.0, -270.1),
+		new THREE.Vector3(46.5, 0.0, -275.5),
+		new THREE.Vector3(-26.1, 0.0, 53.3),
+		new THREE.Vector3(-54.4, 0.0, 97.0),
+		new THREE.Vector3(-68.8, 0.0, 150.5)
+	];
+	// Create centripetal Catmull-Rom spline curve (prevents cusps and sharp turns)
+	// Parameters: points, closed, curveType, tension
+	bargePathCurve = new THREE.CatmullRomCurve3(bargePathPoints, true, 'centripetal', 0.5);
+	
+	// Create line geometry to visualize the path
+	const pathSegments = 100; // Number of segments for smooth curve
+	const pathPoints = bargePathCurve.getPoints(pathSegments);
+	const pathGeometry = new THREE.BufferGeometry().setFromPoints(pathPoints);
+	const pathMaterial = new THREE.LineBasicMaterial({
+		color: 0x00aaff,
+		linewidth: 2,
+		transparent: true,
+		opacity: 0 // Start invisible
+	});
+	bargePathLine = new THREE.Line(pathGeometry, pathMaterial);
+	bargePathLine.position.y = 0.1; // Slightly above water
+	gThreeScene.add(bargePathLine);
+	
+	// Create striped red/white texture for life buoy appearance
+	const stripeCanvas = document.createElement('canvas');
+	stripeCanvas.width = 256;
+	stripeCanvas.height = 32;
+	const stripeCtx = stripeCanvas.getContext('2d');
+	const numStripes = 8;
+	const stripeWidth = stripeCanvas.width / numStripes;
+	for (let i = 0; i < numStripes; i++) {
+		stripeCtx.fillStyle = i % 2 === 0 ? '#ff0000' : '#ffffff';
+		stripeCtx.fillRect(i * stripeWidth, 0, stripeWidth, stripeCanvas.height);
+	}
+	const stripeTexture = new THREE.CanvasTexture(stripeCanvas);
+	stripeTexture.wrapS = THREE.RepeatWrapping;
+	stripeTexture.wrapT = THREE.RepeatWrapping;
+	
+	// Create control point markers (torus shaped like life buoys)
+	const markerGeometry = new THREE.TorusGeometry(1.2, 0.25, 16, 32);
+	const markerMaterial = new THREE.MeshBasicMaterial({
+		map: stripeTexture,
+		transparent: true,
+		opacity: 0, // Start invisible
+		depthTest: false
+	});
+	
+	for (let i = 0; i < bargePathPoints.length; i++) {
+		const marker = new THREE.Mesh(markerGeometry, markerMaterial.clone());
+		marker.position.set(bargePathPoints[i].x, 0.5, bargePathPoints[i].z);
+		marker.rotation.x = Math.PI / 2; // Rotate to be flat (horizontal)
+		marker.userData.pathPointIndex = i; // Store which point this marker represents
+		
+		// Add invisible larger hit area for easier selection
+		const hitAreaGeometry = new THREE.CircleGeometry(3.0, 32);
+		const hitAreaMaterial = new THREE.MeshBasicMaterial({ 
+			transparent: true, 
+			opacity: 0, 
+			depthTest: false,
+			side: THREE.DoubleSide
+		});
+		const hitArea = new THREE.Mesh(hitAreaGeometry, hitAreaMaterial);
+		hitArea.userData.pathPointIndex = i;
+		marker.add(hitArea); // Add as child so it moves with the marker
+		
+		gThreeScene.add(marker);
+		bargePathMarkers.push(marker);
+	}
+	
+	// Initialize as manually moved so first animation activation finds nearest point
+	bargeManuallyMoved = true;
+}
+
 initThreeScene();
 initScene();
+initBargePath();
 update();
