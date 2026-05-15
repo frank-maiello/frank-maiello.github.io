@@ -371,31 +371,26 @@ class MORTAR {
 		this.hasExploded = false;
 		this.clusterCenter = new THREE.Vector3();
 		
-		// 30% chance for hemisphere mode, 70% for normal spherical (center tube always normal)
-		let isCenterTube = (tubeIndex % 25 == 0);
-		this.useHemisphereMode = !isCenterTube && Math.random() < 0.30;
+		// Ring mode center burst tracking
+		this.centerBurstDelay = 0.3; // Delay in seconds after ring detonates
+		this.centerBurstTimer = 0;
+		this.centerBurstExploded = false;
+		this.ringExplosionSize = 0; // Store ring explosion size for consistent center burst ratio
 		
-		// 30% chance for spherical mortars to be sparkle type (always for center tube)
-		this.isSparkleType = isCenterTube || (!this.useHemisphereMode && Math.random() < 0.30);
+		// Firework type will be randomized on each launch (in launch method)
+		// Initialize to false here
+		this.useHemisphereMode = false;
+		this.useRingMode = false;
+		this.isSparkleType = false;
 		
-		if (this.useHemisphereMode) {
-			// Generate two complementary colors for hemispheres
-			let hsl = { h: 0, s: 0, l: 0 };
-			particleColor.getHSL(hsl);
-			this.topHemisphereColor = particleColor.clone();
-			this.bottomHemisphereColor = new THREE.Color().setHSL((hsl.h + 0.5) % 1.0, hsl.s, hsl.l); // Opposite hue
-			
-			// Generate random 3D rotation for gap band orientation
-			this.gapRotation = new THREE.Quaternion();
-			let randomAxis = new THREE.Vector3(
-				Math.random() - 0.5,
-				Math.random() - 0.5,
-				Math.random() - 0.5
-			).normalize();
-			let randomAngle = Math.random() * Math.PI * 2;
-			this.gapRotation.setFromAxisAngle(randomAxis, randomAngle);
-		}
+		// Initialize rotation quaternions (will be set during launch)
+		this.gapRotation = new THREE.Quaternion();
+		this.ringRotation = new THREE.Quaternion();
 		
+		// Initialize hemisphere colors (will be set during launch if needed)
+		this.topHemisphereColor = particleColor.clone();
+		this.bottomHemisphereColor = particleColor.clone();
+
 		// Create particles for this mortar
 		this.createParticles();
 	}
@@ -413,81 +408,66 @@ class MORTAR {
 	}
 	createParticles() {
 		for (let i = 0; i < this.particleCount; i++) {
-			let pos = null;
-			let isTopHemisphere = false;
-			
-			if (this.useHemisphereMode) {
-				// Hemisphere mode - two hemispheres with gap and rotation
-				let theta = Math.random() * Math.PI * 2;
-				
-				// Create gap by splitting phi into two ranges (top and bottom hemispheres)
-				let gapAngle = Math.PI / 16; // Gap of 11.25 degrees (π/16 radians on each side of equator)
-				let topHemisphereMax = Math.PI / 2 - gapAngle; // 0 to ~78.75°
-				let bottomHemisphereMin = Math.PI / 2 + gapAngle; // ~101.25° to 180°
-				
-				let phi;
-				if (Math.random() < 0.5) {
-					// Top hemisphere: phi from 0 to topHemisphereMax
-					phi = Math.acos(1 - Math.random() * (1 - Math.cos(topHemisphereMax)));
-					isTopHemisphere = true;
-				} else {
-					// Bottom hemisphere: phi from bottomHemisphereMin to π
-					phi = Math.acos(Math.cos(bottomHemisphereMin) - Math.random() * (Math.cos(bottomHemisphereMin) + 1));
-					isTopHemisphere = false;
-				}
-				
-				let r = Math.cbrt(Math.random()) * mortarRadius; // Cube root for uniform distribution
-				
-				// Create direction vector and apply random rotation
-				let dir = new THREE.Vector3(
-					r * Math.sin(phi) * Math.cos(theta),
-					r * Math.cos(phi),
-					r * Math.sin(phi) * Math.sin(theta)
-				);
-				dir.applyQuaternion(this.gapRotation);
-				
-				pos = new THREE.Vector3(
-					this.position.x + dir.x,
-					mortarAltitude + dir.y,
-					this.position.z + dir.z
-				);
-			} else {
-				// Normal spherical mode - original code
-				let theta = Math.random() * Math.PI * 2;
-				let phi = Math.acos(2 * Math.random() - 1);
-				let r = Math.cbrt(Math.random()) * mortarRadius; // Cube root for uniform distribution in sphere
-				pos = new THREE.Vector3(
-					this.position.x + r * Math.sin(phi) * Math.cos(theta),
-					mortarAltitude + r * Math.cos(phi),
-					this.position.z + r * Math.sin(phi) * Math.sin(theta)
-				);
-			}
+			// Simple spherical cluster - mode-specific behavior happens during explosion
+			let theta = Math.random() * Math.PI * 2;
+			let phi = Math.acos(2 * Math.random() - 1);
+			let r = Math.cbrt(Math.random()) * mortarRadius;
+			let pos = new THREE.Vector3(
+				this.position.x + r * Math.sin(phi) * Math.cos(theta),
+				mortarAltitude + r * Math.cos(phi),
+				this.position.z + r * Math.sin(phi) * Math.sin(theta)
+			);
 			
 			let vel = new THREE.Vector3(0, 0, 0);
-			// Assign color based on mode
-			let particleColor;
-			if (this.useHemisphereMode) {
-				particleColor = isTopHemisphere ? this.topHemisphereColor.clone() : this.bottomHemisphereColor.clone();
-			} else {
-				particleColor = this.particleColor.clone();
-			}
-			
-			let ball = new BALL(pos, vel, ballRadius, particleColor);
-			ball.mortarId = Mortars.length; // Track which mortar this belongs to
-			ball.active = false; // Start inactive
+			let ball = new BALL(pos, vel, ballRadius, this.particleColor.clone());
+			ball.mortarId = Mortars.length;
+			ball.active = false;
 			ball.hasExploded = false;
-			ball.hemisphereColor = particleColor.clone(); // Store color for later restoration
-			ball.isTopHemisphere = isTopHemisphere; // Store which hemisphere this particle belongs to
-			ball.isCenterTube = (this.tubeIndex % 25 == 0); // Track if from center tube
-			ball.isSparkleType = this.isSparkleType; // Track if this mortar has sparkle effect
+			ball.isCenterTube = (this.tubeIndex % 25 == 0);
+			
 			Balls[this.startIndex + i] = ball;
 		}
 	}
 	launch() {
 		if (!this.isReadyToLaunch()) return; // Not ready yet
 		
-		// Regenerate random rotation for hemisphere mode (each explosion gets new orientation)
+		// Randomize firework type for this launch
+		// Center tube always spherical, others get random type
+		let isCenterTube = (this.tubeIndex % 25 == 0);
+		
+		if (!isCenterTube) {
+			let rand = Math.random();
+			if (rand < 0.10) {
+				// 10% chance for ring mode
+				this.useRingMode = true;
+				this.useHemisphereMode = false;
+			} else if (rand < 0.40) {
+				// 30% chance for hemisphere mode (0.10 to 0.40)
+				this.useHemisphereMode = true;
+				this.useRingMode = false;
+			} else {
+				// 60% chance for normal spherical (0.40 to 1.0)
+				this.useHemisphereMode = false;
+				this.useRingMode = false;
+			}
+		} else {
+			// Center tube always normal spherical
+			this.useHemisphereMode = false;
+			this.useRingMode = false;
+		}
+		
+		// 30% chance for spherical or ring mortars to be sparkle type (always for center tube)
+		this.isSparkleType = isCenterTube || (!this.useHemisphereMode && !this.useRingMode && Math.random() < 0.30);
+		
+		// Generate orientation and colors based on selected mode
 		if (this.useHemisphereMode) {
+			// Generate two complementary colors for hemispheres
+			let hsl = { h: 0, s: 0, l: 0 };
+			this.particleColor.getHSL(hsl);
+			this.topHemisphereColor = this.particleColor.clone();
+			this.bottomHemisphereColor = new THREE.Color().setHSL((hsl.h + 0.5) % 1.0, hsl.s, hsl.l);
+			
+			// Generate random 3D rotation for gap band orientation
 			this.gapRotation = new THREE.Quaternion();
 			let randomAxis = new THREE.Vector3(
 				Math.random() - 0.5,
@@ -496,6 +476,16 @@ class MORTAR {
 			).normalize();
 			let randomAngle = Math.random() * Math.PI * 2;
 			this.gapRotation.setFromAxisAngle(randomAxis, randomAngle);
+		} else if (this.useRingMode) {
+			// Generate random 3D rotation for ring orientation
+			this.ringRotation = new THREE.Quaternion();
+			let randomAxis = new THREE.Vector3(
+				Math.random() - 0.5,
+				Math.random() - 0.5,
+				Math.random() - 0.5
+			).normalize();
+			let randomAngle = Math.random() * Math.PI * 2;
+			this.ringRotation.setFromAxisAngle(randomAxis, randomAngle);
 		}
 		
 		// Randomize launch speed (10.0 to 15.0 m/s)
@@ -584,6 +574,10 @@ class MORTAR {
 		this.inFlight = true;
 		this.hasExploded = false;
 		
+		// Reset center burst tracking for ring mode
+		this.centerBurstTimer = 0;
+		this.centerBurstExploded = false;
+		
 		// Trigger mortar tube flash effect
 		if (tubeFlashTimers[this.tubeIndex] !== undefined) {
 			tubeFlashTimers[this.tubeIndex] = tubeFlashDuration;
@@ -599,17 +593,29 @@ class MORTAR {
 		ballInstancedMesh.instanceColor.needsUpdate = true;
 	}
 	update(deltaTime) {
-		if (!this.inFlight || this.hasExploded) return;
+		if (!this.inFlight) return;
 		
-		this.flightTime += deltaTime;
-		
-		// Spawn spark trail while mortar is in flight
-		this.spawnSparks();
-		
-		if (this.flightTime >= this.detonationTime) {
-			this.explode();
-			this.hasExploded = true;
-			this.inFlight = false;
+		if (!this.hasExploded) {
+			this.flightTime += deltaTime;
+			
+			// Spawn spark trail while mortar is in flight
+			this.spawnSparks();
+			
+			if (this.flightTime >= this.detonationTime) {
+				this.explode();
+				this.hasExploded = true;
+				if (!this.useRingMode) {
+					this.inFlight = false;
+				}
+			}
+		} else if (this.useRingMode && !this.centerBurstExploded) {
+			// Handle delayed center burst for ring mode
+			this.centerBurstTimer += deltaTime;
+			if (this.centerBurstTimer >= this.centerBurstDelay) {
+				this.explodeCenterBurst();
+				this.centerBurstExploded = true;
+				this.inFlight = false;
+			}
 		}
 	}
 	spawnSparks() {
@@ -684,21 +690,43 @@ class MORTAR {
 
 		let blastSpeed = 1 + Math.random() * 1;
 		var explosionSize = 1 + Math.random() * maxExplosionSize; // Base velocity magnitude for explosion particles
+		
+		// Store explosion size for ring mode center burst (to maintain consistent ratio)
+		if (this.useRingMode) {
+			this.ringExplosionSize = explosionSize;
+		}
+		
 		for (let i = this.startIndex; i < this.startIndex + this.particleCount; i++) {
 			if (!Balls[i]) continue;
+			
+			// For ring mode: determine if this particle is part of center burst (first 30%)
+			let particleIndex = i - this.startIndex;
+			let isRingCenterBurst = this.useRingMode && (particleIndex < Math.floor(this.particleCount * 0.3));
+			
+			// Skip center burst particles in ring mode (they explode later)
+			if (isRingCenterBurst) {
+				Balls[i].isRingCenterBurst = true; // Mark for later use
+				continue;
+			} else {
+				Balls[i].isRingCenterBurst = false;
+			}
 			
 			Balls[i].active = true;
 			Balls[i].hasExploded = true;
 			Balls[i].age = 0;
 			Balls[i].brightness = 1.0;
-			//Balls[i].speedMultiplier = 2;
-			//Balls[i].speedMultiplier = 0.7 + Math.random() * 0.6;
 			Balls[i].speedMultiplier = 2.0 + (-0.5 + Math.random()) * 0.1;
 			Balls[i].lifetime = blastSpeed + Math.random() * 2.0;
+			Balls[i].isSparkleType = this.isSparkleType;
 			
-			// Restore hemisphere color for explosion
-			if (Balls[i].hemisphereColor) {
-				Balls[i].baseColor = Balls[i].hemisphereColor.clone();
+			// Assign color based on mode
+			if (this.useHemisphereMode) {
+				// Randomly assign to top or bottom hemisphere
+				let isTopHemisphere = Math.random() < 0.5;
+				Balls[i].isTopHemisphere = isTopHemisphere;
+				Balls[i].baseColor = isTopHemisphere ? this.topHemisphereColor.clone() : this.bottomHemisphereColor.clone();
+			} else {
+				Balls[i].baseColor = this.particleColor.clone();
 			}
 			Balls[i].updateColorWithBrightness();
 			
@@ -720,6 +748,10 @@ class MORTAR {
 					// Bottom hemisphere: phi from bottomHemisphereMin to π
 					phi = Math.acos(Math.cos(bottomHemisphereMin) - Math.random() * (Math.cos(bottomHemisphereMin) + 1));
 				}
+			} else if (this.useRingMode) {
+				// Ring mode: particles explode in a flat ring (phi near π/2 with slight thickness)
+				let ringThickness = Math.PI / 24; // Thin ring with some depth
+				phi = Math.PI / 2 + (Math.random() - 0.5) * ringThickness; // Center at 90° (π/2) with variation
 			} else {
 				// Normal spherical mode
 				phi = Math.acos(2 * Math.random() - 1); // Polar angle (0 to π) - uniform distribution
@@ -731,12 +763,18 @@ class MORTAR {
 				Math.sin(phi) * Math.sin(theta)
 			);
 			
-			// Apply rotation only for hemisphere mode
+			// Apply rotation for hemisphere mode or ring mode
 			if (this.useHemisphereMode) {
 				dir.applyQuaternion(this.gapRotation);
+			} else if (this.useRingMode) {
+				dir.applyQuaternion(this.ringRotation);
 			}
 			
-			var explosionSpeed = explosionSize + Math.random() * (1 - explosionUniformity); // Velocity magnitude with some randomness
+			if (this.useRingMode) {
+				var explosionSpeed = explosionSize + Math.random() * (3 - 3 * explosionUniformity); // Velocity magnitude with some randomness
+			} else {
+				var explosionSpeed = explosionSize + Math.random() * (1 - explosionUniformity); // Velocity magnitude with some randomness
+			}
 			
 			dir.normalize();
 			dir.multiplyScalar(explosionSpeed * Balls[i].speedMultiplier);
@@ -754,6 +792,73 @@ class MORTAR {
 		// Flash the explosion light for this barge
 		if (explosionLights[this.bargeIndex]) {
 			explosionLightIntensities[this.bargeIndex] = explosionLightBrightIntensity;
+			explosionLights[this.bargeIndex].intensity = explosionLightIntensities[this.bargeIndex];
+		}
+		
+		// Update instance colors on GPU
+		ballInstancedMesh.instanceColor.needsUpdate = true;
+	}
+	
+	// Explode center burst for ring mode (delayed white burst)
+	explodeCenterBurst() {
+		if (!this.useRingMode) return;
+		
+		let blastSpeed = 1 + Math.random() * 1;
+		// Use fixed ratio (40%) of the ring explosion size for consistent relative sizing
+		var explosionSize = this.ringExplosionSize * 0.4;
+		
+		for (let i = this.startIndex; i < this.startIndex + this.particleCount; i++) {
+			if (!Balls[i] || !Balls[i].isRingCenterBurst) continue;
+			
+			// Reposition particle to the exact center of the ring explosion
+			Balls[i].pos.copy(this.clusterCenter);
+			
+			Balls[i].active = true;
+			Balls[i].hasExploded = true;
+			Balls[i].age = 0;
+			Balls[i].brightness = 1.0;
+			Balls[i].speedMultiplier = 2.0 + (-0.5 + Math.random()) * 0.1;
+			Balls[i].lifetime = blastSpeed + Math.random() * 2.0;
+			
+			// Set to bright white for center burst
+			Balls[i].baseColor = new THREE.Color(0xffffff);
+			Balls[i].updateColorWithBrightness();
+			
+			// Create spherical explosion for center burst (not a ring)
+			let theta = Math.random() * Math.PI * 2;
+			let phi = Math.acos(2 * Math.random() - 1); // Spherical distribution
+			
+			let dir = new THREE.Vector3(
+				Math.sin(phi) * Math.cos(theta),
+				Math.cos(phi),
+				Math.sin(phi) * Math.sin(theta)
+			);
+			
+			var explosionSpeed = explosionSize + Math.random() * (1 - explosionUniformity);
+			
+			dir.normalize();
+			dir.multiplyScalar(explosionSpeed * Balls[i].speedMultiplier);
+			Balls[i].vel.copy(dir);
+			
+			// Update instance matrix to position particle at cluster center
+			ballMatrix.makeTranslation(Balls[i].pos.x, Balls[i].pos.y, Balls[i].pos.z);
+			ballInstancedMesh.setMatrixAt(Balls[i].instanceId, ballMatrix);
+		}
+		
+		// Update instance matrices on GPU
+		ballInstancedMesh.instanceMatrix.needsUpdate = true;
+		
+		// Create second shock wave for center burst
+		if (shockWaveMeshPool.length > 0) {
+			const mesh = shockWaveMeshPool.pop();
+			const shockWave = new ShockWave(this.clusterCenter);
+			shockWave.mesh = mesh;
+			shockWaves.push(shockWave);
+		}
+		
+		// Flash the explosion light again for center burst
+		if (explosionLights[this.bargeIndex]) {
+			explosionLightIntensities[this.bargeIndex] = explosionLightBrightIntensity * 0.7;
 			explosionLights[this.bargeIndex].intensity = explosionLightIntensities[this.bargeIndex];
 		}
 		
@@ -1163,15 +1268,32 @@ function initScene(bargeTransforms) {
 	Mortars = [];
 
 	const mortarColors = [
-		new THREE.Color(0xff8800), // Orange
 		new THREE.Color(0xff0000), // Red
-		new THREE.Color(0x00ff00), // Green
-		new THREE.Color(0x0088ff), // Blue
-		new THREE.Color(0xff00ff), // Magenta
+		new THREE.Color(0xff4400), // Red-Orange
+		new THREE.Color(0xff8800), // Orange
+		new THREE.Color(0xffaa00), // Gold
+		new THREE.Color(0xffdd00), // Amber
 		new THREE.Color(0xffff00), // Yellow
+		new THREE.Color(0xaaff00), // Yellow-Green
+		new THREE.Color(0x66ff00), // Lime
+		new THREE.Color(0x00ff00), // Green
+		new THREE.Color(0x00ff88), // Spring Green
+		new THREE.Color(0x00ffaa), // Turquoise
 		new THREE.Color(0x00ffff), // Cyan
-		new THREE.Color(0xff8888), // Pink
-		new THREE.Color(0xffffff)  // White
+		new THREE.Color(0x00aaff), // Sky Blue
+		new THREE.Color(0x0088ff), // Blue
+		new THREE.Color(0x0044ff), // Royal Blue
+		new THREE.Color(0x4400ff), // Blue-Violet
+		new THREE.Color(0x8800ff), // Purple
+		new THREE.Color(0xaa00ff), // Violet
+		new THREE.Color(0xff00ff), // Magenta
+		new THREE.Color(0xff00aa), // Hot Pink
+		new THREE.Color(0xff0066), // Deep Pink
+		new THREE.Color(0xff6688), // Light Pink
+		new THREE.Color(0xff88aa), // Rose
+		new THREE.Color(0xffffff), // White
+		new THREE.Color(0xffaa88), // Peach
+		new THREE.Color(0xff8866)  // Coral
 	];
 	
 	// Create mortars in elliptical rings to fit on narrow barge deck: 1 center + 8 in ring 1 + 16 in ring 2
