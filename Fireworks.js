@@ -1262,7 +1262,7 @@ function initScene(bargeTransforms) {
 		shockWaveMeshPool.push(mesh);
 	}
 	
-	// Create 5x5 grid of mortars with different colors
+	// Create mortars with different colors
 	nextBallId = 0;
 	Balls = new Array(numBalls); // Pre-allocate array
 	Mortars = [];
@@ -1444,15 +1444,15 @@ function initScene(bargeTransforms) {
 	});
 	
 	// Round base geometry (thin box)
-	var baseSize = 0.2;
+	var baseSize = 0.35;
 	var baseHeight = 0.05;
 	var baseGeometry = new THREE.CylinderGeometry(baseSize, baseSize, baseHeight, 32, 1, false);
 	var baseMaterial = new THREE.MeshPhongMaterial({
-		color: 0x262626,  
+		color: 0x131313,  
 	});
 	
 	// Hemisphere pivot geometry (sits on top of base)
-	var hemisphereRadius = baseSize * 0.9; // Slightly smaller than base
+	var hemisphereRadius = 0.15; // Slightly smaller than base
 	var hemisphereGeometry = new THREE.SphereGeometry(hemisphereRadius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
 	var hemisphereMaterial = new THREE.MeshPhongMaterial({
 		color: 0x444444,
@@ -1518,13 +1518,13 @@ function initScene(bargeTransforms) {
 		
 		// Create explosion light for this barge
 		let explosionLight = new THREE.PointLight( 0xffaa66, explosionLightDimIntensity, 100 );
-		explosionLight.position.set( bargeOffset.x, averageBurstHeight, bargeOffset.z ); // Position at average burst height
+		explosionLight.position.set( 0, averageBurstHeight, 0 ); // Local position relative to barge
 		explosionLight.castShadow = true;
 		explosionLight.shadow.camera.near = 1;
 		explosionLight.shadow.camera.far = 200;
 		explosionLight.shadow.mapSize.width = 1024;
 		explosionLight.shadow.mapSize.height = 1024;
-		gThreeScene.add( explosionLight );
+		bargeGroup.add( explosionLight ); // Add to barge group so it moves with barge
 		explosionLights.push(explosionLight);
 		explosionLightIntensities.push(explosionLightDimIntensity);
 		
@@ -1563,21 +1563,21 @@ function initScene(bargeTransforms) {
 		var innerTubeMaterial0 = createInnerTubeMaterial();
 		tubeMaterials.push(innerTubeMaterial0);
 		var innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMaterial0);
-		innerTubeMesh.position.set(0, tubeHeight / 2, 0);
+		innerTubeMesh.position.set(0, tubeHeight / 2 + hemisphereRadius, 0);
 		innerTubeMesh.castShadow = true;
 		innerTubeMesh.receiveShadow = true;
 		tubeGroup.add(innerTubeMesh);
 		
 		// Outer tube
 		var outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-		outerTubeMesh.position.set(0, tubeHeight / 2, 0);
+		outerTubeMesh.position.set(0, tubeHeight / 2 + hemisphereRadius, 0);
 		outerTubeMesh.castShadow = true;
 		outerTubeMesh.receiveShadow = true;
 		tubeGroup.add(outerTubeMesh);
 		
 		// Top cap
 		var topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-		topCapMesh.position.set(0, tubeHeight, 0);
+		topCapMesh.position.set(0, tubeHeight + hemisphereRadius, 0);
 		topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
 		topCapMesh.castShadow = true;
 		topCapMesh.receiveShadow = true;
@@ -1585,7 +1585,7 @@ function initScene(bargeTransforms) {
 		
 		// Bottom cap
 		var bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
-		bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
+		bottomCapMesh.position.set(0, tubeHeight * 0.2 + hemisphereRadius, 0); // 20% up from tube bottom
 		bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
 		bottomCapMesh.receiveShadow = true;
 		tubeGroup.add(bottomCapMesh);
@@ -1625,21 +1625,21 @@ function initScene(bargeTransforms) {
 			let innerTubeMat = createInnerTubeMaterial();
 			tubeMaterials.push(innerTubeMat);
 			innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMat);
-			innerTubeMesh.position.set(0, tubeHeight / 2, 0);
+			innerTubeMesh.position.set(0, tubeHeight / 2 + hemisphereRadius, 0);
 			innerTubeMesh.castShadow = true;
 			innerTubeMesh.receiveShadow = true;
 			tubeGroup.add(innerTubeMesh);
 			
 			// Outer tube
 			outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-			outerTubeMesh.position.set(0, tubeHeight / 2, 0);
+			outerTubeMesh.position.set(0, tubeHeight / 2 + hemisphereRadius, 0);
 			outerTubeMesh.castShadow = true;
 			outerTubeMesh.receiveShadow = true;
 			tubeGroup.add(outerTubeMesh);
 			
 			// Top cap
 			topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-			topCapMesh.position.set(0, tubeHeight, 0);
+			topCapMesh.position.set(0, tubeHeight + hemisphereRadius, 0);
 			topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
 			topCapMesh.castShadow = true;
 			topCapMesh.receiveShadow = true;
@@ -1647,7 +1647,7 @@ function initScene(bargeTransforms) {
 			
 			// Bottom cap
 			bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
-			bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
+			bottomCapMesh.position.set(0, tubeHeight * 0.2 + hemisphereRadius, 0); // 20% up from tube bottom
 			bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
 			bottomCapMesh.receiveShadow = true;
 			tubeGroup.add(bottomCapMesh);
@@ -1688,21 +1688,21 @@ function initScene(bargeTransforms) {
 			let innerTubeMat = createInnerTubeMaterial();
 			tubeMaterials.push(innerTubeMat);
 			innerTubeMesh = new THREE.Mesh(innerTubeGeometry, innerTubeMat);
-			innerTubeMesh.position.set(0, tubeHeight / 2, 0);
+			innerTubeMesh.position.set(0, tubeHeight / 2 + hemisphereRadius, 0);
 			innerTubeMesh.castShadow = true;
 			innerTubeMesh.receiveShadow = true;
 			tubeGroup.add(innerTubeMesh);
 			
 			// Outer tube
 			outerTubeMesh = new THREE.Mesh(outerTubeGeometry, outerTubeMaterial);
-			outerTubeMesh.position.set(0, tubeHeight / 2, 0);
+			outerTubeMesh.position.set(0, tubeHeight / 2 + hemisphereRadius, 0);
 			outerTubeMesh.castShadow = true;
 			outerTubeMesh.receiveShadow = true;
 			tubeGroup.add(outerTubeMesh);
 			
 			// Top cap
 			topCapMesh = new THREE.Mesh(topCapGeometry, topCapMaterial);
-			topCapMesh.position.set(0, tubeHeight, 0);
+			topCapMesh.position.set(0, tubeHeight + hemisphereRadius, 0);
 			topCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
 			topCapMesh.castShadow = true;
 			topCapMesh.receiveShadow = true;
@@ -1710,7 +1710,7 @@ function initScene(bargeTransforms) {
 			
 			// Bottom cap
 			bottomCapMesh = new THREE.Mesh(bottomCapGeometry, bottomCapMaterial);
-			bottomCapMesh.position.set(0, tubeHeight * 0.2, 0); // 20% up from tube bottom
+			bottomCapMesh.position.set(0, tubeHeight * 0.2 + hemisphereRadius, 0); // 20% up from tube bottom
 			bottomCapMesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal, facing up
 			bottomCapMesh.receiveShadow = true;
 			tubeGroup.add(bottomCapMesh);
