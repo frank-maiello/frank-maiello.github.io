@@ -1210,8 +1210,7 @@ function initScene(bargeTransforms) {
 	} else if (gBallMaterialMode === 1) {
 		// Plastic
 		ballMaterial = new THREE.MeshPhongMaterial({
-			roughness: 0.5,
-			metalness: 0.0,
+			
 			side: THREE.FrontSide
 		});
 	} else if (gBallMaterialMode === 2) {
@@ -1517,7 +1516,7 @@ function initScene(bargeTransforms) {
 		console.log('  Added bargeGroup to scene, bargeGroups.length:', bargeGroups.length);
 		
 		// Create explosion light for this barge
-		let explosionLight = new THREE.PointLight( 0xffaa66, explosionLightDimIntensity, 100 );
+		let explosionLight = new THREE.PointLight( 0xffb273, explosionLightDimIntensity, 120 );
 		explosionLight.position.set( 0, averageBurstHeight, 0 ); // Local position relative to barge
 		explosionLight.castShadow = true;
 		explosionLight.shadow.camera.near = 1;
@@ -1884,8 +1883,7 @@ function changeBallMaterial(materialMode) {
 	} else if (materialMode === 1) {
 		// Plastic
 		ballMaterial = new THREE.MeshPhongMaterial({
-			roughness: 0.5,
-			metalness: 0.0,
+			
 			side: THREE.FrontSide
 		});
 	} else if (materialMode === 2) {
@@ -1975,7 +1973,7 @@ function initThreeScene() {
 
 		var waterMaterial = new THREE.MeshPhongMaterial({
 			color: 0x05060c, // #05060c dark blue
-			roughness: 0.7,
+
 			side: THREE.FrontSide
 		});
 
@@ -2014,7 +2012,7 @@ function initThreeScene() {
 			jerseyModelTemplate.scale.set(0.5, 0.5, 0.5);
 
 		var uniformCityscapeMaterial = new THREE.MeshPhongMaterial({
-			color: 0x1a1a1a, // 20% gray
+			color: 0x111618,
 			side: THREE.FrontSide
 		});
 		
@@ -2077,7 +2075,7 @@ function initThreeScene() {
 			downtownModelTemplate.scale.set(0.5, 0.5, 0.5);
 
 		var uniformCityscapeMaterial = new THREE.MeshPhongMaterial({
-			color: 0x1a1a1a, // 20% gray
+			color: 0x111618, 
 			side: THREE.FrontSide
 		});
 		
@@ -2117,7 +2115,7 @@ function initThreeScene() {
 			cityscapeNorthModelTemplate.scale.set(0.5, 0.5, 0.5);
 
 		var uniformCityscapeMaterialNorth = new THREE.MeshPhongMaterial({
-			color: 0x1a1a1a, // 20% gray
+			color: 0x111618,
 			side: THREE.FrontSide
 		});
 		
@@ -2868,6 +2866,57 @@ function initThreeScene() {
 		console.error('Error loading moon texture:', error);
 	});
 
+	// Create hemispherical sky dome with sunset gradient (warm west to dark blue east)
+	const skyRadius = 500; // Large radius to appear at infinity
+	const skyGeometry = new THREE.SphereGeometry(skyRadius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+	
+	// Apply vertex colors for gradient from warm (-x) to dark blue (+x)
+	const positions = skyGeometry.attributes.position;
+	const colors = [];
+	const warmColor = new THREE.Color(0x0f0a05); // Very dim warm glow (late twilight)
+	const coolColor = new THREE.Color(0x04070c); // Very dark blue for night sky
+	
+	for (let i = 0; i < positions.count; i++) {
+		const x = positions.getX(i);
+		const y = positions.getY(i);
+		
+		// Normalize x position (-1 to 1, where -1 is warm sunset side)
+		const t = (x / skyRadius + 1) / 2; // 0 at -x (warm), 1 at +x (cool)
+		
+		// Normalize y position (0 to 1, where 0 is horizon, 1 is zenith)
+		const tY = y / skyRadius; // 0 at horizon, 1 at top
+		
+		// Apply power function to favor cool side (less warm, more dark blue)
+		const tAdjusted = Math.pow(t, 0.6); // Shifts gradient toward cool side
+		
+		// Apply vertical fade - warm only near horizon, dark blue above
+		const verticalFade = Math.pow(1 - tY, 3.0); // Strong fade, warm only at very low angles
+		
+		// Interpolate between warm and cool colors
+		const color = new THREE.Color();
+		color.lerpColors(warmColor, coolColor, tAdjusted);
+		
+		// Fade to dark blue based on height
+		color.lerp(coolColor, 1 - verticalFade);
+		
+		colors.push(color.r, color.g, color.b);
+	}
+	
+	skyGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+	
+	const skyMaterial = new THREE.MeshBasicMaterial({
+		vertexColors: true,
+		side: THREE.BackSide, // Render inside of hemisphere
+		depthWrite: false,
+		fog: false
+	});
+	
+	const skyDome = new THREE.Mesh(skyGeometry, skyMaterial);
+	skyDome.position.set(0, 0, 0);
+	skyDome.renderOrder = -1000; // Render behind everything
+	gThreeScene.add(skyDome);
+	console.log('Sky dome added to scene');
+
 	// OLD SPOTLIGHT CODE - Now using helicopter-mounted spotlight with gimbal
 	// The spotlight is created and attached in the helicopter loader above
 
@@ -2885,7 +2934,7 @@ function initThreeScene() {
 	// Create radial gradient from center to edge
 	var gradient = ctx.createRadialGradient(512, 512, 0, 512, 512, 512);
 	//gradient.addColorStop(0, '#282828');  
-	gradient.addColorStop(0, '#1b1a1a');  
+	gradient.addColorStop(0, '#101110');  
 	gradient.addColorStop(1, '#000000');  // Black at edge
 	
 	// Fill canvas with gradient
@@ -3995,6 +4044,14 @@ function simulate() {
 		zeppelinCenterZ += (zeppelinTargetCenterZ - zeppelinCenterZ) * zeppelinCenterLerpSpeed * DeltaT;
 		sailboatCenterX += (sailboatTargetCenterX - sailboatCenterX) * sailboatCenterLerpSpeed * DeltaT;
 		sailboatCenterZ += (sailboatTargetCenterZ - sailboatCenterZ) * sailboatCenterLerpSpeed * DeltaT;
+		biplaneCenterX += (biplaneTargetCenterX - biplaneCenterX) * biplaneCenterLerpSpeed * DeltaT;
+		biplaneCenterZ += (biplaneTargetCenterZ - biplaneCenterZ) * biplaneCenterLerpSpeed * DeltaT;
+		
+		// Update balloon center to track its target barge
+		var balloonTargetCenterX = bargeGroups[balloonTrackedBargeIndex] ? bargeGroups[balloonTrackedBargeIndex].position.x : 0;
+		var balloonTargetCenterZ = bargeGroups[balloonTrackedBargeIndex] ? bargeGroups[balloonTrackedBargeIndex].position.z : 0;
+		balloonCenterX += (balloonTargetCenterX - balloonCenterX) * 0.5 * DeltaT;
+		balloonCenterZ += (balloonTargetCenterZ - balloonCenterZ) * 0.5 * DeltaT;
 		
 		// Animate zeppelin and propellers even when paused
 		if (zeppelinModelTemplate) {
@@ -4002,8 +4059,13 @@ function simulate() {
 			var x = zeppelinCenterX + Math.cos(zeppelinAngle) * ovalRadiusX;
 			var z = zeppelinCenterZ + Math.sin(zeppelinAngle) * ovalRadiusZ;
 			zeppelinModelTemplate.position.set(x, zeppelinHeight, z);
-			var dx = -Math.sin(zeppelinAngle) * ovalRadiusX;
-			var dz = Math.cos(zeppelinAngle) * ovalRadiusZ;
+			
+			// Calculate direction of movement (tangent to oval + center movement)
+			var dx = -Math.sin(zeppelinAngle) * ovalRadiusX * zeppelinSpeed;
+			var dz = Math.cos(zeppelinAngle) * ovalRadiusZ * zeppelinSpeed;
+			dx += (zeppelinTargetCenterX - zeppelinCenterX) * zeppelinCenterLerpSpeed;
+			dz += (zeppelinTargetCenterZ - zeppelinCenterZ) * zeppelinCenterLerpSpeed;
+			
 			zeppelinModelTemplate.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
 		}
 		if (propellerPort) propellerPort.rotation.x += propellerRotationSpeed * DeltaT;
@@ -4016,11 +4078,13 @@ function simulate() {
 			var x = sailboatCenterX + Math.cos(sailboatAngle) * sailboatOvalRadiusX;
 			var z = sailboatCenterZ + Math.sin(sailboatAngle) * sailboatOvalRadiusZ;
 			
-			// Calculate direction of movement (tangent to oval)
-			var dx = -Math.sin(sailboatAngle) * sailboatOvalRadiusX;
-			var dz = Math.cos(sailboatAngle) * sailboatOvalRadiusZ;
+			// Calculate direction of movement (tangent to oval + center movement)
+			var dx = -Math.sin(sailboatAngle) * sailboatOvalRadiusX * sailboatSpeed;
+			var dz = Math.cos(sailboatAngle) * sailboatOvalRadiusZ * sailboatSpeed;
+			dx += (sailboatTargetCenterX - sailboatCenterX) * sailboatCenterLerpSpeed;
+			dz += (sailboatTargetCenterZ - sailboatCenterZ) * sailboatCenterLerpSpeed;
 			
-			// Orient sailboat to face direction of travel
+			// Orient sailboat to face true direction of travel
 			var headingAngle = Math.atan2(dx, dz) - Math.PI / 2;
 			sailboatModelTemplate.rotation.y = headingAngle;
 			
@@ -4037,11 +4101,13 @@ function simulate() {
 			var z = helicopterCenterZ + Math.sin(helicopterAngle) * helicopterOvalRadiusZ;
 			helicopterModelTemplate.position.set(x, helicopterHeight, z);
 			
-			// Calculate direction of movement (tangent to oval)
-			var dx = -Math.sin(helicopterAngle) * helicopterOvalRadiusX;
-			var dz = Math.cos(helicopterAngle) * helicopterOvalRadiusZ;
+			// Calculate direction of movement (tangent to oval + center movement)
+			var dx = -Math.sin(helicopterAngle) * helicopterOvalRadiusX * helicopterSpeed;
+			var dz = Math.cos(helicopterAngle) * helicopterOvalRadiusZ * helicopterSpeed;
+			dx += (helicopterTargetCenterX - helicopterCenterX) * helicopterCenterLerpSpeed;
+			dz += (helicopterTargetCenterZ - helicopterCenterZ) * helicopterCenterLerpSpeed;
 			
-			// Orient helicopter to face direction of travel
+			// Orient helicopter to face true direction of travel
 			var headingAngle = Math.atan2(dx, dz) + Math.PI; // Add 180° to correct orientation
 			helicopterModelTemplate.rotation.y = headingAngle;
 			
@@ -4061,6 +4127,15 @@ function simulate() {
 			var x = balloonCenterX + Math.cos(balloonAngle) * balloonOvalRadiusX;
 			var z = balloonCenterZ + Math.sin(balloonAngle) * balloonOvalRadiusZ;
 			balloonModelTemplate.position.set(x, balloonHeight, z);
+			
+			// Calculate direction of movement and orient balloon
+			var dx = -Math.sin(balloonAngle) * balloonOvalRadiusX * balloonSpeed;
+			var dz = Math.cos(balloonAngle) * balloonOvalRadiusZ * balloonSpeed;
+			var balloonTargetCenterX = bargeGroups[balloonTrackedBargeIndex] ? bargeGroups[balloonTrackedBargeIndex].position.x : 0;
+			var balloonTargetCenterZ = bargeGroups[balloonTrackedBargeIndex] ? bargeGroups[balloonTrackedBargeIndex].position.z : 0;
+			dx += (balloonTargetCenterX - balloonCenterX) * 0.5;
+			dz += (balloonTargetCenterZ - balloonCenterZ) * 0.5;
+			balloonModelTemplate.rotation.y = Math.atan2(dx, dz);
 		}
 		
 		// Update Colgate Clock hands to show current time
@@ -4175,6 +4250,12 @@ function simulate() {
 	biplaneCenterX += (biplaneTargetCenterX - biplaneCenterX) * biplaneCenterLerpSpeed * DeltaT;
 	biplaneCenterZ += (biplaneTargetCenterZ - biplaneCenterZ) * biplaneCenterLerpSpeed * DeltaT;
 	
+	// Update balloon center to track its target barge
+	var balloonTargetCenterX = bargeGroups[balloonTrackedBargeIndex] ? bargeGroups[balloonTrackedBargeIndex].position.x : 0;
+	var balloonTargetCenterZ = bargeGroups[balloonTrackedBargeIndex] ? bargeGroups[balloonTrackedBargeIndex].position.z : 0;
+	balloonCenterX += (balloonTargetCenterX - balloonCenterX) * 0.5 * DeltaT;
+	balloonCenterZ += (balloonTargetCenterZ - balloonCenterZ) * 0.5 * DeltaT;
+	
 	// Auto-launch mortars at random intervals
 	if (autoLaunchEnabled) {
 		timeSinceLastLaunch += DeltaT;
@@ -4254,11 +4335,15 @@ function simulate() {
 		// Update zeppelin position
 		zeppelinModelTemplate.position.set(x, zeppelinHeight, z);
 		
-		// Calculate direction of movement (tangent to oval)
-		var dx = -Math.sin(zeppelinAngle) * ovalRadiusX;
-		var dz = Math.cos(zeppelinAngle) * ovalRadiusZ;
+		// Calculate direction of movement (tangent to oval + center movement)
+		var dx = -Math.sin(zeppelinAngle) * ovalRadiusX * zeppelinSpeed;
+		var dz = Math.cos(zeppelinAngle) * ovalRadiusZ * zeppelinSpeed;
 		
-		// Orient zeppelin to face direction of travel (subtract 90 degrees to correct orientation)
+		// Add center movement velocity
+		dx += (zeppelinTargetCenterX - zeppelinCenterX) * zeppelinCenterLerpSpeed;
+		dz += (zeppelinTargetCenterZ - zeppelinCenterZ) * zeppelinCenterLerpSpeed;
+		
+		// Orient zeppelin to face true direction of travel (subtract 90 degrees to correct orientation)
 		zeppelinModelTemplate.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
 	}
 	
@@ -4283,11 +4368,15 @@ function simulate() {
 		var z = helicopterCenterZ + Math.sin(helicopterAngle) * helicopterOvalRadiusZ;
 		helicopterModelTemplate.position.set(x, helicopterHeight, z);
 		
-		// Calculate direction of movement (tangent to oval)
-		var dx = -Math.sin(helicopterAngle) * helicopterOvalRadiusX;
-		var dz = Math.cos(helicopterAngle) * helicopterOvalRadiusZ;
+		// Calculate direction of movement (tangent to oval + center movement)
+		var dx = -Math.sin(helicopterAngle) * helicopterOvalRadiusX * helicopterSpeed;
+		var dz = Math.cos(helicopterAngle) * helicopterOvalRadiusZ * helicopterSpeed;
 		
-		// Orient helicopter to face direction of travel
+		// Add center movement velocity
+		dx += (helicopterTargetCenterX - helicopterCenterX) * helicopterCenterLerpSpeed;
+		dz += (helicopterTargetCenterZ - helicopterCenterZ) * helicopterCenterLerpSpeed;
+		
+		// Orient helicopter to face true direction of travel
 		var headingAngle = Math.atan2(dx, dz) + Math.PI; // Add 180° to correct orientation
 		helicopterModelTemplate.rotation.y = headingAngle;
 		
@@ -4305,11 +4394,15 @@ function simulate() {
 		var x = sailboatCenterX + Math.cos(sailboatAngle) * sailboatOvalRadiusX;
 		var z = sailboatCenterZ + Math.sin(sailboatAngle) * sailboatOvalRadiusZ;
 		
-		// Calculate direction of movement (tangent to oval)
-		var dx = -Math.sin(sailboatAngle) * sailboatOvalRadiusX;
-		var dz = Math.cos(sailboatAngle) * sailboatOvalRadiusZ;
+		// Calculate direction of movement (tangent to oval + center movement)
+		var dx = -Math.sin(sailboatAngle) * sailboatOvalRadiusX * sailboatSpeed;
+		var dz = Math.cos(sailboatAngle) * sailboatOvalRadiusZ * sailboatSpeed;
 		
-		// Orient sailboat to face direction of travel
+		// Add center movement velocity
+		dx += (sailboatTargetCenterX - sailboatCenterX) * sailboatCenterLerpSpeed;
+		dz += (sailboatTargetCenterZ - sailboatCenterZ) * sailboatCenterLerpSpeed;
+		
+		// Orient sailboat to face true direction of travel
 		var headingAngle = Math.atan2(dx, dz) - Math.PI / 2;
 		sailboatModelTemplate.rotation.y = headingAngle;
 		
@@ -4325,6 +4418,19 @@ function simulate() {
 		var x = balloonCenterX + Math.cos(balloonAngle) * balloonOvalRadiusX;
 		var z = balloonCenterZ + Math.sin(balloonAngle) * balloonOvalRadiusZ;
 		balloonModelTemplate.position.set(x, balloonHeight, z);
+		
+		// Calculate direction of movement (tangent to oval + center movement)
+		var dx = -Math.sin(balloonAngle) * balloonOvalRadiusX * balloonSpeed;
+		var dz = Math.cos(balloonAngle) * balloonOvalRadiusZ * balloonSpeed;
+		
+		// Add center movement velocity (balloon center tracks barge 3)
+		var balloonTargetCenterX = bargeGroups[balloonTrackedBargeIndex] ? bargeGroups[balloonTrackedBargeIndex].position.x : 0;
+		var balloonTargetCenterZ = bargeGroups[balloonTrackedBargeIndex] ? bargeGroups[balloonTrackedBargeIndex].position.z : 0;
+		dx += (balloonTargetCenterX - balloonCenterX) * 0.5; // Use same lerp speed as other vehicles
+		dz += (balloonTargetCenterZ - balloonCenterZ) * 0.5;
+		
+		// Orient balloon to face true direction of travel
+		balloonModelTemplate.rotation.y = Math.atan2(dx, dz);
 	}
 	
 	// Animate biplane flight path
@@ -4334,11 +4440,15 @@ function simulate() {
 		var z = biplaneCenterZ + Math.sin(biplaneAngle) * biplaneOvalRadiusZ;
 		biplaneModelTemplate.position.set(x, biplaneHeight, z);
 		
-		// Calculate direction of movement (tangent to oval)
-		var dx = -Math.sin(biplaneAngle) * biplaneOvalRadiusX;
-		var dz = Math.cos(biplaneAngle) * biplaneOvalRadiusZ;
+		// Calculate direction of movement (tangent to oval + center movement)
+		var dx = -Math.sin(biplaneAngle) * biplaneOvalRadiusX * biplaneSpeed;
+		var dz = Math.cos(biplaneAngle) * biplaneOvalRadiusZ * biplaneSpeed;
 		
-		// Orient biplane to face direction of travel
+		// Add center movement velocity
+		dx += (biplaneTargetCenterX - biplaneCenterX) * biplaneCenterLerpSpeed;
+		dz += (biplaneTargetCenterZ - biplaneCenterZ) * biplaneCenterLerpSpeed;
+		
+		// Orient biplane to face true direction of travel
 		var headingAngle = Math.atan2(dx, dz);
 		biplaneModelTemplate.rotation.y = headingAngle;
 		
