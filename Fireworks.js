@@ -2012,7 +2012,7 @@ function initThreeScene() {
 			jerseyModelTemplate.scale.set(0.5, 0.5, 0.5);
 
 		var uniformCityscapeMaterial = new THREE.MeshPhongMaterial({
-			color: 0x111618,
+			color: 0x121515,
 			side: THREE.FrontSide
 		});
 		
@@ -2075,7 +2075,7 @@ function initThreeScene() {
 			downtownModelTemplate.scale.set(0.5, 0.5, 0.5);
 
 		var uniformCityscapeMaterial = new THREE.MeshPhongMaterial({
-			color: 0x111618, 
+			color: 0x121515, 
 			side: THREE.FrontSide
 		});
 		
@@ -2115,7 +2115,7 @@ function initThreeScene() {
 			cityscapeNorthModelTemplate.scale.set(0.5, 0.5, 0.5);
 
 		var uniformCityscapeMaterialNorth = new THREE.MeshPhongMaterial({
-			color: 0x111618,
+			color: 0x121515,
 			side: THREE.FrontSide
 		});
 		
@@ -2617,7 +2617,7 @@ function initThreeScene() {
 			
 			var bargeMaterial = new THREE.MeshPhongMaterial({
 			//color: 0x4d4d4d, // Light gray
-			color: 0x3b2f2b,
+			color: 0x1d1816,
 			side: THREE.DoubleSide
 		});
 
@@ -2867,14 +2867,14 @@ function initThreeScene() {
 	});
 
 	// Create hemispherical sky dome with sunset gradient (warm west to dark blue east)
-	const skyRadius = 500; // Large radius to appear at infinity
+	const skyRadius = 2 * worldRadius; // Large radius to appear at infinity
 	const skyGeometry = new THREE.SphereGeometry(skyRadius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
 	
 	// Apply vertex colors for gradient from warm (-x) to dark blue (+x)
 	const positions = skyGeometry.attributes.position;
 	const colors = [];
 	const warmColor = new THREE.Color(0x0f0a05); // Very dim warm glow (late twilight)
-	const coolColor = new THREE.Color(0x04070c); // Very dark blue for night sky
+	const coolColor = new THREE.Color(0x06070a); // Very dark blue for night sky
 	
 	for (let i = 0; i < positions.count; i++) {
 		const x = positions.getX(i);
@@ -2934,8 +2934,8 @@ function initThreeScene() {
 	// Create radial gradient from center to edge
 	var gradient = ctx.createRadialGradient(512, 512, 0, 512, 512, 512);
 	//gradient.addColorStop(0, '#282828');  
-	gradient.addColorStop(0, '#101110');  
-	gradient.addColorStop(1, '#000000');  // Black at edge
+	gradient.addColorStop(0, '#151615');  
+	gradient.addColorStop(1, '#06070a');  // Black at edge
 	
 	// Fill canvas with gradient
 	ctx.fillStyle = gradient;
