@@ -736,9 +736,9 @@ class MORTAR {
 			
 			if (this.useHemisphereMode) {
 				// Create gap by splitting phi into two ranges (top and bottom hemispheres)
-				let gapAngle = Math.PI / 16; // Gap of 11.25 degrees (π/16 radians on each side of equator)
-				let topHemisphereMax = Math.PI / 2 - gapAngle; // 0 to ~78.75°
-				let bottomHemisphereMin = Math.PI / 2 + gapAngle; // ~101.25° to 180°
+				let gapAngle = Math.PI / 24; // Gap of 7.5 degrees (π/24 radians on each side of equator)
+				let topHemisphereMax = Math.PI / 2 - gapAngle; // 0 to ~82.5°
+				let bottomHemisphereMin = Math.PI / 2 + gapAngle; // ~97.5° to 180°
 				
 				// Use the stored hemisphere assignment for this particle
 				if (Balls[i].isTopHemisphere) {
@@ -1961,7 +1961,7 @@ function changeBallGeometry(geometryMode) {
 function initThreeScene() {
 	gThreeScene = new THREE.Scene();
 	gThreeScene.background = new THREE.Color(0x000000);
-
+	
 	// LOAD HUDSON RIVER --------------------------------------
 	var hudsonLoader = new THREE.GLTFLoader();
 	hudsonLoader.load(
