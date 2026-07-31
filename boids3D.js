@@ -728,7 +728,7 @@ var gTrailUpdateFrequency = 1; // Update trail every N frames
 var gTrailColorMode = 3; // 0=White, 1=Black, 2=B&W, 3=Color
 
 // Boid geometry types (multiple can be selected)
-var gSelectedBoidTypes = [3]; // Array of selected geometry types: 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter, 16=PaperPlane, 17=Flamingo
+var gSelectedBoidTypes = [1]; // Array of selected geometry types: 0=Sphere, 1=Cone, 2=Cylinder, 3=Box, 4=Tetrahedron, 5=Octahedron, 6=Dodecahedron, 7=Icosahedron, 8=Capsule, 9=Torus, 10=TorusKnot, 11=Plane, 12=Duck, 13=Fish, 14=Avocado, 15=Helicopter, 16=PaperPlane, 17=Flamingo
 var gDuckTemplate = null; // Template duck model for boid geometry
 var gFishTemplate = null; // Template fish model for boid geometry
 var gAvocadoTemplate = null; // Template avocado model for boid geometry
@@ -2749,7 +2749,7 @@ class BOID {
             if (gSelectedBoidTypes.length > 0) {
                 this.geometryType = gSelectedBoidTypes[Math.floor(Math.random() * gSelectedBoidTypes.length)];
             } else {
-                this.geometryType = 3; // Default to box if no types selected
+                this.geometryType = 1; // Default to cone if no types selected
             }
         }
         
@@ -3990,7 +3990,7 @@ function recreateBoidGeometries() {
             case 0: // Sphere
                 geometry = new THREE.SphereGeometry(rad, geometrySegments, geometrySegments);
                 break;
-            case 1: // Cone (default)
+            case 1: // Cone 
                 geometry = new THREE.ConeGeometry(rad, 3 * rad, geometrySegments, 1);
                 break;
             case 2: // Cylinder
