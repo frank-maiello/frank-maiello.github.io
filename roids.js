@@ -20,6 +20,14 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
     };
 }
 
+//  GLOBAL VARIABLES  ------------------
+var canvas, c, cScale, simWidth, simHeight;
+var offscreenFlashCanvas, flashC;
+var offscreenStarfieldCanvas, starfieldC;
+var offscreenNoMoonCanvas, noMoonC;
+var offscreenRoketCanvas;
+var andromedaImage, earthImage;
+
 //  CANVAS SETUP AND SCALING  ------------------   
 function resizeCanvas() {
     canvas = document.getElementById("myCanvas");
@@ -75,7 +83,7 @@ var menuFadeSpeed = 3.0;
 var menuLastInteractionTime = 0;
 var menuAutoHideDelay = 5.0; // seconds
 
-// Mouse handling for menu
+// Mouse handling for menu (set up after canvas is initialized)
 canvas.addEventListener("mousedown", onCanvasMouseDown, false);
 
 function onCanvasMouseDown(evt) {
