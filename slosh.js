@@ -1533,10 +1533,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 15);
             ctx.stroke();
             ctx.font = '60px sans-serif';
-            ctx.fillText('↔', rectX + width / 2, iconY - 5);
+            ctx.fillText('\u{2194}', rectX + width / 2, iconY - 5);
+            ctx.font = '40px sans-serif';
+            ctx.fillText('\u{2195}', rectX + width / 2, iconY + 1);
         } else if (item.id === 'respawn') {
             ctx.font = 'bold 60px verdana';
-            ctx.fillText('∞', rectX + width / 2, iconY - 2);
+            ctx.fillText('\u{221E}', rectX + width / 2, iconY - 2);
         } else if (item.id === 'toys') {
             ctx.font = 'bold 38px monospace';
             ctx.fillStyle = iconColor;
@@ -1544,7 +1546,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 ctx.globalAlpha = 0.4;
             }
             //ctx.fillText('🎲', rectX + width / 2, iconY - 3);
-            ctx.fillText('🎁', rectX + width / 2, iconY - 0);
+            ctx.fillText('\u{1F381}', rectX + width / 2, iconY - 0);
             ctx.globalAlpha = 1;
         } else if (item.id === 'color') {
             // Draw color wheel icon using cached canvas
@@ -3922,7 +3924,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 { id: 'showImploderButton', icon: '\u{1F9F2}', checked: typeof Magnet !== 'undefined' && Magnet.length > 0 && Magnet[0].active, color: 'hsl(320, 85%, 55%)' },
                 { id: 'showStinkerButton', icon: '', image: 'pepe-face.png', checked: typeof Stinker !== 'undefined' && Stinker.length > 0 && Stinker[0].active, color: 'hsl(120, 85%, 55%)' },
                 { id: 'showCycloneButton', icon: '', checked: typeof Cyclone === 'undefined' || Cyclone.length === 0 || Cyclone[0].active, color: 'hsl(180, 85%, 55%)', customDraw: true },
-                { id: 'showMagicSetButton', icon: '', checked: typeof MagicSet !== 'undefined' && MagicSet.length > 0, color: 'hsl(280, 85%, 65%)', customDraw: true },
+                { id: 'showMagicSetButton', icon: '', checked: false, color: 'hsl(280, 85%, 65%)', customDraw: true },
                 null,  // Empty slot
                 null  // Empty slot
             ];
@@ -12616,6 +12618,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         // Initialize main menu to off-screen position
         mainMenuX = -calculateMainMenuWidth();
         mainMenuTargetX = mainMenuX;
+        
+        // Initialize MagicSet as empty array (will be populated if user enables it)
+        MagicSet = [];
         mainMenuVisible = false;
         mainMenuAnimating = false;
         
@@ -12823,7 +12828,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         makeHungryPucks();
         makeBoxes();
         makeMisterMister();
-        makeMagicSet();
+        // makeMagicSet();  // Don't create at startup - user can enable via menu
 
         // Initialize offscreen roket sprite for particle rendering
         defineOffscreenRoket();
@@ -18800,8 +18805,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.fillStyle = `hsla(338, 100%, 72%, ${alphaPercent})`;
                     c.textBaseline = 'middle';
                     c.textAlign = "center";
-                    c.font = `${(0.40 * this.OGradius + 0.3 * this.radius) * cScale}px monospace`;
-                    c.fillText("♥", this.pos.x * cScale, (simHeight - this.pos.y + 0.10 * this.OGradius) * cScale);
+                    c.font = `${(this.OGradius + 0.3 * this.radius) * cScale}px monospace`;
+                    c.fillText("\u{2764}", this.pos.x * cScale, (simHeight - this.pos.y + 0.10 * this.OGradius) * cScale);
                 } else {  // moving heartbeat rendering  ----------
                     drawCircle(cX(this.pos), cY(this.pos), this.radius * cScale);
                     const grd = c.createRadialGradient(
@@ -18819,8 +18824,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     c.fillStyle = `hsla(338, 80%, 50%, ${alphaPercent - 0.9})`;
                     c.textBaseline = 'middle';
                     c.textAlign = "center";
-                    c.font = `${(0.40 * this.OGradius + 0.3 * this.radius) * cScale}px monospace`;
-                    c.fillText("♥", this.pos.x * cScale, (simHeight - this.pos.y + 0.10 * this.OGradius) * cScale);
+                    c.font = `${(this.OGradius + 0.3 * this.radius) * cScale}px monospace`;
+                    c.fillText("\u{2764}", this.pos.x * cScale, (simHeight - this.pos.y + 0.10 * this.OGradius) * cScale);
                 }
             } 
 
@@ -18838,7 +18843,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 c.textBaseline = 'middle';
                 c.textAlign = 'center';
                 c.font = `${baseFontPx}px verdana`;
-                c.fillText("\u26A0", 0, 0);
+                c.fillText("\u{26A0}", 0, 0);
                 c.restore();
             }
 
