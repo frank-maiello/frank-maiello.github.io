@@ -6,11 +6,25 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. In no event shall the author or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in, connection with the software or the use of other dealings in the Software.
 */
 
+//  POLYFILL FOR ROUNDRECT  ------------------
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+        if (width < 2 * radius) radius = width / 2;
+        if (height < 2 * radius) radius = height / 2;
+        this.moveTo(x + radius, y);
+        this.arcTo(x + width, y, x + width, y + height, radius);
+        this.arcTo(x + width, y + height, x, y + height, radius);
+        this.arcTo(x, y + height, x, y, radius);
+        this.arcTo(x, y, x + width, y, radius);
+        return this;
+    };
+}
+
 //  CANVAS SETUP AND SCALING  ------------------   
 function resizeCanvas() {
     canvas = document.getElementById("myCanvas");
-    canvas.width = window.innerWidth - 15;
-    canvas.height = window.innerHeight - 40;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
     canvas.style.cursor = "pointer";
     c = canvas.getContext("2d");
 
@@ -48,42 +62,318 @@ window.addEventListener("resize", resizeCanvas);
 window.addEventListener("resize", makeStars);
 window.addEventListener("resize", defineOffscreenStarfield);
 
-//  PAGE BUTTONS  -------------------
-document.getElementById("torpedoMinusButton").addEventListener("click", function() {
-    if (weaponLevel > 0) {
-        weaponLevel -= 1;
-        score += 20000 * (weaponLevel + 1);
-        
+//  IN-CANVAS MENU SYSTEM  -------------------
+// Menu state variables (replacing HTML checkboxes and buttons)
+var roidFill = { checked: true };
+var artFill = { checked: true };
+var athena = { checked: false };
+
+// Menu visibility and animation
+var menuVisible = false;
+var menuOpacity = 0;
+var menuFadeSpeed = 3.0;
+var menuLastInteractionTime = 0;
+var menuAutoHideDelay = 5.0; // seconds
+
+// Mouse handling for menu
+canvas.addEventListener("mousedown", onCanvasMouseDown, false);
+
+function onCanvasMouseDown(evt) {
+    const handled = onMenuClick(evt);
+    if (!handled) {
+        // Handle other game clicks here if needed
     }
-});
-document.getElementById("torpedoPlusButton").addEventListener("click", function() {
-    if (weaponLevel < maxWeaponLevel) {
-        weaponLevel += 1;
-        score -= 20000 * weaponLevel;;
+}
+
+function onMenuClick(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = evt.clientX - rect.left;
+    const mouseY = evt.clientY - rect.top;
+    
+    // Check ellipsis click (bottom left corner)
+    const ellipsisX = 20;
+    const ellipsisY = canvas.height - 20;
+    const ellipsisRadius = 30;
+    const distToEllipsis = Math.sqrt((mouseX - ellipsisX) ** 2 + (mouseY - ellipsisY) ** 2);
+    
+    if (distToEllipsis < ellipsisRadius) {
+        menuVisible = !menuVisible;
+        menuLastInteractionTime = Date.now() / 1000;
+        return true;
     }
-});
-document.getElementById("waveMinusButton").addEventListener("click", function() {
-    if (wave > 0) {
-        if (wave > 1) {
-            wave -= 1;
+    
+    if (!menuVisible || menuOpacity < 0.5) return false;
+    
+    // Reset interaction timer on any menu interaction
+    menuLastInteractionTime = Date.now() / 1000;
+    
+    // Menu dimensions (bottom left corner)
+    const menuPadding = 10;
+    const itemWidth = 120;
+    const itemHeight = 30;
+    const buttonSize = 19;
+    const checkboxSize = 19;
+    const spacing = 8;
+    
+    const menuX = menuPadding;
+    const menuY = canvas.height - menuPadding - (itemHeight * 5 + spacing * 6);
+    const menuWidth = itemWidth + menuPadding * 2;
+    const menuHeight = itemHeight * 5 + spacing * 6;
+    
+    // Check if click is within menu bounds
+    if (mouseX < menuX || mouseX > menuX + menuWidth ||
+        mouseY < menuY || mouseY > menuY + menuHeight) {
+        return false;
+    }
+    
+    const itemX = menuX + menuPadding;
+    let itemY = menuY + spacing;
+    
+    // Weapon Level row
+    const weaponMinusX = itemX + itemWidth - buttonSize * 2 - spacing;
+    const weaponPlusX = itemX + itemWidth - buttonSize;
+    if (mouseY >= itemY && mouseY <= itemY + itemHeight) {
+        if (mouseX >= weaponMinusX && mouseX <= weaponMinusX + buttonSize) {
+            // Weapon minus
+            if (weaponLevel > 0) {
+                weaponLevel -= 1;
+                score += 20000 * (weaponLevel + 1);
+            }
+            return true;
         }
-        score -= 20000 * wave;
-        if (score < 0) {
-            score = 0;
+        if (mouseX >= weaponPlusX && mouseX <= weaponPlusX + buttonSize) {
+            // Weapon plus
+            if (weaponLevel < maxWeaponLevel) {
+                weaponLevel += 1;
+                score -= 20000 * weaponLevel;
+            }
+            return true;
         }
     }
-});
-document.getElementById("wavePlusButton").addEventListener("click", function() {
-    spawnCycle += 1;
-    if (spawnCycle > 8) {
-        spawnCycle = 1;
+    
+    // Wave Level row
+    itemY += itemHeight + spacing;
+    const waveMinusX = itemX + itemWidth - buttonSize * 2 - spacing;
+    const wavePlusX = itemX + itemWidth - buttonSize;
+    if (mouseY >= itemY && mouseY <= itemY + itemHeight) {
+        if (mouseX >= waveMinusX && mouseX <= waveMinusX + buttonSize) {
+            // Wave minus
+            if (wave > 0) {
+                if (wave > 1) {
+                    wave -= 1;
+                }
+                score -= 20000 * wave;
+                if (score < 0) {
+                    score = 0;
+                }
+            }
+            return true;
+        }
+        if (mouseX >= wavePlusX && mouseX <= wavePlusX + buttonSize) {
+            // Wave plus
+            spawnCycle += 1;
+            if (spawnCycle > 8) {
+                spawnCycle = 1;
+            }
+            wave += 1;
+            score += 20000 * (wave - 1);
+            return true;
+        }
     }
-    wave += 1;
-    score += 20000 * (wave - 1);
-});
-document.getElementById("untouchable").addEventListener("click", function() {
-    untouchable = !untouchable;
-});
+    
+    // Roid Fill checkbox
+    itemY += itemHeight + spacing;
+    const roidFillCheckX = itemX + itemWidth - checkboxSize;
+    if (mouseY >= itemY && mouseY <= itemY + itemHeight) {
+        if (mouseX >= roidFillCheckX && mouseX <= roidFillCheckX + checkboxSize) {
+            roidFill.checked = !roidFill.checked;
+            return true;
+        }
+    }
+    
+    // Art Fill checkbox
+    itemY += itemHeight + spacing;
+    const artFillCheckX = itemX + itemWidth - checkboxSize;
+    if (mouseY >= itemY && mouseY <= itemY + itemHeight) {
+        if (mouseX >= artFillCheckX && mouseX <= artFillCheckX + checkboxSize) {
+            artFill.checked = !artFill.checked;
+            return true;
+        }
+    }
+    
+    // Invincible Mode checkbox
+    itemY += itemHeight + spacing;
+    const athenaCheckX = itemX + itemWidth - checkboxSize;
+    if (mouseY >= itemY && mouseY <= itemY + itemHeight) {
+        if (mouseX >= athenaCheckX && mouseX <= athenaCheckX + checkboxSize) {
+            athena.checked = !athena.checked;
+            return true;
+        }
+    }
+    
+    /*// Untouchable checkbox
+    itemY += itemHeight + spacing;
+    const untouchableCheckX = itemX + itemWidth - checkboxSize;
+    if (mouseY >= itemY && mouseY <= itemY + itemHeight) {
+        if (mouseX >= untouchableCheckX && mouseX <= untouchableCheckX + checkboxSize) {
+            untouchable = !untouchable;
+            return true;
+        }
+    }*/
+    
+    return true; // Click was within menu
+}
+
+function drawMenu() {
+    // Update menu opacity based on visibility
+    const currentTime = Date.now() / 1000;
+    const timeSinceInteraction = currentTime - menuLastInteractionTime;
+    
+    if (menuVisible && timeSinceInteraction > menuAutoHideDelay) {
+        menuVisible = false;
+    }
+    
+    // Fade in/out animation
+    const targetOpacity = menuVisible ? 1.0 : 0.0;
+    if (menuOpacity < targetOpacity) {
+        menuOpacity = Math.min(targetOpacity, menuOpacity + menuFadeSpeed * (1/60));
+    } else if (menuOpacity > targetOpacity) {
+        menuOpacity = Math.max(targetOpacity, menuOpacity - menuFadeSpeed * (1/60));
+    }
+    
+    // Draw ellipsis (always visible)
+    c.save();
+    const ellipsisX = 20;
+    const ellipsisY = canvas.height - 20;
+    const dotRadius = 3;
+    const dotSpacing = 10;
+    const ellipsisOpacity = menuVisible ? 1.0 : 0.7;
+    
+    c.fillStyle = `rgba(210, 210, 210, ${ellipsisOpacity})`;
+    for (let i = 0; i < 3; i++) {
+        c.beginPath();
+        c.arc(ellipsisX + i * dotSpacing, ellipsisY, dotRadius, 0, 2 * Math.PI);
+        c.fill();
+    }
+    c.restore();
+    
+    if (menuOpacity <= 0) return;
+    
+    c.save();
+    c.globalAlpha = menuOpacity;
+    
+    // Menu dimensions
+    const menuPadding = 10;
+    const itemWidth = 120;
+    const itemHeight = 30;
+    const buttonSize = 19;
+    const checkboxSize = 19;
+    const spacing = 8;
+    
+    const menuX = menuPadding;
+    const menuY = canvas.height - menuPadding - (itemHeight * 5 + spacing * 6);
+    const menuWidth = itemWidth + menuPadding * 2;
+    const menuHeight = itemHeight * 5 + spacing * 6;
+    
+    // Draw menu background
+    const cornerRadius = 8;
+    c.beginPath();
+    c.roundRect(menuX, menuY, menuWidth, menuHeight, cornerRadius);
+    const menuGradient = c.createLinearGradient(menuX, menuY, menuX, menuY + menuHeight);
+    menuGradient.addColorStop(0, 'rgba(9, 9, 9, 0.9)');
+    menuGradient.addColorStop(1, 'rgba(19, 19, 19, 0.9)');
+    c.fillStyle = menuGradient;
+    c.fill();
+    
+    // Draw menu items
+    const itemX = menuX + menuPadding;
+    let itemY = menuY + spacing;
+    
+    c.font = '12px monospace';
+    c.textBaseline = 'middle';
+    c.textAlign = 'left';
+    
+    // Weapon Level
+    c.fillStyle = 'rgba(230, 230, 230, 1.0)';
+    c.fillText('Weapon', itemX, itemY + itemHeight / 2);
+    drawButton(itemX + itemWidth - buttonSize * 2 - spacing, itemY + (itemHeight - buttonSize) / 2, buttonSize, '-', 'rgba(180, 100, 43, 0.8)');
+    drawButton(itemX + itemWidth - buttonSize, itemY + (itemHeight - buttonSize) / 2, buttonSize, '+', 'rgba(180, 100, 43, 0.8)');
+    
+    // Wave Level
+    itemY += itemHeight + spacing;
+    c.font = '12px monospace';
+    c.fillStyle = 'rgba(230, 230, 230, 1.0)';
+    c.fillText('Wave', itemX, itemY + itemHeight / 2);
+    drawButton(itemX + itemWidth - buttonSize * 2 - spacing, itemY + (itemHeight - buttonSize) / 2, buttonSize, '-', 'rgba(180, 100, 43, 0.8)');
+    drawButton(itemX + itemWidth - buttonSize, itemY + (itemHeight - buttonSize) / 2, buttonSize, '+', 'rgba(180, 100, 43, 0.8)');
+    
+    // Roid Fill
+    itemY += itemHeight + spacing;
+    c.font = '12px monospace';
+    c.fillStyle = 'rgba(230, 230, 230, 1.0)';
+    c.fillText('Roid Fill', itemX, itemY + itemHeight / 2);
+    drawCheckbox(itemX + itemWidth - checkboxSize, itemY + (itemHeight - checkboxSize) / 2, checkboxSize, roidFill.checked);
+    
+    // Art Fill
+    itemY += itemHeight + spacing;
+    c.font = '12px monospace';
+    c.fillStyle = 'rgba(230, 230, 230, 1.0)';
+    c.fillText('Artwork', itemX, itemY + itemHeight / 2);
+    drawCheckbox(itemX + itemWidth - checkboxSize, itemY + (itemHeight - checkboxSize) / 2, checkboxSize, artFill.checked);
+    
+    // Princess Mode
+    itemY += itemHeight + spacing;
+    c.font = '12px monospace';
+    c.fillStyle = 'rgba(230, 230, 230, 1.0)';
+    c.fillText('Invincible', itemX, itemY + itemHeight / 2);
+    drawCheckbox(itemX + itemWidth - checkboxSize, itemY + (itemHeight - checkboxSize) / 2, checkboxSize, athena.checked);
+    
+    /*// Untouchable
+    itemY += itemHeight + spacing;
+    c.fillStyle = 'rgba(230, 230, 230, 1.0)';
+    c.fillText('Invincible:', itemX, itemY + itemHeight / 2);
+    drawCheckbox(itemX + itemWidth - checkboxSize, itemY + (itemHeight - checkboxSize) / 2, checkboxSize, untouchable);*/
+    
+    c.restore();
+}
+
+function drawButton(x, y, size, label, color) {
+    c.beginPath();
+    c.roundRect(x, y, size, size, 4);
+    c.fillStyle = color;
+    c.fill();
+    c.strokeStyle = 'rgba(200, 200, 200, 0.5)';
+    c.lineWidth = 1;
+    c.stroke();
+    
+    c.fillStyle = 'rgba(255, 255, 255, 1.0)';
+    c.font = 'bold 16px verdana';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(label, x + size / 2, y + size / 2);
+    c.textAlign = 'left';
+}
+
+function drawCheckbox(x, y, size, checked) {
+    c.beginPath();
+    c.roundRect(x, y, size, size, 4);
+    c.fillStyle = checked ? 'rgba(43, 180, 43, 0.8)' : 'rgba(0, 0, 0, 0.8)';
+    c.fill();
+    c.strokeStyle = 'rgba(200, 200, 200, 0.7)';
+    c.lineWidth = 2;
+    c.stroke();
+    
+    if (checked) {
+        c.strokeStyle = 'rgba(255, 255, 255, 1.0)';
+        c.lineWidth = 3;
+        c.lineCap = 'round';
+        c.beginPath();
+        c.moveTo(x + size * 0.2, y + size * 0.5);
+        c.lineTo(x + size * 0.45, y + size * 0.75);
+        c.lineTo(x + size * 0.8, y + size * 0.25);
+        c.stroke();
+    }
+}
 
 //  KEYBOARD CONTROL  ---------------------
 document.addEventListener("keydown", keyDownHandler, false);
@@ -4151,7 +4441,7 @@ function spawnRoids() {
         }
     }
     //  CHOOSE ROID IN AUTO MODE  -----------
-    if (auto.checked == true) {
+    //if (auto.checked == true) {
         spawnMode = 'other';
         if (spawnCycle == 1) {
             var type = 'polkadot';
@@ -4171,9 +4461,9 @@ function spawnRoids() {
         } else if (spawnCycle == 8) {
             var type = threePasser()
         }
-    } 
+    //} 
     //  BUTTON OVERRIDES  ----------
-    if (polkadot.checked == true) {
+    /*if (polkadot.checked == true) {
         var type = 'polkadot';
         spawnMode = 'other';
     } else if (globe.checked == true) {
@@ -4185,7 +4475,7 @@ function spawnRoids() {
     } else if (suds.checked == true) {
         var type = 'suds';
         spawnMode = 'suds';
-    }
+    //}*/
 
     //  LIMIT ROIDS PER WAVE  ----------
     if (spawnMode == 'suds') {
@@ -5727,7 +6017,9 @@ class THRUSTLET {
 
 //  SPAWN EXHAUST  -----------------------------------------
 function spawnThrustExhaustlets(x, y, ang) {
-    for (var s = 0; s < leftStickMagnitude * 10; s++) {
+    // Use leftStickMagnitude if gamepad is present, otherwise use full thrust (1.0) for keyboard
+    var thrustAmount = gamepadPresent ? leftStickMagnitude : 1.0;
+    for (var s = 0; s < thrustAmount * 10; s++) {
         var exhaustScatterX = -0.15 + 0.30 * Math.random();
         var exhaustScatterY = -0.15 + 0.30 * Math.random();
         var pos = new Vector2(
@@ -7023,7 +7315,7 @@ function simulate() {
     }
 
     //  SIMULATE MOON  -----------
-    if (Moon.length > 0 && moonFill.checked == true) {
+    if (Moon.length > 0 && artFill.checked == true) {
         Moon[0].simulate();
     }
 
@@ -7369,7 +7661,7 @@ function draw() {
     c.fillStyle = 'black';
     c.fillRect(0, 0, canvas.width, canvas.height);
 
-    //  DRAW GALAXY IN THE BACKGROUND  ----------------------
+    //  DRAW GALAXY AND MOON IN THE BACKGROUND  ----------------------
     if (artFill.checked ==  true) {
         c.drawImage(andromedaImage, 650 - 0.01 * cScale, - 350 - 0.01 * cScale, canvas.width, canvas.height);
     }
@@ -7384,7 +7676,7 @@ function draw() {
     }
 
     //  DRAW MOON  -----------
-    if (Moon.length > 0 && moonFill.checked == true) {
+    if (Moon.length > 0 && artFill.checked ==  true) {
         Moon[0].draw();
     }
 
@@ -7641,7 +7933,7 @@ function draw() {
         c.textAlign = "left";
         c.fillStyle = 'hsla(40, 90%, 50%, 80%)';
         c.beginPath();
-        c.fillText(streak + "×", .045 * cScale, .07 * cScale);
+        c.fillText(streak + "x", .045 * cScale, .07 * cScale);
         //  hit percent  ----------
         c.font = `${0.035 * cScale}px monospace`;
         c.fillText(hitPct + '%', .042 * cScale, .119 * cScale);
@@ -7658,7 +7950,7 @@ function draw() {
         
         c.lineWidth = 2;
         c.beginPath();
-        c.strokeText(Math.floor(score).toLocaleString("el-GR"), .14 * cScale, .098 * cScale);
+        c.strokeText(Math.floor(score).toLocaleString(), .14 * cScale, .098 * cScale);
     } else {
         score = 0;
     }
@@ -7688,10 +7980,10 @@ function draw() {
             c.fill();
         } 
     } else {
-        c.font = `${0.2 * cScale}px arial`;
+        c.font = `${0.07 * cScale}px arial`;
         c.strokeStyle = `hsla(120, 70%, 50%, ${rudolphIntensity}%)`;
         c.lineWidth = 0.005 * cScale;
-        c.strokeText('∞', (iconXpos - 0.1) * cScale, 0.002 * cScale);
+        c.strokeText('invincible', (iconXpos - 0.1) * cScale, 0.03 * cScale);
     }
 
     //  ARC BAR GAUGE METER FOR SHIELD AND TORPEDO  ---------------------
@@ -8208,6 +8500,8 @@ function draw() {
 
     }
     
+    //  DRAW IN-CANVAS MENU  --------------------
+    drawMenu();
 }
 
 //  RUN  --------------------

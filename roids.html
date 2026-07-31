@@ -17,10 +17,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             color: hsl(0, 0%, 89%);
             text-align: center;
             text-shadow: 3px 4px 10px hsl(0, 0%, 0%);
-            margin-left: 0px;
-            margin-right: 0px;
-            padding-left: 5px;
-            padding-right: 5px;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
 
         }
         h1 {font-family: verdana; 
@@ -128,28 +127,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         </style>
 </head>
 
-<body style="background: linear-gradient(to bottom, hsl(0, 0%, 8%) 0%, hsl(0, 0%, 15%) 50%); background-attachment: fixed; margin-left: 0px; margin-right: 0px">
+<body style="background: linear-gradient(to bottom, hsl(0, 0%, 8%) 0%, hsl(0, 0%, 15%) 50%); background-attachment: fixed; margin: 0; padding: 0;">
     <div style="display:none;">
         <img id="andromeda" src="andromeda.png">
         <img id="earth" src="planet_disc.png">
     </div>
-        <canvas id="myCanvas" style="border:1px solid hsl(0, 0%, 30%); margin-bottom: 3px; padding-left: 1px; padding-right: 1px; margin-left: 1px; margin-right: 1px">
+        <canvas id="myCanvas" style="display: block; margin: 0; padding: 0;">
     </canvas>
 
-    <h2><input type="checkbox" title="Roid Fill ON/OFF" id="roidFill" class="checkbox" checked>
-    <input type="checkbox" title="Artwork ON/OFF" id="artFill" class="checkbox" checked>
-    <input type="checkbox" title="Not a Moon ON/OFF" id="moonFill" class="checkbox" checked>
-    <input type="checkbox" title="Princess Mode ON/OFF" id="athena" class="checkbox" unchecked>
-    <input type="checkbox" title="Untouchable ON/OFF" id="untouchable" class="checkbox" unchecked>
-    <input type="radio" title="Auto Roids (default)" name="spawnType" id="auto" class="radio" checked>
-    <input type="radio" title="Polkadot Roids" name="spawnType" id="polkadot" class="radio">
-    <input type="radio" title="Globe Roids" name="spawnType" id="globe" class="radio">
-    <input type="radio" title="Eyeball Roids" name="spawnType" id="eyeball" class="radio">
-    <input type="radio" title="Tiny Bubbles" name="spawnType" id="suds" class="radio">
-    <input type="button" value="-" title="Decrease Wave Level" id="waveMinusButton" class="button1">
-    <input type="button" value="+" title="Increase Wave Level" id="wavePlusButton" class="button1">
-    <input type="button" value="-" title="Decrease Torpedo Level" id="torpedoMinusButton" class="button">
-    <input type="button" value="+" title="Increase Torpedo Level" id="torpedoPlusButton" class="button"></h2>
+    <!-- All controls are now in the in-canvas menu at bottom left -->
     
     <script src="roids.js"></script>
 </body>

@@ -272,6 +272,26 @@ var zeppelinCamPoint = null;
 var zeppelinAngle = 1.7 * Math.PI; // Current angle on oval path
 var zeppelinSpeed = 0.01; // Radians per second
 
+// Fireboat fountain variables
+var fireboatModelTemplate = null;
+var fountainParticles = []; // Array of fountain particle objects
+var fountainInstancedMesh = null; // Instanced mesh for fountain particles
+var fountainParticlesPerNozzle = 200; // Particles per nozzle
+var fountainTotalParticles = 800; // 4 nozzles * 200 particles
+var fountainGravity = -10; // Custom gravity for exaggerated arc (adjustable)
+var fountainColor = new THREE.Color(0xffffff); // White particles
+var fountainEnabled = false; // Start disabled
+// Spray node references (extracted from model)
+var sprayNodeAftPort = null;
+var sprayNodeRearStarboard = null;
+var sprayNodeForeLow = null;
+var sprayNodeForeHigh = null;
+// Spray axis references (cylinders to determine direction)
+var sprayAxisAftPort = null;
+var sprayAxisRearStarboard = null;
+var sprayAxisForeLow = null;
+var sprayAxisForeHigh = null;
+
 // Sailboat variables
 var sailboatModelTemplate = null;
 var sailboatCamPoint = null;
@@ -982,6 +1002,222 @@ class BALL {
 			ballInstancedMesh.setColorAt(this.instanceId, this.color);
 		}
 	}
+}
+
+// Fireboat Fountain System -------------------------------------------
+// Fountain particle class - lightweight and efficient
+class FountainParticle {
+	constructor(nozzleIndex, particleIndex) {
+		this.nozzleIndex = nozzleIndex; // Which nozzle (0-3)
+		this.particleIndex = particleIndex; // Unique particle index within all fountain particles
+		this.pos = new THREE.Vector3();
+		this.vel = new THREE.Vector3();
+		this.age = 0;
+		this.lifetime = 0.25 + Math.random() * 0.25; // 0.5 to 1.0 seconds (varied)
+		this.active = false;
+		this.spawnDelay = Math.random() * 0.05; // Stagger spawning for natural effect
+	}
+	
+	reset(position, direction, nozzleIndex) {
+		this.nozzleIndex = nozzleIndex;
+		this.pos.copy(position);
+		
+		// Add slight randomness to direction for spray effect
+		let spread = 0.6; // Cone spread angle
+		let randomDir = new THREE.Vector3(
+			direction.x + (Math.random() - 0.5) * spread,
+			direction.y + (Math.random() - 0.5) * spread,
+			direction.z + (Math.random() - 0.5) * spread
+		).normalize();
+		
+		// Initial velocity with some variation
+		let speed = 12.0 + Math.random() * 3.0; // 12-15 m/s
+		this.vel.copy(randomDir).multiplyScalar(speed);
+		
+		this.age = 0;
+		this.lifetime = 1.0 + Math.random() * 0.5; // Varied lifetime
+		this.active = true;
+	}
+	
+	update() {
+		if (!this.active) return;
+		
+		this.age += DeltaT;
+		
+		// Deactivate when lifetime exceeded
+		if (this.age >= this.lifetime) {
+			this.active = false;
+			return;
+		}
+		
+		// Apply custom fountain gravity
+		this.vel.y += fountainGravity * DeltaT;
+		
+		// Apply air resistance
+		this.vel.multiplyScalar(0.99);
+		
+		// Update position
+		this.pos.addScaledVector(this.vel, DeltaT);
+		
+		// Deactivate if particle goes below water level
+		if (this.pos.y < -0.5) {
+			this.active = false;
+		}
+	}
+}
+
+// Initialize fountain system
+function initFountainSystem() {
+	if (!gThreeScene) return;
+	
+	console.log('Initializing fountain system...');
+	
+	// Create fountain particles (400 total: 100 per nozzle)
+	fountainParticles = [];
+	for (let nozzle = 0; nozzle < 4; nozzle++) {
+		for (let i = 0; i < fountainParticlesPerNozzle; i++) {
+			let particle = new FountainParticle(nozzle, nozzle * fountainParticlesPerNozzle + i);
+			fountainParticles.push(particle);
+		}
+	}
+	
+	// Create instanced mesh for fountain particles
+	let fountainGeometry = new THREE.SphereGeometry(ballRadius * 0.5, 6, 6); // Smaller, lower poly than fireworks
+	let fountainMaterial = new THREE.MeshBasicMaterial({ color: fountainColor });
+	fountainInstancedMesh = new THREE.InstancedMesh(fountainGeometry, fountainMaterial, fountainTotalParticles);
+	
+	// Initialize all matrices to hidden state
+	let hiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+	for (let i = 0; i < fountainTotalParticles; i++) {
+		fountainInstancedMesh.setMatrixAt(i, hiddenMatrix);
+	}
+	fountainInstancedMesh.instanceMatrix.needsUpdate = true;
+	
+	gThreeScene.add(fountainInstancedMesh);
+	console.log('Fountain system initialized with', fountainTotalParticles, 'particles');
+}
+
+// Get spray direction from axis cylinder
+function getNozzleDirection(axisObject) {
+	if (!axisObject) return new THREE.Vector3(0, 1, 0); // Default upward
+	
+	// Get world matrix and extract the up vector (Y axis in local space)
+	// This gives us the direction the cylinder is pointing
+	let worldMatrix = new THREE.Matrix4();
+	axisObject.matrixWorld.decompose(
+		new THREE.Vector3(), // position (not needed)
+		new THREE.Quaternion(), // rotation (not needed)
+		new THREE.Vector3()  // scale (not needed)
+	);
+	
+	// Extract the local Y-axis (up vector) from world matrix
+	// Cylinders point along their Y axis
+	let direction = new THREE.Vector3();
+	direction.setFromMatrixColumn(axisObject.matrixWorld, 1); // Column 1 is Y axis
+	direction.normalize();
+	
+	// Flip direction 180 degrees
+	direction.negate();
+	
+	return direction;
+}
+
+// Update fountain system each frame
+function updateFountainSystem() {
+	if (!fountainEnabled || !fountainInstancedMesh) return;
+	if (!sprayNodeAftPort || !sprayNodeRearStarboard || !sprayNodeForeLow || !sprayNodeForeHigh) return;
+	
+	// Array of spray nodes and axes
+	let sprayNodes = [sprayNodeAftPort, sprayNodeRearStarboard, sprayNodeForeLow, sprayNodeForeHigh];
+	let sprayAxes = [sprayAxisAftPort, sprayAxisRearStarboard, sprayAxisForeLow, sprayAxisForeHigh];
+	
+	// Spawn rate: spawn a few particles per nozzle per frame
+	let particlesPerNozzlePerFrame = 3;
+	let frameCounter = Math.floor(Date.now() / 16); // Rough frame count
+	
+	// Update all particles
+	let tempMatrix = new THREE.Matrix4();
+	let tempColor = new THREE.Color();
+	
+	for (let i = 0; i < fountainParticles.length; i++) {
+		let particle = fountainParticles[i];
+		
+		// Spawn new particles
+		if (!particle.active) {
+			let nozzleIndex = particle.nozzleIndex;
+			
+			// Check if it's time to spawn this particle
+			if ((frameCounter + i) % Math.floor(fountainParticlesPerNozzle / particlesPerNozzlePerFrame) === 0) {
+				// Get world position of spray node
+				let spawnPos = new THREE.Vector3();
+				sprayNodes[nozzleIndex].getWorldPosition(spawnPos);
+				
+				// Get spray direction from axis
+				let sprayDir = getNozzleDirection(sprayAxes[nozzleIndex]);
+				
+				// Reset particle
+				particle.reset(spawnPos, sprayDir, nozzleIndex);
+			}
+		}
+		
+		// Update active particles
+		if (particle.active) {
+			particle.update();
+			
+			// Update instance matrix
+			if (particle.active) {
+				tempMatrix.makeTranslation(particle.pos.x, particle.pos.y, particle.pos.z);
+				
+				// Fade alpha based on lifetime for smooth disappearance
+				let alpha = 1.0 - (particle.age / particle.lifetime);
+				let scale = 0.7 + alpha * 0.3; // Shrink slightly as it fades
+				tempMatrix.scale(new THREE.Vector3(scale, scale, scale));
+				
+				fountainInstancedMesh.setMatrixAt(particle.particleIndex, tempMatrix);
+			} else {
+				// Hide inactive particle
+				tempMatrix.makeScale(0, 0, 0);
+				fountainInstancedMesh.setMatrixAt(particle.particleIndex, tempMatrix);
+			}
+		} else {
+			// Hide inactive particle
+			tempMatrix.makeScale(0, 0, 0);
+			fountainInstancedMesh.setMatrixAt(particle.particleIndex, tempMatrix);
+		}
+	}
+	
+	fountainInstancedMesh.instanceMatrix.needsUpdate = true;
+}
+
+// Toggle fountain system on/off
+function toggleFountainSystem() {
+	fountainEnabled = !fountainEnabled;
+	console.log('Fountain system:', fountainEnabled ? 'ENABLED' : 'DISABLED');
+	
+	if (!fountainEnabled) {
+		// Deactivate all particles when disabled
+		for (let i = 0; i < fountainParticles.length; i++) {
+			fountainParticles[i].active = false;
+		}
+		
+		// Hide all particles
+		if (fountainInstancedMesh) {
+			let tempMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+			for (let i = 0; i < fountainTotalParticles; i++) {
+				fountainInstancedMesh.setMatrixAt(i, tempMatrix);
+			}
+			fountainInstancedMesh.instanceMatrix.needsUpdate = true;
+		}
+	}
+}
+
+// Set fountain color
+function setFountainColor(hexColor) {
+	fountainColor.setHex(hexColor);
+	if (fountainInstancedMesh) {
+		fountainInstancedMesh.material.color.copy(fountainColor);
+	}
+	console.log('Fountain color set to:', fountainColor.getHexString());
 }
 
 // Shock Wave Class -------------------------------------------
@@ -2695,6 +2931,7 @@ function initThreeScene() {
 			fireboatModelTemplate.scale.set(1.0, 1.0, 1.0);
 
 			// Enable shadow casting and receiving on all meshes in the model
+			// Also extract spray nodes and axes for fountain system
 			fireboatModelTemplate.traverse(function(child) {
 				if (child.isMesh) {
 					child.castShadow = true;
@@ -2710,10 +2947,44 @@ function initThreeScene() {
 						}
 					}
 				}
+				
+				// Extract spray nodes for fountain origins
+				if (child.name === 'sprayNodeAftPort') {
+					sprayNodeAftPort = child;
+					console.log('Found sprayNodeAftPort');
+				} else if (child.name === 'sprayNodeRearStarboard') {
+					sprayNodeRearStarboard = child;
+					console.log('Found sprayNodeRearStarboard');
+				} else if (child.name === 'sprayNodeForeLow') {
+					sprayNodeForeLow = child;
+					console.log('Found sprayNodeForeLow');
+				} else if (child.name === 'sprayNodeForeHigh') {
+					sprayNodeForeHigh = child;
+					console.log('Found sprayNodeForeHigh');
+				}
+				
+				// Extract spray axes for fountain directions
+				if (child.name === 'sprayAxisAftPort') {
+					sprayAxisAftPort = child;
+					console.log('Found sprayAxisAftPort');
+				} else if (child.name === 'sprayAxisRearStarboard') {
+					sprayAxisRearStarboard = child;
+					console.log('Found sprayAxisRearStarboard');
+				} else if (child.name === 'sprayAxisForeLow') {
+					sprayAxisForeLow = child;
+					console.log('Found sprayAxisForeLow');
+				} else if (child.name === 'sprayAxisForeHigh') {
+					sprayAxisForeHigh = child;
+					console.log('Found sprayAxisForeHigh');
+				}
 			});
 
 			gThreeScene.add(fireboatModelTemplate);
 			console.log('fireboat model loaded successfully');
+			
+			// Initialize fountain system after model is loaded
+			initFountainSystem();
+			
 			updateLoadingProgress();
 		},
 		function(xhr) {
@@ -2874,7 +3145,7 @@ function initThreeScene() {
 	const positions = skyGeometry.attributes.position;
 	const colors = [];
 	const warmColor = new THREE.Color(0x0f0a05); // Very dim warm glow (late twilight)
-	const coolColor = new THREE.Color(0x06070a); // Very dark blue for night sky
+	const coolColor = new THREE.Color(0x020203); // Very dark blue for night sky
 	
 	for (let i = 0; i < positions.count; i++) {
 		const x = positions.getX(i);
@@ -3972,6 +4243,29 @@ function onKeyDown( evt ) {
 		}
 		console.log('];');
 	}
+	
+	// Fireboat fountain controls
+	if (evt.key === 'f' || evt.key === 'F') {
+		toggleFountainSystem();
+	}
+	
+	// Fountain color controls (number keys 1-9)
+	if (evt.key >= '1' && evt.key <= '9') {
+		const colorMap = {
+			'1': 0xffffff, // White
+			'2': 0xff0000, // Red
+			'3': 0x00ff00, // Green
+			'4': 0x0000ff, // Blue
+			'5': 0xffff00, // Yellow
+			'6': 0xff00ff, // Magenta
+			'7': 0x00ffff, // Cyan
+			'8': 0xff8800, // Orange
+			'9': 0x8800ff  // Purple
+		};
+		if (colorMap[evt.key]) {
+			setFountainColor(colorMap[evt.key]);
+		}
+	}
 }
 
 function onWheel( evt ) {
@@ -4322,6 +4616,9 @@ function simulate() {
 			ballInstancedMesh.instanceColor.needsUpdate = true;
 		}
 	}
+	
+	// Update fireboat fountain system
+	updateFountainSystem();
 	
 	// Animate zeppelin flying in oval course
 	if (zeppelinModelTemplate) {
